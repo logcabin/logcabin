@@ -16,5 +16,5 @@ src = [
 env.StaticLibrary("DLogRPC",
                   src,
 		  CPPPATH = [ "#include" ],
-                  CFLAGS = [ "-g" ])
+                  CPPFLAGS = [ "-g" ])
 

@@ -14,5 +14,5 @@ env.Program("dlogd", [ "main.cpp" ],
 	    LIBPATH = [ "#build/libDLogRPC" ],
 	    LIBS = [ "DLogRPC" ],
 	    CPPPATH = "#include",
-            CFLAGS = "-g")
+            CPPFLAGS = "-g")
 
