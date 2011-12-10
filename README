@@ -1,0 +1,54 @@
+====================================
+1. Building
+====================================
+
+Pre-requisites:
+ - scons
+ - git
+ - g++ or clang
+
+Command:
+
+$ scons
+
+This will build the client, server, and coordinator.
+
+$ scons -c
+
+This command cleans the build.
+
+For custom build environments you can place your configuration variables in
+Local.sc.
+
+$ scons --help
+
+Shows the supported configuration parameters with a short description and the
+default value.
+
+====================================
+2. Running
+====================================
+
+====================================
+3. Testing
+====================================
+
+====================================
+4. Source code layout
+====================================
+
+SConstruct
+    Top-level scons build file
+
+dlogd/
+    Distributed Log Daemon
+
+include/
+    Public includes
+
+libDLogRPC/
+    DLog RPC Library in C
+
+libDLogClient/
+    DLog Client Library in C
+

@@ -1,0 +1,20 @@
+import os
+
+opts = Variables('../../Local.sc')
+
+opts.AddVariables(
+    ("CC", "C Compiler"),
+    ("AS", "Assembler"),
+    ("LINK", "Linker"),
+)
+
+env = Environment(options = opts, tools = ['default'], ENV = os.environ)
+
+src = [
+    "DLogRPC.cc",
+]
+env.StaticLibrary("DLogRPC",
+                  src,
+		  CPPPATH = [ "#include" ],
+                  CFLAGS = [ "-g" ])
+
