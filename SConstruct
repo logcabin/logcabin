@@ -32,3 +32,9 @@ env.StaticObject("build/gtest",
                  CPPFLAGS = [ "-g", "-std=c++0x" ])
 env.StaticLibrary("build/gtest",
                   ["build/gtest.o"])
+env.Program("build/test",
+            [ "TestRunner.cc" ],
+            LIBPATH = [ "#build" ],
+            LIBS = [ "gtest", "pthread" ],
+            CPPPATH = ["#include", "#gtest/include"],
+            CPPFLAGS = [ "-g", "-std=c++0x" ])
