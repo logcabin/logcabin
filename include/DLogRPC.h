@@ -51,7 +51,7 @@ class RPCSegment {
      * \param data
      *      Creates an RPC.
      */
-    RPCSegment(const void *data, uint32_t len)
+    RPCSegment(const void* data, uint32_t len)
     {
         buf = data;
         length = len;
@@ -67,7 +67,7 @@ class RPCSegment {
         length += len;
     }
     /// Pointer to buffer.
-    const void *buf;
+    const void* buf;
     /// Length of buffer.
     uint32_t length;
 };
@@ -120,7 +120,7 @@ class RPCMessage {
      * \param len
      *      Length of the blob.
      */
-    void append(void *buf, uint32_t len);
+    void append(void* buf, uint32_t len);
   private:
     /// Maximum buffer size (not including large blobs).
     static const uint32_t MAXBUFFER_SIZE = 1024;
@@ -197,7 +197,7 @@ class RPCResponse {
      * \param msg
      *      The received response.
      */
-    virtual void processResponse(RPCMessage &msg);
+    virtual void processResponse(RPCMessage& msg);
     /**
      * An event callback a derived class may implement to process a timeout or
      * other error.
@@ -229,7 +229,7 @@ class RPCSession {
      * \param hostname
      *      Hostname of the peer.
      */
-    RPCSession(RPCTransport &t, const std::string& hostname);
+    RPCSession(RPCTransport& t, const std::string& hostname);
     /**
      * Register an RPCService object with this session.
      * \param s
@@ -243,7 +243,7 @@ class RPCSession {
      * \param message
      *      Message to transmit.
      */
-    void send(RPCResponse& response, RPCMessage &message);
+    void send(RPCResponse& response, RPCMessage& message);
   private:
     RPCSession(const RPCSession&) = delete;
     RPCSession& operator=(const RPCSession&) = delete;
