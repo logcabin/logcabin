@@ -25,3 +25,10 @@ PhonyTargets(check = "./cpplint.py")
 PhonyTargets(lint = "./cpplint.py")
 PhonyTargets(doc = "doxygen")
 PhonyTargets(docs = "doxygen")
+
+env.StaticObject("build/gtest",
+                 ["gtest/src/gtest-all.cc"],
+                 CPPPATH = [ "#gtest", "#gtest/include" ],
+                 CPPFLAGS = [ "-g", "-std=c++0x" ])
+env.StaticLibrary("build/gtest",
+                  ["build/gtest.o"])
