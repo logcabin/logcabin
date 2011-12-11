@@ -1,0 +1,16 @@
+#!/bin/bash
+fail=0
+for hook in hooks/pre-commit-*; do
+    if [ -x $hook ]; then
+        echo "Running $hook..."
+        $hook
+        status=$?
+        if [ $status -ne 0 ]; then
+            echo "$hook failed with status $status"
+            fail=1
+        fi
+    else
+        echo "WARNING: Skipping $hook since it's not executable."
+    fi
+done
+exit $fail

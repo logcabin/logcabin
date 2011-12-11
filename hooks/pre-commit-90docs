@@ -1,0 +1,6 @@
+#!/bin/bash
+ERRORS=$( doxygen 2>&1 | egrep -i \(Warning\|Error\) | wc -l )
+if [ $ERRORS -gt 0 ]; then
+    echo "Fix your documentation warnings first!"
+fi
+exit $ERRORS
