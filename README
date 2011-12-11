@@ -25,6 +25,10 @@ $ scons --help
 Shows the supported configuration parameters with a short description and the
 default value.
 
+$ doxygen
+
+This will build the documentation and place it in docs/doxygen.
+
 ====================================
 2. Running
 ====================================
