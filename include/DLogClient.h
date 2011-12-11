@@ -26,7 +26,8 @@
 #ifndef DLOGCLIENT_H
 #define DLOGCLIENT_H
 
-namespace DLogClient {
+namespace DLog {
+namespace Client {
 
 class Cluster; // forward declaration
 
@@ -251,6 +252,7 @@ class Cluster {
     Cluster& operator=(const Cluster&) = delete;
 };
 
+} // namespace
 } // namespace
 
 #endif /* DLOGCLIENT_H */

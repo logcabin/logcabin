@@ -26,7 +26,8 @@
 #ifndef DLOGRPC_H
 #define DLOGRPC_H
 
-namespace DLogRPC {
+namespace DLog {
+namespace RPC {
 
 /**
  * This exception is thrown when failing to establish a connection to a host.
@@ -44,19 +45,19 @@ class HostNotConnected : public std::exception {
 /**
  * Represents a single contiguous segment of data to transmit or receive.
  */
-class RPCSegment {
+class Segment {
   public:
     /**
      * Constructor.
      * \param data
      *      Creates an RPC.
      */
-    RPCSegment(const void* data, uint32_t len)
+    Segment(const void* data, uint32_t len)
     {
         buf = data;
         length = len;
     }
-    ~RPCSegment() { }
+    ~Segment() { }
     /**
      * Grow the segment by extending the length.
      * \param len
@@ -76,13 +77,13 @@ class RPCSegment {
  * Represents a single RPC message and contains helper functions to serialize
  * and deserialize data.
  */
-class RPCMessage {
+class Message {
   public:
     /**
      * Constructor.
      */
-    RPCMessage();
-    ~RPCMessage();
+    Message();
+    ~Message();
     /**
      * Serialize a uint8_t to the message.
      * \param i
@@ -127,29 +128,29 @@ class RPCMessage {
     /// Buffer for message data (not including large blobs).
     char buffer[MAXBUFFER_SIZE];
     /// List of segments that make up the RPC.
-    std::vector<RPCSegment> segments;
-    friend class RPCTransport;
+    std::vector<Segment> segments;
+    friend class Transport;
 };
 
 /// RPC Service Id
-typedef uint16_t RPCServiceId;
+typedef uint16_t ServiceId;
 /// RPC Opcode
-typedef uint16_t RPCOpcode;
+typedef uint16_t Opcode;
 /// RPC Message Id
-typedef uint64_t RPCMessageId;
+typedef uint64_t MessageId;
 
 /**
  * RPC service interface that all services derive from.
  */
-class RPCService {
+class Service {
   public:
-    virtual ~RPCService() = 0;
+    virtual ~Service() = 0;
     /**
      * Return the service id of this service.
      * \return
      *      Service id.
      */
-    virtual RPCServiceId getServiceId() const = 0;
+    virtual ServiceId getServiceId() const = 0;
     /**
      * Process an incoming service request.
      * \param op
@@ -159,23 +160,23 @@ class RPCService {
      * \return
      *      RPC response message.
      */
-    virtual RPCMessage& processMessage(RPCOpcode op, RPCMessage& msg) = 0;
+    virtual Message& processMessage(Opcode op, Message& msg) = 0;
   private:
-    RPCService(const RPCService&) = delete;
-    RPCService& operator=(const RPCService&) = delete;
+    Service(const Service&) = delete;
+    Service& operator=(const Service&) = delete;
 };
 
 /**
  * RPC response object that is used to receive callbacks and wait for the
  * response to a request.
  */
-class RPCResponse {
+class Response {
   public:
     /**
      * Constructor.
      */
-    RPCResponse();
-    virtual ~RPCResponse();
+    Response();
+    virtual ~Response();
     /**
      * Is the response ready for processing?
      * \return
@@ -187,17 +188,17 @@ class RPCResponse {
      * \return
      *      The message id.
      */
-    RPCMessageId getMessageId();
+    MessageId getMessageId();
     /**
      * Get the message response.
      */
-    virtual RPCMessage& getResponse();
+    virtual Message& getResponse();
     /**
      * An event callback a derived class may implement to process the response.
      * \param msg
      *      The received response.
      */
-    virtual void processResponse(RPCMessage& msg);
+    virtual void processResponse(Message& msg);
     /**
      * An event callback a derived class may implement to process a timeout or
      * other error.
@@ -207,20 +208,20 @@ class RPCResponse {
     /// Is the message ready?
     bool ready;
     /// Message id
-    RPCMessageId msgId;
+    MessageId msgId;
     /// Message response
-    RPCMessage* response;
-    RPCResponse(const RPCResponse&) = delete;
-    RPCResponse& operator=(const RPCResponse&) = delete;
+    Message* response;
+    Response(const Response&) = delete;
+    Response& operator=(const Response&) = delete;
 };
 
-class RPCTransport {
+class Transport {
 };
 
 /**
  * Manages an RPC session.
  */
-class RPCSession {
+class Session {
   public:
     /**
      * Constructor
@@ -229,13 +230,13 @@ class RPCSession {
      * \param hostname
      *      Hostname of the peer.
      */
-    RPCSession(RPCTransport& t, const std::string& hostname);
+    Session(Transport& t, const std::string& hostname);
     /**
-     * Register an RPCService object with this session.
+     * Register an Service object with this session.
      * \param s
-     *      A pointer to an RPCService object.
+     *      A pointer to an Service object.
      */
-    void registerService(std::unique_ptr<RPCService> s);
+    void registerService(std::unique_ptr<Service> s);
     /**
      * Send a message and register a response object.
      * \param response
@@ -243,12 +244,13 @@ class RPCSession {
      * \param message
      *      Message to transmit.
      */
-    void send(RPCResponse& response, RPCMessage& message);
+    void send(Response& response, Message& message);
   private:
-    RPCSession(const RPCSession&) = delete;
-    RPCSession& operator=(const RPCSession&) = delete;
+    Session(const Session&) = delete;
+    Session& operator=(const Session&) = delete;
 };
 
+} // namespace
 } // namespace
 
 #endif /* DLOGRPC_H */
