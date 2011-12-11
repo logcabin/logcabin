@@ -4,13 +4,14 @@ opts = Variables('../../Local.sc')
 
 opts.AddVariables(
     ("CC", "C Compiler"),
+    ("CXX", "C++ Compiler"),
     ("AS", "Assembler"),
     ("LINK", "Linker"),
 )
 
 env = Environment(options = opts, tools = ['default'], ENV = os.environ)
 
-env.Program("dlogd", [ "main.cpp" ],
+env.Program("dlogd", [ "main.cc" ],
             LIBPATH = [ "#build/libDLogRPC" ],
             LIBS = [ "DLogRPC" ],
             CPPPATH = "#include",

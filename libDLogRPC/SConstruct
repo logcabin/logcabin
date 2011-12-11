@@ -4,6 +4,7 @@ opts = Variables('../../Local.sc')
 
 opts.AddVariables(
     ("CC", "C Compiler"),
+    ("CXX", "C++ Compiler"),
     ("AS", "Assembler"),
     ("LINK", "Linker"),
 )
