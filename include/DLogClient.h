@@ -13,6 +13,11 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+/**
+ * \file
+ * This file declares the interface for DLog's client library.
+ */
+
 #include <cstddef>
 #include <memory>
 #include <string>
@@ -23,9 +28,7 @@
 
 namespace DLogClient {
 
-// forward declarations
-class Cluster;
-class ClusterImpl;
+class Cluster; // forward declaration
 
 /**
  * The type of a log entry ID.
@@ -39,6 +42,34 @@ typedef uint64_t EntryId;
  * A reserved log ID.
  */
 static const EntryId NO_ID = ~0ULL;
+
+/**
+ * These declarations are for internal use only and should not be accessed
+ * outside the library's implementation.
+ */
+namespace Internal {
+
+class ClientImpl; // forward declaration
+
+/**
+ * A smart pointer to the internal client implementation object.
+ * The client implementation is heap-allocated and reference-counted because a
+ * Cluster instance and many Log instances (owned by the application) may refer
+ * to it.
+ */
+class ClientImplRef {
+  public:
+    explicit ClientImplRef(ClientImpl& clientImpl);
+    ClientImplRef(const ClientImplRef& other);
+    ClientImplRef& operator=(const ClientImplRef& other);
+    ~ClientImplRef();
+    ClientImpl& operator*() const;
+    ClientImpl* operator->() const;
+  private:
+    ClientImpl* clientImpl;
+};
+
+} // namespace DLogClient::Internal
 
 /**
  * Encapsulates a blob of data in a single log entry.
@@ -157,7 +188,7 @@ class Log {
     EntryId getLastId();
 
   private:
-    Cluster& cluster;
+    Internal::ClientImplRef& clientImpl;
     const std::string name;
     const uint64_t logId;
     friend class Cluster;
@@ -215,7 +246,7 @@ class Cluster {
     std::vector<std::string> listLogs();
 
   private:
-    std::unique_ptr<ClusterImpl> impl;
+    Internal::ClientImplRef clientImpl;
     Cluster(const Cluster&) = delete;
     Cluster& operator=(const Cluster&) = delete;
 };
