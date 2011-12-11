@@ -10,9 +10,11 @@ opts.AddVariables(
 
 env = Environment(options = opts, tools = ['default'], ENV = os.environ)
 
-env.Program("dlogd", [ "main.cpp" ],
-            LIBPATH = [ "#build/libDLogRPC" ],
-            LIBS = [ "DLogRPC" ],
-            CPPPATH = "#include",
-            CPPFLAGS = [ "-g", "-std=c++0x" ])
+src = [
+    "DLogClient.cc",
+]
+env.StaticLibrary("DLogClient",
+                  src,
+                  CPPPATH = [ "#include" ],
+                  CPPFLAGS = [ "-g", "-std=c++0x" ])
 
