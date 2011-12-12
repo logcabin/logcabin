@@ -57,26 +57,29 @@ template<typename T>
 class Ref {
   public:
     /**
-     * Constructor to be used when creating the object.
+     * Constructor from raw reference.
      * \param outside
      *      The new object that is now owned by its Refs.
      */
-    explicit Ref(T* outside)
-        : ptr(outside) {
+    explicit Ref(T& outside)
+        : ptr(&outside) {
         RefHelper<T>::incRefCount(ptr);
     }
+    /// Constructor from Ref.
     Ref(const Ref<T>& other) // NOLINT
-        : ptr(other.ptr) {
-        RefHelper<T>::incRefCount(other.ptr);
+        : ptr(other.get()) {
+        RefHelper<T>::incRefCount(ptr);
     }
+    /// Assignment from Ref.
     Ref<T>& operator=(const Ref<T>& other) {
         // Inc other.ptr before dec ptr in case both pointers already point to
         // the same object.
-        RefHelper<T>::incRefCount(other.ptr);
+        RefHelper<T>::incRefCount(other.get());
         RefHelper<T>::decRefCountAndDestroy(ptr);
-        ptr = other.ptr;
+        ptr = other.get();
         return *this;
     }
+    /// Destructor.
     ~Ref() {
         RefHelper<T>::decRefCountAndDestroy(ptr);
     }
@@ -85,6 +88,79 @@ class Ref {
     }
     T* operator->() const {
         return ptr;
+    }
+    T* get() const {
+        return ptr;
+    }
+  private:
+    T* ptr;
+};
+
+/**
+ * An optional reference to an object. This may store NULL, so be careful when
+ * dereferencing it.
+ */
+template<typename T>
+class Ptr {
+  public:
+    /**
+     * Constructor from raw pointer.
+     * \param outside
+     *      The new object that is now owned by its Refs.
+     */
+    explicit Ptr(T* outside = NULL)
+        : ptr(outside) {
+        if (outside != NULL)
+            RefHelper<T>::incRefCount(ptr);
+    }
+    /// Constructor from Ref.
+    explicit Ptr(const Ref<T>& other) // NOLINT
+        : ptr(other.get()) {
+        RefHelper<T>::incRefCount(ptr);
+    }
+    /// Constructor from Ptr.
+    Ptr(const Ptr<T>& other) // NOLINT
+        : ptr(other.get()) {
+        if (ptr != NULL)
+            RefHelper<T>::incRefCount(ptr);
+    }
+    /// Assignment from Ref.
+    Ptr<T>& operator=(const Ref<T>& other) {
+        // Inc other.ptr before dec ptr in case both pointers already point to
+        // the same object.
+        RefHelper<T>::incRefCount(other.get());
+        if (ptr != NULL)
+            RefHelper<T>::decRefCountAndDestroy(ptr);
+        ptr = other.get();
+        return *this;
+    }
+    /// Assignment from Ptr.
+    Ptr<T>& operator=(const Ptr<T>& other) {
+        // Inc other.ptr before dec ptr in case both pointers already point to
+        // the same object.
+        if (other.ptr != NULL)
+            RefHelper<T>::incRefCount(other.get());
+        if (ptr != NULL)
+            RefHelper<T>::decRefCountAndDestroy(ptr);
+        ptr = other.get();
+        return *this;
+    }
+    /// Destructor.
+    ~Ptr() {
+        if (ptr != NULL)
+            RefHelper<T>::decRefCountAndDestroy(ptr);
+    }
+    T& operator*() const {
+        return *ptr;
+    }
+    T* operator->() const {
+        return ptr;
+    }
+    T* get() const {
+        return ptr;
+    }
+    operator bool const() {
+        return ptr != NULL;
     }
   private:
     T* ptr;
