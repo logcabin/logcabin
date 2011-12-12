@@ -3,7 +3,7 @@ Import('env')
 src = [
     "main.cc",
     "LogManager.cc",
-    "#build/proto/dlog.pb.cc",
+    "#build/proto/dlog.pb.o",
 ]
 
 env.Program("dlogd", src,
