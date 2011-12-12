@@ -2,12 +2,15 @@ Import('env')
 
 src = [
     "main.cc",
+    "Debug.c",
     "LogManager.cc",
-    "#build/proto/dlog.pb.o",
+    #"#build/proto/dlog.pb.o",
 ]
 
 env.Program("dlogd", src,
-            LIBPATH = [ "#build/libDLogRPC", "#build/libDLogStorage" ],
-            LIBS = [ "protobuf", "DLogRPC", "DLogStorage" ],
+            LIBPATH = [ "$LIBPATH",
+                        "#build/libDLogRPC",
+                        "#build/libDLogStorage" ],
+            LIBS = [ "event_core-2.0", "DLogRPC", "DLogStorage" ],
             CPPPATH = [ "#include", "#" ])
 

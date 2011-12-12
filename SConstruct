@@ -36,6 +36,7 @@ else:
     sys.exit(-1)
 
 if env["VERBOSE"] == "0":
+    env["CCCOMSTR"] = "Compiling $SOURCE"
     env["CXXCOMSTR"] = "Compiling $SOURCE"
     env["SHCCCOMSTR"] = "Compiling $SOURCE"
     env["SHCXXCOMSTR"] = "Compiling $SOURCE"
