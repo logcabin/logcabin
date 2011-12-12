@@ -9,6 +9,7 @@ opts.AddVariables(
     ("AS", "Assembler"),
     ("LINK", "Linker"),
     ("BUILDTYPE", "Build type (RELEASE or DEBUG)", "RELEASE"),
+    ("VERBOSE", "Show full build information (0 or 1)", "0"),
 )
 
 env = Environment(options = opts, tools = ['default'], ENV = os.environ)
@@ -29,6 +30,11 @@ elif env["BUILDTYPE"] == "RELEASE":
 else:
     print "Error BUILDTYPE must be RELEASE or DEBUG"
     sys.exit(-1)
+
+if env["VERBOSE"] == "0":
+    env["CXXCOMSTR"] = "Compiling $SOURCE"
+    env["ARCOMSTR"] = "Creating library $TARGET"
+    env["LINKCOMSTR"] = "Linking $TARGET"
 
 Export('env')
 SConscript('libDLogClient/SConscript', variant_dir='build/libDLogClient')
