@@ -9,12 +9,12 @@ opts.AddVariables(
     ("LINK", "Linker"),
 )
 
-env = Environment(options = opts, tools = ['default'], ENV = os.environ)
+Import('env')
 
 src = [
-    "DLogClient.cc",
+    "DLogRPC.cc",
 ]
-env.StaticLibrary("DLogClient",
+env.StaticLibrary("DLogRPC",
                   src,
                   CPPPATH = [ "#include" ],
                   CPPFLAGS = [ "-g", "-std=c++0x" ])

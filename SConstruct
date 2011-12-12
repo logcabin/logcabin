@@ -12,9 +12,10 @@ opts.AddVariables(
 env = Environment(options = opts, tools = ['default'], ENV = os.environ)
 Help(opts.GenerateHelpText(env))
 
-SConscript('libDLogClient/SConstruct', variant_dir='build/libDLogClient')
-SConscript('libDLogRPC/SConstruct', variant_dir='build/libDLogRPC')
-SConscript('dlogd/SConstruct', variant_dir='build/dlogd')
+Export('env')
+SConscript('libDLogClient/SConscript', variant_dir='build/libDLogClient')
+SConscript('libDLogRPC/SConscript', variant_dir='build/libDLogRPC')
+SConscript('dlogd/SConscript', variant_dir='build/dlogd')
 
 # This function is taken from http://www.scons.org/wiki/PhonyTargets
 def PhonyTargets(env = None, **kw):

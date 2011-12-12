@@ -9,7 +9,7 @@ opts.AddVariables(
     ("LINK", "Linker"),
 )
 
-env = Environment(options = opts, tools = ['default'], ENV = os.environ)
+Import('env')
 
 env.Program("dlogd", [ "main.cc" ],
             LIBPATH = [ "#build/libDLogRPC" ],
