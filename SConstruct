@@ -14,20 +14,19 @@ opts.AddVariables(
 env = Environment(options = opts, tools = ['default'], ENV = os.environ)
 Help(opts.GenerateHelpText(env))
 
-COMMON_FLAGS = [ "-Wall", "-Wformat=2", "-Wextra", "-Wwrite-strings",
-                 "-Wno-unused-parameter", "-Wmissing-format-attribute" ]
-env.Append(CFLAGS = COMMON_FLAGS)
+env.Append(CXXFLAGS = [ "-Wall", "-Wformat=2", "-Wextra", "-Wwrite-strings",
+                        "-Wno-unused-parameter", "-Wmissing-format-attribute" ])
 env.Append(CFLAGS = [ "-Wmissing-prototypes", "-Wmissing-declarations",
                       "-Wshadow", "-Wbad-function-cast" ])
-env.Append(CPPFLAGS = COMMON_FLAGS)
 env.Append(CPPFLAGS = [ "-Wno-non-template-friend", "-Woverloaded-virtual",
                         "-Wcast-qual", "-Wcast-align", "-Wconversion",
                         "-std=c++0x" ])
 
 if env["BUILDTYPE"] == "DEBUG":
-    env.Append(CFLAGS = "-g")
-    env.Append(CPPFLAGS = "-g")
-elif env["BUILDTYPE"] != "RELEASE":
+    env.Append(CXXFLAGS = [ "-g", "-DDEBUG" ])
+elif env["BUILDTYPE"] == "RELEASE":
+    env.Append(CXXFLAGS = "-DNDEBUG")
+else:
     print "Error BUILDTYPE must be RELEASE or DEBUG"
     sys.exit(-1)
 
