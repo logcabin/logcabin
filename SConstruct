@@ -41,6 +41,7 @@ SConscript('libDLogClient/SConscript', variant_dir='build/libDLogClient')
 SConscript('libDLogRPC/SConscript', variant_dir='build/libDLogRPC')
 SConscript('dlogperf/SConscript', variant_dir='build/dlogperf')
 SConscript('dlogd/SConscript', variant_dir='build/dlogd')
+SConscript('test/SConscript', variant_dir='build/test')
 
 # This function is taken from http://www.scons.org/wiki/PhonyTargets
 def PhonyTargets(env = None, **kw):
@@ -53,20 +54,3 @@ PhonyTargets(lint = "./cpplint.py")
 PhonyTargets(doc = "doxygen")
 PhonyTargets(docs = "doxygen")
 
-env.StaticObject("build/gtest",
-                 ["gtest/src/gtest-all.cc"],
-                 CPPPATH = [ "#gtest", "#gtest/include" ],
-                 CXXFLAGS = [ "-g", "-DDEBUG" ],
-                 CPPFLAGS = "-std=c++0x")
-env.StaticLibrary("build/gtest",
-                  ["build/gtest.o"])
-env.Program("build/test",
-            [
-              "TestRunner.cc",
-              "RefTest.cc",
-            ],
-            LIBPATH = [ "#build" ],
-            LIBS = [ "gtest", "pthread" ],
-            CPPPATH = ["#include", "#gtest/include"],
-            CXXFLAGS = [ "-g", "-DDEBUG" ],
-            CPPFLAGS = "-std=c++0x")

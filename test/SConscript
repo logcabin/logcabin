@@ -1,0 +1,22 @@
+Import('env')
+
+env.SharedObject("#build/test/gtest-all.o",
+                 "#gtest/src/gtest-all.cc",
+                 CPPPATH = [ "#gtest", "#gtest/include" ],
+                 CXXFLAGS = [ "-g", "-DDEBUG" ],
+                 CPPFLAGS = "-std=c++0x")
+env.StaticLibrary("#build/test/gtest",
+                 ["gtest-all.o"],
+                 CPPPATH = [ "#gtest", "#gtest/include" ],
+                 CXXFLAGS = [ "-g", "-DDEBUG" ],
+                 CPPFLAGS = "-std=c++0x")
+env.Program("test",
+            [
+              "TestRunner.cc",
+              "RefTest.cc",
+            ],
+            LIBPATH = [ "#build/test" ],
+            LIBS = [ "gtest", "pthread" ],
+            CPPPATH = ["#include", "#gtest/include"],
+            CXXFLAGS = [ "-g", "-DDEBUG" ],
+            CPPFLAGS = "-std=c++0x")
