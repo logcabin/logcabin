@@ -1,3 +1,4 @@
+import sys
 import os
 
 opts = Variables('Local.sc')
@@ -7,10 +8,28 @@ opts.AddVariables(
     ("CXX", "C++ Compiler"),
     ("AS", "Assembler"),
     ("LINK", "Linker"),
+    ("BUILDTYPE", "Build type (RELEASE or DEBUG)", "RELEASE"),
 )
 
 env = Environment(options = opts, tools = ['default'], ENV = os.environ)
 Help(opts.GenerateHelpText(env))
+
+COMMON_FLAGS = [ "-Wall", "-Wformat=2", "-Wextra", "-Wwrite-strings",
+                 "-Wno-unused-parameter", "-Wmissing-format-attribute" ]
+env.Append(CFLAGS = COMMON_FLAGS)
+env.Append(CFLAGS = [ "-Wmissing-prototypes", "-Wmissing-declarations",
+                      "-Wshadow", "-Wbad-function-cast" ])
+env.Append(CPPFLAGS = COMMON_FLAGS)
+env.Append(CPPFLAGS = [ "-Wno-non-template-friend", "-Woverloaded-virtual",
+                        "-Wcast-qual", "-Wcast-align", "-Wconversion",
+                        "-std=c++0x" ])
+
+if env["BUILDTYPE"] == "DEBUG":
+    env.Append(CFLAGS = "-g")
+    env.Append(CPPFLAGS = "-g")
+elif env["BUILDTYPE"] != "RELEASE":
+    print "Error BUILDTYPE must be RELEASE or DEBUG"
+    sys.exit(-1)
 
 Export('env')
 SConscript('libDLogClient/SConscript', variant_dir='build/libDLogClient')
@@ -30,8 +49,7 @@ PhonyTargets(docs = "doxygen")
 
 env.StaticObject("build/gtest",
                  ["gtest/src/gtest-all.cc"],
-                 CPPPATH = [ "#gtest", "#gtest/include" ],
-                 CPPFLAGS = [ "-g", "-std=c++0x" ])
+                 CPPPATH = [ "#gtest", "#gtest/include" ])
 env.StaticLibrary("build/gtest",
                   ["build/gtest.o"])
 env.Program("build/test",
@@ -41,5 +59,4 @@ env.Program("build/test",
             ],
             LIBPATH = [ "#build" ],
             LIBS = [ "gtest", "pthread" ],
-            CPPPATH = ["#include", "#gtest/include"],
-            CPPFLAGS = [ "-g", "-std=c++0x" ])
+            CPPPATH = ["#include", "#gtest/include"])

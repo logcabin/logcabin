@@ -1,19 +1,7 @@
-import os
-
-opts = Variables('../../Local.sc')
-
-opts.AddVariables(
-    ("CC", "C Compiler"),
-    ("CXX", "C++ Compiler"),
-    ("AS", "Assembler"),
-    ("LINK", "Linker"),
-)
-
 Import('env')
 
 env.Program("dlogd", [ "main.cc" ],
             LIBPATH = [ "#build/libDLogRPC" ],
             LIBS = [ "DLogRPC" ],
-            CPPPATH = "#include",
-            CPPFLAGS = [ "-g", "-std=c++0x" ])
+            CPPPATH = "#include")
 
