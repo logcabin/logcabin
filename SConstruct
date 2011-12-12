@@ -10,6 +10,7 @@ opts.AddVariables(
     ("LINK", "Linker"),
     ("BUILDTYPE", "Build type (RELEASE or DEBUG)", "RELEASE"),
     ("VERBOSE", "Show full build information (0 or 1)", "0"),
+    ("NUMCPUS", "Number of CPUs to use for build (0 means auto).", "0"),
 )
 
 env = Environment(options = opts, tools = ['default'], ENV = os.environ)
@@ -37,6 +38,19 @@ if env["VERBOSE"] == "0":
     env["SHCXXCOMSTR"] = "Compiling $SOURCE"
     env["ARCOMSTR"] = "Creating library $TARGET"
     env["LINKCOMSTR"] = "Linking $TARGET"
+
+def GetNumCPUs():
+    if env["NUMCPUS"] != "0":
+	return int(env["NUMCPUS"])
+    if os.sysconf_names.has_key("SC_NPROCESSORS_ONLN"):
+	cpus = os.sysconf("SC_NPROCESSORS_ONLN")
+	if isinstance(cpus, int) and cpus > 0:
+	    return 2*cpus
+	else:
+	    return 2
+    return 2*int(os.popen2("sysctl -n hw.ncpu")[1].read())
+
+env.SetOption('num_jobs', GetNumCPUs())
 
 Export('env')
 SConscript('libDLogClient/SConscript', variant_dir='build/libDLogClient')
