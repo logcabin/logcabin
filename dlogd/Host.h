@@ -26,8 +26,8 @@
 #include <Ref.h>
 #include <DLogRPC.h>
 
-#ifndef HOST_H
-#define HOST_H
+#ifndef DLOGD_HOST_H
+#define DLOGD_HOST_H
 
 namespace DLog {
 
@@ -35,7 +35,7 @@ namespace DLog {
  * The class that manages the state of an individual cluster member.
  */
 class Host {
-    public:
+  public:
     enum HostStatus {
         /// Host is alive an healthy.
         HOSTSTATUS_UP,
@@ -46,6 +46,8 @@ class Host {
     };
     /**
      * Constructor.
+     * \param t
+     *      Transport to use.
      * \param host
      *      Host ip and port.
      */
@@ -85,7 +87,7 @@ class Host {
      *      Number of heartbeats lost since the machine joined the cluster.
      */
     uint32_t getLostHeartbeats();
-private:
+  private:
     /// Transport object
     RPC::Transport* transport;
     /// Data session object
@@ -98,4 +100,4 @@ private:
 
 } // namespace
 
-#endif /* HOST_H */
+#endif /* DLOGD_HOST_H */
