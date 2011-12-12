@@ -5,6 +5,5 @@ src = [
 ]
 env.StaticLibrary("DLogRPC",
                   src,
-                  CPPPATH = [ "#include" ],
-                  CPPFLAGS = [ "-g", "-std=c++0x" ])
+                  CPPPATH = [ "#include" ])
 

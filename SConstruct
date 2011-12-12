@@ -48,7 +48,9 @@ PhonyTargets(docs = "doxygen")
 
 env.StaticObject("build/gtest",
                  ["gtest/src/gtest-all.cc"],
-                 CPPPATH = [ "#gtest", "#gtest/include" ])
+                 CPPPATH = [ "#gtest", "#gtest/include" ],
+                 CXXFLAGS = [ "-g", "-DDEBUG" ],
+                 CPPFLAGS = "-std=c++0x")
 env.StaticLibrary("build/gtest",
                   ["build/gtest.o"])
 env.Program("build/test",
@@ -58,4 +60,6 @@ env.Program("build/test",
             ],
             LIBPATH = [ "#build" ],
             LIBS = [ "gtest", "pthread" ],
-            CPPPATH = ["#include", "#gtest/include"])
+            CPPPATH = ["#include", "#gtest/include"],
+            CXXFLAGS = [ "-g", "-DDEBUG" ],
+            CPPFLAGS = "-std=c++0x")
