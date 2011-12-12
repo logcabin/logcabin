@@ -6,6 +6,7 @@ Pre-requisites:
  - scons
  - git
  - g++ or clang
+ - doxygen
 
 Command:
 
@@ -47,6 +48,9 @@ This will build the documentation and place it in docs/doxygen.
 
 SConstruct
     Top-level scons build file
+
+dlogperf/
+    Performance benchmark
 
 dlogd/
     Distributed Log Daemon

@@ -13,4 +13,11 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include "DLogRPC.h"
+#include <DLogRPC.h>
+#include <DLogClient.h>
+
+int main(int argc, char *argv[])
+{
+    return 0;
+}
+
