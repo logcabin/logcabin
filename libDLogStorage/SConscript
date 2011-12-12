@@ -1,0 +1,9 @@
+Import('env')
+
+src = [
+    "DLogStorage.cc",
+]
+env.StaticLibrary("DLogStorage",
+                  src,
+                  CPPPATH = [ "#include" ])
+
