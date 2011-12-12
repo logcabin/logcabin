@@ -22,7 +22,7 @@ env.Append(CFLAGS = [ "-Wmissing-prototypes", "-Wmissing-declarations",
                       "-Wshadow", "-Wbad-function-cast" ])
 env.Append(CPPFLAGS = [ "-Wno-non-template-friend", "-Woverloaded-virtual",
                         "-Wcast-qual", "-Wcast-align", "-Wconversion",
-                        "-std=c++0x" ])
+                        "-Weffc++", "-std=c++0x" ])
 
 if env["BUILDTYPE"] == "DEBUG":
     env.Append(CXXFLAGS = [ "-g", "-DDEBUG" ])
