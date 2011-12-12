@@ -33,6 +33,8 @@ else:
 
 if env["VERBOSE"] == "0":
     env["CXXCOMSTR"] = "Compiling $SOURCE"
+    env["SHCCCOMSTR"] = "Compiling $SOURCE"
+    env["SHCXXCOMSTR"] = "Compiling $SOURCE"
     env["ARCOMSTR"] = "Creating library $TARGET"
     env["LINKCOMSTR"] = "Linking $TARGET"
 
