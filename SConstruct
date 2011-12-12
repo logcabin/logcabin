@@ -41,13 +41,13 @@ if env["VERBOSE"] == "0":
 
 def GetNumCPUs():
     if env["NUMCPUS"] != "0":
-	return int(env["NUMCPUS"])
+        return int(env["NUMCPUS"])
     if os.sysconf_names.has_key("SC_NPROCESSORS_ONLN"):
-	cpus = os.sysconf("SC_NPROCESSORS_ONLN")
-	if isinstance(cpus, int) and cpus > 0:
-	    return 2*cpus
-	else:
-	    return 2
+        cpus = os.sysconf("SC_NPROCESSORS_ONLN")
+        if isinstance(cpus, int) and cpus > 0:
+            return 2*cpus
+        else:
+            return 2
     return 2*int(os.popen2("sysctl -n hw.ncpu")[1].read())
 
 env.SetOption('num_jobs', GetNumCPUs())
