@@ -51,6 +51,8 @@ class Segment {
      * Constructor.
      * \param data
      *      Creates an RPC.
+     * \param len
+     *      Initial length of the segment.
      */
     Segment(const void* data, uint32_t len)
     {
