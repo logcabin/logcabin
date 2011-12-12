@@ -39,8 +39,9 @@ if env["VERBOSE"] == "0":
 Export('env')
 SConscript('libDLogClient/SConscript', variant_dir='build/libDLogClient')
 SConscript('libDLogRPC/SConscript', variant_dir='build/libDLogRPC')
-SConscript('dlogperf/SConscript', variant_dir='build/dlogperf')
+SConscript('libDLogStorage/SConscript', variant_dir='build/libDLogStorage')
 SConscript('dlogd/SConscript', variant_dir='build/dlogd')
+SConscript('dlogperf/SConscript', variant_dir='build/dlogperf')
 SConscript('test/SConscript', variant_dir='build/test')
 
 # This function is taken from http://www.scons.org/wiki/PhonyTargets

@@ -160,11 +160,14 @@ class Log {
      *      Makes the operation conditional on this being the last ID in the
      *      log. Use NO_ID to unconditionally append.
      * \return
-     *      False if the condition given by previousId failed, otherwise true.
+     *      The created entry ID, or NO_ID if the condition given by previousId
+     *      failed. There's no need to invalidate this returned ID. It is the
+     *      new head of the log, so it should be passed in future conditions as
+     *      the previousId argument.
      * \throw LogDisappearedException
      *      If this log no longer exists because someone deleted it.
      */
-    bool invalidate(const std::vector<EntryId>& invalidates,
+    EntryId invalidate(const std::vector<EntryId>& invalidates,
                     EntryId previousId = NO_ID);
 
     /**
@@ -202,8 +205,8 @@ class Log {
  */
 class ErrorCallback {
   public:
-    virtual ~ErrorCallback();
-    virtual void callBack(/* ... */);
+    virtual ~ErrorCallback() {}
+    virtual void callBack(/* ... */) = 0;
 };
 
 /**

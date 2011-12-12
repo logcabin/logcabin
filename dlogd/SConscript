@@ -1,7 +1,12 @@
 Import('env')
 
-env.Program("dlogd", [ "main.cc" ],
-            LIBPATH = [ "#build/libDLogRPC" ],
-            LIBS = [ "DLogRPC" ],
+src = [
+    "main.cc",
+    "LogManager.cc",
+]
+
+env.Program("dlogd", src,
+            LIBPATH = [ "#build/libDLogRPC", "#build/libDLogStorage" ],
+            LIBS = [ "DLogRPC", "DLogStorage" ],
             CPPPATH = "#include")
 
