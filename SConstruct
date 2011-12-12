@@ -8,6 +8,7 @@ opts.AddVariables(
     ("CXX", "C++ Compiler"),
     ("AS", "Assembler"),
     ("LINK", "Linker"),
+    ("LIBEVENT2PATH", "libevent-2.0 library path (if necessary).", ""),
     ("BUILDTYPE", "Build type (RELEASE or DEBUG)", "RELEASE"),
     ("VERBOSE", "Show full build information (0 or 1)", "0"),
     ("NUMCPUS", "Number of CPUs to use for build (0 means auto).", "0"),
@@ -41,6 +42,9 @@ if env["VERBOSE"] == "0":
     env["ARCOMSTR"] = "Creating library $TARGET"
     env["LINKCOMSTR"] = "Linking $TARGET"
 
+if env["LIBEVENT2PATH"] != "":
+    env.Append(LIBPATH = env["LIBEVENT2PATH"])
+
 def GetNumCPUs():
     if env["NUMCPUS"] != "0":
         return int(env["NUMCPUS"])
@@ -69,8 +73,8 @@ def PhonyTargets(env = None, **kw):
     for target,action in kw.items():
         env.AlwaysBuild(env.Alias(target, [], action))
 
-PhonyTargets(check = "./cpplint.py")
-PhonyTargets(lint = "./cpplint.py")
-PhonyTargets(doc = "doxygen")
-PhonyTargets(docs = "doxygen")
+PhonyTargets(check = "scripts/cpplint.py")
+PhonyTargets(lint = "scripts/cpplint.py")
+PhonyTargets(doc = "doxygen docs/Doxyfile")
+PhonyTargets(docs = "doxygen docs/Doxyfile")
 
