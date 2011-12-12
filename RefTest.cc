@@ -44,14 +44,14 @@ class TObj {
 TEST(RefTest, basic) {
     liveCount = 0;
 
-    Ref<TObj> r1(new TObj("foo"));
+    Ref<TObj> r1(*new TObj("foo"));
     EXPECT_EQ(1, r1->refCount);
     {
         Ref<TObj> r2(r1);
         EXPECT_EQ(2, r1->refCount);
     }
     EXPECT_EQ(1, r1->refCount);
-    Ref<TObj> r3(new TObj("bar"));
+    Ref<TObj> r3(*new TObj("bar"));
     r3 = r1;
     EXPECT_EQ(2, r1->refCount);
 
@@ -59,6 +59,34 @@ TEST(RefTest, basic) {
 
     EXPECT_EQ("foo", r3->name);
     EXPECT_EQ("foo", (*r3).name);
+}
+
+TEST(PtrTest, basic) {
+    liveCount = 0;
+
+    Ref<TObj> r1(*new TObj("foo"));
+    Ptr<TObj> p1(r1);
+    Ptr<TObj> p2(NULL);
+    Ptr<TObj> p3(new TObj("bar"));
+    Ptr<TObj> p4(p1);
+    Ptr<TObj> p5;
+
+    EXPECT_FALSE(p2);
+    EXPECT_FALSE(p5);
+
+    EXPECT_EQ(3, p1->refCount);
+    {
+        Ptr<TObj> p5(p1);
+        EXPECT_EQ(4, p1->refCount);
+    }
+    EXPECT_EQ(3, p1->refCount);
+    EXPECT_EQ(1, p3->refCount);
+
+    EXPECT_EQ(2, liveCount);
+
+    EXPECT_EQ("foo", p4->name);
+    EXPECT_EQ("foo", (*p4).name);
+    EXPECT_EQ("bar", p3->name);
 }
 
 } // namespace DLog
