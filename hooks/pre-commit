@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 fail=0
 for hook in hooks/pre-commit-*; do
     if [ -x $hook ]; then
