@@ -64,6 +64,12 @@ class DLogService : public RPC::Service {
     void deleteLog(std::unique_ptr<RPC::Message> request,
                    std::unique_ptr<RPC::Message> reply);
     /**
+     * List logs.
+     * \copydetails openLog
+     */
+    void listLog(std::unique_ptr<RPC::Message> request,
+                 std::unique_ptr<RPC::Message> reply);
+    /**
      * Append to a log.
      * \copydetails openLog
      */
