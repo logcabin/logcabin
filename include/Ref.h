@@ -159,7 +159,7 @@ class Ptr {
     T* get() const {
         return ptr;
     }
-    operator bool const() {
+    operator bool() const {
         return ptr != NULL;
     }
   private:
