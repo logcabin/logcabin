@@ -3,10 +3,11 @@ Import('env')
 src = [
     "main.cc",
     "LogManager.cc",
+    "#build/proto/dlog.pb.cc",
 ]
 
 env.Program("dlogd", src,
             LIBPATH = [ "#build/libDLogRPC", "#build/libDLogStorage" ],
-            LIBS = [ "DLogRPC", "DLogStorage" ],
-            CPPPATH = "#include")
+            LIBS = [ "protobuf", "DLogRPC", "DLogStorage" ],
+            CPPPATH = [ "#include", "#" ])
 
