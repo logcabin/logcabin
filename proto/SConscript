@@ -1,0 +1,8 @@
+Import('env')
+
+env.Protoc([],
+           "dlog.proto",
+           PROTOCPROTOPATH = ['.'],
+           PROTOCPYTHONOUTDIR = None,
+           PROTOCOUTDIR = '.')
+

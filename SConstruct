@@ -13,7 +13,9 @@ opts.AddVariables(
     ("NUMCPUS", "Number of CPUs to use for build (0 means auto).", "0"),
 )
 
-env = Environment(options = opts, tools = ['default'], ENV = os.environ)
+env = Environment(options = opts,
+                  tools = ['default', 'protoc'],
+                  ENV = os.environ)
 Help(opts.GenerateHelpText(env))
 
 env.Append(CXXFLAGS = [ "-Wall", "-Wformat=2", "-Wextra", "-Wwrite-strings",
@@ -58,6 +60,7 @@ SConscript('libDLogRPC/SConscript', variant_dir='build/libDLogRPC')
 SConscript('libDLogStorage/SConscript', variant_dir='build/libDLogStorage')
 SConscript('dlogd/SConscript', variant_dir='build/dlogd')
 SConscript('dlogperf/SConscript', variant_dir='build/dlogperf')
+SConscript('proto/SConscript', variant_dir='build/proto')
 SConscript('test/SConscript', variant_dir='build/test')
 
 # This function is taken from http://www.scons.org/wiki/PhonyTargets
