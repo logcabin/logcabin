@@ -9,5 +9,5 @@ env.Protoc([],
 env.StaticObject("#build/proto/dlog.pb.o",
                  "#build/proto/dlog.pb.cc",
                  CPPPATH = "#",
-                 CPPFLAGS = "-std=c++0x")
+                 CXXFLAGS = "-std=c++0x")
 

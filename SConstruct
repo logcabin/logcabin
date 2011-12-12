@@ -19,11 +19,11 @@ env = Environment(options = opts,
                   ENV = os.environ)
 Help(opts.GenerateHelpText(env))
 
-env.Append(CXXFLAGS = [ "-Wall", "-Wformat=2", "-Wextra", "-Wwrite-strings",
+env.Append(CPPFLAGS = [ "-Wall", "-Wformat=2", "-Wextra", "-Wwrite-strings",
                         "-Wno-unused-parameter", "-Wmissing-format-attribute" ])
 env.Append(CFLAGS = [ "-Wmissing-prototypes", "-Wmissing-declarations",
                       "-Wshadow", "-Wbad-function-cast" ])
-env.Append(CPPFLAGS = [ "-Wno-non-template-friend", "-Woverloaded-virtual",
+env.Append(CXXFLAGS = [ "-Wno-non-template-friend", "-Woverloaded-virtual",
                         "-Wcast-qual", "-Wcast-align", "-Wconversion",
                         "-Weffc++", "-std=c++0x" ])
 
