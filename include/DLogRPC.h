@@ -141,6 +141,12 @@ typedef uint16_t Opcode;
 /// RPC Message Id
 typedef uint64_t MessageId;
 
+/// RPC Service Ids
+enum {
+    SERVICE_DLOG,
+    SERVICE_REPLICATION,
+};
+
 /**
  * RPC service interface that all services derive from.
  */
@@ -157,12 +163,16 @@ class Service {
      * Process an incoming service request.
      * \param op
      *      RPC opcode
-     * \param msg
+     * \param request
      *      RPC request message
+     * \param reply
+     *      A reply message that has a header already initialized.
      * \return
      *      RPC response message.
      */
-    virtual Message& processMessage(Opcode op, Message& msg) = 0;
+    virtual void processMessage(Opcode op,
+                                std::unique_ptr<Message> request,
+                                std::unique_ptr<Message> reply) = 0;
   private:
     Service(const Service&) = delete;
     Service& operator=(const Service&) = delete;
@@ -247,6 +257,13 @@ class Session {
      *      Message to transmit.
      */
     void send(Response& response, Message& message);
+    /**
+     * Send a reply back to the caller. Only service objects should send this
+     * type of message.
+     * \param reply
+     *      Message to reply back with.
+     */
+    void sendResponse(std::unique_ptr<Message> reply);
   private:
     Session(const Session&) = delete;
     Session& operator=(const Session&) = delete;
