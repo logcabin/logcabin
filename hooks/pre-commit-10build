@@ -1,2 +1,2 @@
-#!/usr/bin/env bash
-exec scons --silent
+#!/bin/sh
+scons --silent
