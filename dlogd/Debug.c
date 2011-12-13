@@ -13,6 +13,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <stdint.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
