@@ -22,71 +22,96 @@ namespace DLog {
 
 namespace {
 
-uint32_t liveCount;
-
 class TObj {
-  public:
+  private:
     explicit TObj(const std::string& name)
-        : name(name)
-        , refCount(0)
+        : refCount()
+        , name(name)
     {
         ++liveCount;
     }
+    friend class DLog::MakeHelper; // construct with make()
+  public:
     ~TObj() {
         --liveCount;
     }
+    RefHelper<TObj>::RefCount refCount;
     const std::string name;
-    uint32_t refCount;
+    static uint32_t liveCount;
 };
+uint32_t TObj::liveCount;
 
 } // anonymous namespace
 
 TEST(RefTest, basic) {
-    liveCount = 0;
+    TObj::liveCount = 0;
 
-    Ref<TObj> r1(*new TObj("foo"));
-    EXPECT_EQ(1, r1->refCount);
+    Ref<TObj> r1 = make<TObj>("foo");
+    EXPECT_EQ(1U, r1->refCount.get());
     {
         Ref<TObj> r2(r1);
-        EXPECT_EQ(2, r1->refCount);
+        EXPECT_EQ(2U, r1->refCount.get());
     }
-    EXPECT_EQ(1, r1->refCount);
-    Ref<TObj> r3(*new TObj("bar"));
+    EXPECT_EQ(1U, r1->refCount.get());
+    Ref<TObj> r3 = make<TObj>("bar");
     r3 = r1;
-    EXPECT_EQ(2, r1->refCount);
+    EXPECT_EQ(2U, r1->refCount.get());
 
-    EXPECT_EQ(1, liveCount);
+    EXPECT_EQ(1U, TObj::liveCount);
 
     EXPECT_EQ("foo", r3->name);
     EXPECT_EQ("foo", (*r3).name);
 }
 
-TEST(PtrTest, basic) {
-    liveCount = 0;
+TEST(RefTest, equality) {
+    Ref<TObj> r1 = make<TObj>("foo");
+    Ref<TObj> r2 = make<TObj>("foo");
+    Ref<TObj> r3(r1);
+    EXPECT_NE(r1, r2);
+    EXPECT_EQ(r1, r3);
+}
 
-    Ref<TObj> r1(*new TObj("foo"));
+TEST(PtrTest, basic) {
+    TObj::liveCount = 0;
+
+    Ref<TObj> r1 = make<TObj>("foo");
     Ptr<TObj> p1(r1);
     Ptr<TObj> p2(NULL);
-    Ptr<TObj> p3(new TObj("bar"));
+    Ptr<TObj> p3 = make<TObj>("bar");
     Ptr<TObj> p4(p1);
     Ptr<TObj> p5;
 
     EXPECT_FALSE(p2);
     EXPECT_FALSE(p5);
 
-    EXPECT_EQ(3, p1->refCount);
+    EXPECT_EQ(3U, p1->refCount.get());
     {
         Ptr<TObj> p5(p1);
-        EXPECT_EQ(4, p1->refCount);
+        EXPECT_EQ(4U, p1->refCount.get());
     }
-    EXPECT_EQ(3, p1->refCount);
-    EXPECT_EQ(1, p3->refCount);
+    EXPECT_EQ(3U, p1->refCount.get());
+    EXPECT_EQ(1U, p3->refCount.get());
 
-    EXPECT_EQ(2, liveCount);
+    EXPECT_EQ(2U, TObj::liveCount);
 
     EXPECT_EQ("foo", p4->name);
     EXPECT_EQ("foo", (*p4).name);
     EXPECT_EQ("bar", p3->name);
+}
+
+TEST(PtrTest, equality) {
+    Ref<TObj> r1 = make<TObj>("foo");
+    Ptr<TObj> p1 = make<TObj>("foo");
+    Ptr<TObj> p2 = make<TObj>("foo");
+    Ptr<TObj> p3(r1);
+    Ptr<TObj> p4;
+    Ptr<TObj> p5;
+    EXPECT_NE(p1, r1);
+    EXPECT_NE(r1, p1);
+    EXPECT_EQ(r1, p3);
+    EXPECT_EQ(p3, r1);
+    EXPECT_NE(p1, p2);
+    EXPECT_EQ(p4, p5);
 }
 
 } // namespace DLog

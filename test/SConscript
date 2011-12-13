@@ -13,10 +13,8 @@ env.StaticLibrary("#build/test/gtest",
 env.Program("test",
             [
               "TestRunner.cc",
-              "RefTest.cc",
+              "include/RefTest.cc",
             ],
             LIBPATH = [ "#build/test" ],
             LIBS = [ "gtest", "pthread" ],
-            CPPPATH = ["#include", "#gtest/include"],
-            CPPFLAGS = [ "-g", "-DDEBUG" ],
-            CXXFLAGS = "-std=c++0x")
+            CPPPATH = ["#", "#include", "#gtest/include"])
