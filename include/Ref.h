@@ -111,13 +111,37 @@ class Ref {
         : ptr(&outside) {
         RefHelper<T>::incRefCount(ptr);
     }
-    /// Constructor from Ref.
+    /**
+     * Constructor from Ref.
+     * (The templated version would be sufficient, but -Weffc++ gets angry
+     * without this.)
+     */
     Ref(const Ref<T>& other) // NOLINT
         : ptr(other.get()) {
         RefHelper<T>::incRefCount(ptr);
     }
-    /// Assignment from Ref.
+    /// Copy constructor from other Ref types.
+    template<typename U>
+    Ref(const Ref<U>& other) // NOLINT
+        : ptr(other.get()) {
+        RefHelper<T>::incRefCount(ptr);
+    }
+    /**
+     * Assignment from Ref.
+     * (The templated version would be sufficient, but -Weffc++ gets angry
+     * without this.)
+     */
     Ref<T>& operator=(const Ref<T>& other) {
+        // Inc other.ptr before dec ptr in case both pointers already point to
+        // the same object.
+        RefHelper<T>::incRefCount(other.get());
+        RefHelper<T>::decRefCountAndDestroy(ptr);
+        ptr = other.get();
+        return *this;
+    }
+    /// Assignment from other Ref types.
+    template<typename U>
+    Ref<T>& operator=(const Ref<U>& other) {
         // Inc other.ptr before dec ptr in case both pointers already point to
         // the same object.
         RefHelper<T>::incRefCount(other.get());
@@ -160,18 +184,33 @@ class Ptr {
             RefHelper<T>::incRefCount(ptr);
     }
     /// Constructor from Ref.
-    Ptr(const Ref<T>& other) // NOLINT
+    template<typename U>
+    Ptr(const Ref<U>& other) // NOLINT
         : ptr(other.get()) {
         RefHelper<T>::incRefCount(ptr);
     }
-    /// Constructor from Ptr.
+
+    /**
+     * Constructor from Ptr.
+     * (The templated version would be sufficient, but -Weffc++ gets angry
+     * without this.)
+     */
     Ptr(const Ptr<T>& other) // NOLINT
         : ptr(other.get()) {
         if (ptr != NULL)
             RefHelper<T>::incRefCount(ptr);
     }
+    /// Constructor from other Ptr types.
+    template<typename U>
+    Ptr(const Ptr<U>& other) // NOLINT
+        : ptr(other.get()) {
+        if (ptr != NULL)
+            RefHelper<T>::incRefCount(ptr);
+    }
+
     /// Assignment from Ref.
-    Ptr<T>& operator=(const Ref<T>& other) {
+    template<typename U>
+    Ptr<T>& operator=(const Ref<U>& other) {
         // Inc other.ptr before dec ptr in case both pointers already point to
         // the same object.
         RefHelper<T>::incRefCount(other.get());
@@ -180,8 +219,24 @@ class Ptr {
         ptr = other.get();
         return *this;
     }
-    /// Assignment from Ptr.
+    /**
+     * Assignment from Ptr.
+     * (The templated version would be sufficient, but -Weffc++ gets angry
+     * without this.)
+     */
     Ptr<T>& operator=(const Ptr<T>& other) {
+        // Inc other.ptr before dec ptr in case both pointers already point to
+        // the same object.
+        if (other.ptr != NULL)
+            RefHelper<T>::incRefCount(other.get());
+        if (ptr != NULL)
+            RefHelper<T>::decRefCountAndDestroy(ptr);
+        ptr = other.get();
+        return *this;
+    }
+    /// Assignment from other Ptr types.
+    template<typename U>
+    Ptr<T>& operator=(const Ptr<U>& other) {
         // Inc other.ptr before dec ptr in case both pointers already point to
         // the same object.
         if (other.ptr != NULL)
@@ -216,39 +271,39 @@ class Ptr {
 // Equality comparisons for Ptr and Ref.
 
 // Ref vs Ref
-template<typename T>
-bool operator==(const Ref<T>& a, const Ref<T>& b) {
+template<typename T, typename U>
+bool operator==(const Ref<T>& a, const Ref<U>& b) {
     return a.get() == b.get();
 }
-template<typename T>
-bool operator!=(const Ref<T>& a, const Ref<T>& b) {
+template<typename T, typename U>
+bool operator!=(const Ref<T>& a, const Ref<U>& b) {
     return a.get() != b.get();
 }
 // Ptr vs Ptr
-template<typename T>
-bool operator==(const Ptr<T>& a, const Ptr<T>& b) {
+template<typename T, typename U>
+bool operator==(const Ptr<T>& a, const Ptr<U>& b) {
     return a.get() == b.get();
 }
-template<typename T>
-bool operator!=(const Ptr<T>& a, const Ptr<T>& b) {
+template<typename T, typename U>
+bool operator!=(const Ptr<T>& a, const Ptr<U>& b) {
     return a.get() != b.get();
 }
 // Ref vs Ptr
-template<typename T>
-bool operator==(const Ref<T>& a, const Ptr<T>& b) {
+template<typename T, typename U>
+bool operator==(const Ref<T>& a, const Ptr<U>& b) {
     return a.get() == b.get();
 }
-template<typename T>
-bool operator!=(const Ref<T>& a, const Ptr<T>& b) {
+template<typename T, typename U>
+bool operator!=(const Ref<T>& a, const Ptr<U>& b) {
     return a.get() != b.get();
 }
 // Ptr vs Ref
-template<typename T>
-bool operator==(const Ptr<T>& a, const Ref<T>& b) {
+template<typename T, typename U>
+bool operator==(const Ptr<T>& a, const Ref<U>& b) {
     return a.get() == b.get();
 }
-template<typename T>
-bool operator!=(const Ptr<T>& a, const Ref<T>& b) {
+template<typename T, typename U>
+bool operator!=(const Ptr<T>& a, const Ref<U>& b) {
     return a.get() != b.get();
 }
 
