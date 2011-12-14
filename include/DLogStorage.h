@@ -39,6 +39,18 @@ static const LogId NO_LOG_ID = ~0ULL;
 static const EntryId NO_ENTRY_ID = ~0ULL;
 typedef uint64_t TimeStamp;
 
+class LogManager; // forward declaration
+namespace Storage { class Chunk; } // forward declaration
+
+// specialization because Chunks are allocated with malloc
+template<>
+class RefHelper<Storage::Chunk> {
+  public:
+    typedef DefaultRefCountWrapper<uint32_t> RefCount;
+    static void incRefCount(Storage::Chunk* obj);
+    static void decRefCountAndDestroy(Storage::Chunk* obj);
+};
+
 namespace Storage {
 
 /**
@@ -57,9 +69,9 @@ class Chunk {
      */
     static Ref<Chunk> makeChunk(const void* data, uint32_t length);
     /// Return a pointer to the first byte of data for this chunk.
-    const void* getData() const;
+    const void* getData() const { return data; }
     /// Return the number of bytes that make up data.
-    uint32_t getLength() const;
+    uint32_t getLength() const { return length; }
 
   private:
     /**
@@ -76,7 +88,7 @@ class Chunk {
     /**
      * Reference count for RefHelper<Chunk> to use.
      */
-    uint32_t refCount;
+    RefHelper<Chunk>::RefCount refCount;
     /**
      * The number of bytes that make up data.
      */
@@ -85,7 +97,7 @@ class Chunk {
      * Points to the first byte of memory following this class.
      * Must be the last member of this class.
      */
-    const char data[0];
+    char data[0];
 
     Chunk(const Chunk&) = delete;
     Chunk& operator=(const Chunk&) = delete;
@@ -118,6 +130,13 @@ class LogEntry {
     LogEntry(LogId logId, EntryId entryId,
              TimeStamp createTime,
              const std::vector<EntryId>& invalidations);
+
+    /**
+     * Return a string representation of this log entry.
+     * This is useful for testing and debugging.
+     * Non-printable data will be omitted from the output.
+     */
+    std::string toString() const;
 
     /**
      * The log this entry is or was a part of.
@@ -175,7 +194,7 @@ class Log {
     /**
      * Constructor.
      */
-    Log();
+    explicit Log(LogId logId);
 
     /**
      * Destructor. Calls the destructorCompletions.
@@ -185,7 +204,7 @@ class Log {
     /**
      * Return this logs ID.
      */
-    virtual LogId getLogId() = 0;
+    LogId getLogId() { return logId; }
 
     /**
      * Return the ID for the entry at the head of the log.
@@ -216,20 +235,23 @@ class Log {
      *      Called once entry has may be considered durable.
      */
     virtual void append(LogEntry& entry,
-                        std::unique_ptr<AppendCallback> appendCompletion) = 0;
+                        std::unique_ptr<AppendCallback>&&
+                            appendCompletion) = 0;
 
     /**
      * Register a callback to be called when this class is destroyed.
      */
-    void addDestructorCallback(std::unique_ptr<DestructorCallback>
-                                destructorCompletion);
+    void addDestructorCallback(std::unique_ptr<DestructorCallback>&&
+                                    destructorCompletion);
 
+  protected:
+    RefHelper<Log>::RefCount refCount;
   private:
+    const LogId logId;
     std::vector<std::unique_ptr<DestructorCallback>> destructorCompletions;
-    uint32_t refCount;
     Log(const Log&) = delete;
     Log& operator=(const Log&) = delete;
-    friend class RefHelper<Log>;
+    friend class DLog::RefHelper<Log>;
 };
 
 /**
@@ -237,7 +259,7 @@ class Log {
  * This is a bit of a dangerous interface which is only used by LogManager.
  */
 class StorageModule {
-  private:
+  public:
     /**
      * See deleteLog().
      */
@@ -247,16 +269,18 @@ class StorageModule {
         virtual void deleted(LogId logId) = 0;
     };
 
-  public:
+    StorageModule() = default;
     virtual ~StorageModule() {}
 
   private:
     /**
      * Scan the logs on the durable storage and return handles to each one.
      * \warning
-     *      The caller should be careful to call this only once, since having
-     *      multiple Log objects that refer to the same underlying storage is
-     *      likely to result in data corruption.
+     *      The caller should be careful to call this only once at
+     *      initialization, since having multiple Log objects that refer to the
+     *      same underlying storage is likely to result in data corruption.
+     * \return
+     *      A handle to each log in the system, in no specified order.
      */
     virtual std::vector<Ref<Log>> getLogs() = 0;
 
@@ -264,6 +288,7 @@ class StorageModule {
      * Create a new log.
      * Making this method asynchronous is probably unnecessarily pain.
      *
+     * TODO(ongaro): This isn't quite right:
      * This need not be atomic but must be idempotent. After even a partial
      * create, getLogs() must return this log and deleteLog() must be able to
      * delete any storage resources allocated to this log.
@@ -288,18 +313,15 @@ class StorageModule {
      *      Called once the delete completes.
      */
     virtual void deleteLog(LogId logId,
-                           std::unique_ptr<DeleteCallback>
+                           std::unique_ptr<DeleteCallback>&&
                                             deleteCompletion) = 0;
 
     StorageModule(const StorageModule&) = delete;
     StorageModule& operator=(const StorageModule&) = delete;
+    friend class DLog::LogManager;
 };
 
 } // namespace DLog::Storage
-
-// specialization because Chunks are allocated with malloc
-template<>
-class RefHelper<Storage::Chunk>;
 
 } // namespace DLog
 
