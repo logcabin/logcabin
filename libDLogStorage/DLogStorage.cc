@@ -18,7 +18,10 @@
 #include <algorithm>
 #include <sstream>
 
+#include <google/protobuf/message_lite.h>
+
 #include "DLogStorage.h"
+#include "../dlogd/Debug.h"
 
 namespace DLog {
 
@@ -46,8 +49,7 @@ Chunk::makeChunk(const void* data, uint32_t length)
 #if DEBUG
     ++(MakeHelper::getMakesInProgress());
 #endif
-    Chunk* ptr = new(malloc(sizeof(Chunk) + length))
-                        Chunk(data, length);
+    Chunk* ptr = new(malloc(sizeof(Chunk) + length)) Chunk(length);
     Ref<Chunk> ref(*ptr);
     // Ref counts start at 1 so that objects can create Refs to themselves
     // in their constructors. We decrement the ref count here after
@@ -56,15 +58,36 @@ Chunk::makeChunk(const void* data, uint32_t length)
 #if DEBUG
     --(MakeHelper::getMakesInProgress());
 #endif
+    memcpy(ptr->data, data, length);
     return ref;
 }
 
-Chunk::Chunk(const void* data, uint32_t length)
+Ref<Chunk>
+Chunk::makeChunk(const ::google::protobuf::MessageLite& message)
+{
+    uint32_t length = downCast<uint32_t>(message.ByteSize());
+#if DEBUG
+    ++(MakeHelper::getMakesInProgress());
+#endif
+    Chunk* ptr = new(malloc(sizeof(Chunk) + length)) Chunk(length);
+    Ref<Chunk> ref(*ptr);
+    // Ref counts start at 1 so that objects can create Refs to themselves
+    // in their constructors. We decrement the ref count here after
+    // creating a reference to it so that the object is not leaked.
+    RefHelper<Chunk>::decRefCountAndDestroy(ref.get());
+#if DEBUG
+    --(MakeHelper::getMakesInProgress());
+#endif
+    if (!message.SerializeToArray(ptr->data, length))
+        PANIC("Serializing protocol buffer failed");
+    return ref;
+}
+
+Chunk::Chunk(uint32_t length)
     : refCount()
     , length(length)
     , data()
 {
-    memcpy(this->data, data, length);
 }
 
 Ref<Chunk> NO_DATA(Chunk::makeChunk(NULL, 0));
@@ -147,10 +170,16 @@ Log::~Log()
 }
 
 void
-Log::addDestructorCallback(std::unique_ptr<DestructorCallback>&&
-                                    destructorCompletion)
+Log::addDestructorCallback(Ref<DestructorCallback> destructorCompletion)
 {
     destructorCompletions.push_back(std::move(destructorCompletion));
+}
+
+// class StorageModule
+
+StorageModule::StorageModule()
+    : refCount()
+{
 }
 
 } // namespace DLog::Storage

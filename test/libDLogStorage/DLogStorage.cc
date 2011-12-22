@@ -83,6 +83,8 @@ namespace {
 
 // used in Log's destructor test
 class LogDestructorCallback : public Log::DestructorCallback {
+  private:
+      LogDestructorCallback() = default;
   public:
     void destructorCallback(LogId logId) {
         ++count;
@@ -90,6 +92,8 @@ class LogDestructorCallback : public Log::DestructorCallback {
     }
     static uint32_t count;
     static LogId lastLogId;
+    friend class MakeHelper;
+    friend class RefHelper<LogDestructorCallback>;
 };
 uint32_t LogDestructorCallback::count;
 LogId LogDestructorCallback::lastLogId;
@@ -101,8 +105,8 @@ TEST(Log, destructor) {
     LogDestructorCallback::lastLogId = 0;
     {
         Ref<Log> log = make<MemoryLog>(38);
-        log->addDestructorCallback(unique<LogDestructorCallback>());
-        log->addDestructorCallback(unique<LogDestructorCallback>());
+        log->addDestructorCallback(make<LogDestructorCallback>());
+        log->addDestructorCallback(make<LogDestructorCallback>());
     }
     EXPECT_EQ(2U, LogDestructorCallback::count);
     EXPECT_EQ(38U, LogDestructorCallback::lastLogId);

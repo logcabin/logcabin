@@ -46,7 +46,7 @@ MemoryLog::readFrom(EntryId start)
 
 void
 MemoryLog::append(LogEntry& entry,
-                  std::unique_ptr<AppendCallback>&& appendCompletion)
+                  Ref<AppendCallback> appendCompletion)
 {
     EntryId newId = headId + 1;
     if (headId == NO_ENTRY_ID)
@@ -65,26 +65,24 @@ MemoryStorageModule::MemoryStorageModule()
 {
 }
 
-std::vector<Ref<Log>>
+std::vector<LogId>
 MemoryStorageModule::getLogs()
 {
-    std::vector<Ref<Log>> ret;
-    for (auto it = logs.begin();
-         it != logs.end();
-         ++it) {
-        ret.push_back(it->second);
-    }
-#if DEBUG
+    std::vector<LogId> ret = getKeys(logs);
     // This may help catch bugs in which the caller depends on
     // the ordering of this list, which is unspecified.
     std::random_shuffle(ret.begin(), ret.end());
-#endif
     return ret;
 }
 
 Ref<Log>
-MemoryStorageModule::createLog(LogId logId)
+MemoryStorageModule::openLog(LogId logId)
 {
+    // This is not strictly necessary but makes testing easier.
+    auto it = logs.find(logId);
+    if (it != logs.end())
+        return it->second;
+
     Ref<Log> newLog = make<MemoryLog>(logId);
     logs.insert({logId, newLog});
     return newLog;
@@ -92,8 +90,7 @@ MemoryStorageModule::createLog(LogId logId)
 
 void
 MemoryStorageModule::deleteLog(LogId logId,
-                               std::unique_ptr<DeleteCallback>&&
-                                   deleteCompletion)
+                               Ref<DeleteCallback> deleteCompletion)
 {
     logs.erase(logId);
     deleteCompletion->deleted(logId);

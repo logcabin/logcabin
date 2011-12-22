@@ -19,6 +19,7 @@
  */
 
 #include <list>
+#include <unordered_map>
 
 #include "DLogStorage.h"
 
@@ -37,8 +38,7 @@ class MemoryLog : public Log {
   public:
     EntryId getLastId() { return headId; }
     std::deque<LogEntry> readFrom(EntryId start);
-    void append(LogEntry& entry,
-                std::unique_ptr<AppendCallback>&& appendCompletion);
+    void append(LogEntry& entry, Ref<AppendCallback> appendCompletion);
 
   private:
     EntryId headId;
@@ -54,13 +54,15 @@ class MemoryLog : public Log {
  * module is destroyed.
  */
 class MemoryStorageModule : public StorageModule {
-  public:
+  private:
     MemoryStorageModule();
-    std::vector<Ref<Log>> getLogs();
-    Ref<Log> createLog(LogId logId);
-    void deleteLog(LogId logId,
-                   std::unique_ptr<DeleteCallback>&& deleteCompletion);
+  public:
+    std::vector<LogId> getLogs();
+    Ref<Log> openLog(LogId logId);
+    void deleteLog(LogId logId, Ref<DeleteCallback> deleteCompletion);
     std::unordered_map<LogId, Ref<Log>> logs;
+    friend class DLog::MakeHelper;
+    friend class DLog::RefHelper<MemoryStorageModule>;
 };
 
 } // namespace DLog::Storage

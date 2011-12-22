@@ -31,6 +31,8 @@ using std::deque;
 namespace {
 
 class LogAppendCallback : public Log::AppendCallback {
+  private:
+    LogAppendCallback() = default;
   public:
     void appended(LogEntry entry) {
         lastEntry = entry;
@@ -46,11 +48,15 @@ LogEntry LogAppendCallback::lastEntry {
 };
 
 class SMDeleteCallback : public StorageModule::DeleteCallback {
+  private:
+    SMDeleteCallback() = default;
   public:
     void deleted(LogId logId) {
         lastLogId = logId;
     }
     static LogId lastLogId;
+    friend class MakeHelper;
+    friend class RefHelper<SMDeleteCallback>;
 };
 LogId SMDeleteCallback::lastLogId;
 
@@ -67,20 +73,6 @@ eStr(const Container& container)
     return ret;
 }
 
-vector<LogId>
-logIds(const vector<Ref<Log>>& logs)
-{
-    vector<LogId> ids;
-    for (auto it = logs.begin();
-         it != logs.end();
-         ++it) {
-        Ref<Log> log = *it;
-        ids.push_back(log->getLogId());
-    }
-    std::sort(ids.begin(), ids.end());
-    return ids;
-}
-
 } // anonymous namespace
 
 TEST(MemoryLog, constructor) {
@@ -92,9 +84,9 @@ TEST(MemoryLog, getLastId) {
     Ref<MemoryLog> log = make<MemoryLog>(92);
     EXPECT_EQ(NO_ENTRY_ID, log->getLastId());
     LogEntry e1(1, 2, 3, Chunk::makeChunk("hello", 6));
-    log->append(e1, unique<LogAppendCallback>());
+    log->append(e1, make<LogAppendCallback>());
     EXPECT_EQ(0U, log->getLastId());
-    log->append(e1, unique<LogAppendCallback>());
+    log->append(e1, make<LogAppendCallback>());
     EXPECT_EQ(1U, log->getLastId());
 }
 
@@ -103,9 +95,9 @@ TEST(MemoryLog, readFrom) {
     EXPECT_EQ(vector<string>{}, eStr(log->readFrom(0)));
     EXPECT_EQ(vector<string>{}, eStr(log->readFrom(12)));
     LogEntry e1(1, 2, 3, Chunk::makeChunk("hello", 6));
-    log->append(e1, unique<LogAppendCallback>());
+    log->append(e1, make<LogAppendCallback>());
     LogEntry e2(4, 5, 6, Chunk::makeChunk("world!", 7));
-    log->append(e2, unique<LogAppendCallback>());
+    log->append(e2, make<LogAppendCallback>());
     EXPECT_EQ((vector<string> {
                 "(92, 0) 'hello'",
                 "(92, 1) 'world!'",
@@ -122,41 +114,41 @@ TEST(MemoryLog, readFrom) {
 TEST(MemoryLog, append) {
     Ref<MemoryLog> log = make<MemoryLog>(92);
     LogEntry e1(1, 2, 3, Chunk::makeChunk("hello", 6), {4, 5});
-    log->append(e1, unique<LogAppendCallback>());
+    log->append(e1, make<LogAppendCallback>());
     EXPECT_EQ(92U, e1.logId);
     EXPECT_EQ(0U, e1.entryId);
     EXPECT_EQ("(92, 0) 'hello' [inv 4, 5]",
               LogAppendCallback::lastEntry.toString());
     LogEntry e2(1, 2, 3, Chunk::makeChunk("goodbye", 8), {4, 5});
-    log->append(e2, unique<LogAppendCallback>());
+    log->append(e2, make<LogAppendCallback>());
     EXPECT_EQ(1U, e2.entryId);
 }
 
 TEST(MemoryStorageModule, getLogs) {
-    MemoryStorageModule sm;
-    EXPECT_EQ((vector<LogId>{}), logIds(sm.getLogs()));
-    sm.createLog(38);
-    sm.createLog(755);
-    sm.createLog(129);
-    EXPECT_EQ((vector<LogId>{38, 129, 755}), logIds(sm.getLogs()));
+    Ref<MemoryStorageModule> sm = make<MemoryStorageModule>();
+    EXPECT_EQ((vector<LogId>{}), sorted(sm->getLogs()));
+    sm->openLog(38);
+    sm->openLog(755);
+    sm->openLog(129);
+    EXPECT_EQ((vector<LogId>{38, 129, 755}), sorted(sm->getLogs()));
 }
 
-TEST(MemoryStorageModule, createLog) {
-    MemoryStorageModule sm;
-    Ref<Log> log = sm.createLog(12);
+TEST(MemoryStorageModule, openLog) {
+    Ref<MemoryStorageModule> sm = make<MemoryStorageModule>();
+    Ref<Log> log = sm->openLog(12);
     EXPECT_EQ(12U, log->getLogId());
-    EXPECT_EQ((vector<LogId>{12}), logIds(sm.getLogs()));
+    EXPECT_EQ((vector<LogId>{12}), sorted(sm->getLogs()));
 }
 
 TEST(MemoryStorageModule, deleteLog) {
     SMDeleteCallback::lastLogId = 0;
-    MemoryStorageModule sm;
-    Ref<Log> log = sm.createLog(12);
-    sm.deleteLog(10, unique<SMDeleteCallback>());
+    Ref<MemoryStorageModule> sm = make<MemoryStorageModule>();
+    Ref<Log> log = sm->openLog(12);
+    sm->deleteLog(10, make<SMDeleteCallback>());
     EXPECT_EQ(10U, SMDeleteCallback::lastLogId);
-    sm.deleteLog(12, unique<SMDeleteCallback>());
+    sm->deleteLog(12, make<SMDeleteCallback>());
     EXPECT_EQ(12U, SMDeleteCallback::lastLogId);
-    EXPECT_EQ((vector<LogId>{}), logIds(sm.getLogs()));
+    EXPECT_EQ((vector<LogId>{}), sorted(sm->getLogs()));
 }
 
 } // namespace DLog::Storage

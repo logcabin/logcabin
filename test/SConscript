@@ -17,9 +17,12 @@ env.Program("test",
               "include/RefTest.cc",
               "libDLogStorage/DLogStorage.cc",
               "libDLogStorage/MemoryStorageModule.cc",
+              "#build/dlogd/Debug.o",
               "#build/libDLogStorage/DLogStorage.o",
               "#build/libDLogStorage/MemoryStorageModule.o",
             ],
             LIBPATH = [ "#build/test" ],
-            LIBS = [ "gtest", "pthread" ],
-            CPPPATH = ["#", "#include", "#gtest/include"])
+            LIBS = [ "gtest", "pthread", "protobuf", "rt" ],
+            CPPPATH = ["#", "#include", "#gtest/include"],
+            # -fno-access-control allows tests to access private members
+            CXXFLAGS = env["CXXFLAGS"] + ["-fno-access-control"])
