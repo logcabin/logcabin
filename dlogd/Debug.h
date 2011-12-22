@@ -56,7 +56,7 @@ __attribute__((format(printf, 5, 6)));
  */
 #define LOG(logLevel, format, ...) do { \
     Debug_Log(__FILE__, __LINE__, __FUNCTION__, \
-              logLevel, format, ##__VA_ARGS__); \
+              logLevel, format "\n", ##__VA_ARGS__); \
 } while (0)
 
 /**

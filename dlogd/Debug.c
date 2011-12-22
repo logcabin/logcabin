@@ -46,12 +46,12 @@ Debug_Log(const char* fileName, uint32_t lineNum, const char* func,
         level = VERBOSE;
 
     clock_gettime(CLOCK_REALTIME, &now);
-    printf("%010lu.%09lu %s:%d in %s %s: ",
+    fprintf(stderr, "%010lu.%09lu %s:%d in %s %s: ",
            now.tv_sec, now.tv_nsec,
            fileName, lineNum, func, logLevelToString[level]);
 
     va_start(ap, format);
-    vfprintf(stdout, format, ap);
+    vfprintf(stderr, format, ap);
     va_end(ap);
 }
 
