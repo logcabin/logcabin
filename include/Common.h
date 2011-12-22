@@ -18,9 +18,11 @@
  * Common utilities and definitions.
  */
 
+#include <algorithm>
 #include <cassert>
 #include <cinttypes>
 #include <memory>
+#include <vector>
 
 #ifndef COMMON_H
 #define COMMON_H
@@ -62,6 +64,75 @@ downCast(const Large& large)
     // this method to convert between signed and unsigned values.
     assert(large - small == 0);
     return small;
+}
+
+/**
+ * Sort an R-value in place.
+ * \param container
+ *      An R-value to sort.
+ * \return
+ *      The sorted input.
+ */
+template<typename Container>
+Container
+sorted(Container&& container)
+{
+    std::sort(container.begin(), container.end());
+    return container;
+}
+
+/**
+ * Return a copy of the keys of a map.
+ */
+template<typename Map>
+std::vector<typename Map::key_type>
+getKeys(const Map& map)
+{
+    std::vector<typename Map::key_type> keys;
+    for (auto it = map.begin(); it != map.end(); ++it)
+        keys.push_back(it->first);
+    return keys;
+}
+
+/**
+ * Return a copy of the values of a map.
+ */
+template<typename Map>
+std::vector<typename Map::mapped_type>
+getValues(const Map& map)
+{
+    std::vector<typename Map::mapped_type> values;
+    for (auto it = map.begin(); it != map.end(); ++it)
+        values.push_back(it->second);
+    return values;
+}
+
+/**
+ * Return a copy of the key-value pairs of a map.
+ */
+template<typename Map>
+std::vector<std::pair<typename Map::key_type,
+                      typename Map::mapped_type>>
+getItems(const Map& map)
+{
+    std::vector<std::pair<typename Map::key_type,
+                          typename Map::mapped_type>> items;
+    for (auto it = map.begin(); it != map.end(); ++it)
+        items.push_back(*it);
+    return items;
+}
+
+/**
+ * Return true if all elements of 'haystack' are equal to 'needle'.
+ */
+template<typename Container, typename Item>
+bool
+hasOnly(const Container& haystack, const Item& needle) {
+    for (auto it = haystack.begin(); it != haystack.end(); ++it) {
+        if (*it != needle)
+            return false;
+    }
+    return true;
 }
 
 } // namespace DLog

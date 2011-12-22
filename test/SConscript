@@ -13,6 +13,7 @@ env.StaticLibrary("#build/test/gtest",
 env.Program("test",
             [
               "TestRunner.cc",
+              "include/CommonTest.cc",
               "include/RefTest.cc",
               "libDLogStorage/DLogStorage.cc",
               "libDLogStorage/MemoryStorageModule.cc",
