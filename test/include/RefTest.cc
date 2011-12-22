@@ -63,6 +63,13 @@ TEST(RefTest, basic) {
     EXPECT_EQ("foo", (*r3).name);
 }
 
+TEST(RefTest, selfAssignment) {
+    Ref<TObj> r1 = make<TObj>("foo");
+    r1 = r1;
+    r1 = r1;
+    EXPECT_EQ(1U, r1->refCount.get());
+}
+
 TEST(RefTest, equality) {
     Ref<TObj> r1 = make<TObj>("foo");
     Ref<TObj> r2 = make<TObj>("foo");
@@ -97,6 +104,13 @@ TEST(PtrTest, basic) {
     EXPECT_EQ("foo", p4->name);
     EXPECT_EQ("foo", (*p4).name);
     EXPECT_EQ("bar", p3->name);
+}
+
+TEST(PtrTest, selfAssignment) {
+    Ptr<TObj> p1 = make<TObj>("foo");
+    p1 = p1;
+    p1 = p1;
+    EXPECT_EQ(1U, p1->refCount.get());
 }
 
 TEST(PtrTest, equality) {

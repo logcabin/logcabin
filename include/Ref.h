@@ -22,6 +22,8 @@
  *      RefHelper<MyClass>::RefCount refCount;
  *    Placing this member early in the class declaration allows the constructor
  *    to hand out Refs to this object right away.
+ *    This type is not copyable or assignable, so your class may not be
+ *    copyable or assignable (the compiler will enforce this).
  * 2. The refCount member should be default-initialized.
  * 3. The constructor should be private.
  * 4. The class declaration should include:
@@ -49,6 +51,8 @@ namespace DLog {
  * A small object that holds a reference count.
  * This class's primary purpose is to ensure that the reference count is
  * initialized to the correct value.
+ * This is not copyable or assignable to ensure that reference-counted objects
+ * are not copied or assigned.
  * \param Numeric
  *      The underlying integer type to use.
  */
@@ -72,6 +76,12 @@ class DefaultRefCountWrapper {
     Numeric get() { return value; }
   private:
     static void assertMakeInProgress(); // defined below due to circular dep
+
+    DefaultRefCountWrapper(const DefaultRefCountWrapper<Numeric>&) // NOLINT
+                                                        = delete;
+    DefaultRefCountWrapper<Numeric>&
+    operator=(const DefaultRefCountWrapper<Numeric>& other) = delete;
+
     Numeric value;
 };
 
@@ -262,6 +272,11 @@ class Ptr {
     }
     operator bool() const {
         return ptr != NULL;
+    }
+    void reset() {
+        if (ptr != NULL)
+            RefHelper<T>::decRefCountAndDestroy(ptr);
+        ptr = NULL;
     }
 
   private:
