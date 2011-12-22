@@ -2,6 +2,7 @@ Import('env')
 
 src = [
     "main.cc",
+    "AsyncMutex.cc",
     "Debug.c",
     "LogManager.cc",
     #"#build/proto/dlog.pb.o",
