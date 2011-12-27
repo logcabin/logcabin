@@ -107,4 +107,17 @@ TEST(hasOnly, basic) {
     EXPECT_FALSE(hasOnly((vector<int>{1, 2}), 2));
 }
 
+// Tests for format come from the RAMCloud project.
+TEST(format, basic) {
+    EXPECT_EQ("rofl3", format("rofl3"));
+    EXPECT_EQ("rofl3", format("r%sl%d", "of", 3));
+}
+
+TEST(format, large) {
+    char x[3000];
+    memset(x, 0xcc, sizeof(x));
+    x[sizeof(x) - 1] = '\0';
+    EXPECT_EQ(x, format("%s", x));
+}
+
 } // namespace DLog

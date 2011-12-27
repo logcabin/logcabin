@@ -22,6 +22,7 @@
 #include <cassert>
 #include <cinttypes>
 #include <memory>
+#include <string>
 #include <vector>
 
 #ifndef COMMON_H
@@ -134,6 +135,12 @@ hasOnly(const Container& haystack, const Item& needle) {
     }
     return true;
 }
+
+/**
+ * A safe version of sprintf.
+ */
+std::string format(const char* format, ...)
+    __attribute__((format(printf, 1, 2)));
 
 } // namespace DLog
 
