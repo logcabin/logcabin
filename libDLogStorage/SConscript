@@ -2,9 +2,22 @@ Import('env')
 
 src = [
     "DLogStorage.cc",
+    "DumbFilesystemStorageModule.cc",
+    "FilesystemUtil.cc",
     "MemoryStorageModule.cc",
+    "#build/libDLogStorage/DumbFilesystem.pb.o",
 ]
 env.StaticLibrary("DLogStorage",
                   src,
                   CPPPATH = [ "#include" ])
 
+env.Protoc([],
+           "DumbFilesystem.proto",
+           PROTOCPROTOPATH = ['.'],
+           PROTOCPYTHONOUTDIR = None,
+           PROTOCOUTDIR = '.')
+
+env.StaticObject("#build/libDLogStorage/DumbFilesystem.pb.o",
+                 "#build/libDLogStorage/DumbFilesystem.pb.cc",
+                 CPPPATH = "#",
+                 CXXFLAGS = "-std=c++0x")

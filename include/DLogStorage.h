@@ -340,6 +340,7 @@ class StorageModule {
     virtual void deleteLog(LogId logId,
                            Ref<DeleteCallback> deleteCompletion) = 0;
 
+  protected:
     RefHelper<StorageModule>::RefCount refCount;
     friend class RefHelper<StorageModule>;
     friend class DLog::LogManager;
