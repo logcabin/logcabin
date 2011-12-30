@@ -279,15 +279,20 @@ TEST_F(DumbFilesystemLogTest, readWriteCommon) {
                 vector<EntryId>{31, 33, 94});
     log->write(e4);
     log->read(4);
+    // empty data should differ from NO_DATA
+    LogEntry e5(92, 5, 9, Chunk::makeChunk("", 0));
+    log->write(e5);
+    log->read(5);
     EXPECT_EQ((vector<string> {
-                "(92, 1) ''",
+                "(92, 1) NODATA",
                 "(92, 2) 'hello'",
-                "(92, 3) '' [inv 28, 29, 30]",
+                "(92, 3) NODATA [inv 28, 29, 30]",
                 "(92, 4) 'hello' [inv 31, 33, 94]",
+                "(92, 5) ''",
               }),
               eStr(log->entries));
-    EXPECT_EQ(8U, log->entries.back().createTime);
-    EXPECT_EQ(4U, log->headId);
+    EXPECT_EQ(9U, log->entries.back().createTime);
+    EXPECT_EQ(5U, log->headId);
 }
 
 } // namespace DLog::Storage

@@ -204,8 +204,10 @@ DumbFilesystemLog::write(const LogEntry& entry)
 {
     ProtoBuf::DumbFilesystem::LogEntry contents;
     contents.set_create_time(entry.createTime);
-    contents.set_data(entry.data->getData(),
-                      entry.data->getLength());
+    if (entry.data != NO_DATA) {
+        contents.set_data(entry.data->getData(),
+                          entry.data->getLength());
+    }
     for (auto it = entry.invalidations.begin();
          it != entry.invalidations.end();
          ++it) {
