@@ -1,0 +1,13 @@
+Import('env')
+
+env.Protoc([],
+           "dlog.proto",
+           PROTOCPROTOPATH = ['.'],
+           PROTOCPYTHONOUTDIR = None,
+           PROTOCOUTDIR = '.')
+
+env.StaticObject("#build/proto/dlog.pb.o",
+                 "#build/proto/dlog.pb.cc",
+                 CPPPATH = "#",
+                 CXXFLAGS = "-std=c++0x")
+

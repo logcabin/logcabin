@@ -3,20 +3,37 @@ Import('env')
 env.SharedObject("#build/test/gtest-all.o",
                  "#gtest/src/gtest-all.cc",
                  CPPPATH = [ "#gtest", "#gtest/include" ],
-                 CXXFLAGS = [ "-g", "-DDEBUG" ],
-                 CPPFLAGS = "-std=c++0x")
+                 CPPFLAGS = [ "-g", "-DDEBUG" ],
+                 CXXFLAGS = "-std=c++0x")
 env.StaticLibrary("#build/test/gtest",
                  ["gtest-all.o"],
                  CPPPATH = [ "#gtest", "#gtest/include" ],
-                 CXXFLAGS = [ "-g", "-DDEBUG" ],
-                 CPPFLAGS = "-std=c++0x")
+                 CPPFLAGS = [ "-g", "-DDEBUG" ],
+                 CXXFLAGS = "-std=c++0x")
 env.Program("test",
             [
               "TestRunner.cc",
-              "RefTest.cc",
+              "dlogd/AsyncMutex.cc",
+              "dlogd/LogManager.cc",
+              "include/CommonTest.cc",
+              "include/RefTest.cc",
+              "libDLogStorage/DLogStorage.cc",
+              "libDLogStorage/DumbFilesystemStorageModule.cc",
+              "libDLogStorage/FilesystemUtil.cc",
+              "libDLogStorage/MemoryStorageModule.cc",
+              "#build/dlogd/AsyncMutex.o",
+              "#build/dlogd/Debug.o",
+              "#build/dlogd/InternalLog.pb.o",
+              "#build/dlogd/LogManager.o",
+              "#build/libDLogRPC/Common.o",
+              "#build/libDLogStorage/DLogStorage.o",
+              "#build/libDLogStorage/DumbFilesystem.pb.o",
+              "#build/libDLogStorage/DumbFilesystemStorageModule.o",
+              "#build/libDLogStorage/FilesystemUtil.o",
+              "#build/libDLogStorage/MemoryStorageModule.o",
             ],
             LIBPATH = [ "#build/test" ],
-            LIBS = [ "gtest", "pthread" ],
-            CPPPATH = ["#include", "#gtest/include"],
-            CXXFLAGS = [ "-g", "-DDEBUG" ],
-            CPPFLAGS = "-std=c++0x")
+            LIBS = [ "gtest", "pthread", "protobuf", "rt" ],
+            CPPPATH = ["#", "#include", "#gtest/include"],
+            # -fno-access-control allows tests to access private members
+            CXXFLAGS = env["CXXFLAGS"] + ["-fno-access-control"])

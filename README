@@ -3,10 +3,11 @@
 ====================================
 
 Pre-requisites:
- - scons
  - git
- - g++ or clang
+ - scons
  - doxygen
+ - g++ or clang
+ - protobuf
 
 Command:
 
@@ -63,4 +64,7 @@ libDLogRPC/
 
 libDLogClient/
     DLog Client Library in C
+
+proto/
+    Public protobuf definitions
 

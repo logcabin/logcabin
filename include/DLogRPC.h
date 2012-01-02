@@ -55,9 +55,9 @@ class Segment {
      *      Initial length of the segment.
      */
     Segment(const void* data, uint32_t len)
+        : buf(data),
+          length(len)
     {
-        buf = data;
-        length = len;
     }
     ~Segment() { }
     /**
@@ -73,6 +73,9 @@ class Segment {
     const void* buf;
     /// Length of buffer.
     uint32_t length;
+  private:
+    Segment(const Segment&) = delete;
+    Segment& operator=(const Segment&) = delete;
 };
 
 /**

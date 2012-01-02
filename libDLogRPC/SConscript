@@ -1,6 +1,7 @@
 Import('env')
 
 src = [
+    "Common.cc",
     "DLogRPC.cc",
 ]
 env.StaticLibrary("DLogRPC",

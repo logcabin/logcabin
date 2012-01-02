@@ -1,2 +1,2 @@
-#!/usr/bin/env bash
+#!/bin/sh
 scons --silent test && exec build/test/test >/dev/null 2>&1

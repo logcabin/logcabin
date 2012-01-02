@@ -16,10 +16,31 @@
 /**
  * \file
  * Templates for intrusive reference counting.
+ *
+ * To set up a class MyClass to be reference counted:
+ * 1. The first member of MyClass should be:
+ *      RefHelper<MyClass>::RefCount refCount;
+ *    Placing this member early in the class declaration allows the constructor
+ *    to hand out Refs to this object right away.
+ *    This type is not copyable or assignable, so your class may not be
+ *    copyable or assignable (the compiler will enforce this).
+ * 2. The refCount member should be default-initialized.
+ * 3. The constructor should be private.
+ * 4. The class declaration should include:
+ *      friend class DLog::MakeHelper;
+ *      friend class DLog::RefHelper<MyClass>;
+ *
+ * It is illegal for a constructor to hand out Refs to this object and /then/
+ * throw an exception. The assert in ~DefaultRefCountWrapper attempts to catch
+ * this sort of bug.
+ *
+ * Every instance of the class must now be created as follows:
+ *      Ref<MyClass> newInstance = DLog::make<MyClass>(...constructor args...);
+ * The constructor arguments will be forwarded to your private constructor(s).
+ * Using the constructor(s) directly is illegal.
  */
 
-#include <cstddef>
-#include <memory>
+#include "Common.h"
 
 #ifndef REF_H // TODO(ongaro): this needs a prefix
 #define REF_H
@@ -27,31 +48,66 @@
 namespace DLog {
 
 /**
- * This class is used by Ref to increment and decrement reference counts and to
- * destroy the object.
+ * A small object that holds a reference count.
+ * This class's primary purpose is to ensure that the reference count is
+ * initialized to the correct value.
+ * This is not copyable or assignable to ensure that reference-counted objects
+ * are not copied or assigned.
+ * \param Numeric
+ *      The underlying integer type to use.
+ */
+template<typename Numeric>
+class DefaultRefCountWrapper {
+  public:
+    DefaultRefCountWrapper()
+        : value(1) {
+        assertMakeInProgress();
+    }
+    ~DefaultRefCountWrapper() {
+        // 'value' is usually 0. It can be 1 if the object's constructor threw
+        // an exception. If it's higher than that, the object's constructor
+        // threw an exception after handing out Refs to itself, which will lead
+        // to memory corruption. It's safer to kill the program.
+        assert(value <= 1);
+    }
+    Numeric inc() { return ++value; }
+    Numeric dec() { return --value; }
+    // get is here for testing purposes
+    Numeric get() { return value; }
+  private:
+    static void assertMakeInProgress(); // defined below due to circular dep
+
+    DefaultRefCountWrapper(const DefaultRefCountWrapper<Numeric>&) // NOLINT
+                                                        = delete;
+    DefaultRefCountWrapper<Numeric>&
+    operator=(const DefaultRefCountWrapper<Numeric>& other) = delete;
+
+    Numeric value;
+};
+
+/**
+ * This class is used by Ref and Ptr to increment and decrement reference
+ * counts and to destroy the object.
  *
- * This default implementation will be sufficient for most classes.
- * It assumes you have an integer member named refCount that you've initialized
- * to zero and have made accessible to RefHelper<T>.
- *
- * You can specialize this template for your class if it needs to be destroyed
- * differently or it has a different integer name or interface.
+ * This default implementation will be sufficient for most classes. You can
+ * specialize this template for your class if it needs to be destroyed
+ * differently or it has a different reference count type.
  */
 template<typename T>
 class RefHelper {
   public:
+    typedef DefaultRefCountWrapper<uint32_t> RefCount;
     static void incRefCount(T* obj) {
-        ++obj->refCount;
+        obj->refCount.inc();
     }
     static void decRefCountAndDestroy(T* obj) {
-        --obj->refCount;
-        if (obj->refCount == 0)
+        if (obj->refCount.dec() == 0)
             delete obj;
     }
 };
 
 /**
- * A reference to an object.
+ * A reference to an object that may not be NULL.
  */
 template<typename T>
 class Ref {
@@ -65,13 +121,37 @@ class Ref {
         : ptr(&outside) {
         RefHelper<T>::incRefCount(ptr);
     }
-    /// Constructor from Ref.
+    /**
+     * Constructor from Ref.
+     * (The templated version would be sufficient, but -Weffc++ gets angry
+     * without this.)
+     */
     Ref(const Ref<T>& other) // NOLINT
         : ptr(other.get()) {
         RefHelper<T>::incRefCount(ptr);
     }
-    /// Assignment from Ref.
+    /// Copy constructor from other Ref types.
+    template<typename U>
+    Ref(const Ref<U>& other) // NOLINT
+        : ptr(other.get()) {
+        RefHelper<T>::incRefCount(ptr);
+    }
+    /**
+     * Assignment from Ref.
+     * (The templated version would be sufficient, but -Weffc++ gets angry
+     * without this.)
+     */
     Ref<T>& operator=(const Ref<T>& other) {
+        // Inc other.ptr before dec ptr in case both pointers already point to
+        // the same object.
+        RefHelper<T>::incRefCount(other.get());
+        RefHelper<T>::decRefCountAndDestroy(ptr);
+        ptr = other.get();
+        return *this;
+    }
+    /// Assignment from other Ref types.
+    template<typename U>
+    Ref<T>& operator=(const Ref<U>& other) {
         // Inc other.ptr before dec ptr in case both pointers already point to
         // the same object.
         RefHelper<T>::incRefCount(other.get());
@@ -114,18 +194,33 @@ class Ptr {
             RefHelper<T>::incRefCount(ptr);
     }
     /// Constructor from Ref.
-    explicit Ptr(const Ref<T>& other) // NOLINT
+    template<typename U>
+    Ptr(const Ref<U>& other) // NOLINT
         : ptr(other.get()) {
         RefHelper<T>::incRefCount(ptr);
     }
-    /// Constructor from Ptr.
+
+    /**
+     * Constructor from Ptr.
+     * (The templated version would be sufficient, but -Weffc++ gets angry
+     * without this.)
+     */
     Ptr(const Ptr<T>& other) // NOLINT
         : ptr(other.get()) {
         if (ptr != NULL)
             RefHelper<T>::incRefCount(ptr);
     }
+    /// Constructor from other Ptr types.
+    template<typename U>
+    Ptr(const Ptr<U>& other) // NOLINT
+        : ptr(other.get()) {
+        if (ptr != NULL)
+            RefHelper<T>::incRefCount(ptr);
+    }
+
     /// Assignment from Ref.
-    Ptr<T>& operator=(const Ref<T>& other) {
+    template<typename U>
+    Ptr<T>& operator=(const Ref<U>& other) {
         // Inc other.ptr before dec ptr in case both pointers already point to
         // the same object.
         RefHelper<T>::incRefCount(other.get());
@@ -134,8 +229,24 @@ class Ptr {
         ptr = other.get();
         return *this;
     }
-    /// Assignment from Ptr.
+    /**
+     * Assignment from Ptr.
+     * (The templated version would be sufficient, but -Weffc++ gets angry
+     * without this.)
+     */
     Ptr<T>& operator=(const Ptr<T>& other) {
+        // Inc other.ptr before dec ptr in case both pointers already point to
+        // the same object.
+        if (other.ptr != NULL)
+            RefHelper<T>::incRefCount(other.get());
+        if (ptr != NULL)
+            RefHelper<T>::decRefCountAndDestroy(ptr);
+        ptr = other.get();
+        return *this;
+    }
+    /// Assignment from other Ptr types.
+    template<typename U>
+    Ptr<T>& operator=(const Ptr<U>& other) {
         // Inc other.ptr before dec ptr in case both pointers already point to
         // the same object.
         if (other.ptr != NULL)
@@ -162,9 +273,109 @@ class Ptr {
     operator bool() const {
         return ptr != NULL;
     }
+    void reset() {
+        if (ptr != NULL)
+            RefHelper<T>::decRefCountAndDestroy(ptr);
+        ptr = NULL;
+    }
+
   private:
     T* ptr;
 };
+
+// Equality comparisons for Ptr and Ref.
+
+// Ref vs Ref
+template<typename T, typename U>
+bool operator==(const Ref<T>& a, const Ref<U>& b) {
+    return a.get() == b.get();
+}
+template<typename T, typename U>
+bool operator!=(const Ref<T>& a, const Ref<U>& b) {
+    return a.get() != b.get();
+}
+// Ptr vs Ptr
+template<typename T, typename U>
+bool operator==(const Ptr<T>& a, const Ptr<U>& b) {
+    return a.get() == b.get();
+}
+template<typename T, typename U>
+bool operator!=(const Ptr<T>& a, const Ptr<U>& b) {
+    return a.get() != b.get();
+}
+// Ref vs Ptr
+template<typename T, typename U>
+bool operator==(const Ref<T>& a, const Ptr<U>& b) {
+    return a.get() == b.get();
+}
+template<typename T, typename U>
+bool operator!=(const Ref<T>& a, const Ptr<U>& b) {
+    return a.get() != b.get();
+}
+// Ptr vs Ref
+template<typename T, typename U>
+bool operator==(const Ptr<T>& a, const Ref<U>& b) {
+    return a.get() == b.get();
+}
+template<typename T, typename U>
+bool operator!=(const Ptr<T>& a, const Ref<U>& b) {
+    return a.get() != b.get();
+}
+
+/**
+ * This class is a container for the implementation of make().
+ * It exists because it's more convenient to friend than a template.
+ */
+class MakeHelper {
+  public:
+    template<typename T, typename... Args>
+    Ref<T>
+    static make(Args&&... args) {
+#if DEBUG
+        ++(getMakesInProgress());
+#endif
+        Ref<T> obj(*new T(static_cast<Args&&>(args)...));
+        // Ref counts start at 1 so that objects can create Refs to themselves
+        // in their constructors. We decrement the ref count here after
+        // creating a reference to it so that the object is not leaked.
+        RefHelper<T>::decRefCountAndDestroy(obj.get());
+#if DEBUG
+        --(getMakesInProgress());
+#endif
+        return obj;
+    }
+#if DEBUG
+    static uint32_t& getMakesInProgress() {
+        // TODO(ongaro): This should be thread-local.
+        static uint32_t makesInProgress = 0;
+        return makesInProgress;
+    }
+#endif
+};
+
+/**
+ * Construct an object of a reference-counted class.
+ * Use this as follows:
+ *      Ref<MyClass> newInstance = DLog::make<MyClass>(...constructor args...);
+ * The constructor arguments will be forwarded to the constructor(s) of T.
+ */
+template<typename T, typename... Args>
+Ref<T>
+make(Args&&... args)
+{
+    return MakeHelper::make<T>(static_cast<Args&&>(args)...);
+}
+
+template<typename Numeric>
+void
+DefaultRefCountWrapper<Numeric>::assertMakeInProgress()
+{
+    // This check tries to make sure you're constructing a
+    // reference-counted object with make() instead of using the
+    // Constructor directly. Some illegal uses may get by, but this should
+    // catch most of them.
+    assert(MakeHelper::getMakesInProgress() > 0);
+}
 
 } // namespace DLog
 
