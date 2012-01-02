@@ -16,6 +16,7 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <errno.h>
 
 #include <algorithm>
 #include <google/protobuf/io/zero_copy_stream_impl.h>

@@ -16,6 +16,7 @@
 #include <dirent.h>
 #include <string.h>
 #include <unistd.h>
+#include <errno.h>
 
 #include "FilesystemUtil.h"
 #include "../dlogd/Debug.h" // TODO(ongaro): Move Debug to common
