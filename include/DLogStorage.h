@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "Ref.h"
+#include "Callback.h"
 
 #ifndef DLOGSTORAGE_H
 #define DLOGSTORAGE_H
@@ -32,22 +33,6 @@
 namespace google { namespace protobuf { class MessageLite; } }
 
 namespace DLog {
-
-// TODO(ongaro): move this
-class BaseCallback {
-  protected:
-    BaseCallback()
-        : refCount() {
-    }
-  public:
-    virtual ~BaseCallback() {}
-  protected:
-    RefHelper<BaseCallback>::RefCount refCount;
-    friend class RefHelper<BaseCallback>;
-    BaseCallback(const BaseCallback& other) = delete;
-    BaseCallback& operator=(const BaseCallback& other) = delete;
-};
-
 
 // TODO(ongaro): These probably need to go elsewhere.
 typedef uint64_t LogId;
