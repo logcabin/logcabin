@@ -4,7 +4,7 @@ env.Program("dlogperf", [ "main.cc" ],
             LIBPATH = [ "$LIBPATH",
                         "#build/libDLogRPC",
                         "#build/libDLogClient" ],
-            LIBS = [ "rt", "event_core-2.0", "event_pthreads-2.0",
-                     "DLogRPC", "DLogClient" ],
+            LIBS = [ "DLogRPC", "DLogClient",
+                     "event_core-2.0", "event_pthreads-2.0", "rt" ],
             CPPPATH = "#include")
 
