@@ -15,8 +15,8 @@
 
 #include <stdint.h>
 
-#ifndef DLOGD_DEBUG_H
-#define DLOGD_DEBUG_H
+#ifndef DEBUG_H
+#define DEBUG_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -85,5 +85,5 @@ __attribute__((format(printf, 5, 6)));
 };
 #endif /* __cplusplus */
 
-#endif /* DLOGD_DEBUG_H */
+#endif /* DEBUG_H */
 
