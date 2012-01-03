@@ -13,7 +13,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <sys/types.h>
+#include <stdint.h>
 
 #ifndef DLOGD_DEBUG_H
 #define DLOGD_DEBUG_H
