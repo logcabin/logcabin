@@ -17,7 +17,7 @@
 #include <unistd.h>
 
 #include "WorkDispatcher.h"
-#include "../dlogd/Debug.h" // TODO(ongaro): Move Debug to common
+#include "Debug.h"
 
 namespace DLog {
 

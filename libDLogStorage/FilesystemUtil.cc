@@ -19,7 +19,7 @@
 #include <errno.h>
 
 #include "FilesystemUtil.h"
-#include "../dlogd/Debug.h" // TODO(ongaro): Move Debug to common
+#include "Debug.h"
 
 namespace DLog {
 namespace Storage {

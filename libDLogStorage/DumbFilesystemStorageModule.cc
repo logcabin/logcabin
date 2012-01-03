@@ -22,7 +22,7 @@
 #include <google/protobuf/io/zero_copy_stream_impl.h>
 
 #include "../build/libDLogStorage/DumbFilesystem.pb.h"
-#include "../dlogd/Debug.h" // TODO(ongaro): Move Debug to common
+#include "Debug.h"
 #include "DumbFilesystemStorageModule.h"
 #include "FilesystemUtil.h"
 

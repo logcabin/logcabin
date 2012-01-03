@@ -21,7 +21,7 @@
 #include <google/protobuf/message_lite.h>
 
 #include "DLogStorage.h"
-#include "../dlogd/Debug.h"
+#include "Debug.h"
 
 namespace DLog {
 
