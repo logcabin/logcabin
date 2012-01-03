@@ -272,6 +272,16 @@ class Log {
  */
 class StorageModule {
   public:
+
+    /**
+     * See openLog().
+     */
+    class OpenCallback : public BaseCallback {
+      public:
+        virtual void opened(Ref<Log> log) = 0;
+        friend class RefHelper<OpenCallback>;
+    };
+
     /**
      * See deleteLog().
      */
@@ -296,8 +306,6 @@ class StorageModule {
      * Open a log.
      * This will create or finish creating the log if it does not fully exist.
      *
-     * Making this method asynchronous is probably unnecessarily pain.
-     *
      * Creating a log need not be atomic but must be idempotent. After even a
      * partial create, getLogs() must return this log and deleteLog() must be
      * able to delete any storage resources allocated to this log.
@@ -305,10 +313,11 @@ class StorageModule {
      * \param logId
      *      A log ID. The caller must make sure not to create multiple Log
      *      objects for the same log ID.
-     * \return
-     *      A handle to the newly constructed log object.
+     * \param openCompletion
+     *      Called once the open completes.
      */
-    virtual Ref<Log> openLog(LogId logId) = 0;
+    virtual void openLog(LogId logId,
+                         Ref<OpenCallback> openCompletion) = 0;
 
     /**
      * Delete a log from stable storage.

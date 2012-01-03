@@ -58,7 +58,7 @@ class MemoryStorageModule : public StorageModule {
     MemoryStorageModule();
   public:
     std::vector<LogId> getLogs();
-    Ref<Log> openLog(LogId logId);
+    void openLog(LogId logId, Ref<OpenCallback> openCompletion);
     void deleteLog(LogId logId, Ref<DeleteCallback> deleteCompletion);
     std::unordered_map<LogId, Ref<Log>> logs;
     friend class DLog::MakeHelper;

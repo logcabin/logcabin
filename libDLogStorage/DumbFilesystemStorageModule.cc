@@ -66,11 +66,12 @@ DumbFilesystemStorageModule::getLogs()
     return ret;
 }
 
-Ref<Log>
-DumbFilesystemStorageModule::openLog(LogId logId)
+void
+DumbFilesystemStorageModule::openLog(LogId logId,
+                                     Ref<OpenCallback> openCompletion)
 {
     Ref<Log> newLog = make<DumbFilesystemLog>(logId, getLogPath(logId));
-    return newLog;
+    openCompletion->opened(newLog);
 }
 
 void

@@ -51,7 +51,7 @@ class FilesystemStorageModule : public StorageModule {
     explicit FilesystemStorageModule(const std::string& path);
   public:
     std::vector<LogId> getLogs();
-    Ref<Log> openLog(LogId logId);
+    void openLog(LogId logId, Ref<OpenCallback> openCompletion);
     void deleteLog(LogId logId, Ref<DeleteCallback> deleteCompletion);
   private:
     /// Return the filesystem path for a particular log.

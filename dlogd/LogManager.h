@@ -194,7 +194,7 @@ class LogManager {
     /// The module providing the underlying durable storage.
     Ref<Storage::StorageModule> storageModule;
     /// A handle to the internal log.
-    Ref<Storage::Log> internalLog;
+    Ptr<Storage::Log> internalLog;
     /**
      * The logs on storage that have been fully created.
      * Does not include the internal log.
@@ -211,6 +211,7 @@ class LogManager {
 
     // Internal helper classes.
     class NoOpStorageDeleteCallback;
+    class ConstructorInternalLogOpenedCallback;
     class ConstructorReplayCallback;
     class InitializeAppendCallback;
     class CreateLogMutexCallback;
@@ -220,6 +221,7 @@ class LogManager {
     class DeleteLogInvalidateCallback;
     class DeleteLogReplayCallback;
     class LogDestroyedCallback;
+    class ReplayDeclareLogCreatedCallback;
 
     friend class MakeHelper;
     friend class RefHelper<LogManager>;

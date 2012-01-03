@@ -75,17 +75,20 @@ MemoryStorageModule::getLogs()
     return ret;
 }
 
-Ref<Log>
-MemoryStorageModule::openLog(LogId logId)
+void
+MemoryStorageModule::openLog(LogId logId,
+                             Ref<OpenCallback> openCompletion)
 {
     // This is not strictly necessary but makes testing easier.
     auto it = logs.find(logId);
-    if (it != logs.end())
-        return it->second;
+    if (it != logs.end()) {
+        openCompletion->opened(it->second);
+        return;
+    }
 
     Ref<Log> newLog = make<MemoryLog>(logId);
     logs.insert({logId, newLog});
-    return newLog;
+    openCompletion->opened(newLog);
 }
 
 void

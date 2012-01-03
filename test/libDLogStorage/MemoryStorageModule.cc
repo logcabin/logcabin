@@ -47,6 +47,24 @@ LogEntry LogAppendCallback::lastEntry {
     { 0xdeadbeef }
 };
 
+class SMOpenCallback : public StorageModule::OpenCallback {
+  private:
+    explicit SMOpenCallback(Ptr<Log>* result = NULL)
+        : result(result)
+    {
+    }
+  public:
+    void opened(Ref<Log> log) {
+        if (result != NULL)
+            *result = log;
+    }
+    Ptr<Log>* result;
+    friend class MakeHelper;
+    friend class RefHelper<SMOpenCallback>;
+    SMOpenCallback(const SMOpenCallback&) = delete;
+    SMOpenCallback& operator=(const SMOpenCallback&) = delete;
+};
+
 class SMDeleteCallback : public StorageModule::DeleteCallback {
   private:
     SMDeleteCallback() = default;
@@ -127,15 +145,16 @@ TEST(MemoryLog, append) {
 TEST(MemoryStorageModule, getLogs) {
     Ref<MemoryStorageModule> sm = make<MemoryStorageModule>();
     EXPECT_EQ((vector<LogId>{}), sorted(sm->getLogs()));
-    sm->openLog(38);
-    sm->openLog(755);
-    sm->openLog(129);
+    sm->openLog(38, make<SMOpenCallback>());
+    sm->openLog(755, make<SMOpenCallback>());
+    sm->openLog(129, make<SMOpenCallback>());
     EXPECT_EQ((vector<LogId>{38, 129, 755}), sorted(sm->getLogs()));
 }
 
 TEST(MemoryStorageModule, openLog) {
     Ref<MemoryStorageModule> sm = make<MemoryStorageModule>();
-    Ref<Log> log = sm->openLog(12);
+    Ptr<Log> log;
+    sm->openLog(12, make<SMOpenCallback>(&log));
     EXPECT_EQ(12U, log->getLogId());
     EXPECT_EQ((vector<LogId>{12}), sorted(sm->getLogs()));
 }
@@ -143,7 +162,8 @@ TEST(MemoryStorageModule, openLog) {
 TEST(MemoryStorageModule, deleteLog) {
     SMDeleteCallback::lastLogId = 0;
     Ref<MemoryStorageModule> sm = make<MemoryStorageModule>();
-    Ref<Log> log = sm->openLog(12);
+    Ptr<Log> log;
+    sm->openLog(12, make<SMOpenCallback>(&log));
     sm->deleteLog(10, make<SMDeleteCallback>());
     EXPECT_EQ(10U, SMDeleteCallback::lastLogId);
     sm->deleteLog(12, make<SMDeleteCallback>());

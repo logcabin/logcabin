@@ -111,6 +111,13 @@ class LogManagerTest : public ::testing::Test {
         mgr = make<LogManager>(storage,
                                make<InitializeCallback>());
     }
+    Ptr<MemoryLog> getInternalLog() {
+        auto it = storage->logs.find(LogManager::INTERNAL_LOG_ID);
+        if (it == storage->logs.end())
+            return Ptr<MemoryLog>();
+        Ptr<Log> log = it->second;
+        return Ptr<MemoryLog>(static_cast<MemoryLog*>(log.get()));
+    }
     Ref<MemoryStorageModule> storage;
     Ptr<LogManager> mgr;
 };
@@ -118,7 +125,7 @@ class LogManagerTest : public ::testing::Test {
 TEST_F(LogManagerTest, constructor_emptyStorage) {
     createManager();
     EXPECT_EQ(1U, InitializeCallback::count);
-    EXPECT_EQ(0U, storage->openLog(LogManager::INTERNAL_LOG_ID)->getLastId());
+    EXPECT_EQ(0U, getInternalLog()->getLastId());
     EXPECT_TRUE(mgr->initialized);
     EXPECT_EQ(0U, mgr->logs.size());
     EXPECT_EQ(0U, mgr->logNames.size());
@@ -126,7 +133,7 @@ TEST_F(LogManagerTest, constructor_emptyStorage) {
 }
 
 TEST_F(LogManagerTest, constructor_extraLogsWithoutMetadata) {
-    storage->openLog(13);
+    storage->logs.insert({13, make<MemoryLog>(13)});
     ASSERT_DEATH(createManager(), "left-over data");
 }
 
@@ -139,8 +146,7 @@ TEST_F(LogManagerTest, constructor_replayLog) {
     mgr->createLog("bar", make<CreateCallback>());
     mgr->createLog("baz", make<CreateCallback>());
     mgr.reset();
-    Ref<Log> l = storage->openLog(LogManager::INTERNAL_LOG_ID);
-    Ref<MemoryLog> log(*static_cast<MemoryLog*>(l.get()));
+    Ptr<MemoryLog> log(getInternalLog());
     --log->headId;
     log->entries.pop_back();
     EXPECT_EQ(2U, log->getLastId());
@@ -152,7 +158,7 @@ TEST_F(LogManagerTest, constructor_replayLog) {
     createManager();
     EXPECT_EQ(1U, InitializeCallback::count);
     EXPECT_EQ(2U, log->getLastId());
-    EXPECT_EQ(2U, storage->openLog(LogManager::INTERNAL_LOG_ID)->getLastId());
+    EXPECT_EQ(2U, getInternalLog()->getLastId());
     EXPECT_TRUE(mgr->initialized);
     EXPECT_EQ((vector<LogId> { 1, 2 }), getKeys(mgr->logs));
     EXPECT_EQ((vector<string> {"foo", "bar"}), getKeys(mgr->logNames));
@@ -163,7 +169,7 @@ TEST_F(LogManagerTest, initializeStorage) {
     createManager();
     EXPECT_EQ(1U, InitializeCallback::count);
     EXPECT_TRUE(mgr->initialized);
-    Ref<Log> internalLog = storage->openLog(LogManager::INTERNAL_LOG_ID);
+    Ptr<Log> internalLog = getInternalLog();
     ASSERT_EQ(0U, internalLog->getLastId());
     LogEntry entry = internalLog->readFrom(0).at(0);
     EXPECT_EQ("(0, 0) BINARY", entry.toString());
@@ -179,7 +185,7 @@ TEST_F(LogManagerTest, createLog) {
     mgr->createLog("foo", make<CreateCallback>());
     EXPECT_EQ(1U, CreateCallback::count);
     EXPECT_EQ(1U, CreateCallback::lastLogId);
-    EXPECT_EQ(1U, storage->openLog(LogManager::INTERNAL_LOG_ID)->getLastId());
+    EXPECT_EQ(1U, getInternalLog()->getLastId());
     EXPECT_EQ((vector<LogId> { 1 }), getKeys(mgr->logs));
     EXPECT_EQ((vector<string> { "foo" }), getKeys(mgr->logNames));
     Ref<LogManager::LogInfo> logInfo = mgr->logNames.find("foo")->second;

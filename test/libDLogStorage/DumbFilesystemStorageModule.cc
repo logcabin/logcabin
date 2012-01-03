@@ -49,6 +49,24 @@ LogEntry LogAppendCallback::lastEntry {
     { 0xdeadbeef }
 };
 
+class SMOpenCallback : public StorageModule::OpenCallback {
+  private:
+    explicit SMOpenCallback(Ptr<Log>* result = NULL)
+        : result(result)
+    {
+    }
+  public:
+    void opened(Ref<Log> log) {
+        if (result != NULL)
+            *result = log;
+    }
+    Ptr<Log>* result;
+    friend class MakeHelper;
+    friend class RefHelper<SMOpenCallback>;
+    SMOpenCallback(const SMOpenCallback&) = delete;
+    SMOpenCallback& operator=(const SMOpenCallback&) = delete;
+};
+
 class SMDeleteCallback : public StorageModule::DeleteCallback {
   private:
     SMDeleteCallback() = default;
@@ -105,9 +123,9 @@ TEST_F(DumbFilesystemStorageModuleTest, constructor) {
 TEST_F(DumbFilesystemStorageModuleTest, getLogs) {
     createStorageModule();
     EXPECT_EQ((vector<LogId>{}), sorted(sm->getLogs()));
-    sm->openLog(38);
-    sm->openLog(755);
-    sm->openLog(129);
+    sm->openLog(38, make<SMOpenCallback>());
+    sm->openLog(755, make<SMOpenCallback>());
+    sm->openLog(129, make<SMOpenCallback>());
     EXPECT_EQ((vector<LogId>{38, 129, 755}), sorted(sm->getLogs()));
     close(open((tmpdir + "/NaN").c_str(), O_WRONLY|O_CREAT, 0644));
     createStorageModule();
@@ -116,7 +134,8 @@ TEST_F(DumbFilesystemStorageModuleTest, getLogs) {
 
 TEST_F(DumbFilesystemStorageModuleTest, openLog) {
     createStorageModule();
-    Ref<Log> log = sm->openLog(12);
+    Ptr<Log> log;
+    sm->openLog(12, make<SMOpenCallback>(&log));
     EXPECT_EQ(12U, log->getLogId());
     EXPECT_EQ((vector<LogId>{12}), sorted(sm->getLogs()));
     createStorageModule();
@@ -125,7 +144,8 @@ TEST_F(DumbFilesystemStorageModuleTest, openLog) {
 
 TEST_F(DumbFilesystemStorageModuleTest, deleteLog) {
     createStorageModule();
-    Ref<Log> log = sm->openLog(12);
+    Ptr<Log> log;
+    sm->openLog(12, make<SMOpenCallback>(&log));
     sm->deleteLog(10, make<SMDeleteCallback>());
     EXPECT_EQ(10U, SMDeleteCallback::lastLogId);
     sm->deleteLog(12, make<SMDeleteCallback>());
@@ -149,7 +169,8 @@ class DumbFilesystemLogTest : public DumbFilesystemStorageModuleTest {
         createLog();
     }
     void createLog() {
-        Ref<Log> tmpLog = sm->openLog(92);
+        Ptr<Log> tmpLog;
+        sm->openLog(92, make<SMOpenCallback>(&tmpLog));
         log = Ptr<DumbFilesystemLog>(
                         static_cast<DumbFilesystemLog*>(tmpLog.get()));
     }

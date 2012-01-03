@@ -66,11 +66,12 @@ FilesystemStorageModule::getLogs()
     return ret;
 }
 
-Ref<Log>
-FilesystemStorageModule::openLog(LogId logId)
+void
+FilesystemStorageModule::openLog(LogId logId,
+                                 Ref<OpenCallback> openCompletion)
 {
     Ref<Log> newLog = make<FilesystemLog>(logId, getLogPath(logId));
-    return newLog;
+    openCompletion->opened(newLog);
 }
 
 namespace {
