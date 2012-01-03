@@ -66,12 +66,61 @@ FilesystemStorageModule::getLogs()
     return ret;
 }
 
+namespace {
+
+/// Used by openLog.
+class WorkerOpenLogCompletion : public WorkDispatcher::CompletionCallback  {
+    typedef StorageModule::OpenCallback OpenCallback;
+    WorkerOpenLogCompletion(Ref<OpenCallback> openCompletion,
+                            Ref<Log> log)
+        : openCompletion(openCompletion)
+        , log(log)
+    {
+    }
+  public:
+    void completed() {
+        openCompletion->opened(log);
+    }
+    Ref<OpenCallback> openCompletion;
+    Ref<Log> log;
+    friend class DLog::MakeHelper;
+    friend class DLog::RefHelper<WorkerOpenLogCompletion>;
+};
+
+/// Used by openLog.
+class WorkerOpenLog : public WorkDispatcher::WorkerCallback  {
+    typedef StorageModule::OpenCallback OpenCallback;
+    WorkerOpenLog(LogId logId,
+                  const std::string& path,
+                  Ref<OpenCallback> openCompletion)
+        : logId(logId)
+        , path(path)
+        , openCompletion(openCompletion)
+    {
+    }
+  public:
+    void run() {
+        Ref<Log> newLog = make<FilesystemLog>(logId, path);
+        auto completion = make<WorkerOpenLogCompletion>(openCompletion,
+                                                        newLog);
+        workDispatcher->scheduleCompletion(completion);
+    }
+    const LogId logId;
+    const std::string path;
+    Ref<OpenCallback> openCompletion;
+    friend class DLog::MakeHelper;
+    friend class DLog::RefHelper<WorkerOpenLog>;
+};
+
+} // anonymous namespace
+
 void
 FilesystemStorageModule::openLog(LogId logId,
                                  Ref<OpenCallback> openCompletion)
 {
-    Ref<Log> newLog = make<FilesystemLog>(logId, getLogPath(logId));
-    openCompletion->opened(newLog);
+    auto work = make<WorkerOpenLog>(logId, getLogPath(logId),
+                                    openCompletion);
+    workDispatcher->scheduleWork(work);
 }
 
 namespace {

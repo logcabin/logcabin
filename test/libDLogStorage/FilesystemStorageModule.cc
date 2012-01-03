@@ -144,6 +144,9 @@ TEST_F(FilesystemStorageModuleTest, getLogs) {
     sm->openLog(38, make<SMOpenCallback>());
     sm->openLog(755, make<SMOpenCallback>());
     sm->openLog(129, make<SMOpenCallback>());
+    runWorkerCompletion();
+    runWorkerCompletion();
+    runWorkerCompletion();
     EXPECT_EQ((vector<LogId>{38, 129, 755}), sorted(sm->getLogs()));
     close(open((tmpdir + "/NaN").c_str(), O_WRONLY|O_CREAT, 0644));
     createStorageModule();
@@ -154,6 +157,7 @@ TEST_F(FilesystemStorageModuleTest, openLog) {
     createStorageModule();
     Ptr<Log> log;
     sm->openLog(12, make<SMOpenCallback>(&log));
+    runWorkerCompletion();
     EXPECT_EQ(12U, log->getLogId());
     EXPECT_EQ((vector<LogId>{12}), sorted(sm->getLogs()));
     createStorageModule();
@@ -164,6 +168,7 @@ TEST_F(FilesystemStorageModuleTest, deleteLog) {
     createStorageModule();
     Ptr<Log> log;
     sm->openLog(12, make<SMOpenCallback>(&log));
+    runWorkerCompletion();
     sm->deleteLog(10, make<SMDeleteCallback>());
     runWorkerCompletion();
     EXPECT_EQ(10U, SMDeleteCallback::lastLogId);
@@ -191,6 +196,7 @@ class FilesystemLogTest : public FilesystemStorageModuleTest {
     void createLog() {
         Ptr<Log> tmpLog;
         sm->openLog(92, make<SMOpenCallback>(&tmpLog));
+        runWorkerCompletion();
         log = Ptr<FilesystemLog>(
                         static_cast<FilesystemLog*>(tmpLog.get()));
     }
