@@ -17,7 +17,7 @@
 #include <gtest/gtest.h>
 #include <sys/stat.h>
 
-#include "dlogd/Debug.h"
+#include "Debug.h"
 #include "libDLogStorage/FilesystemUtil.h"
 
 namespace DLog {

@@ -16,7 +16,7 @@
 #include <gtest/gtest.h>
 #include <unistd.h>
 
-#include "dlogd/Debug.h"
+#include "Debug.h"
 #include "WorkDispatcher.h"
 
 namespace DLog {

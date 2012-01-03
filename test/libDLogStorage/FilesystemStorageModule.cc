@@ -19,7 +19,7 @@
 #include <gtest/gtest.h>
 
 #include "Common.h"
-#include "dlogd/Debug.h"
+#include "Debug.h"
 #include "libDLogStorage/FilesystemStorageModule.h"
 #include "libDLogStorage/FilesystemUtil.h"
 
