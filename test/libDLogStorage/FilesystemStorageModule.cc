@@ -22,6 +22,7 @@
 #include "Debug.h"
 #include "libDLogStorage/FilesystemStorageModule.h"
 #include "libDLogStorage/FilesystemUtil.h"
+#include "WorkDispatcher.h"
 
 namespace DLog {
 namespace Storage {
@@ -73,6 +74,23 @@ eStr(const Container& container)
         ret.push_back(it->toString());
     }
     return ret;
+}
+
+void
+runWorkerCompletion(uint64_t timeoutMs = 100) {
+    while (true) {
+        Ptr<WorkDispatcher::CompletionCallback> completion =
+                                        workDispatcher->popCompletion();
+        if (completion) {
+            completion->completed();
+            return;
+        } else {
+            usleep(1000);
+            --timeoutMs;
+            if (timeoutMs == 0)
+                FAIL() << "Exceeded timeout";
+        }
+    }
 }
 
 } // anonymous namespace
@@ -127,8 +145,10 @@ TEST_F(FilesystemStorageModuleTest, deleteLog) {
     createStorageModule();
     Ref<Log> log = sm->openLog(12);
     sm->deleteLog(10, make<SMDeleteCallback>());
+    runWorkerCompletion();
     EXPECT_EQ(10U, SMDeleteCallback::lastLogId);
     sm->deleteLog(12, make<SMDeleteCallback>());
+    runWorkerCompletion();
     EXPECT_EQ(12U, SMDeleteCallback::lastLogId);
     EXPECT_EQ((vector<LogId>{}), sorted(sm->getLogs()));
     createStorageModule();

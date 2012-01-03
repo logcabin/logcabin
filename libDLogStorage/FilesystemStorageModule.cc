@@ -25,6 +25,7 @@
 #include "Debug.h" // TODO(ongaro): Move Debug to common
 #include "FilesystemStorageModule.h"
 #include "FilesystemUtil.h"
+#include "WorkDispatcher.h"
 
 namespace DLog {
 
@@ -32,8 +33,7 @@ namespace Storage {
 
 // class FilesystemStorageModule
 
-FilesystemStorageModule::FilesystemStorageModule(
-                                    const std::string& path)
+FilesystemStorageModule::FilesystemStorageModule(const std::string& path)
     : path(path)
 {
     if (mkdir(path.c_str(), 0755) != 0) {
@@ -73,12 +73,58 @@ FilesystemStorageModule::openLog(LogId logId)
     return newLog;
 }
 
+namespace {
+
+/// Used by deleteLog.
+class WorkerDeleteLogCompletion : public WorkDispatcher::CompletionCallback  {
+    typedef StorageModule::DeleteCallback DeleteCallback;
+    WorkerDeleteLogCompletion(LogId logId,
+                              Ref<DeleteCallback> deleteCompletion)
+        : logId(logId)
+        , deleteCompletion(deleteCompletion)
+    {
+    }
+  public:
+    void completed() {
+        deleteCompletion->deleted(logId);
+    }
+    LogId logId;
+    Ref<DeleteCallback> deleteCompletion;
+
+    friend class DLog::MakeHelper;
+    friend class DLog::RefHelper<WorkerDeleteLogCompletion>;
+};
+
+/// Used by deleteLog.
+class WorkerDeleteLog : public WorkDispatcher::WorkerCallback  {
+    WorkerDeleteLog(const std::string& path,
+                    Ref<WorkerDeleteLogCompletion> completion)
+        : path(path)
+        , completion(completion)
+    {
+    }
+  public:
+    void run() {
+        FilesystemUtil::remove(path);
+        workDispatcher->scheduleCompletion(completion);
+    }
+    const std::string path;
+    Ref<WorkerDeleteLogCompletion> completion;
+
+    friend class DLog::MakeHelper;
+    friend class DLog::RefHelper<WorkerDeleteLog>;
+};
+} // anonymous namespace
+
 void
 FilesystemStorageModule::deleteLog(LogId logId,
-                               Ref<DeleteCallback> deleteCompletion)
+                                   Ref<DeleteCallback> deleteCompletion)
 {
-    FilesystemUtil::remove(getLogPath(logId));
-    deleteCompletion->deleted(logId);
+    auto completion = make<WorkerDeleteLogCompletion>(logId,
+                                                      deleteCompletion);
+    auto work = make<WorkerDeleteLog>(getLogPath(logId),
+                                      completion);
+    workDispatcher->scheduleWork(work);
 }
 
 std::string
