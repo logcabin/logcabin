@@ -28,9 +28,9 @@ env.Append(CXXFLAGS = [ "-Wno-non-template-friend", "-Woverloaded-virtual",
                         "-Weffc++", "-std=c++0x" ])
 
 if env["BUILDTYPE"] == "DEBUG":
-    env.Append(CXXFLAGS = [ "-g", "-DDEBUG" ])
+    env.Append(CPPFLAGS = [ "-g", "-DDEBUG" ])
 elif env["BUILDTYPE"] == "RELEASE":
-    env.Append(CXXFLAGS = "-DNDEBUG")
+    env.Append(CPPFLAGS = "-DNDEBUG")
 else:
     print "Error BUILDTYPE must be RELEASE or DEBUG"
     sys.exit(-1)

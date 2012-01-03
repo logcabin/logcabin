@@ -1,7 +1,10 @@
 Import('env')
 
 env.Program("dlogperf", [ "main.cc" ],
-            LIBPATH = [ "#build/libDLogRPC", "#build/libDLogClient" ],
-            LIBS = [ "DLogRPC", "DLogClient" ],
+            LIBPATH = [ "$LIBPATH",
+                        "#build/libDLogRPC",
+                        "#build/libDLogClient" ],
+            LIBS = [ "rt", "event_core-2.0", "event_pthreads-2.0",
+                     "DLogRPC", "DLogClient" ],
             CPPPATH = "#include")
 

@@ -2,7 +2,9 @@ Import('env')
 
 src = [
     "Common.cc",
+    "Debug.c",
     "DLogRPC.cc",
+    "eventwrapper.cc",
 ]
 env.StaticLibrary("DLogRPC",
                   src,

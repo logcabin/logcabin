@@ -3,18 +3,18 @@ Import('env')
 src = [
     "main.cc",
     "AsyncMutex.cc",
-    "Debug.c",
     "LogManager.cc",
-    #"#build/proto/dlog.pb.o",
+    "#build/proto/dlog.pb.o",
     "#build/dlogd/InternalLog.pb.o",
 ]
 
 env.Program("dlogd", src,
             LIBPATH = [ "$LIBPATH",
+                        "#.",
                         "#build/libDLogRPC",
                         "#build/libDLogStorage" ],
-            LIBS = [ "event_core-2.0", "protobuf",
-                     "DLogRPC", "DLogStorage" ],
+            LIBS = [ "rt", "event_core-2.0", "event_pthreads-2.0",
+                     "protobuf", "DLogRPC", "DLogStorage" ],
             CPPPATH = [ "#include", "#" ])
 
 env.Protoc([],

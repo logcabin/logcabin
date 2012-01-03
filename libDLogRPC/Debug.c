@@ -20,7 +20,7 @@
 
 #include <time.h>
 
-#include "Debug.h"
+#include <Debug.h>
 
 /**
  * String array to convert logLevels into a string that will be printed. This 
@@ -46,12 +46,16 @@ Debug_Log(const char* fileName, uint32_t lineNum, const char* func,
         level = VERBOSE;
 
     clock_gettime(CLOCK_REALTIME, &now);
-    fprintf(stderr, "%010lu.%09lu %s:%d in %s %s: ",
-           now.tv_sec, now.tv_nsec,
-           fileName, lineNum, func, logLevelToString[level]);
+    fprintf(stdout, "%010lu.%09lu %s:%d in %s %s: ",
+            now.tv_sec, now.tv_nsec,
+            fileName, lineNum, func, logLevelToString[level]);
 
     va_start(ap, format);
     vfprintf(stderr, format, ap);
     va_end(ap);
+
+    fprintf(stdout, "\n");
+
+    fflush(stdout);
 }
 
