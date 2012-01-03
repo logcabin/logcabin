@@ -5,6 +5,7 @@ src = [
     "DumbFilesystemStorageModule.cc",
     "FilesystemUtil.cc",
     "MemoryStorageModule.cc",
+    "WorkDispatcher.cc",
     "#build/libDLogStorage/DumbFilesystem.pb.o",
 ]
 env.StaticLibrary("DLogStorage",
