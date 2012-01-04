@@ -133,13 +133,10 @@ TEST(MemoryLog, append) {
     Ref<MemoryLog> log = make<MemoryLog>(92);
     LogEntry e1(1, 2, 3, Chunk::makeChunk("hello", 6), {4, 5});
     log->append(e1, make<LogAppendCallback>());
-    EXPECT_EQ(92U, e1.logId);
-    EXPECT_EQ(0U, e1.entryId);
     EXPECT_EQ("(92, 0) 'hello' [inv 4, 5]",
               LogAppendCallback::lastEntry.toString());
     LogEntry e2(1, 2, 3, Chunk::makeChunk("goodbye", 8), {4, 5});
     log->append(e2, make<LogAppendCallback>());
-    EXPECT_EQ(1U, e2.entryId);
 }
 
 TEST(MemoryStorageModule, getLogs) {

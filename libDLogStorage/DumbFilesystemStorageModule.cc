@@ -125,7 +125,7 @@ DumbFilesystemLog::readFrom(EntryId start)
 }
 
 void
-DumbFilesystemLog::append(LogEntry& entry,
+DumbFilesystemLog::append(LogEntry entry,
                           Ref<AppendCallback> appendCompletion)
 {
     EntryId newId = headId + 1;

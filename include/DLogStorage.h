@@ -218,7 +218,7 @@ class Log {
     /**
      * Return this logs ID.
      */
-    LogId getLogId() { return logId; }
+    LogId getLogId() const { return logId; }
 
     /**
      * Return the ID for the entry at the head of the log.
@@ -240,15 +240,14 @@ class Log {
 
     /**
      * Append a log entry (data and/or invalidations).
-     * \param[in,out] entry
-     *      The entry to append. Its EntryId will be set upon the return of
-     *      this function. A copy of this entry will be passed to
-     *      appendCompletion once the entry has been written to durable
-     *      storage.
+     * \param entry
+     *      The entry to append. A copy of this entry will be passed to
+     *      appendCompletion with its EntryId set once the entry has been
+     *      written to durable storage.
      * \param appendCompletion
-     *      Called once entry has may be considered durable.
+     *      Called once entry may be considered durable.
      */
-    virtual void append(LogEntry& entry,
+    virtual void append(LogEntry entry,
                         Ref<AppendCallback> appendCompletion) = 0;
 
     /**

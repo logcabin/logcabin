@@ -45,7 +45,7 @@ MemoryLog::readFrom(EntryId start)
 }
 
 void
-MemoryLog::append(LogEntry& entry,
+MemoryLog::append(LogEntry entry,
                   Ref<AppendCallback> appendCompletion)
 {
     EntryId newId = headId + 1;

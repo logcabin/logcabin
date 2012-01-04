@@ -215,8 +215,10 @@ TEST_F(FilesystemLogTest, constructor) {
 
     LogEntry e1(1, 2, 3, Chunk::makeChunk("hello", 6));
     log->append(e1, make<LogAppendCallback>());
+    runWorkerCompletion();
     LogEntry e2(4, 5, 6, Chunk::makeChunk("goodbye", 8));
     log->append(e2, make<LogAppendCallback>());
+    runWorkerCompletion();
     createLog();
     EXPECT_EQ((vector<string> {
                 "(92, 0) 'hello'",
@@ -229,8 +231,10 @@ TEST_F(FilesystemLogTest, getLastId) {
     EXPECT_EQ(NO_ENTRY_ID, log->getLastId());
     LogEntry e1(1, 2, 3, Chunk::makeChunk("hello", 6));
     log->append(e1, make<LogAppendCallback>());
+    runWorkerCompletion();
     EXPECT_EQ(0U, log->getLastId());
     log->append(e1, make<LogAppendCallback>());
+    runWorkerCompletion();
     EXPECT_EQ(1U, log->getLastId());
     createLog();
     EXPECT_EQ(1U, log->getLastId());
@@ -241,8 +245,10 @@ TEST_F(FilesystemLogTest, readFrom) {
     EXPECT_EQ(vector<string>{}, eStr(log->readFrom(12)));
     LogEntry e1(1, 2, 3, Chunk::makeChunk("hello", 6));
     log->append(e1, make<LogAppendCallback>());
+    runWorkerCompletion();
     LogEntry e2(4, 5, 6, Chunk::makeChunk("world!", 7));
     log->append(e2, make<LogAppendCallback>());
+    runWorkerCompletion();
     EXPECT_EQ((vector<string> {
                 "(92, 0) 'hello'",
                 "(92, 1) 'world!'",
@@ -265,23 +271,45 @@ TEST_F(FilesystemLogTest, readFrom) {
 TEST_F(FilesystemLogTest, append) {
     LogEntry e1(1, 2, 3, Chunk::makeChunk("hello", 6), {4, 5});
     log->append(e1, make<LogAppendCallback>());
-    EXPECT_EQ(92U, e1.logId);
-    EXPECT_EQ(0U, e1.entryId);
+    runWorkerCompletion();
     EXPECT_EQ("(92, 0) 'hello' [inv 4, 5]",
               LogAppendCallback::lastEntry.toString());
     LogEntry e2(1, 2, 3, Chunk::makeChunk("goodbye", 8), {4, 5});
     log->append(e2, make<LogAppendCallback>());
-    EXPECT_EQ(1U, e2.entryId);
+    runWorkerCompletion();
     createLog();
     EXPECT_EQ(1U, log->getLastId());
+}
+
+TEST_F(FilesystemLogTest, appendQueuing) {
+    LogEntry e1(1, 2, 3, Chunk::makeChunk("hello", 6));
+    // Test queuing up some writes
+    // The first two will be queued in append().
+    log->writing = true;
+    log->append(e1, make<LogAppendCallback>());
+    log->append(e1, make<LogAppendCallback>());
+    // append() one more, allowing the three to be written.
+    log->writing = false;
+    log->append(e1, make<LogAppendCallback>());
+    // Before letting the append completion run, queue another one.
+    log->append(e1, make<LogAppendCallback>());
+    // Now let the first completion run.
+    // It should schedule the second batch of writes.
+    runWorkerCompletion();
+    // And let the second completion run.
+    runWorkerCompletion();
+    EXPECT_FALSE(log->writing);
+    EXPECT_EQ(3U, log->getLastId());
 }
 
 TEST_F(FilesystemLogTest, getEntryIds) {
     EXPECT_EQ((vector<EntryId>{}), sorted(log->getEntryIds()));
     LogEntry e1(1, 2, 3, Chunk::makeChunk("hello", 6));
     log->append(e1, make<LogAppendCallback>());
+    runWorkerCompletion();
     LogEntry e2(4, 5, 6, Chunk::makeChunk("goodbye", 8));
     log->append(e2, make<LogAppendCallback>());
+    runWorkerCompletion();
     EXPECT_EQ((vector<LogId>{0, 1}), sorted(log->getEntryIds()));
     close(open((log->path + "/NaN").c_str(), O_WRONLY|O_CREAT, 0644));
     createLog();

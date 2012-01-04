@@ -38,7 +38,7 @@ class MemoryLog : public Log {
   public:
     EntryId getLastId() { return headId; }
     std::deque<LogEntry> readFrom(EntryId start);
-    void append(LogEntry& entry, Ref<AppendCallback> appendCompletion);
+    void append(LogEntry entry, Ref<AppendCallback> appendCompletion);
 
   private:
     EntryId headId;

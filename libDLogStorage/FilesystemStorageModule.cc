@@ -190,6 +190,8 @@ FilesystemLog::FilesystemLog(LogId logId, const std::string& path)
     , path(path)
     , headId(NO_ENTRY_ID)
     , entries()
+    , writing(false)
+    , writeQueue()
 {
     if (mkdir(path.c_str(), 0755) != 0) {
         if (errno != EEXIST) {
@@ -220,18 +222,97 @@ FilesystemLog::readFrom(EntryId start)
 }
 
 void
-FilesystemLog::append(LogEntry& entry,
-                          Ref<AppendCallback> appendCompletion)
+FilesystemLog::append(LogEntry entry,
+                      Ref<AppendCallback> appendCompletion)
 {
-    EntryId newId = headId + 1;
-    if (headId == NO_ENTRY_ID)
-        newId = 0;
-    headId = newId;
-    entry.logId = getLogId();
-    entry.entryId = newId;
-    entries.push_back(entry);
-    write(entry);
-    appendCompletion->appended(entries.back());
+    writeQueue.push_back({entry, appendCompletion});
+    scheduleAppends();
+}
+
+/// Used by scheduleAppends.
+class FilesystemLog::WorkerAppendCompletion
+                        : public WorkDispatcher::CompletionCallback  {
+    WorkerAppendCompletion(Ref<FilesystemLog> log,
+                           WriteQueue&& writeQueue)
+        : log(log)
+        , writeQueue(std::move(writeQueue))
+    {
+    }
+  public:
+    void completed() {
+        // Update in-memory data structures.
+        for (auto it = writeQueue.begin(); it != writeQueue.end(); ++it) {
+            const LogEntry& entry = it->first;
+            Ref<AppendCallback> appendCompletion = it->second;
+            log->headId = entry.entryId;
+            log->entries.push_back(entry);
+        }
+
+        // Schedule more writes if they've already queued up.
+        log->writing = false;
+        log->scheduleAppends();
+
+        // Call append completions. This is done in a separate loop so that it
+        // can be concurrent with storage writes.
+        for (auto it = writeQueue.begin(); it != writeQueue.end(); ++it) {
+            const LogEntry& entry = it->first;
+            Ref<AppendCallback> appendCompletion = it->second;
+            appendCompletion->appended(entry);
+        }
+    }
+    Ref<FilesystemLog> log;
+    const WriteQueue writeQueue;
+    friend class DLog::MakeHelper;
+    friend class DLog::RefHelper<WorkerAppendCompletion>;
+};
+
+/// Used by scheduleAppends.
+class FilesystemLog::WorkerAppend : public WorkDispatcher::WorkerCallback  {
+    WorkerAppend(Ref<FilesystemLog> log,
+                 WriteQueue&& writeQueue)
+        : log(log)
+        , headId(log->headId)
+        , writeQueue(std::move(writeQueue))
+    {
+        LOG(DBG, "supposed to write %lu entries", this->writeQueue.size());
+    }
+  public:
+    // Write to disk.
+    void run() {
+        // Be careful not to modify 'log' from worker threads.
+        for (auto it = writeQueue.begin(); it != writeQueue.end(); ++it) {
+            LogEntry& entry = it->first;
+            if (headId == NO_ENTRY_ID)
+                headId = 0;
+            else
+                ++headId;
+            entry.logId = log->getLogId();
+            entry.entryId = headId;
+            LOG(DBG, "writing (%lu, %lu)", entry.logId, entry.entryId);
+            log->write(entry);
+        }
+        auto completion = make<WorkerAppendCompletion>(log,
+                                                       std::move(writeQueue));
+        workDispatcher->scheduleCompletion(completion);
+    }
+    Ref<FilesystemLog> log;
+    EntryId headId;
+    WriteQueue writeQueue;
+    friend class DLog::MakeHelper;
+    friend class DLog::RefHelper<WorkerAppend>;
+};
+
+void
+FilesystemLog::scheduleAppends()
+{
+    if (!writing && !writeQueue.empty()) {
+        writing = true;
+        WriteQueue localWriteQueue;
+        writeQueue.swap(localWriteQueue);
+        auto work = make<WorkerAppend>(Ref<FilesystemLog>(*this),
+                                       std::move(localWriteQueue));
+        workDispatcher->scheduleWork(work);
+    }
 }
 
 std::vector<EntryId>

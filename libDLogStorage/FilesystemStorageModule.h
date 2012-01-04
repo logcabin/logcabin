@@ -19,7 +19,9 @@
  */
 
 #include <list>
+#include <deque>
 #include <unordered_map>
+#include <vector>
 
 #include "DLogStorage.h"
 
@@ -36,7 +38,6 @@ namespace Storage {
  * - Never cleans up used storage space
  * - Does not detect data corruption
  * - Does not detect metadata corruption
- * - Does all file I/O in the main thread
  * - Does not call sync or fsync
  * Therefore, it is not yet recommended for actual use.
  */
@@ -71,8 +72,18 @@ class FilesystemLog : public Log {
   public:
     EntryId getLastId() { return headId; }
     std::deque<LogEntry> readFrom(EntryId start);
-    void append(LogEntry& entry, Ref<AppendCallback> appendCompletion);
+    void append(LogEntry entry, Ref<AppendCallback> appendCompletion);
   private:
+    /**
+     * If no work request is outstanding, empty writeQueue into a new work
+     * request. See also 'writing'.
+     */
+    void scheduleAppends();
+    /**
+     * Scan the entries on the filesystem and return their IDs.
+     * \return
+     *      The ID of each entry, in no specified order.
+     */
     std::vector<EntryId> getEntryIds();
     /// Return the filesystem path for a particular entry.
     std::string getEntryPath(EntryId entryId) const;
@@ -86,6 +97,27 @@ class FilesystemLog : public Log {
     EntryId headId;
     /// All log entries in order.
     std::list<LogEntry> entries;
+    /**
+     * This is true while a write work request is outstanding.
+     * It is used to ensure that only one work request is outstanding at a
+     * time. This in turn guarantees that storage writes are fully ordered for
+     * this log.
+     */
+    bool writing;
+    /// These make up a WriteQueue.
+    typedef std::pair<LogEntry, Ref<AppendCallback>> WriteQueueEntry;
+    /// A queue of outstanding log append requests.
+    typedef std::vector<WriteQueueEntry> WriteQueue;
+    /**
+     * Append requests are queued up here until they are sent to a worker for
+     * writing out to the filesystem.
+     */
+    WriteQueue writeQueue;
+
+    // Helper classes.
+    class WorkerAppend;
+    class WorkerAppendCompletion;
+
     friend class DLog::MakeHelper;
     friend class DLog::RefHelper<FilesystemLog>;
 };
