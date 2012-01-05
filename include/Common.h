@@ -1,4 +1,4 @@
-/* Copyright (c) 2011 Stanford University
+/* Copyright (c) 2011-2012 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -141,6 +141,30 @@ hasOnly(const Container& haystack, const Item& needle) {
  */
 std::string format(const char* format, ...)
     __attribute__((format(printf, 1, 2)));
+
+/**
+ * Determine whether a null-terminated string is printable.
+ * \param str
+ *      A null-terminated string.
+ * \return
+ *      True if all the bytes of str before its null terminator are nice to
+ *      display in a single line of text.
+ */
+bool
+isPrintable(const char* str);
+
+/**
+ * Determine whether some data is a printable, null-terminated string.
+ * \param data
+ *      The first byte.
+ * \param length
+ *      The number of bytes of 'data'.
+ * \return
+ *      True if the last byte of data is a null terminator and all the bytes of
+ *      data before that are nice to display in a single line of text.
+ */
+bool
+isPrintable(const void* data, size_t length);
 
 } // namespace DLog
 

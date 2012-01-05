@@ -363,7 +363,7 @@ TEST_F(FilesystemLogTest, readWriteCommon) {
                 "(92, 2) 'hello'",
                 "(92, 3) NODATA [inv 28, 29, 30]",
                 "(92, 4) 'hello' [inv 31, 33, 94]",
-                "(92, 5) ''",
+                "(92, 5) BINARY",
               }),
               eStr(log->entries));
     EXPECT_EQ(9U, log->entries.back().createTime);
