@@ -69,8 +69,6 @@ class Message {
     ~Message();
     /**
      * Serialize the message header.
-     * \param buf
-     *      Blob to append to the message.
      */
     void serializeHeader();
     void deserializeHeader();
@@ -179,7 +177,7 @@ class Response {
  */
 class Server {
   public:
-    Server(uint16_t port);
+    explicit Server(uint16_t port);
     ~Server();
     /**
      * Register an Service object with this session.
@@ -209,7 +207,7 @@ class Client {
      * \param loop
      *      EventLoop object to attach to.
      */
-    Client(EventLoop& loop);
+    explicit Client(EventLoop& loop);
     ~Client();
     /**
      * Connect to a server.

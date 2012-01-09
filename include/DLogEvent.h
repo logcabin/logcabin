@@ -64,7 +64,7 @@ class EventSignal {
  */
 class EventTimer {
   public:
-    EventTimer(EventLoop &loop);
+    explicit EventTimer(EventLoop &loop);
     virtual ~EventTimer();
     void addPeriodic(time_t seconds);
     void add(time_t seconds);
