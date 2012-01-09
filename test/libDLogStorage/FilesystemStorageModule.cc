@@ -321,23 +321,24 @@ TEST_F(FilesystemLogTest, getEntryPath) {
 }
 
 TEST_F(FilesystemLogTest, readErrors) {
+    // File does not exist
     EXPECT_DEATH(log->read(444),
                  "Could not open");
 
+    // Empty file
     close(open((log->path + "/0000000000000000").c_str(),
                O_WRONLY|O_CREAT, 0644));
     EXPECT_DEATH(log->read(0),
-                 "Failed to parse log entry");
+                 "File .* corrupt");
+
+    // TODO(ongaro): do some random testing
 }
 
 TEST_F(FilesystemLogTest, writeErrors) {
     LogEntry e1(92, 1, 5, NO_DATA);
     log->write(e1);
     EXPECT_DEATH(log->write(e1),
-                 "Could not create");
-
-    // TODO(ongaro): Test a failure in serializing the protocol buffer.
-    // I don't see an obvious, clean way to do this.
+                 "Could not create"); // File exists
 }
 
 TEST_F(FilesystemLogTest, readWriteCommon) {

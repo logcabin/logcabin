@@ -166,6 +166,9 @@ isPrintable(const char* str);
 bool
 isPrintable(const void* data, size_t length);
 
+/// Like sizeof but returns a uint32_t.
+#define sizeof32(x) downCast<uint32_t>(sizeof(x))
+
 } // namespace DLog
 
 #endif /* COMMON_H */

@@ -13,16 +13,17 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <endian.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
-#include <errno.h>
 
 #include <algorithm>
-#include <google/protobuf/io/zero_copy_stream_impl.h>
 
-#include "../build/libDLogStorage/DumbFilesystem.pb.h"
-#include "Debug.h" // TODO(ongaro): Move Debug to common
+#include "Checksum.h"
+#include "Debug.h"
 #include "FilesystemStorageModule.h"
 #include "FilesystemUtil.h"
 #include "WorkDispatcher.h"
@@ -343,33 +344,186 @@ FilesystemLog::getEntryPath(EntryId entryId) const
     return format("%s/%016lx", path.c_str(), entryId);
 }
 
+namespace {
+namespace Header {
+
+/**
+ * This is a small header that immediately follows the checksum.
+ * The format of this header shouldn't change over time.
+ */
+struct Fixed {
+    /**
+     * Convert the contents to host order from big endian (how this header
+     * should be stored on disk).
+     */
+    void fromBigEndian() {
+        checksumCoverage = be32toh(checksumCoverage);
+        version = be32toh(version);
+    }
+    /**
+     * Convert the contents to big endian (how this header should be
+     * stored on disk) from host order.
+     */
+    void toBigEndian() {
+        checksumCoverage = htobe32(checksumCoverage);
+        version = htobe32(version);
+    }
+    /**
+     * The number of bytes including and following this header that the
+     * checksum preceding this header should cover.
+     */
+    uint32_t checksumCoverage;
+    /**
+     * The version of the header which follows this one.
+     * This should be 0 for now.
+     */
+    uint32_t version;
+} __attribute__((packed));
+
+/**
+ * This header follows the Fixed header.
+ */
+struct Version0 {
+    /**
+     * Convert the contents to host order from big endian (how this header
+     * should be stored on disk).
+     */
+    void fromBigEndian() {
+        logId = be64toh(logId);
+        entryId = be64toh(entryId);
+        createTime = be64toh(createTime);
+        invalidationsLen = be32toh(invalidationsLen);
+        dataChecksumLen = be32toh(dataChecksumLen);
+        dataLen = be32toh(dataLen);
+    }
+    /**
+     * Convert the contents to big endian (how this header should be
+     * stored on disk) from host order.
+     */
+    void toBigEndian() {
+        logId = htobe64(logId);
+        entryId = htobe64(entryId);
+        createTime = htobe64(createTime);
+        invalidationsLen = htobe32(invalidationsLen);
+        dataChecksumLen = htobe32(dataChecksumLen);
+        dataLen = htobe32(dataLen);
+    }
+    /// See LogEntry.
+    uint64_t logId;
+    /// See LogEntry.
+    uint64_t entryId;
+    /// See LogEntry.
+    uint64_t createTime;
+    /// The number of entry invalidations this entry contains.
+    uint32_t invalidationsLen;
+    /// The number of bytes in the data checksum, including the null
+    /// terminator. This should be 0 if the user supplied no data.
+    uint32_t dataChecksumLen;
+    /// The number of bytes in the data.
+    uint32_t dataLen;
+} __attribute__((packed));
+
+} // DLog::Storage::<anonymous>::Header
+} // DLog::Storage::<anonymous>
+
 void
 FilesystemLog::read(EntryId entryId)
 {
     const std::string entryPath = getEntryPath(entryId);
-    int fd = open(entryPath.c_str(), O_RDONLY);
-    if (fd == -1)
-        PANIC("Could not open %s: %s", entryPath.c_str(), strerror(errno));
-    ::google::protobuf::io::FileInputStream inputStream(fd);
-    inputStream.SetCloseOnDelete(true);
-    ProtoBuf::DumbFilesystem::LogEntry contents;
-    if (!contents.ParseFromZeroCopyStream(&inputStream)) {
-        PANIC("Failed to parse log entry from %s. "
-              "It is missing the following required fields: %s",
-              entryPath.c_str(),
-              contents.InitializationErrorString().c_str());
+    FilesystemUtil::FileContents file(entryPath);
+    uint32_t fileOffset = 0;
+
+    // Copy out the checksum.
+    char checksum[Checksum::MAX_LENGTH];
+    uint32_t bytesRead = file.copyPartial(fileOffset,
+                                          checksum, sizeof32(checksum));
+    uint32_t checksumBytes = Checksum::length(checksum, bytesRead);
+    if (checksumBytes == 0)
+        PANIC("File %s corrupt", entryPath.c_str());
+    fileOffset += checksumBytes;
+
+    // Copy out the fixed header, which contains how many bytes the checksum
+    // covers.
+    Header::Fixed fixedHeader;
+    file.copy(fileOffset, &fixedHeader, sizeof32(fixedHeader));
+    fixedHeader.fromBigEndian();
+
+    // Verify the checksum.
+    const void* checksumArea = file.get(fileOffset,
+                                        fixedHeader.checksumCoverage);
+    fileOffset += sizeof32(fixedHeader);
+    std::string error = Checksum::verify(checksum,
+                                         checksumArea,
+                                         fixedHeader.checksumCoverage);
+    if (!error.empty()) {
+        PANIC("Checksum verification failure on %s: %s",
+              entryPath.c_str(), error.c_str());
     }
+
+    // Copy out the regular header.
+    if (fixedHeader.version > 0) {
+        PANIC("The running code is too old to understand the version of the "
+              "file format encountered in %s (version %u)",
+              entryPath.c_str(), fixedHeader.version);
+    }
+    Header::Version0 header;
+    file.copy(fileOffset, &header, sizeof32(header));
+    header.fromBigEndian();
+    fileOffset += sizeof32(header);
+
+    // Run basic sanity checks on the regular header.
+    // TODO(ongaro): The uuid should be included in the checksum.
+    if (header.logId != getLogId()) {
+        PANIC("Expected log ID %lu, found %lu in %s",
+              getLogId(), header.logId, entryPath.c_str());
+    }
+    if (header.entryId != entryId) {
+        PANIC("Expected entry ID %lu, found %lu in %s",
+              entryId, header.entryId, entryPath.c_str());
+    }
+    const uint32_t invalidationsBytes = (header.invalidationsLen *
+                                         sizeof32(EntryId));
+    if (fixedHeader.checksumCoverage != (sizeof(fixedHeader) +
+                                         sizeof(header) +
+                                         invalidationsBytes +
+                                         header.dataChecksumLen)) {
+        PANIC("File %s corrupt", entryPath.c_str());
+    }
+
+    // Copy out the invalidations array.
+    const EntryId* invalidationsArray =
+        file.get<EntryId>(fileOffset, invalidationsBytes);
+    fileOffset += invalidationsBytes;
+    std::vector<EntryId> invalidations(
+                invalidationsArray,
+                invalidationsArray + header.invalidationsLen);
+
+    // Copy out the data.
     Ref<Chunk> data = NO_DATA;
-    if (contents.has_data()) {
-        const std::string& contentsData = contents.data();
-        data = Chunk::makeChunk(contentsData.c_str(),
-                                downCast<uint32_t>(contentsData.length()));
+    if (header.dataChecksumLen > 0) {
+        // Get and verify the data checksum.
+        const char* dataChecksum =
+            file.get<char>(fileOffset, header.dataChecksumLen);
+        fileOffset += header.dataChecksumLen;
+        if (Checksum::length(dataChecksum, header.dataChecksumLen) !=
+            header.dataChecksumLen) {
+            PANIC("File %s corrupt", entryPath.c_str());
+        }
+        const void* rawData = file.get(fileOffset, header.dataLen);
+        fileOffset += header.dataLen;
+        error = Checksum::verify(dataChecksum, rawData, header.dataLen);
+        if (!error.empty()) {
+            PANIC("Checksum verification failure on %s: %s",
+                  entryPath.c_str(), error.c_str());
+        }
+        // Create the data chunk.
+        data = Chunk::makeChunk(rawData, header.dataLen);
     }
-    const auto& contentsInv = contents.invalidations();
-    std::vector<EntryId> invalidations(contentsInv.begin(), contentsInv.end());
+
+    // Create the LogEntry and add it to this Log.
     LogEntry entry(getLogId(),
                    entryId,
-                   contents.create_time(),
+                   header.createTime,
                    data,
                    invalidations);
     entries.push_back(entry);
@@ -377,29 +531,77 @@ FilesystemLog::read(EntryId entryId)
         headId = entryId;
 }
 
+namespace {
+const char* config_checksum_placeholder = "SHA-1";
+}
+
 void
 FilesystemLog::write(const LogEntry& entry)
 {
-    ProtoBuf::DumbFilesystem::LogEntry contents;
-    contents.set_create_time(entry.createTime);
+    // Calculate the data checksum.
+    char dataChecksum[Checksum::MAX_LENGTH];
+    uint32_t dataChecksumLen = 0;
     if (entry.data != NO_DATA) {
-        contents.set_data(entry.data->getData(),
-                          entry.data->getLength());
-    }
-    for (auto it = entry.invalidations.begin();
-         it != entry.invalidations.end();
-         ++it) {
-        contents.add_invalidations(*it);
+        dataChecksumLen = Checksum::calculate(config_checksum_placeholder,
+                                              entry.data->getData(),
+                                              entry.data->getLength(),
+                                              dataChecksum);
     }
 
+    // Calculate useful lengths.
+    const uint32_t invalidationsBytes =
+            downCast<uint32_t>(entry.invalidations.size()) * sizeof32(EntryId);
+    const uint32_t checksumCoverage = sizeof32(Header::Fixed) +
+                                      sizeof32(Header::Version0) +
+                                      invalidationsBytes +
+                                      dataChecksumLen;
+
+    // Fill in the fixed header.
+    Header::Fixed fixedHeader;
+    fixedHeader.checksumCoverage = checksumCoverage;
+    fixedHeader.version = 0;
+    fixedHeader.toBigEndian();
+
+    // Fill in the header.
+    Header::Version0 header;
+    header.logId = getLogId();
+    header.entryId = entry.entryId;
+    header.createTime = entry.createTime;
+    header.invalidationsLen = downCast<uint32_t>(entry.invalidations.size());
+    header.dataChecksumLen = dataChecksumLen;
+    header.dataLen = entry.data->getLength();
+    header.toBigEndian();
+
+    // Calculate the checksum.
+    char checksum[Checksum::MAX_LENGTH];
+    uint32_t checksumLen = Checksum::calculate(
+                config_checksum_placeholder,
+                {{ &fixedHeader, sizeof32(fixedHeader) },
+                 { &header, sizeof32(header) },
+                 { entry.invalidations.data(), invalidationsBytes },
+                 { dataChecksum, dataChecksumLen }},
+                checksum);
+
+    // Open the file, write to it, and close it.
     const std::string entryPath = getEntryPath(entry.entryId);
     int fd = open(entryPath.c_str(), O_WRONLY|O_CREAT|O_EXCL, 0644);
     if (fd == -1)
         PANIC("Could not create %s: %s", entryPath.c_str(), strerror(errno));
-    ::google::protobuf::io::FileOutputStream outputStream(fd);
-    outputStream.SetCloseOnDelete(true);
-    if (!contents.SerializeToZeroCopyStream(&outputStream))
-        PANIC("Failed to serialize log entry");
+    if (FilesystemUtil::write(fd, {
+            { checksum, checksumLen},
+            { &fixedHeader, sizeof32(fixedHeader) },
+            { &header, sizeof32(header) },
+            { entry.invalidations.data(), invalidationsBytes },
+            { dataChecksum, dataChecksumLen },
+            { entry.data->getData(), entry.data->getLength() },
+        }) == -1) {
+        PANIC("Filesystem write to %s failed: %s",
+              entryPath.c_str(), strerror(errno));
+    }
+    if (close(fd) != 0) {
+        PANIC("Failed to close log entry file %s: %s",
+              entryPath.c_str(), strerror(errno));
+    }
 }
 
 

@@ -36,8 +36,6 @@ namespace Storage {
  * It has a number of limitations for now:
  * - Creates one file per log entry
  * - Never cleans up used storage space
- * - Does not detect data corruption
- * - Does not detect metadata corruption
  * - Does not call sync or fsync
  * Therefore, it is not yet recommended for actual use.
  */
