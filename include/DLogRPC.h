@@ -1,4 +1,4 @@
-/* Copyright (c) 2011 Stanford University
+/* Copyright (c) 2011-2012 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -18,6 +18,7 @@
  * This file declares the interface for DLog's RPC library.
  */
 
+#include <cstdint>
 #include <cstddef>
 #include <memory>
 #include <string>
@@ -42,101 +43,6 @@ class HostConnectFailure : public std::exception {
 class HostNotConnected : public std::exception {
 };
 
-/**
- * Represents a single contiguous segment of data to transmit or receive.
- */
-class Segment {
-  public:
-    /**
-     * Constructor.
-     * \param data
-     *      Creates an RPC.
-     * \param len
-     *      Initial length of the segment.
-     */
-    Segment(const void* data, uint32_t len)
-        : buf(data),
-          length(len)
-    {
-    }
-    ~Segment() { }
-    /**
-     * Grow the segment by extending the length.
-     * \param len
-     *      Additional length to append to the segment.
-     */
-    void grow(uint32_t len)
-    {
-        length += len;
-    }
-    /// Pointer to buffer.
-    const void* buf;
-    /// Length of buffer.
-    uint32_t length;
-  private:
-    Segment(const Segment&) = delete;
-    Segment& operator=(const Segment&) = delete;
-};
-
-/**
- * Represents a single RPC message and contains helper functions to serialize
- * and deserialize data.
- */
-class Message {
-  public:
-    /**
-     * Constructor.
-     */
-    Message();
-    ~Message();
-    /**
-     * Serialize a uint8_t to the message.
-     * \param i
-     *      Integer to serialize into the message.
-     */
-    void append(uint8_t i);
-    /**
-     * Serialize a uint16_t to the message.
-     * \param i
-     *      Integer to serialize into the message.
-     */
-    void append(uint16_t i);
-    /**
-     * Serialize a uint32_t to the message.
-     * \param i
-     *      Integer to serialize into the message.
-     */
-    void append(uint32_t i);
-    /**
-     * Serialize a uint64_t to the message.
-     * \param i
-     *      Integer to serialize into the message.
-     */
-    void append(uint64_t i);
-    /**
-     * Serialize a string to the message.
-     * \param s
-     *      String to serialize into the message.
-     */
-    void append(const std::string& s);
-    /**
-     * Serialize a blob to the message.
-     * \param buf
-     *      Blob to append to the message.
-     * \param len
-     *      Length of the blob.
-     */
-    void append(void* buf, uint32_t len);
-  private:
-    /// Maximum buffer size (not including large blobs).
-    static const uint32_t MAXBUFFER_SIZE = 1024;
-    /// Buffer for message data (not including large blobs).
-    char buffer[MAXBUFFER_SIZE];
-    /// List of segments that make up the RPC.
-    std::vector<Segment> segments;
-    friend class Transport;
-};
-
 /// RPC Service Id
 typedef uint16_t ServiceId;
 /// RPC Opcode
@@ -148,6 +54,43 @@ typedef uint64_t MessageId;
 enum {
     SERVICE_DLOG,
     SERVICE_REPLICATION,
+};
+
+/**
+ * Represents a single RPC message and contains helper functions to serialize
+ * and deserialize the message header.
+ */
+class Message {
+  public:
+    /**
+     * Constructor.
+     */
+    Message();
+    ~Message();
+    /**
+     * Serialize the message header.
+     * \param buf
+     *      Blob to append to the message.
+     */
+    void serializeHeader();
+    void deserializeHeader();
+    void setPayload(void* buf, uint32_t len);
+    void *getPayload();
+    uint32_t getPayloadLen();
+    Opcode rpcOp;
+    ServiceId rpcService;
+    MessageId rpcId;
+  private:
+    /// Header size.
+    static const uint32_t HEADER_SIZE = 16;
+    /// Buffer for message header.
+    char header[HEADER_SIZE];
+    /// Message payload.
+    void *payload;
+    /// Payload length.
+    uint32_t payloadLen;
+    Message(const Message&) = delete;
+    Message& operator=(const Message&) = delete;
 };
 
 /**
@@ -230,36 +173,20 @@ class Response {
     Response& operator=(const Response&) = delete;
 };
 
-class Transport {
-};
-
 /**
- * Manages an RPC session.
+ * RPC server class handles incoming requests and deliver them to a registered 
+ * Service.
  */
-class Session {
+class Server {
   public:
-    /**
-     * Constructor
-     * \param t
-     *      Transport to use for this RPC session.
-     * \param hostname
-     *      Hostname of the peer.
-     */
-    Session(Transport& t, const std::string& hostname);
+    Server(uint16_t port);
+    ~Server();
     /**
      * Register an Service object with this session.
      * \param s
      *      A pointer to an Service object.
      */
     void registerService(std::unique_ptr<Service> s);
-    /**
-     * Send a message and register a response object.
-     * \param response
-     *      Response object for this message.
-     * \param message
-     *      Message to transmit.
-     */
-    void send(Response& response, Message& message);
     /**
      * Send a reply back to the caller. Only service objects should send this
      * type of message.
@@ -268,8 +195,41 @@ class Session {
      */
     void sendResponse(std::unique_ptr<Message> reply);
   private:
-    Session(const Session&) = delete;
-    Session& operator=(const Session&) = delete;
+};
+
+class EventLoop;
+
+/**
+ * RPC clients may only initiate RPC requests and receive responses.
+ */
+class Client {
+  public:
+    /**
+     * Constructor.
+     * \param loop
+     *      EventLoop object to attach to.
+     */
+    Client(EventLoop& loop);
+    ~Client();
+    /**
+     * Connect to a server.
+     * \param host
+     *      Server host ip.
+     * \param port
+     *      Server port number.
+     */
+    void connect(const std::string& host, uint16_t port);
+    void disconnect();
+    /**
+     * Send a message and register a response object.
+     * \param response
+     *      Response object for this message.
+     * \param message
+     *      Message to transmit.
+     */
+    void send(Response& response, Message& message);
+    Response send(Message& message);
+  private:
 };
 
 } // namespace
