@@ -61,6 +61,12 @@ TEST_F(ChecksumTest, calculate) {
     EXPECT_EQ(sha1OutputLen, calculate("SHA-1", "test", 5, output));
     EXPECT_STREQ("SHA-1:961fa64958818f767707072755d7018dcd278e94",
                  output);
+    EXPECT_EQ(sha1OutputLen, calculate("SHA-1",
+                                       {{"te", 2},
+                                        {"", 0},
+                                        {"st", 3}}, output));
+    EXPECT_STREQ("SHA-1:961fa64958818f767707072755d7018dcd278e94",
+                 output);
     EXPECT_DEATH(calculate("nonsense", "test", 5, output),
                  "not available");
 }
@@ -95,6 +101,11 @@ TEST_F(ChecksumTest, verify) {
     EXPECT_EQ("",
               verify("SHA-1:961fa64958818f767707072755d7018dcd278e94",
                      "test", 5));
+    EXPECT_EQ("",
+              verify("SHA-1:961fa64958818f767707072755d7018dcd278e94",
+                     {{"te", 2},
+                      {"", 0},
+                      {"st", 3}}));
     EXPECT_EQ("The given checksum value is corrupt and not printable.",
               verify("\n", "test", 5));
     EXPECT_EQ("Missing colon in checksum: SHA-1",

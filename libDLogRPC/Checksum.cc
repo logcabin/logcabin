@@ -54,11 +54,9 @@ class Algorithm {
     std::string getName() const { return name; }
 
     /**
-     * Calculate the checksum for a chunk of data.
+     * Calculate the checksum for some data.
      * \param data
-     *      The first byte of the data.
-     * \param dataLength
-     *      The number of bytes in the data.
+     *      An list of (pointer, length) pairs describing what to checksum.
      * \param[out] result
      *      The result of the hash function will be placed here.
      *      This will be a null-terminated, printable C-string.
@@ -67,7 +65,7 @@ class Algorithm {
      *      terminator. This is guaranteed to be greater than 1.
      */
     uint32_t
-    writeChecksum(const void* data, uint32_t dataLength,
+    writeChecksum(std::initializer_list<std::pair<const void*, uint32_t>> data,
                   char result[MAX_LENGTH]) {
         // copy name and : to result
         memcpy(result, name.c_str(), name.length());
@@ -78,9 +76,12 @@ class Algorithm {
         // calculate binary digest
         uint32_t binarySize = downCast<uint32_t>(hashFn->DigestSize());
         uint8_t binary[binarySize];
-        hashFn->CalculateDigest(binary,
-                                static_cast<const uint8_t*>(data),
-                                dataLength);
+
+        for (auto it = data.begin(); it != data.end(); ++it) {
+            hashFn->Update(static_cast<const uint8_t*>(it->first),
+                           it->second);
+        }
+        hashFn->Final(binary);
 
         // add hex digest to result
         const char* hexArray = "0123456789abcdef";
@@ -241,13 +242,22 @@ calculate(const char* algorithm,
           const void* data, uint32_t dataLength,
           char output[MAX_LENGTH])
 {
+    return calculate(algorithm, {{data, dataLength}}, output);
+}
+
+uint32_t
+calculate(const char* algorithm,
+          std::initializer_list<std::pair<const void*, uint32_t>> data,
+          char output[MAX_LENGTH])
+{
     Algorithm* algo = Algorithms::find(algorithm);
     if (algo == NULL) {
         PANIC("The hashing algorithm %s is not available",
               algorithm);
     }
-    return algo->writeChecksum(data, dataLength, output);
+    return algo->writeChecksum(data, output);
 }
+
 
 uint32_t
 length(const char* checksum,
@@ -267,6 +277,13 @@ length(const char* checksum,
 std::string
 verify(const char* checksum,
        const void* data, uint32_t dataLength)
+{
+    return verify(checksum, {{data, dataLength}});
+}
+
+std::string
+verify(const char* checksum,
+       std::initializer_list<std::pair<const void*, uint32_t>> data)
 {
     if (!isPrintable(checksum))
         return "The given checksum value is corrupt and not printable.";
@@ -290,7 +307,7 @@ verify(const char* checksum,
 
     // compare calculated checksum with the one given
     char calculated[MAX_LENGTH];
-    algo->writeChecksum(data, dataLength, calculated);
+    algo->writeChecksum(data, calculated);
     if (strcmp(calculated, checksum) != 0) {
         return format("Checksum doesn't match: expected %s but calculated %s",
                       checksum, calculated);
