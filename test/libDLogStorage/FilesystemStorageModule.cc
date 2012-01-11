@@ -19,6 +19,7 @@
 #include <gtest/gtest.h>
 
 #include "Common.h"
+#include "Config.h"
 #include "Debug.h"
 #include "libDLogStorage/FilesystemStorageModule.h"
 #include "libDLogStorage/FilesystemUtil.h"
@@ -117,24 +118,28 @@ class FilesystemStorageModuleTest : public ::testing::Test {
   public:
     FilesystemStorageModuleTest()
         : tmpdir(FilesystemUtil::tmpnam())
+        , config()
         , sm() {
+        config.set("storagePath", tmpdir);
         SMDeleteCallback::lastLogId = 0;
     }
     ~FilesystemStorageModuleTest() {
         FilesystemUtil::remove(tmpdir);
     }
     void createStorageModule() {
-        sm = make<FilesystemStorageModule>(tmpdir);
+        sm = make<FilesystemStorageModule>(config);
     }
     std::string tmpdir;
+    Config config;
     Ptr<FilesystemStorageModule> sm;
 };
 
 TEST_F(FilesystemStorageModuleTest, constructor) {
     createStorageModule();
     createStorageModule(); // no error if the directory already exists
-    EXPECT_DEATH(make<FilesystemStorageModule>(
-                            "/the/parent/directory/doesnt/exist"),
+    Config c;
+    c.set("storagePath", "/the/parent/directory/doesnt/exist");
+    EXPECT_DEATH(make<FilesystemStorageModule>(c),
                  "Failed to create directory");
 }
 
@@ -210,7 +215,8 @@ TEST_F(FilesystemLogTest, constructor) {
 
     createLog(); // no error if the directory already exists
     EXPECT_DEATH(make<FilesystemLog>(444,
-                            "/the/parent/directory/doesnt/exist"),
+                            "/the/parent/directory/doesnt/exist",
+                            "SHA-1"),
                  "Failed to create directory");
 
     LogEntry e1(1, 2, 3, Chunk::makeChunk("hello", 6));

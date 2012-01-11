@@ -38,9 +38,8 @@ createStorageModule(const Config& config)
         return make<DumbFilesystemStorageModule>(path);
     } else if (moduleName == "filesystem") {
         std::string path = config.read<std::string>("storagePath");
-        LOG(NOTICE, "Using filesystem storage module at %s",
-                    path.c_str());
-        return make<FilesystemStorageModule>(path);
+        LOG(NOTICE, "Using filesystem storage module");
+        return make<FilesystemStorageModule>(config);
     } else if (moduleName == "memory") {
         LOG(NOTICE, "Using memory storage module");
         return make<MemoryStorageModule>();

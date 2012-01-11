@@ -15,9 +15,14 @@
 
 #include <gtest/gtest.h>
 
+#include "WorkDispatcher.h"
+
+using namespace DLog;
+
 int
 main(int argc, char *argv[])
 {
     ::testing::InitGoogleTest(&argc, argv);
+    DLog::workDispatcher = new WorkDispatcher(0, 4);
     return RUN_ALL_TESTS();
 }

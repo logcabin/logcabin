@@ -17,14 +17,13 @@
 #include <set>
 
 #include "Common.h"
+#include "Config.h"
 #include "Debug.h"
 #include "LogManager.h"
 
 namespace DLog {
 
 using namespace Storage; // NOLINT
-
-const char* config_uuid_placeholder = "dead-beef";
 
 LogManager::LogInfo::LogInfo(const std::string& logName)
     : refCount()
@@ -50,7 +49,8 @@ class LogManager::NoOpStorageDeleteCallback
 };
 
 
-LogManager::LogManager(Ref<StorageModule> storageModule,
+LogManager::LogManager(const Config& config,
+                       Ref<StorageModule> storageModule,
                        Ref<InitializeCallback> initializeCompletion)
     : refCount()
     , initialized(false)
@@ -58,8 +58,13 @@ LogManager::LogManager(Ref<StorageModule> storageModule,
     , internalLog()
     , logs()
     , logNames()
-    , uuid(config_uuid_placeholder)
+    , uuid(config.read<std::string>("uuid"))
 {
+    if (uuid.length() < 10) {
+        PANIC("This is a poor choice of a UUID (%s). Refusing to proceed.",
+              uuid.c_str());
+    }
+    LOG(NOTICE, "Initializing log manager with UUID %s", uuid.c_str());
     storageModule->openLog(INTERNAL_LOG_ID,
            make<ConstructorInternalLogOpenedCallback>(
                 Ref<LogManager>(*this),

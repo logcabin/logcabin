@@ -41,13 +41,7 @@ namespace Storage {
  */
 class FilesystemStorageModule : public StorageModule {
   private:
-    /**
-     * Constructor.
-     * \param path
-     *      A filesystem path for this storage module to operate in.
-     *      The parent directory of 'path' must already exist.
-     */
-    explicit FilesystemStorageModule(const std::string& path);
+    explicit FilesystemStorageModule(const Config& config);
   public:
     std::vector<LogId> getLogs();
     void openLog(LogId logId, Ref<OpenCallback> openCompletion);
@@ -57,6 +51,7 @@ class FilesystemStorageModule : public StorageModule {
     std::string getLogPath(LogId logId) const;
     /// See constructor.
     const std::string path;
+    const std::string checksumAlgorithm;
     friend class DLog::MakeHelper;
     friend class DLog::RefHelper<FilesystemStorageModule>;
 };
@@ -66,7 +61,8 @@ class FilesystemStorageModule : public StorageModule {
  */
 class FilesystemLog : public Log {
   private:
-    FilesystemLog(LogId logId, const std::string& path);
+    FilesystemLog(LogId logId, const std::string& path,
+                  const std::string& checksumAlgorithm);
   public:
     EntryId getLastId() { return headId; }
     std::deque<LogEntry> readFrom(EntryId start);
@@ -91,6 +87,8 @@ class FilesystemLog : public Log {
     void write(const LogEntry& entry);
     /// See constructor.
     const std::string path;
+    /// See constructor.
+    const std::string checksumAlgorithm;
     /// See getLastId().
     EntryId headId;
     /// All log entries in order.

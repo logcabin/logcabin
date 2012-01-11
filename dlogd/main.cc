@@ -110,9 +110,16 @@ int main(int argc, char *argv[])
     Config config;
     config.readFile(options.configFilename);
 
+    // Create the work dispatcher.
+    uint32_t maxThreads = config.read<uint32_t>("maxThreads", 16);
+    if (maxThreads < 2)
+        maxThreads = 2;
+    DLog::workDispatcher = new WorkDispatcher(0, maxThreads - 1);
+
     // Create log manager.
     Ref<LogManager> logManager =
-        make<LogManager>(Storage::Factory::createStorageModule(config),
+        make<LogManager>(config,
+                         Storage::Factory::createStorageModule(config),
                          make<LogManagerReady>());
 
     // Fake a main loop.

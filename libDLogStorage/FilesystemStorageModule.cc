@@ -23,6 +23,7 @@
 #include <algorithm>
 
 #include "Checksum.h"
+#include "Config.h"
 #include "Debug.h"
 #include "FilesystemStorageModule.h"
 #include "FilesystemUtil.h"
@@ -34,9 +35,16 @@ namespace Storage {
 
 // class FilesystemStorageModule
 
-FilesystemStorageModule::FilesystemStorageModule(const std::string& path)
-    : path(path)
+FilesystemStorageModule::FilesystemStorageModule(const Config& config)
+    : path(config.read<std::string>("storagePath"))
+    , checksumAlgorithm(config.read<std::string>("checksum", "SHA-1"))
 {
+    { // Ensure the checksum algorithm is valid.
+        char buf[Checksum::MAX_LENGTH];
+        Checksum::calculate(checksumAlgorithm.c_str(), "", 0, buf);
+    }
+
+    LOG(NOTICE, "Using filesystem storage module at %s", path.c_str());
     if (mkdir(path.c_str(), 0755) != 0) {
         if (errno != EEXIST) {
             PANIC("Failed to create directory for FilesystemStorageModule:"
@@ -93,21 +101,25 @@ class WorkerOpenLog : public WorkDispatcher::WorkerCallback  {
     typedef StorageModule::OpenCallback OpenCallback;
     WorkerOpenLog(LogId logId,
                   const std::string& path,
+                  const std::string& checksumAlgorithm,
                   Ref<OpenCallback> openCompletion)
         : logId(logId)
         , path(path)
+        , checksumAlgorithm(checksumAlgorithm)
         , openCompletion(openCompletion)
     {
     }
   public:
     void run() {
-        Ref<Log> newLog = make<FilesystemLog>(logId, path);
+        Ref<Log> newLog = make<FilesystemLog>(logId, path,
+                                              checksumAlgorithm);
         auto completion = make<WorkerOpenLogCompletion>(openCompletion,
                                                         newLog);
         workDispatcher->scheduleCompletion(completion);
     }
     const LogId logId;
     const std::string path;
+    const std::string checksumAlgorithm;
     Ref<OpenCallback> openCompletion;
     friend class DLog::MakeHelper;
     friend class DLog::RefHelper<WorkerOpenLog>;
@@ -120,6 +132,7 @@ FilesystemStorageModule::openLog(LogId logId,
                                  Ref<OpenCallback> openCompletion)
 {
     auto work = make<WorkerOpenLog>(logId, getLogPath(logId),
+                                    checksumAlgorithm,
                                     openCompletion);
     workDispatcher->scheduleWork(work);
 }
@@ -186,9 +199,12 @@ FilesystemStorageModule::getLogPath(LogId logId) const
 
 // class FilesystemLog
 
-FilesystemLog::FilesystemLog(LogId logId, const std::string& path)
+FilesystemLog::FilesystemLog(LogId logId,
+                             const std::string& path,
+                             const std::string& checksumAlgorithm)
     : Log(logId)
     , path(path)
+    , checksumAlgorithm(checksumAlgorithm)
     , headId(NO_ENTRY_ID)
     , entries()
     , writing(false)
@@ -531,10 +547,6 @@ FilesystemLog::read(EntryId entryId)
         headId = entryId;
 }
 
-namespace {
-const char* config_checksum_placeholder = "SHA-1";
-}
-
 void
 FilesystemLog::write(const LogEntry& entry)
 {
@@ -542,7 +554,7 @@ FilesystemLog::write(const LogEntry& entry)
     char dataChecksum[Checksum::MAX_LENGTH];
     uint32_t dataChecksumLen = 0;
     if (entry.data != NO_DATA) {
-        dataChecksumLen = Checksum::calculate(config_checksum_placeholder,
+        dataChecksumLen = Checksum::calculate(checksumAlgorithm.c_str(),
                                               entry.data->getData(),
                                               entry.data->getLength(),
                                               dataChecksum);
@@ -575,7 +587,7 @@ FilesystemLog::write(const LogEntry& entry)
     // Calculate the checksum.
     char checksum[Checksum::MAX_LENGTH];
     uint32_t checksumLen = Checksum::calculate(
-                config_checksum_placeholder,
+                checksumAlgorithm.c_str(),
                 {{ &fixedHeader, sizeof32(fixedHeader) },
                  { &header, sizeof32(header) },
                  { entry.invalidations.data(), invalidationsBytes },

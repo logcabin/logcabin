@@ -17,6 +17,7 @@
 #include <gtest/gtest.h>
 
 #include "Common.h"
+#include "Config.h"
 #include "dlogd/LogManager.h"
 #include "libDLogStorage/MemoryStorageModule.h"
 
@@ -97,9 +98,11 @@ class NoOpStorageDeleteCallback : public StorageModule::DeleteCallback {
 class LogManagerTest : public ::testing::Test {
   public:
     LogManagerTest()
-        : storage(make<MemoryStorageModule>())
+        : config()
+        , storage(make<MemoryStorageModule>())
         , mgr()
     {
+        config.set("uuid", "my-fake-uuid-123");
         InitializeCallback::count = 0;
         CreateCallback::count = 0;
         CreateCallback::lastLogId = 0;
@@ -108,7 +111,8 @@ class LogManagerTest : public ::testing::Test {
     }
     void createManager() {
         // This is counting on the memory storage to initialize right away.
-        mgr = make<LogManager>(storage,
+        mgr = make<LogManager>(config,
+                               storage,
                                make<InitializeCallback>());
     }
     Ptr<MemoryLog> getInternalLog() {
@@ -118,6 +122,7 @@ class LogManagerTest : public ::testing::Test {
         Ptr<Log> log = it->second;
         return Ptr<MemoryLog>(static_cast<MemoryLog*>(log.get()));
     }
+    Config config;
     Ref<MemoryStorageModule> storage;
     Ptr<LogManager> mgr;
 };
@@ -129,7 +134,7 @@ TEST_F(LogManagerTest, constructor_emptyStorage) {
     EXPECT_TRUE(mgr->initialized);
     EXPECT_EQ(0U, mgr->logs.size());
     EXPECT_EQ(0U, mgr->logNames.size());
-    EXPECT_EQ("dead-beef", mgr->uuid);
+    EXPECT_EQ("my-fake-uuid-123", mgr->uuid);
 }
 
 TEST_F(LogManagerTest, constructor_extraLogsWithoutMetadata) {
@@ -162,7 +167,7 @@ TEST_F(LogManagerTest, constructor_replayLog) {
     EXPECT_TRUE(mgr->initialized);
     EXPECT_EQ((vector<LogId> { 1, 2 }), getKeys(mgr->logs));
     EXPECT_EQ((vector<string> {"foo", "bar"}), getKeys(mgr->logNames));
-    EXPECT_EQ("dead-beef", mgr->uuid);
+    EXPECT_EQ("my-fake-uuid-123", mgr->uuid);
 }
 
 TEST_F(LogManagerTest, initializeStorage) {
@@ -176,7 +181,7 @@ TEST_F(LogManagerTest, initializeStorage) {
     ProtoBuf::InternalLog::LogEntry contents;
     ASSERT_TRUE(contents.ParseFromArray(entry.data->getData(),
                                         entry.data->getLength()));
-    EXPECT_EQ("type: METADATA_TYPE metadata { uuid: \"dead-beef\" }",
+    EXPECT_EQ("type: METADATA_TYPE metadata { uuid: \"my-fake-uuid-123\" }",
               contents.ShortDebugString());
 }
 

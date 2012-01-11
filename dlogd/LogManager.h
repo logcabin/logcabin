@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "AsyncMutex.h"
+#include "Config.h"
 #include "DLogStorage.h"
 #include "Ref.h"
 #include "build/dlogd/InternalLog.pb.h"
@@ -113,12 +114,15 @@ class LogManager {
 
     /**
      * Constructor.
+     * \param config
+     *      Configuration options.
      * \param storageModule
      *      Used to store logs durably.
      * \param initializeCompletion
      *      Until this fires, the caller is not allowed to access this class.
      */
-    explicit LogManager(Ref<Storage::StorageModule> storageModule,
+    explicit LogManager(const Config& config,
+                        Ref<Storage::StorageModule> storageModule,
                         Ref<InitializeCallback> initializeCompletion);
 
   public:
