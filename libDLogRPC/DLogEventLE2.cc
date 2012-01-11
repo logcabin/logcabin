@@ -111,7 +111,7 @@ EventTimerLE2CB(evutil_socket_t fd, int16_t event, void *arg)
 
     et->trigger();
     if (et->isPersistent()) {
-        et->add(et->getPeriod());
+        et->addPeriodic(et->getPeriod());
     }
 }
 
