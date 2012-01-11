@@ -34,7 +34,7 @@ namespace RPC {
 class EventSignalPriv {
   public:
     EventSignalPriv() { }
-    virtual ~EventSignalPriv() = 0;
+    virtual ~EventSignalPriv() { };
     virtual void add() = 0;
     virtual void add(time_t seconds) = 0;
     virtual void remove() = 0;
@@ -48,7 +48,7 @@ class EventSignalPriv {
 class EventTimerPriv {
   public:
     EventTimerPriv() { }
-    virtual ~EventTimerPriv() = 0;
+    virtual ~EventTimerPriv() { };
     virtual void add(time_t seconds) = 0;
     virtual void remove() = 0;
     virtual bool isPending() = 0;

@@ -98,7 +98,7 @@ class EventLoop {
      * TODO(ali): Support multiple event loop implementations.
      */
     static EventLoop* makeEventLoop();
-    virtual ~EventLoop() = 0;
+    virtual ~EventLoop() { };
     virtual void processEvents() = 0;
     virtual void loopBreak() = 0;
     virtual void loopExit(time_t seconds) = 0;
