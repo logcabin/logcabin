@@ -1,4 +1,4 @@
-/* Copyright (c) 2011 Stanford University
+/* Copyright (c) 2011-2012 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -13,11 +13,27 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <algorithm>
 #include <stdarg.h>
+#include <string.h>
 
 #include "Common.h"
 
 namespace DLog {
+
+namespace {
+
+/**
+ * Returns true for the ASCII characters that one would want to display in a
+ * single line of text.
+ */
+bool
+display(char c)
+{
+    return (32 <= c && c < 127);
+}
+
+} // anonymous namespace
 
 // This comes from the RAMCloud project.
 std::string
@@ -46,6 +62,22 @@ format(const char* format, ...)
 
     va_end(ap);
     return s;
+}
+
+bool
+isPrintable(const char* str)
+{
+    return isPrintable(str, strlen(str) + 1);
+}
+
+bool
+isPrintable(const void* data, size_t length)
+{
+    const char* begin = static_cast<const char*>(data);
+    const char* end = begin + length - 1;
+    return (length >= 1 &&
+            *end == '\0' &&
+            std::all_of(begin, end, display));
 }
 
 } // namespace DLog

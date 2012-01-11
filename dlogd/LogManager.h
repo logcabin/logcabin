@@ -1,4 +1,4 @@
-/* Copyright (c) 2011 Stanford University
+/* Copyright (c) 2011-2012 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "AsyncMutex.h"
+#include "Config.h"
 #include "DLogStorage.h"
 #include "Ref.h"
 #include "build/dlogd/InternalLog.pb.h"
@@ -113,12 +114,15 @@ class LogManager {
 
     /**
      * Constructor.
+     * \param config
+     *      Configuration options.
      * \param storageModule
      *      Used to store logs durably.
      * \param initializeCompletion
      *      Until this fires, the caller is not allowed to access this class.
      */
-    explicit LogManager(Ref<Storage::StorageModule> storageModule,
+    explicit LogManager(const Config& config,
+                        Ref<Storage::StorageModule> storageModule,
                         Ref<InitializeCallback> initializeCompletion);
 
   public:
@@ -194,7 +198,7 @@ class LogManager {
     /// The module providing the underlying durable storage.
     Ref<Storage::StorageModule> storageModule;
     /// A handle to the internal log.
-    Ref<Storage::Log> internalLog;
+    Ptr<Storage::Log> internalLog;
     /**
      * The logs on storage that have been fully created.
      * Does not include the internal log.
@@ -211,6 +215,7 @@ class LogManager {
 
     // Internal helper classes.
     class NoOpStorageDeleteCallback;
+    class ConstructorInternalLogOpenedCallback;
     class ConstructorReplayCallback;
     class InitializeAppendCallback;
     class CreateLogMutexCallback;
@@ -220,6 +225,7 @@ class LogManager {
     class DeleteLogInvalidateCallback;
     class DeleteLogReplayCallback;
     class LogDestroyedCallback;
+    class ReplayDeclareLogCreatedCallback;
 
     friend class MakeHelper;
     friend class RefHelper<LogManager>;

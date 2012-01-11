@@ -3,6 +3,7 @@ Import('env')
 src = [
     "DLogStorage.cc",
     "DumbFilesystemStorageModule.cc",
+    "Factory.cc",
     "FilesystemStorageModule.cc",
     "FilesystemUtil.cc",
     "MemoryStorageModule.cc",

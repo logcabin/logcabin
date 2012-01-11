@@ -182,6 +182,6 @@ WorkDispatcher::workerMain()
     }
 }
 
-WorkDispatcher* workDispatcher = new WorkDispatcher(0, 32);
+WorkDispatcher* workDispatcher;
 
 } // namespace DLog

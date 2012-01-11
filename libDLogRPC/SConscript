@@ -2,6 +2,8 @@ Import('env')
 
 src = [
     "Common.cc",
+    "Checksum.cc",
+    "Config.cc",
     "Debug.c",
     "DLogEvent.cc",
     "DLogEventLE2.cc",

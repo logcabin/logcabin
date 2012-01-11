@@ -6,8 +6,9 @@ Pre-requisites:
  - git
  - scons
  - doxygen
- - g++ or clang
+ - g++ >= 4.4
  - protobuf
+ - crypto++
 
 Command:
 
@@ -39,9 +40,19 @@ This will build the documentation and place it in docs/doxygen.
 2. Running
 ====================================
 
+You need a config file. See sample.conf for more info.
+
+Then run:
+
+$ build/dlogd/dlogd --help
+
 ====================================
 3. Testing
 ====================================
+
+Build the project. Then run the unit tests:
+
+$ build/test/test
 
 ====================================
 4. Source code layout
@@ -60,10 +71,10 @@ include/
     Public includes
 
 libDLogRPC/
-    DLog RPC Library in C
+    DLog RPC Library in C++
 
 libDLogClient/
-    DLog Client Library in C
+    DLog Client Library in C++
 
 proto/
     Public protobuf definitions

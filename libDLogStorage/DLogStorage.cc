@@ -1,4 +1,4 @@
-/* Copyright (c) 2011 Stanford University
+/* Copyright (c) 2011-2012 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -26,20 +26,6 @@
 namespace DLog {
 
 namespace Storage {
-
-namespace {
-
-/**
- * Returns true for the ASCII characters that one would want to display in a
- * single line of text.
- */
-bool
-display(char c)
-{
-    return (32 <= c && c < 127);
-}
-
-} // anonymous namespace
 
 // class Chunk
 
@@ -125,17 +111,8 @@ LogEntry::toString() const
     if (data == NO_DATA) {
         s << "NODATA";
     } else {
-        const char* begin = static_cast<const char*>(data->getData());
-        const char* end = begin + data->getLength();
-        bool printable = std::all_of(begin, end - 1, display);
-        if (printable && begin != end) {
-            if (*(end - 1) == '\0')
-                --end;
-            else if (!display(*(end - 1)))
-                printable = false;
-        }
-        if (printable)
-            s << "'" << std::string(begin, end) << "'";
+        if (isPrintable(data->getData(), data->getLength()))
+            s << "'" << static_cast<const char*>(data->getData()) << "'";
         else
             s << "BINARY";
     }

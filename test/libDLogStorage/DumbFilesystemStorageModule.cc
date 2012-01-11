@@ -1,4 +1,4 @@
-/* Copyright (c) 2011 Stanford University
+/* Copyright (c) 2011-2012 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -47,6 +47,24 @@ LogEntry LogAppendCallback::lastEntry {
     0xdeadbeefdeadbeef,
     Chunk::makeChunk("deadbeef", 9),
     { 0xdeadbeef }
+};
+
+class SMOpenCallback : public StorageModule::OpenCallback {
+  private:
+    explicit SMOpenCallback(Ptr<Log>* result = NULL)
+        : result(result)
+    {
+    }
+  public:
+    void opened(Ref<Log> log) {
+        if (result != NULL)
+            *result = log;
+    }
+    Ptr<Log>* result;
+    friend class MakeHelper;
+    friend class RefHelper<SMOpenCallback>;
+    SMOpenCallback(const SMOpenCallback&) = delete;
+    SMOpenCallback& operator=(const SMOpenCallback&) = delete;
 };
 
 class SMDeleteCallback : public StorageModule::DeleteCallback {
@@ -105,9 +123,9 @@ TEST_F(DumbFilesystemStorageModuleTest, constructor) {
 TEST_F(DumbFilesystemStorageModuleTest, getLogs) {
     createStorageModule();
     EXPECT_EQ((vector<LogId>{}), sorted(sm->getLogs()));
-    sm->openLog(38);
-    sm->openLog(755);
-    sm->openLog(129);
+    sm->openLog(38, make<SMOpenCallback>());
+    sm->openLog(755, make<SMOpenCallback>());
+    sm->openLog(129, make<SMOpenCallback>());
     EXPECT_EQ((vector<LogId>{38, 129, 755}), sorted(sm->getLogs()));
     close(open((tmpdir + "/NaN").c_str(), O_WRONLY|O_CREAT, 0644));
     createStorageModule();
@@ -116,7 +134,8 @@ TEST_F(DumbFilesystemStorageModuleTest, getLogs) {
 
 TEST_F(DumbFilesystemStorageModuleTest, openLog) {
     createStorageModule();
-    Ref<Log> log = sm->openLog(12);
+    Ptr<Log> log;
+    sm->openLog(12, make<SMOpenCallback>(&log));
     EXPECT_EQ(12U, log->getLogId());
     EXPECT_EQ((vector<LogId>{12}), sorted(sm->getLogs()));
     createStorageModule();
@@ -125,7 +144,8 @@ TEST_F(DumbFilesystemStorageModuleTest, openLog) {
 
 TEST_F(DumbFilesystemStorageModuleTest, deleteLog) {
     createStorageModule();
-    Ref<Log> log = sm->openLog(12);
+    Ptr<Log> log;
+    sm->openLog(12, make<SMOpenCallback>(&log));
     sm->deleteLog(10, make<SMDeleteCallback>());
     EXPECT_EQ(10U, SMDeleteCallback::lastLogId);
     sm->deleteLog(12, make<SMDeleteCallback>());
@@ -149,7 +169,8 @@ class DumbFilesystemLogTest : public DumbFilesystemStorageModuleTest {
         createLog();
     }
     void createLog() {
-        Ref<Log> tmpLog = sm->openLog(92);
+        Ptr<Log> tmpLog;
+        sm->openLog(92, make<SMOpenCallback>(&tmpLog));
         log = Ptr<DumbFilesystemLog>(
                         static_cast<DumbFilesystemLog*>(tmpLog.get()));
     }
@@ -218,13 +239,10 @@ TEST_F(DumbFilesystemLogTest, readFrom) {
 TEST_F(DumbFilesystemLogTest, append) {
     LogEntry e1(1, 2, 3, Chunk::makeChunk("hello", 6), {4, 5});
     log->append(e1, make<LogAppendCallback>());
-    EXPECT_EQ(92U, e1.logId);
-    EXPECT_EQ(0U, e1.entryId);
     EXPECT_EQ("(92, 0) 'hello' [inv 4, 5]",
               LogAppendCallback::lastEntry.toString());
     LogEntry e2(1, 2, 3, Chunk::makeChunk("goodbye", 8), {4, 5});
     log->append(e2, make<LogAppendCallback>());
-    EXPECT_EQ(1U, e2.entryId);
     createLog();
     EXPECT_EQ(1U, log->getLastId());
 }
@@ -288,7 +306,7 @@ TEST_F(DumbFilesystemLogTest, readWriteCommon) {
                 "(92, 2) 'hello'",
                 "(92, 3) NODATA [inv 28, 29, 30]",
                 "(92, 4) 'hello' [inv 31, 33, 94]",
-                "(92, 5) ''",
+                "(92, 5) BINARY",
               }),
               eStr(log->entries));
     EXPECT_EQ(9U, log->entries.back().createTime);

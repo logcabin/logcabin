@@ -1,4 +1,4 @@
-/* Copyright (c) 2011 Stanford University
+/* Copyright (c) 2011-2012 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -19,9 +19,11 @@
 #include <gtest/gtest.h>
 
 #include "Common.h"
+#include "Config.h"
 #include "Debug.h"
 #include "libDLogStorage/FilesystemStorageModule.h"
 #include "libDLogStorage/FilesystemUtil.h"
+#include "WorkDispatcher.h"
 
 namespace DLog {
 namespace Storage {
@@ -47,6 +49,24 @@ LogEntry LogAppendCallback::lastEntry {
     0xdeadbeefdeadbeef,
     Chunk::makeChunk("deadbeef", 9),
     { 0xdeadbeef }
+};
+
+class SMOpenCallback : public StorageModule::OpenCallback {
+  private:
+    explicit SMOpenCallback(Ptr<Log>* result = NULL)
+        : result(result)
+    {
+    }
+  public:
+    void opened(Ref<Log> log) {
+        if (result != NULL)
+            *result = log;
+    }
+    Ptr<Log>* result;
+    friend class MakeHelper;
+    friend class RefHelper<SMOpenCallback>;
+    SMOpenCallback(const SMOpenCallback&) = delete;
+    SMOpenCallback& operator=(const SMOpenCallback&) = delete;
 };
 
 class SMDeleteCallback : public StorageModule::DeleteCallback {
@@ -75,39 +95,63 @@ eStr(const Container& container)
     return ret;
 }
 
+void
+runWorkerCompletion(uint64_t timeoutMs = 100) {
+    while (true) {
+        Ptr<WorkDispatcher::CompletionCallback> completion =
+                                        workDispatcher->popCompletion();
+        if (completion) {
+            completion->completed();
+            return;
+        } else {
+            usleep(1000);
+            --timeoutMs;
+            if (timeoutMs == 0)
+                FAIL() << "Exceeded timeout";
+        }
+    }
+}
+
 } // anonymous namespace
 
 class FilesystemStorageModuleTest : public ::testing::Test {
   public:
     FilesystemStorageModuleTest()
         : tmpdir(FilesystemUtil::tmpnam())
+        , config()
         , sm() {
+        config.set("storagePath", tmpdir);
         SMDeleteCallback::lastLogId = 0;
     }
     ~FilesystemStorageModuleTest() {
         FilesystemUtil::remove(tmpdir);
     }
     void createStorageModule() {
-        sm = make<FilesystemStorageModule>(tmpdir);
+        sm = make<FilesystemStorageModule>(config);
     }
     std::string tmpdir;
+    Config config;
     Ptr<FilesystemStorageModule> sm;
 };
 
 TEST_F(FilesystemStorageModuleTest, constructor) {
     createStorageModule();
     createStorageModule(); // no error if the directory already exists
-    EXPECT_DEATH(make<FilesystemStorageModule>(
-                            "/the/parent/directory/doesnt/exist"),
+    Config c;
+    c.set("storagePath", "/the/parent/directory/doesnt/exist");
+    EXPECT_DEATH(make<FilesystemStorageModule>(c),
                  "Failed to create directory");
 }
 
 TEST_F(FilesystemStorageModuleTest, getLogs) {
     createStorageModule();
     EXPECT_EQ((vector<LogId>{}), sorted(sm->getLogs()));
-    sm->openLog(38);
-    sm->openLog(755);
-    sm->openLog(129);
+    sm->openLog(38, make<SMOpenCallback>());
+    sm->openLog(755, make<SMOpenCallback>());
+    sm->openLog(129, make<SMOpenCallback>());
+    runWorkerCompletion();
+    runWorkerCompletion();
+    runWorkerCompletion();
     EXPECT_EQ((vector<LogId>{38, 129, 755}), sorted(sm->getLogs()));
     close(open((tmpdir + "/NaN").c_str(), O_WRONLY|O_CREAT, 0644));
     createStorageModule();
@@ -116,7 +160,9 @@ TEST_F(FilesystemStorageModuleTest, getLogs) {
 
 TEST_F(FilesystemStorageModuleTest, openLog) {
     createStorageModule();
-    Ref<Log> log = sm->openLog(12);
+    Ptr<Log> log;
+    sm->openLog(12, make<SMOpenCallback>(&log));
+    runWorkerCompletion();
     EXPECT_EQ(12U, log->getLogId());
     EXPECT_EQ((vector<LogId>{12}), sorted(sm->getLogs()));
     createStorageModule();
@@ -125,10 +171,14 @@ TEST_F(FilesystemStorageModuleTest, openLog) {
 
 TEST_F(FilesystemStorageModuleTest, deleteLog) {
     createStorageModule();
-    Ref<Log> log = sm->openLog(12);
+    Ptr<Log> log;
+    sm->openLog(12, make<SMOpenCallback>(&log));
+    runWorkerCompletion();
     sm->deleteLog(10, make<SMDeleteCallback>());
+    runWorkerCompletion();
     EXPECT_EQ(10U, SMDeleteCallback::lastLogId);
     sm->deleteLog(12, make<SMDeleteCallback>());
+    runWorkerCompletion();
     EXPECT_EQ(12U, SMDeleteCallback::lastLogId);
     EXPECT_EQ((vector<LogId>{}), sorted(sm->getLogs()));
     createStorageModule();
@@ -149,7 +199,9 @@ class FilesystemLogTest : public FilesystemStorageModuleTest {
         createLog();
     }
     void createLog() {
-        Ref<Log> tmpLog = sm->openLog(92);
+        Ptr<Log> tmpLog;
+        sm->openLog(92, make<SMOpenCallback>(&tmpLog));
+        runWorkerCompletion();
         log = Ptr<FilesystemLog>(
                         static_cast<FilesystemLog*>(tmpLog.get()));
     }
@@ -163,13 +215,16 @@ TEST_F(FilesystemLogTest, constructor) {
 
     createLog(); // no error if the directory already exists
     EXPECT_DEATH(make<FilesystemLog>(444,
-                            "/the/parent/directory/doesnt/exist"),
+                            "/the/parent/directory/doesnt/exist",
+                            "SHA-1"),
                  "Failed to create directory");
 
     LogEntry e1(1, 2, 3, Chunk::makeChunk("hello", 6));
     log->append(e1, make<LogAppendCallback>());
+    runWorkerCompletion();
     LogEntry e2(4, 5, 6, Chunk::makeChunk("goodbye", 8));
     log->append(e2, make<LogAppendCallback>());
+    runWorkerCompletion();
     createLog();
     EXPECT_EQ((vector<string> {
                 "(92, 0) 'hello'",
@@ -182,8 +237,10 @@ TEST_F(FilesystemLogTest, getLastId) {
     EXPECT_EQ(NO_ENTRY_ID, log->getLastId());
     LogEntry e1(1, 2, 3, Chunk::makeChunk("hello", 6));
     log->append(e1, make<LogAppendCallback>());
+    runWorkerCompletion();
     EXPECT_EQ(0U, log->getLastId());
     log->append(e1, make<LogAppendCallback>());
+    runWorkerCompletion();
     EXPECT_EQ(1U, log->getLastId());
     createLog();
     EXPECT_EQ(1U, log->getLastId());
@@ -194,8 +251,10 @@ TEST_F(FilesystemLogTest, readFrom) {
     EXPECT_EQ(vector<string>{}, eStr(log->readFrom(12)));
     LogEntry e1(1, 2, 3, Chunk::makeChunk("hello", 6));
     log->append(e1, make<LogAppendCallback>());
+    runWorkerCompletion();
     LogEntry e2(4, 5, 6, Chunk::makeChunk("world!", 7));
     log->append(e2, make<LogAppendCallback>());
+    runWorkerCompletion();
     EXPECT_EQ((vector<string> {
                 "(92, 0) 'hello'",
                 "(92, 1) 'world!'",
@@ -218,23 +277,45 @@ TEST_F(FilesystemLogTest, readFrom) {
 TEST_F(FilesystemLogTest, append) {
     LogEntry e1(1, 2, 3, Chunk::makeChunk("hello", 6), {4, 5});
     log->append(e1, make<LogAppendCallback>());
-    EXPECT_EQ(92U, e1.logId);
-    EXPECT_EQ(0U, e1.entryId);
+    runWorkerCompletion();
     EXPECT_EQ("(92, 0) 'hello' [inv 4, 5]",
               LogAppendCallback::lastEntry.toString());
     LogEntry e2(1, 2, 3, Chunk::makeChunk("goodbye", 8), {4, 5});
     log->append(e2, make<LogAppendCallback>());
-    EXPECT_EQ(1U, e2.entryId);
+    runWorkerCompletion();
     createLog();
     EXPECT_EQ(1U, log->getLastId());
+}
+
+TEST_F(FilesystemLogTest, appendQueuing) {
+    LogEntry e1(1, 2, 3, Chunk::makeChunk("hello", 6));
+    // Test queuing up some writes
+    // The first two will be queued in append().
+    log->writing = true;
+    log->append(e1, make<LogAppendCallback>());
+    log->append(e1, make<LogAppendCallback>());
+    // append() one more, allowing the three to be written.
+    log->writing = false;
+    log->append(e1, make<LogAppendCallback>());
+    // Before letting the append completion run, queue another one.
+    log->append(e1, make<LogAppendCallback>());
+    // Now let the first completion run.
+    // It should schedule the second batch of writes.
+    runWorkerCompletion();
+    // And let the second completion run.
+    runWorkerCompletion();
+    EXPECT_FALSE(log->writing);
+    EXPECT_EQ(3U, log->getLastId());
 }
 
 TEST_F(FilesystemLogTest, getEntryIds) {
     EXPECT_EQ((vector<EntryId>{}), sorted(log->getEntryIds()));
     LogEntry e1(1, 2, 3, Chunk::makeChunk("hello", 6));
     log->append(e1, make<LogAppendCallback>());
+    runWorkerCompletion();
     LogEntry e2(4, 5, 6, Chunk::makeChunk("goodbye", 8));
     log->append(e2, make<LogAppendCallback>());
+    runWorkerCompletion();
     EXPECT_EQ((vector<LogId>{0, 1}), sorted(log->getEntryIds()));
     close(open((log->path + "/NaN").c_str(), O_WRONLY|O_CREAT, 0644));
     createLog();
@@ -246,23 +327,24 @@ TEST_F(FilesystemLogTest, getEntryPath) {
 }
 
 TEST_F(FilesystemLogTest, readErrors) {
+    // File does not exist
     EXPECT_DEATH(log->read(444),
                  "Could not open");
 
+    // Empty file
     close(open((log->path + "/0000000000000000").c_str(),
                O_WRONLY|O_CREAT, 0644));
     EXPECT_DEATH(log->read(0),
-                 "Failed to parse log entry");
+                 "File .* corrupt");
+
+    // TODO(ongaro): do some random testing
 }
 
 TEST_F(FilesystemLogTest, writeErrors) {
     LogEntry e1(92, 1, 5, NO_DATA);
     log->write(e1);
     EXPECT_DEATH(log->write(e1),
-                 "Could not create");
-
-    // TODO(ongaro): Test a failure in serializing the protocol buffer.
-    // I don't see an obvious, clean way to do this.
+                 "Could not create"); // File exists
 }
 
 TEST_F(FilesystemLogTest, readWriteCommon) {
@@ -288,7 +370,7 @@ TEST_F(FilesystemLogTest, readWriteCommon) {
                 "(92, 2) 'hello'",
                 "(92, 3) NODATA [inv 28, 29, 30]",
                 "(92, 4) 'hello' [inv 31, 33, 94]",
-                "(92, 5) ''",
+                "(92, 5) BINARY",
               }),
               eStr(log->entries));
     EXPECT_EQ(9U, log->entries.back().createTime);

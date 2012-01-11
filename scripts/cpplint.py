@@ -2507,7 +2507,7 @@ def CheckLanguage(filename, clean_lines, linenum, file_extension, include_state,
           % (match.group(1), match.group(2)))
 
   if (Search(r'\busing namespace\b', line) and
-      not Search(r'\busing namespace RAMCloud\b', line)):
+      not Search(r'\busing namespace DLog\b', line)):
     error(filename, linenum, 'build/namespaces', 5,
           'Do not use namespace using-directives.  '
           'Use using-declarations instead.')

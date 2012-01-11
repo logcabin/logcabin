@@ -2,4 +2,5 @@ build
 .sconsign.dblite
 /docs/doxygen/
 Local.sc
+logcabin.conf
 *.pyc

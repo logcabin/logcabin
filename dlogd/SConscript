@@ -13,8 +13,9 @@ env.Program("dlogd", src,
                         "#.",
                         "#build/libDLogRPC",
                         "#build/libDLogStorage" ],
-            LIBS = [ "protobuf", "DLogRPC", "DLogStorage",
-                     "event_core-2.0", "event_pthreads-2.0", "rt" ],
+            LIBS = [ "protobuf", "DLogStorage", "DLogRPC",
+                     "event_core-2.0", "event_pthreads-2.0", "rt",
+                     "cryptopp" ],
             CPPPATH = [ "#include", "#" ])
 
 env.Protoc([],

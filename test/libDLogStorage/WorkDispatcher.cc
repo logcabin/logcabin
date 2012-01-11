@@ -78,6 +78,15 @@ class WorkDispatcherTest : public ::testing::Test {
         , completion(make<CompletionCallback>())
         , work(make<WorkerCallback>())
     {
+        // Temporarily delete the global workDispatcher to be sure that
+        // WOrkDispatcherDebug::totalNumWorkers starts at 0.
+        delete workDispatcher;
+        workDispatcher = NULL;
+    }
+
+    ~WorkDispatcherTest() {
+        // Restore the global workDispatcher.
+        workDispatcher = new WorkDispatcher(0, 32);
     }
 
     Ref<CompletionNotifier> notifier;

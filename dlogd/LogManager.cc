@@ -1,4 +1,4 @@
-/* Copyright (c) 2011 Stanford University
+/* Copyright (c) 2011-2012 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -17,14 +17,13 @@
 #include <set>
 
 #include "Common.h"
+#include "Config.h"
 #include "Debug.h"
 #include "LogManager.h"
 
 namespace DLog {
 
 using namespace Storage; // NOLINT
-
-const char* config_uuid_placeholder = "dead-beef";
 
 LogManager::LogInfo::LogInfo(const std::string& logName)
     : refCount()
@@ -50,41 +49,76 @@ class LogManager::NoOpStorageDeleteCallback
 };
 
 
-LogManager::LogManager(Ref<StorageModule> storageModule,
+LogManager::LogManager(const Config& config,
+                       Ref<StorageModule> storageModule,
                        Ref<InitializeCallback> initializeCompletion)
     : refCount()
     , initialized(false)
     , storageModule(storageModule)
-    , internalLog(storageModule->openLog(INTERNAL_LOG_ID))
+    , internalLog()
     , logs()
     , logNames()
-    , uuid(config_uuid_placeholder)
+    , uuid(config.read<std::string>("uuid"))
 {
-    std::vector<LogId> foundLogs = storageModule->getLogs();
-    std::deque<LogEntry> internalLogEntries = internalLog->readFrom(0);
-
-    // Read from the internal log.
-    if (internalLogEntries.empty()) {
-        if (!hasOnly(foundLogs, LogId(INTERNAL_LOG_ID))) {
-            PANIC("It looks like there's some left-over data stored here, but "
-                  "all the metadata is gone?");
-        }
-        // There's nothing at all here; create the storage.
-        initializeStorage(initializeCompletion);
-        return;
+    if (uuid.length() < 10) {
+        PANIC("This is a poor choice of a UUID (%s). Refusing to proceed.",
+              uuid.c_str());
     }
-
-    // Replay the internal log.
-    make<ConstructorReplayCallback>(Ref<LogManager>(*this),
-                                    foundLogs, internalLogEntries,
-                                    initializeCompletion);
+    LOG(NOTICE, "Initializing log manager with UUID %s", uuid.c_str());
+    storageModule->openLog(INTERNAL_LOG_ID,
+           make<ConstructorInternalLogOpenedCallback>(
+                Ref<LogManager>(*this),
+                initializeCompletion));
 }
+
+/**
+ * This continues the constructor once the internal log has been opened.
+ */
+class LogManager::ConstructorInternalLogOpenedCallback
+                    : public StorageModule::OpenCallback {
+    ConstructorInternalLogOpenedCallback(
+                            Ref<LogManager> logManager,
+                            Ref<InitializeCallback> initializeCompletion)
+        : logManager(logManager)
+        , initializeCompletion(initializeCompletion)
+    {
+    }
+  public:
+    void opened(Ref<Log> log) {
+        logManager->internalLog = log;
+
+        std::vector<LogId> foundLogs = logManager->storageModule->getLogs();
+        std::deque<LogEntry> internalLogEntries =
+                        logManager->internalLog->readFrom(0);
+
+        // Read from the internal log.
+        if (internalLogEntries.empty()) {
+            if (!hasOnly(foundLogs, LogId(INTERNAL_LOG_ID))) {
+                PANIC("It looks like there's some left-over data stored here, "
+                      "but all the metadata is gone?");
+            }
+            // There's nothing at all here; create the storage.
+            logManager->initializeStorage(initializeCompletion);
+            return;
+        }
+
+        // Replay the internal log.
+        make<ConstructorReplayCallback>(logManager,
+                                        foundLogs, internalLogEntries,
+                                        initializeCompletion);
+    }
+  private:
+    Ref<LogManager> logManager;
+    Ref<InitializeCallback> initializeCompletion;
+    friend class RefHelper<ConstructorInternalLogOpenedCallback>;
+    friend class MakeHelper;
+};
+
 
 /**
  * This is used in the constructor to replay the internal log.
  */
 class LogManager::ConstructorReplayCallback : public ReplayCallback {
-  public:
     ConstructorReplayCallback(Ref<LogManager> logManager,
                               std::vector<LogId> foundLogs,
                               std::deque<LogEntry> internalLogEntries,
@@ -96,6 +130,7 @@ class LogManager::ConstructorReplayCallback : public ReplayCallback {
     {
         next();
     }
+  public:
     void replayed() {
         if (!internalLogEntries.empty()) {
             next();
@@ -579,10 +614,34 @@ LogManager::replayDeclareLogEntry(const LogEntry& entry,
     if (logInfo->log) {
         WARN("Attempted to create an open log (id %lu, name '%s') -- ignored",
              logId, logName.c_str());
+        completion->replayed();
     } else {
-        logInfo->log = this->storageModule->openLog(logId);
+        storageModule->openLog(logId,
+                               make<ReplayDeclareLogCreatedCallback>(
+                                    logInfo,
+                                    completion));
     }
-    completion->replayed();
 }
+
+/// Helper for replayDeclareLogEntry().
+class LogManager::ReplayDeclareLogCreatedCallback
+                        : public StorageModule::OpenCallback {
+  private:
+    ReplayDeclareLogCreatedCallback(Ref<LogInfo> logInfo,
+                                    Ref<ReplayCallback> completion)
+        : logInfo(logInfo)
+        , completion(completion) {
+    }
+  public:
+    void opened(Ref<Log> log) {
+        logInfo->log = log;
+        completion->replayed();
+    }
+    Ref<LogInfo> logInfo;
+    Ref<ReplayCallback> completion;
+    friend class RefHelper<ReplayDeclareLogCreatedCallback>;
+    friend class MakeHelper;
+};
+
 
 } // namespace DLog

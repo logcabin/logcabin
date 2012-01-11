@@ -1,4 +1,4 @@
-/* Copyright (c) 2011 Stanford University
+/* Copyright (c) 2011-2012 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -118,6 +118,20 @@ TEST(format, large) {
     memset(x, 0xcc, sizeof(x));
     x[sizeof(x) - 1] = '\0';
     EXPECT_EQ(x, format("%s", x));
+}
+
+TEST(isPrintable, str) {
+    EXPECT_TRUE(isPrintable(""));
+    EXPECT_TRUE(isPrintable("foo"));
+    EXPECT_FALSE(isPrintable("\n"));
+}
+
+TEST(isPrintable, data) {
+    EXPECT_FALSE(isPrintable("", 0));
+    EXPECT_TRUE(isPrintable("", 1));
+    EXPECT_TRUE(isPrintable("foo", 4));
+    EXPECT_FALSE(isPrintable("foo", 3));
+    EXPECT_FALSE(isPrintable("\n", 2));
 }
 
 } // namespace DLog

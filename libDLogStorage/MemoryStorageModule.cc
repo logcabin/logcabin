@@ -1,4 +1,4 @@
-/* Copyright (c) 2011 Stanford University
+/* Copyright (c) 2011-2012 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -45,7 +45,7 @@ MemoryLog::readFrom(EntryId start)
 }
 
 void
-MemoryLog::append(LogEntry& entry,
+MemoryLog::append(LogEntry entry,
                   Ref<AppendCallback> appendCompletion)
 {
     EntryId newId = headId + 1;
@@ -75,17 +75,20 @@ MemoryStorageModule::getLogs()
     return ret;
 }
 
-Ref<Log>
-MemoryStorageModule::openLog(LogId logId)
+void
+MemoryStorageModule::openLog(LogId logId,
+                             Ref<OpenCallback> openCompletion)
 {
     // This is not strictly necessary but makes testing easier.
     auto it = logs.find(logId);
-    if (it != logs.end())
-        return it->second;
+    if (it != logs.end()) {
+        openCompletion->opened(it->second);
+        return;
+    }
 
     Ref<Log> newLog = make<MemoryLog>(logId);
     logs.insert({logId, newLog});
-    return newLog;
+    openCompletion->opened(newLog);
 }
 
 void

@@ -1,4 +1,4 @@
-/* Copyright (c) 2011 Stanford University
+/* Copyright (c) 2011-2012 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -41,6 +41,7 @@ static const LogId NO_LOG_ID = ~0ULL;
 static const EntryId NO_ENTRY_ID = ~0ULL;
 typedef uint64_t TimeStamp;
 
+class Config; // forward declaration
 class LogManager; // forward declaration
 namespace Storage { class Chunk; } // forward declaration
 
@@ -218,7 +219,7 @@ class Log {
     /**
      * Return this logs ID.
      */
-    LogId getLogId() { return logId; }
+    LogId getLogId() const { return logId; }
 
     /**
      * Return the ID for the entry at the head of the log.
@@ -240,15 +241,14 @@ class Log {
 
     /**
      * Append a log entry (data and/or invalidations).
-     * \param[in,out] entry
-     *      The entry to append. Its EntryId will be set upon the return of
-     *      this function. A copy of this entry will be passed to
-     *      appendCompletion once the entry has been written to durable
-     *      storage.
+     * \param entry
+     *      The entry to append. A copy of this entry will be passed to
+     *      appendCompletion with its EntryId set once the entry has been
+     *      written to durable storage.
      * \param appendCompletion
-     *      Called once entry has may be considered durable.
+     *      Called once entry may be considered durable.
      */
-    virtual void append(LogEntry& entry,
+    virtual void append(LogEntry entry,
                         Ref<AppendCallback> appendCompletion) = 0;
 
     /**
@@ -272,6 +272,16 @@ class Log {
  */
 class StorageModule {
   public:
+
+    /**
+     * See openLog().
+     */
+    class OpenCallback : public BaseCallback {
+      public:
+        virtual void opened(Ref<Log> log) = 0;
+        friend class RefHelper<OpenCallback>;
+    };
+
     /**
      * See deleteLog().
      */
@@ -296,8 +306,6 @@ class StorageModule {
      * Open a log.
      * This will create or finish creating the log if it does not fully exist.
      *
-     * Making this method asynchronous is probably unnecessarily pain.
-     *
      * Creating a log need not be atomic but must be idempotent. After even a
      * partial create, getLogs() must return this log and deleteLog() must be
      * able to delete any storage resources allocated to this log.
@@ -305,10 +313,11 @@ class StorageModule {
      * \param logId
      *      A log ID. The caller must make sure not to create multiple Log
      *      objects for the same log ID.
-     * \return
-     *      A handle to the newly constructed log object.
+     * \param openCompletion
+     *      Called once the open completes.
      */
-    virtual Ref<Log> openLog(LogId logId) = 0;
+    virtual void openLog(LogId logId,
+                         Ref<OpenCallback> openCompletion) = 0;
 
     /**
      * Delete a log from stable storage.
@@ -330,6 +339,13 @@ class StorageModule {
     friend class RefHelper<StorageModule>;
     friend class DLog::LogManager;
 };
+
+namespace Factory {
+/**
+ * Construct a storage module as described in configuration options.
+ */
+Ref<StorageModule> createStorageModule(const Config& config);
+} // namespace DLog::Storage::Factory
 
 } // namespace DLog::Storage
 

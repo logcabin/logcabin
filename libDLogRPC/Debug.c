@@ -46,7 +46,7 @@ Debug_Log(const char* fileName, uint32_t lineNum, const char* func,
         level = VERBOSE;
 
     clock_gettime(CLOCK_REALTIME, &now);
-    fprintf(stdout, "%010lu.%09lu %s:%d in %s %s: ",
+    fprintf(stderr, "%010lu.%09lu %s:%d in %s %s: ",
             now.tv_sec, now.tv_nsec,
             fileName, lineNum, func, logLevelToString[level]);
 
@@ -54,8 +54,6 @@ Debug_Log(const char* fileName, uint32_t lineNum, const char* func,
     vfprintf(stderr, format, ap);
     va_end(ap);
 
-    fprintf(stdout, "\n");
-
-    fflush(stdout);
+    fflush(stderr);
 }
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2011 Stanford University
+/* Copyright (c) 2011-2012 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -38,7 +38,7 @@ class MemoryLog : public Log {
   public:
     EntryId getLastId() { return headId; }
     std::deque<LogEntry> readFrom(EntryId start);
-    void append(LogEntry& entry, Ref<AppendCallback> appendCompletion);
+    void append(LogEntry entry, Ref<AppendCallback> appendCompletion);
 
   private:
     EntryId headId;
@@ -58,7 +58,7 @@ class MemoryStorageModule : public StorageModule {
     MemoryStorageModule();
   public:
     std::vector<LogId> getLogs();
-    Ref<Log> openLog(LogId logId);
+    void openLog(LogId logId, Ref<OpenCallback> openCompletion);
     void deleteLog(LogId logId, Ref<DeleteCallback> deleteCompletion);
     std::unordered_map<LogId, Ref<Log>> logs;
     friend class DLog::MakeHelper;

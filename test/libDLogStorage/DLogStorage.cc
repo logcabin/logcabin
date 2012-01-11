@@ -67,7 +67,7 @@ TEST(LogEntry, toString) {
     EXPECT_EQ("(1, 2) 'hello' [inv 4, 5, 6]", entry1.toString());
     EXPECT_EQ("(1, 2) NODATA [inv 4, 5, 6]", entry2.toString());
     EXPECT_EQ("(1, 2) 'hello'", entry3.toString());
-    EXPECT_EQ("(1, 2) ''", entry4.toString());
+    EXPECT_EQ("(1, 2) BINARY", entry4.toString());
     EXPECT_EQ("(1, 2) BINARY", entry5.toString());
 }
 
