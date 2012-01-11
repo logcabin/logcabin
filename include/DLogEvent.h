@@ -54,8 +54,10 @@ class EventSignal {
      */
     virtual void trigger() = 0;
   private:
+    /// Signal to bind to.
     int signal;
-    Ref<EventSignalPriv> priv;
+    /// Pointer to the private implementation object.
+    std::unique_ptr<EventSignalPriv> priv;
 };
 
 /**
@@ -81,7 +83,8 @@ class EventTimer {
     time_t period;
     /// Set to true for periodic timers.
     bool persist;
-    Ref<EventTimerPriv> priv;
+    /// Pointer to the private implementation object.
+    std::unique_ptr<EventTimerPriv> priv;
 };
 
 /**
