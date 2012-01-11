@@ -41,6 +41,7 @@ static const LogId NO_LOG_ID = ~0ULL;
 static const EntryId NO_ENTRY_ID = ~0ULL;
 typedef uint64_t TimeStamp;
 
+class Config; // forward declaration
 class LogManager; // forward declaration
 namespace Storage { class Chunk; } // forward declaration
 
@@ -338,6 +339,13 @@ class StorageModule {
     friend class RefHelper<StorageModule>;
     friend class DLog::LogManager;
 };
+
+namespace Factory {
+/**
+ * Construct a storage module as described in configuration options.
+ */
+Ref<StorageModule> createStorageModule(const Config& config);
+} // namespace DLog::Storage::Factory
 
 } // namespace DLog::Storage
 
