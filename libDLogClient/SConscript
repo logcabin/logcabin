@@ -1,6 +1,7 @@
 Import('env')
 
 src = [
+    "ClientImpl.cc",
     "DLogClient.cc",
     "#build/proto/dlog.pb.o",
 ]

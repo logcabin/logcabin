@@ -41,7 +41,7 @@ class EventTimerTest : public ::testing::Test {
 
 class MyTimer : public RPC::EventTimer {
   public:
-    MyTimer(RPC::EventLoop &loop)
+    explicit MyTimer(RPC::EventLoop &loop)
         : RPC::EventTimer(loop),
           triggerCount(0),
           loopPtr(&loop)

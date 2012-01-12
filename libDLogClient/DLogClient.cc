@@ -1,4 +1,4 @@
-/* Copyright (c) 2011 Stanford University
+/* Copyright (c) 2012 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -13,4 +13,177 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <string.h>
+
+#include "ClientImpl.h"
 #include "DLogClient.h"
+#include "Ref.h"
+
+namespace DLog {
+namespace Client {
+
+namespace Internal {
+
+// class ClientImplRef
+
+ClientImplRef::ClientImplRef(ClientImpl& clientImpl)
+    : clientImpl(&clientImpl)
+{
+    RefHelper<ClientImpl>::incRefCount(&clientImpl);
+}
+
+ClientImplRef::ClientImplRef(const ClientImplRef& other)
+    : clientImpl(other.clientImpl)
+{
+    RefHelper<ClientImpl>::incRefCount(clientImpl);
+}
+
+ClientImplRef::~ClientImplRef()
+{
+    RefHelper<ClientImpl>::decRefCountAndDestroy(clientImpl);
+}
+
+ClientImplRef&
+ClientImplRef::operator=(const ClientImplRef& other)
+{
+    RefHelper<ClientImpl>::incRefCount(other.clientImpl);
+    RefHelper<ClientImpl>::decRefCountAndDestroy(clientImpl);
+    clientImpl = other.clientImpl;
+    return *this;
+}
+
+ClientImpl&
+ClientImplRef::operator*() const
+{
+    return *clientImpl;
+}
+
+ClientImpl*
+ClientImplRef::operator->() const
+{
+    return clientImpl;
+}
+
+} // namespace DLog::Client::Internal
+
+// class Entry
+
+Entry::Entry(const void* data, uint32_t length)
+    : id(NO_ID)
+    , data(new char[length])
+    , length(length)
+{
+    memcpy(this->data.get(), data, length);
+}
+
+Entry::Entry(Entry&& other)
+    : id(other.id)
+    , data(other.data.release())
+    , length(other.length)
+{
+}
+
+Entry::~Entry()
+{
+}
+
+Entry&
+Entry::operator=(Entry&& other)
+{
+    id = other.id;
+    data = std::move(other.data);
+    length = other.length;
+    return *this;
+}
+
+EntryId
+Entry::getId() const
+{
+    return id;
+}
+
+const void*
+Entry::getData() const
+{
+    return data.get();
+}
+
+uint32_t
+Entry::getLength() const
+{
+    return length;
+}
+
+// class Log
+
+Log::Log(Internal::ClientImplRef clientImpl,
+         const std::string& name,
+         uint64_t logId)
+    : clientImpl(clientImpl)
+    , name(name)
+    , logId(logId)
+{
+}
+
+Log::~Log()
+{
+}
+
+EntryId
+Log::append(Entry& data,
+            const std::vector<EntryId>& invalidates,
+            EntryId previousId)
+{
+    return clientImpl->append(logId, &data, invalidates, previousId);
+}
+
+EntryId
+Log::invalidate(const std::vector<EntryId>& invalidates,
+                EntryId previousId)
+{
+    return clientImpl->append(logId, NULL, invalidates, previousId);
+}
+
+std::vector<Entry>
+Log::read(EntryId from)
+{
+    return clientImpl->read(logId, from);
+}
+
+// class Cluster
+
+Cluster::Cluster(const std::string& hosts)
+    : clientImpl(*make<Internal::ClientImpl>())
+{
+}
+
+Cluster::~Cluster()
+{
+}
+
+void
+Cluster::registerErrorCallback(std::unique_ptr<ErrorCallback> callback)
+{
+    clientImpl->registerErrorCallback(std::move(callback));
+}
+
+Log
+Cluster::openLog(const std::string& logName)
+{
+    return clientImpl->openLog(logName);
+}
+
+void
+Cluster::deleteLog(const std::string& logName)
+{
+    clientImpl->deleteLog(logName);
+}
+
+std::vector<std::string>
+Cluster::listLogs()
+{
+    return clientImpl->listLogs();
+}
+
+} // namespace DLog::Client
+} // namespace DLog

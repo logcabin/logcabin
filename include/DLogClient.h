@@ -62,8 +62,8 @@ class ClientImplRef {
   public:
     explicit ClientImplRef(ClientImpl& clientImpl);
     ClientImplRef(const ClientImplRef& other);
-    ClientImplRef& operator=(const ClientImplRef& other);
     ~ClientImplRef();
+    ClientImplRef& operator=(const ClientImplRef& other);
     ClientImpl& operator*() const;
     ClientImpl* operator->() const;
   private:
@@ -76,17 +76,6 @@ class ClientImplRef {
  * Encapsulates a blob of data in a single log entry.
  */
 class Entry {
-  private:
-    /**
-     * Constructor.
-     * \param id
-     *      The entry ID.
-     * \param data
-     *      Data that is owned by the caller.
-     * \param length
-     *      The number of bytes in data.
-     */
-    Entry(EntryId id, const void* data, uint32_t length);
   public:
     /**
      * Constructor.
@@ -97,7 +86,12 @@ class Entry {
      *      The number of bytes in data.
      */
     Entry(const void* data, uint32_t length);
+    /// Move constructor.
+    Entry(Entry&& other);
+    /// Destructor.
     ~Entry();
+    /// Move assignment.
+    Entry& operator=(Entry&& other);
     /// Return the entry ID.
     EntryId getId() const;
     /// Return the binary blob of data.
@@ -107,11 +101,11 @@ class Entry {
 
   private:
     EntryId id;
-    std::unique_ptr<const void> data;
-    const uint32_t length;
+    std::unique_ptr<char[]> data;
+    uint32_t length;
     Entry(const Entry&) = delete;
     Entry& operator=(const Entry&) = delete;
-    friend class Log;
+    friend class Internal::ClientImpl;
 };
 
 
@@ -128,7 +122,9 @@ class LogDisappearedException : public std::exception {
  */
 class Log {
   private:
-    Log(Cluster& cluster, const std::string& name, uint64_t logId);
+    Log(Internal::ClientImplRef clientImpl,
+        const std::string& name,
+        uint64_t logId);
   public:
     ~Log();
 
@@ -192,12 +188,10 @@ class Log {
     EntryId getLastId();
 
   private:
-    Internal::ClientImplRef& clientImpl;
+    Internal::ClientImplRef clientImpl;
     const std::string name;
     const uint64_t logId;
-    friend class Cluster;
-    Log(const Log&) = delete;
-    Log& operator=(const Log&) = delete;
+    friend class Internal::ClientImpl;
 };
 
 /**
@@ -206,7 +200,7 @@ class Log {
 class ErrorCallback {
   public:
     virtual ~ErrorCallback() {}
-    virtual void callBack(/* ... */) = 0;
+    virtual void callback(/* ... */) = 0;
 };
 
 /**
@@ -245,7 +239,7 @@ class Cluster {
     /**
      * Get a list of logs.
      * \return
-     *      The name of each existing log.
+     *      The name of each existing log in sorted order.
      */
     std::vector<std::string> listLogs();
 
