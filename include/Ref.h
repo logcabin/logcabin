@@ -40,7 +40,14 @@
  * Using the constructor(s) directly is illegal.
  */
 
+#if __GNUC__ >= 4 && __GNUC_MINOR__ >= 5
+#include <atomic>
+#else
+#include <cstdatomic>
+#endif
+
 #include "Common.h"
+#include "Debug.h"
 
 #ifndef REF_H // TODO(ongaro): this needs a prefix
 #define REF_H
@@ -57,32 +64,32 @@ namespace DLog {
  *      The underlying integer type to use.
  */
 template<typename Numeric>
-class DefaultRefCountWrapper {
+class AtomicRefCountWrapper {
   public:
-    DefaultRefCountWrapper()
+    AtomicRefCountWrapper()
         : value(1) {
         assertMakeInProgress();
     }
-    ~DefaultRefCountWrapper() {
+    ~AtomicRefCountWrapper() {
         // 'value' is usually 0. It can be 1 if the object's constructor threw
         // an exception. If it's higher than that, the object's constructor
         // threw an exception after handing out Refs to itself, which will lead
         // to memory corruption. It's safer to kill the program.
-        assert(value <= 1);
+        assert(value.load() <= 1);
     }
-    Numeric inc() { return ++value; }
-    Numeric dec() { return --value; }
+    Numeric inc() { return value.fetch_add(1) + 1; }
+    Numeric dec() { return value.fetch_sub(1) - 1; }
     // get is here for testing purposes
-    Numeric get() { return value; }
+    Numeric get() { return value.load(); }
   private:
     static void assertMakeInProgress(); // defined below due to circular dep
 
-    DefaultRefCountWrapper(const DefaultRefCountWrapper<Numeric>&) // NOLINT
+    AtomicRefCountWrapper(const AtomicRefCountWrapper<Numeric>&) // NOLINT
                                                         = delete;
-    DefaultRefCountWrapper<Numeric>&
-    operator=(const DefaultRefCountWrapper<Numeric>& other) = delete;
+    AtomicRefCountWrapper<Numeric>&
+    operator=(const AtomicRefCountWrapper<Numeric>& other) = delete;
 
-    Numeric value;
+    std::atomic<Numeric> value;
 };
 
 /**
@@ -96,7 +103,7 @@ class DefaultRefCountWrapper {
 template<typename T>
 class RefHelper {
   public:
-    typedef DefaultRefCountWrapper<uint32_t> RefCount;
+    typedef AtomicRefCountWrapper<uint32_t> RefCount;
     static void incRefCount(T* obj) {
         obj->refCount.inc();
     }
@@ -368,7 +375,7 @@ make(Args&&... args)
 
 template<typename Numeric>
 void
-DefaultRefCountWrapper<Numeric>::assertMakeInProgress()
+AtomicRefCountWrapper<Numeric>::assertMakeInProgress()
 {
     // This check tries to make sure you're constructing a
     // reference-counted object with make() instead of using the

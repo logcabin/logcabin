@@ -49,7 +49,7 @@ namespace Storage { class Chunk; } // forward declaration
 template<>
 class RefHelper<Storage::Chunk> {
   public:
-    typedef DefaultRefCountWrapper<uint32_t> RefCount;
+    typedef AtomicRefCountWrapper<uint32_t> RefCount;
     static void incRefCount(Storage::Chunk* obj);
     static void decRefCountAndDestroy(Storage::Chunk* obj);
 };
