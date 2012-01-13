@@ -20,12 +20,13 @@ env = Environment(options = opts,
 Help(opts.GenerateHelpText(env))
 
 env.Append(CPPFLAGS = [ "-Wall", "-Wformat=2", "-Wextra", "-Wwrite-strings",
-                        "-Wno-unused-parameter", "-Wmissing-format-attribute" ])
+                        "-Wno-unused-parameter", "-Wmissing-format-attribute",
+                        "-Werror" ])
 env.Append(CFLAGS = [ "-Wmissing-prototypes", "-Wmissing-declarations",
-                      "-Wshadow", "-Wbad-function-cast" ])
+                      "-Wshadow", "-Wbad-function-cast", "-Werror" ])
 env.Append(CXXFLAGS = [ "-Wno-non-template-friend", "-Woverloaded-virtual",
                         "-Wcast-qual", "-Wcast-align", "-Wconversion",
-                        "-Weffc++", "-std=c++0x" ])
+                        "-Weffc++", "-std=c++0x", "-Werror" ])
 
 if env["BUILDTYPE"] == "DEBUG":
     env.Append(CPPFLAGS = [ "-g", "-DDEBUG" ])
