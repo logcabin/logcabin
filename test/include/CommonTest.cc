@@ -49,7 +49,7 @@ const map<int, string> digits {
 
 } // anonymous namespace
 
-TEST(unique, basic) {
+TEST(Common, unique) {
     TObj::liveCount = 0;
     {
         std::unique_ptr<TObj> x = unique<TObj>("foo");
@@ -58,7 +58,7 @@ TEST(unique, basic) {
     EXPECT_EQ(0U, TObj::liveCount);
 }
 
-TEST(downCast, basic) {
+TEST(Common, downCast) {
     EXPECT_DEATH(downCast<uint8_t>(256), "");
     EXPECT_DEATH(downCast<int8_t>(192), "");
     EXPECT_DEATH(downCast<uint8_t>(-10), "");
@@ -66,28 +66,28 @@ TEST(downCast, basic) {
     EXPECT_EQ(55, x);
 }
 
-TEST(sorted, basic) {
+TEST(Common, sorted) {
     EXPECT_EQ((vector<int> {}),
               sorted(vector<int> {}));
     EXPECT_EQ((vector<int> { 1, 5, 7}),
               sorted(vector<int> {5, 1, 7}));
 }
 
-TEST(getKeys, basic) {
+TEST(Common, getKeys) {
     EXPECT_EQ((vector<int>{}),
               getKeys(empty));
     EXPECT_EQ((vector<int>{ 1, 2, 3 }),
               getKeys(digits));
 }
 
-TEST(getValues, basic) {
+TEST(Common, getValues) {
     EXPECT_EQ((vector<string>{}),
               getValues(empty));
     EXPECT_EQ((vector<string>{ "one", "two", "three" }),
               getValues(digits));
 }
 
-TEST(getItems, basic) {
+TEST(Common, getItems) {
     EXPECT_EQ((vector<pair<int, string>>{}),
               getItems(empty));
     EXPECT_EQ((vector<pair<int, string>>{
@@ -98,7 +98,7 @@ TEST(getItems, basic) {
               getItems(digits));
 }
 
-TEST(hasOnly, basic) {
+TEST(Common, hasOnly) {
     EXPECT_TRUE(hasOnly((vector<int>{}), 1));
     EXPECT_TRUE(hasOnly((vector<int>{1}), 1));
     EXPECT_TRUE(hasOnly((vector<int>{1, 1}), 1));
@@ -108,25 +108,25 @@ TEST(hasOnly, basic) {
 }
 
 // Tests for format come from the RAMCloud project.
-TEST(format, basic) {
+TEST(Common, formatBasic) {
     EXPECT_EQ("rofl3", format("rofl3"));
     EXPECT_EQ("rofl3", format("r%sl%d", "of", 3));
 }
 
-TEST(format, large) {
+TEST(Common, formatLarge) {
     char x[3000];
     memset(x, 0xcc, sizeof(x));
     x[sizeof(x) - 1] = '\0';
     EXPECT_EQ(x, format("%s", x));
 }
 
-TEST(isPrintable, str) {
+TEST(Common, isPrintableStr) {
     EXPECT_TRUE(isPrintable(""));
     EXPECT_TRUE(isPrintable("foo"));
     EXPECT_FALSE(isPrintable("\n"));
 }
 
-TEST(isPrintable, data) {
+TEST(Common, isPrintableData) {
     EXPECT_FALSE(isPrintable("", 0));
     EXPECT_TRUE(isPrintable("", 1));
     EXPECT_TRUE(isPrintable("foo", 4));
