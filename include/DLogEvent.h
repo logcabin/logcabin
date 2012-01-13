@@ -96,6 +96,7 @@ class EventLoop {
      * Constructor for the event loop implementation.
      *
      * TODO(ali): Support multiple event loop implementations.
+     * TODO(ongaro): Who owns the memory for the returned object?
      */
     static EventLoop* makeEventLoop();
     virtual ~EventLoop() { };

@@ -171,8 +171,11 @@ EventTimerLE2Priv::isPending()
 /**
  * Constructor for the libevent2 implementation of the EventLoop class.
  */
-EventLoopLE2Impl::EventLoopLE2Impl() : base(event_base_new())
+EventLoopLE2Impl::EventLoopLE2Impl() : base(NULL)
 {
+    int r = evthread_use_pthreads();
+    assert(r == 0);
+    base = event_base_new();
     assert(base != NULL);
 }
 

@@ -21,6 +21,7 @@
 #include "Common.h"
 #include "Config.h"
 #include "Debug.h"
+#include "DLogEvent.h"
 #include "DLogStorage.h"
 #include "LogManager.h"
 #include "WorkDispatcher.h"
@@ -88,6 +89,45 @@ class OptionParser {
     std::string configFilename;
 };
 
+/**
+ * This runs on the event loop thread to service worker completions.
+ */
+class WorkDispatcherNotification : public RPC::EventTimer {
+  public:
+    explicit WorkDispatcherNotification(RPC::EventLoop& eventLoop)
+        : EventTimer(eventLoop)
+    {
+    }
+    void trigger() {
+        while (true) {
+            Ptr<WorkDispatcher::CompletionCallback> completion =
+                                        workDispatcher->popCompletion();
+            if (!completion)
+                break;
+            completion->completed();
+        }
+    }
+};
+
+/**
+ * This runs on worker threads to ping the event loop thread.
+ */
+class WorkDispatcherNotifier : public WorkDispatcher::CompletionNotifier {
+    explicit WorkDispatcherNotifier(RPC::EventLoop& eventLoop)
+        : notification(eventLoop)
+    {
+    }
+  public:
+    void notify() {
+        notification.add(0);
+    }
+  private:
+    WorkDispatcherNotification notification;
+    friend class DLog::RefHelper<WorkDispatcherNotifier>;
+    friend class DLog::MakeHelper;
+};
+
+
 class LogManagerReady : public LogManager::InitializeCallback {
   public:
     void initialized() {
@@ -122,17 +162,10 @@ int main(int argc, char *argv[])
                          Storage::Factory::createStorageModule(config),
                          make<LogManagerReady>());
 
-    // Fake a main loop.
-    while (true) {
-        Ptr<WorkDispatcher::CompletionCallback> completion =
-                                    workDispatcher->popCompletion();
-        if (!completion) {
-            usleep(1000);
-            continue;
-        }
-        completion->completed();
-    }
-
-    return 0;
+    // Set up and run the main loop.
+    // TODO(ongaro): memory leak
+    RPC::EventLoop* eventLoop = RPC::EventLoop::makeEventLoop();
+    workDispatcher->setNotifier(make<WorkDispatcherNotifier>(*eventLoop));
+    while (true)
+        eventLoop->processEvents();
 }
-
