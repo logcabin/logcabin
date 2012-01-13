@@ -33,10 +33,9 @@ namespace Storage {
 
 /**
  * This will become the default storage module that uses the filesystem.
- * It has a number of limitations for now:
+ * It has some limitations for now:
  * - Creates one file per log entry
  * - Never cleans up used storage space
- * - Does not call sync or fsync
  * Therefore, it is not yet recommended for actual use.
  */
 class FilesystemStorageModule : public StorageModule {

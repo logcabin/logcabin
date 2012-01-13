@@ -50,6 +50,12 @@ std::vector<std::string> ls(const std::string& path);
 void remove(const std::string& path);
 
 /**
+ * Open a directory, fsync it, and close it. This is useful to fsync a
+ * directory after creating a file or directory within it.
+ */
+void syncDir(const std::string& path);
+
+/**
  * Return a path suitable for use as a temporary file or directory that is
  * likely to not exist.
  * \warning

@@ -140,6 +140,16 @@ TEST_F(FilesystemUtilTest, remove) {
                  "Could not remove");
 }
 
+TEST_F(FilesystemUtilTest, syncDir) {
+    // I don't know of a way to observe that this does anything,
+    // but at least we can run through it and make sure nothing panics.
+    // -Diego
+    FilesystemUtil::syncDir(tmpdir);
+    FilesystemUtil::syncDir(tmpdir + "/..");
+    EXPECT_DEATH(FilesystemUtil::syncDir(tmpdir + "/a"),
+                 "open");
+}
+
 TEST_F(FilesystemUtilTest, tmpnam) {
     EXPECT_NE(FilesystemUtil::tmpnam(), FilesystemUtil::tmpnam());
 }

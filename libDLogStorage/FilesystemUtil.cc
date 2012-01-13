@@ -81,6 +81,24 @@ remove(const std::string& path)
     }
 }
 
+void
+syncDir(const std::string& path)
+{
+    int fd = open(path.c_str(), O_RDONLY);
+    if (fd == -1) {
+        PANIC("Could not open %s: %s",
+              path.c_str(), strerror(errno));
+    }
+    if (fsync(fd) != 0) {
+        PANIC("Could not fsync %s: %s",
+              path.c_str(), strerror(errno));
+    }
+    if (close(fd) != 0) {
+        WARN("Failed to close file %s: %s",
+             path.c_str(), strerror(errno));
+    }
+}
+
 std::string
 tmpnam()
 {

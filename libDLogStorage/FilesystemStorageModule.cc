@@ -45,7 +45,9 @@ FilesystemStorageModule::FilesystemStorageModule(const Config& config)
     }
 
     LOG(NOTICE, "Using filesystem storage module at %s", path.c_str());
-    if (mkdir(path.c_str(), 0755) != 0) {
+    if (mkdir(path.c_str(), 0755) == 0) {
+        FilesystemUtil::syncDir(path + "/..");
+    } else {
         if (errno != EEXIST) {
             PANIC("Failed to create directory for FilesystemStorageModule:"
                   " mkdir(%s) failed: %s", path.c_str(), strerror(errno));
@@ -210,7 +212,9 @@ FilesystemLog::FilesystemLog(LogId logId,
     , writing(false)
     , writeQueue()
 {
-    if (mkdir(path.c_str(), 0755) != 0) {
+    if (mkdir(path.c_str(), 0755) == 0) {
+        FilesystemUtil::syncDir(path + "/..");
+    } else {
         if (errno != EEXIST) {
             PANIC("Failed to create directory for FilesystemLog:"
                   " mkdir(%s) failed: %s", path.c_str(), strerror(errno));
@@ -608,6 +612,10 @@ FilesystemLog::write(const LogEntry& entry)
             { entry.data->getData(), entry.data->getLength() },
         }) == -1) {
         PANIC("Filesystem write to %s failed: %s",
+              entryPath.c_str(), strerror(errno));
+    }
+    if (fsync(fd) != 0) {
+        PANIC("Could not fsync %s: %s",
               entryPath.c_str(), strerror(errno));
     }
     if (close(fd) != 0) {
