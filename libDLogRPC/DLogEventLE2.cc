@@ -13,6 +13,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <string.h>
 #include <sys/time.h>
 
 #include "Debug.h"
@@ -26,6 +27,64 @@
 
 namespace DLog {
 namespace RPC {
+
+static void
+EventListenerLE2AcceptCB(struct evconnlistener *listener, evutil_socket_t fd,
+                         struct sockaddr *a, int slen, void *arg)
+{
+    EventListener *el = reinterpret_cast<EventListener *>(arg);
+
+    el->accept(fd);
+}
+
+static void
+EventListenerLE2ErrorCB(struct evconnlistener *lis, void *arg)
+{
+    EventListener *el = reinterpret_cast<EventListener *>(arg);
+
+    el->error();
+}
+
+EventListenerLE2Priv::EventListenerLE2Priv(EventLoop& loop, EventListener& l)
+    : listener(),
+      el(&l),
+      loop(&loop)
+{
+}
+
+EventListenerLE2Priv::~EventListenerLE2Priv()
+{
+    if (listener) {
+        evconnlistener_free(listener);
+        listener = NULL;
+    }
+}
+
+bool
+EventListenerLE2Priv::bind(uint16_t port)
+{
+    struct sockaddr_in sin;
+    EventLoopLE2Impl* impl = static_cast<EventLoopLE2Impl*>(loop);
+
+    memset(&sin, 0, sizeof(sin));
+    sin.sin_family = AF_INET;
+    sin.sin_addr.s_addr = htonl(INADDR_ANY);
+    sin.sin_port = htons(port);
+
+    listener = evconnlistener_new_bind(impl->base,
+                        EventListenerLE2AcceptCB,
+                        el,
+                        LEV_OPT_CLOSE_ON_FREE | LEV_OPT_REUSEABLE,
+                        -1,
+                        (struct sockaddr *)&sin, sizeof(sin));
+    if (!listener) {
+        return false;
+    }
+
+    evconnlistener_set_error_cb(listener, EventListenerLE2ErrorCB);
+
+    return true;
+}
 
 /**
  * EventSignal libevent2 C callback function. 

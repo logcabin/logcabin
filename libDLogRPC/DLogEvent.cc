@@ -27,6 +27,22 @@
 namespace DLog {
 namespace RPC {
 
+EventListener::EventListener(EventLoop& loop)
+    : priv(new EventListenerLE2Priv(loop, *this))
+{
+    // TODO(ali): EventLoopImpl should construct the object.
+}
+
+EventListener::~EventListener()
+{
+}
+
+bool
+EventListener::bind(uint16_t port)
+{
+    return priv->bind(port);
+}
+
 /**
  * Constructor.
  * \param loop EventLoop instance to bind to

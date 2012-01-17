@@ -28,6 +28,17 @@ namespace DLog {
 namespace RPC {
 
 /**
+ * EventListenerPriv object that encapsulates the event-loop implementation
+ * specific functionality for EventListener objects.
+ */
+class EventListenerPriv {
+  public:
+    EventListenerPriv() { }
+    virtual ~EventListenerPriv() { }
+    virtual bool bind(uint16_t port) = 0;
+};
+
+/**
  * EventSignalPriv object that encapsulates the event-loop implementation
  * specific functionality for EventSignal objects.
  */

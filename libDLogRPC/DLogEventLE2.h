@@ -39,11 +39,38 @@ namespace RPC {
 class EventLoopLE2Impl;
 
 /**
+ * libevent2 implementation of the EventListenerPriv object.
+ */
+class EventListenerLE2Priv : public EventListenerPriv {
+  public:
+    /**
+     * Constructor.
+     * \param loop EventLoop to bind to.
+     * \param l EventListener parent object.
+     */
+    EventListenerLE2Priv(EventLoop& loop, EventListener& l);
+    virtual ~EventListenerLE2Priv();
+    /**
+     * \copydoc EventListener::bind
+     */
+    virtual bool bind(uint16_t port);
+  private:
+    /// libevent evconnlistener
+    struct evconnlistener* listener;
+    /// Pointer to parent object
+    EventListener* el;
+    /// Pointer to event loop
+    EventLoop* loop;
+    EventListenerLE2Priv(const EventListenerLE2Priv&) = delete;
+    EventListenerLE2Priv& operator=(const EventListenerLE2Priv&) = delete;
+};
+
+/**
  * libevent2 implementation of the EventSignalPriv object.
  */
 class EventSignalLE2Priv : public EventSignalPriv {
   public:
-    EventSignalLE2Priv(EventLoop& loop, EventSignal &s);
+    EventSignalLE2Priv(EventLoop& loop, EventSignal& s);
     virtual ~EventSignalLE2Priv();
     virtual void add();
     virtual void add(time_t seconds);
@@ -92,6 +119,7 @@ class EventLoopLE2Impl : public EventLoop {
     struct event_base *base;
     EventLoopLE2Impl(const EventLoopLE2Impl&) = delete;
     EventLoopLE2Impl& operator=(const EventLoopLE2Impl&) = delete;
+    friend class EventListenerLE2Priv;
     friend class EventSignalLE2Priv;
     friend class EventTimerLE2Priv;
 };

@@ -33,8 +33,40 @@ namespace RPC {
 
 // Forward declarations
 class EventLoop;
+class EventSocketPriv;
+class EventListenerPriv;
 class EventSignalPriv;
 class EventTimerPriv;
+
+/**
+ * A listener object that binds to a TCP socket and accepts new connections.
+ */
+class EventListener {
+  public:
+    /**
+     * Constructor.
+     * \param loop EventLoop instance to bind to.
+     */
+    explicit EventListener(EventLoop& loop);
+    virtual ~EventListener();
+    /**
+     * Bind to a particular port and start listening.
+     * \param port Port to bind to.
+     */
+    bool bind(uint16_t port);
+    /**
+     * Accept callback when a socket is accepted.
+     * \param fd Incoming socket fd handle.
+     */
+    virtual void accept(int fd) = 0;
+    /**
+     * Error callback reporting something went wrong.
+     */
+    virtual void error(void) = 0;
+  private:
+    /// Pointer to the private implementation object.
+    std::unique_ptr<EventListenerPriv> priv;
+};
 
 /**
  * A signal event object. The client should inherit from this and implement
@@ -42,7 +74,7 @@ class EventTimerPriv;
  */
 class EventSignal {
   public:
-    EventSignal(EventLoop &loop, int s);
+    EventSignal(EventLoop& loop, int s);
     virtual ~EventSignal();
     void add();
     void add(time_t timeout);
@@ -66,7 +98,7 @@ class EventSignal {
  */
 class EventTimer {
   public:
-    explicit EventTimer(EventLoop &loop);
+    explicit EventTimer(EventLoop& loop);
     virtual ~EventTimer();
     void addPeriodic(time_t seconds);
     void add(time_t seconds);
