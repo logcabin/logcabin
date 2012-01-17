@@ -39,6 +39,57 @@ namespace RPC {
 class EventLoopLE2Impl;
 
 /**
+ * libevent2 implementation of the EventSocketPriv object.
+ */
+class EventSocketLE2Priv : public EventSocketPriv {
+  public:
+    /**
+     * Constructor.
+     * \param loop EventLoop to bind to.
+     * \param s EventSocket parent object.
+     */
+    EventSocketLE2Priv(EventLoop& loop, EventSocket& s);
+    virtual ~EventSocketLE2Priv();
+    /**
+     * \copydoc EventSocket::bind
+     */
+    virtual bool bind(int fd);
+    /**
+     * \copydoc EventSocket::connect
+     */
+    virtual bool connect(const char* ip, uint16_t port);
+    /**
+     * \copydoc EventSocket::write
+     */
+    virtual int write(const void* buf, int length);
+    /**
+     * \copydoc EventSocket::setReadWatermark
+     */
+    virtual void setReadWatermark(int length);
+    /**
+     * \copydoc EventSocket::getLength
+     */
+    virtual size_t getLength();
+    /**
+     * \copydoc EventSocket::read
+     */
+    virtual int read(void* buf, int length);
+    /**
+     * \copydoc EventSocket::discard
+     */
+    virtual int discard(int length);
+  private:
+    /// libevent bufferevent
+    struct bufferevent *bev;
+    /// Pointer to parent object
+    EventSocket* es;
+    /// Pointer to event loop
+    EventLoop* loop;
+    EventSocketLE2Priv(const EventSocketLE2Priv&) = delete;
+    EventSocketLE2Priv& operator=(const EventSocketLE2Priv&) = delete;
+};
+
+/**
  * libevent2 implementation of the EventListenerPriv object.
  */
 class EventListenerLE2Priv : public EventListenerPriv {
@@ -119,6 +170,7 @@ class EventLoopLE2Impl : public EventLoop {
     struct event_base *base;
     EventLoopLE2Impl(const EventLoopLE2Impl&) = delete;
     EventLoopLE2Impl& operator=(const EventLoopLE2Impl&) = delete;
+    friend class EventSocketLE2Priv;
     friend class EventListenerLE2Priv;
     friend class EventSignalLE2Priv;
     friend class EventTimerLE2Priv;

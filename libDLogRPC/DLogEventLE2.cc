@@ -15,6 +15,7 @@
 
 #include <string.h>
 #include <sys/time.h>
+#include <arpa/inet.h>
 
 #include "Debug.h"
 #include "DLogEvent.h"
@@ -27,6 +28,143 @@
 
 namespace DLog {
 namespace RPC {
+
+static void
+EventSocketLE2ReadCB(struct bufferevent *bev, void *arg)
+{
+    EventSocket *es = reinterpret_cast<EventSocket *>(arg);
+
+    es->read();
+}
+
+static void
+EventSocketLE2WriteCB(struct bufferevent *bev, void *arg)
+{
+    EventSocket *es = reinterpret_cast<EventSocket *>(arg);
+
+    es->write();
+}
+
+static void
+EventSocketLE2EventCB(struct bufferevent *bev, int16_t events, void *arg)
+{
+    EventSocket::EventMask eventMask = EventSocket::Null;
+    int eventErrno = 0;
+    EventSocket *es = reinterpret_cast<EventSocket *>(arg);
+
+    if (events & BEV_EVENT_CONNECTED)
+        eventMask = EventSocket::EventMask(eventMask | EventSocket::Connected);
+    if (events & BEV_EVENT_EOF)
+        eventMask = EventSocket::EventMask(eventMask | EventSocket::Eof);
+    if (events & BEV_EVENT_ERROR) {
+        eventMask = EventSocket::EventMask(eventMask | EventSocket::Error);
+        eventErrno = errno;
+    }
+
+    es->event(eventMask, eventErrno);
+}
+
+EventSocketLE2Priv::EventSocketLE2Priv(EventLoop& loop, EventSocket& s)
+    : bev(),
+      es(&s),
+      loop(&loop)
+{
+}
+
+EventSocketLE2Priv::~EventSocketLE2Priv()
+{
+}
+
+bool
+EventSocketLE2Priv::bind(int fd)
+{
+    EventLoopLE2Impl* impl = static_cast<EventLoopLE2Impl*>(loop);
+
+    bev = bufferevent_socket_new(impl->base, fd,
+                                 BEV_OPT_CLOSE_ON_FREE | BEV_OPT_THREADSAFE);
+    if (!bev) {
+        return false;
+    }
+
+    bufferevent_setcb(bev,
+                      EventSocketLE2ReadCB,
+                      EventSocketLE2WriteCB,
+                      EventSocketLE2EventCB,
+                      es);
+    bufferevent_enable(bev, EV_READ | EV_WRITE);
+
+    return true;
+}
+
+bool
+EventSocketLE2Priv::connect(const char* ip, uint16_t port)
+{
+    EventLoopLE2Impl* impl = static_cast<EventLoopLE2Impl*>(loop);
+    struct sockaddr_in sin;
+
+    memset(&sin, 0, sizeof(sin));
+    sin.sin_family = AF_INET;
+    inet_pton(AF_INET, ip, &sin.sin_addr);
+    sin.sin_port = htons(port);
+
+    bev = bufferevent_socket_new(impl->base, -1, BEV_OPT_CLOSE_ON_FREE);
+    if (!bev) {
+        return false;
+    }
+
+    bufferevent_setcb(bev,
+                      EventSocketLE2ReadCB,
+                      EventSocketLE2WriteCB,
+                      EventSocketLE2EventCB,
+                      this);
+    bufferevent_enable(bev, EV_READ | EV_WRITE);
+
+    if (bufferevent_socket_connect(bev,
+                                   (struct sockaddr*)&sin,
+                                   sizeof(sin)) < 0) {
+        bufferevent_free(bev);
+        bev = NULL;
+        return false;
+    }
+
+    return true;
+}
+
+int
+EventSocketLE2Priv::write(const void* buf, int length)
+{
+    return bufferevent_write(bev, buf, length);
+}
+
+void
+EventSocketLE2Priv::setReadWatermark(int length)
+{
+    bufferevent_setwatermark(bev, EV_READ, length, 0);
+}
+
+size_t
+EventSocketLE2Priv::getLength()
+{
+    struct evbuffer *input = bufferevent_get_input(bev);
+
+    return evbuffer_get_length(input);
+}
+
+int
+EventSocketLE2Priv::read(void* buf, int length)
+{
+    struct evbuffer *input = bufferevent_get_input(bev);
+
+    return evbuffer_remove(input, buf, length);
+}
+
+int
+EventSocketLE2Priv::discard(int length)
+{
+    struct evbuffer *input = bufferevent_get_input(bev);
+
+    return evbuffer_drain(input, length);
+}
 
 static void
 EventListenerLE2AcceptCB(struct evconnlistener *listener, evutil_socket_t fd,

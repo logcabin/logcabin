@@ -27,6 +27,57 @@
 namespace DLog {
 namespace RPC {
 
+EventSocket::EventSocket(EventLoop& loop)
+    : priv(new EventSocketLE2Priv(loop, *this))
+{
+}
+
+EventSocket::~EventSocket()
+{
+}
+
+bool
+EventSocket::bind(int fd)
+{
+    return priv->bind(fd);
+}
+
+bool
+EventSocket::connect(const char* ip, uint16_t port)
+{
+    return priv->connect(ip, port);
+}
+
+int
+EventSocket::write(const void* buf, int length)
+{
+    return priv->write(buf, length);
+}
+
+void
+EventSocket::setReadWatermark(int length)
+{
+    priv->setReadWatermark(length);
+}
+
+size_t
+EventSocket::getLength()
+{
+    return priv->getLength();
+}
+
+int
+EventSocket::read(void* buf, int length)
+{
+    return priv->read(buf, length);
+}
+
+int
+EventSocket::discard(int length)
+{
+    return priv->discard(length);
+}
+
 EventListener::EventListener(EventLoop& loop)
     : priv(new EventListenerLE2Priv(loop, *this))
 {

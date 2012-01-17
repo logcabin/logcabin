@@ -39,6 +39,76 @@ class EventSignalPriv;
 class EventTimerPriv;
 
 /**
+ * A socket object that processes TCP socket events.
+ */
+class EventSocket {
+  public:
+    /*
+     * EventMask flag, all values must be powers of two.
+     */
+    enum EventMask {
+        Null = 0,
+        Connected = 1,
+        Eof = 2,
+        Error = 4,
+    };
+    /**
+     * Constructor.
+     * \param loop EventLoop instance to bind to.
+     */
+    explicit EventSocket(EventLoop& loop);
+    virtual ~EventSocket();
+    /**
+     * Bind to a pre-existing file descriptor. This is useful for wrapping
+     * sockets that have been accepted.
+     * \param fd Socket file descriptor.
+     */
+    bool bind(int fd);
+    /**
+     * Connect to a new machine.
+     * \param ip IP address string to connect to.
+     * \param port Port of the target machine.
+     */
+    bool connect(const char* ip, uint16_t port);
+    /**
+     * Socket read callback.
+     */
+    virtual void read() = 0;
+    /**
+     * Socket write callback.
+     */
+    virtual void write() = 0;
+    /**
+     * Socket event callback.
+     */
+    virtual void event(EventMask events, int errnum) = 0;
+    /**
+     * Write a specified number of bytes to the socket.
+     */
+    virtual int write(const void* buf, int length);
+    /**
+     * Set the read watermark.
+     */
+    virtual void setReadWatermark(int length);
+  protected:
+    /**
+     * Get the length of the incoming data.
+     */
+    size_t getLength();
+    /**
+     * Read a specified number of bytes from the socket.
+     */
+    int read(void* buf, int length);
+    /**
+     * Discard a specified number of bytes from the socket.
+     */
+    int discard(int length);
+  private:
+    /// Pointer to the private implementation object.
+    std::unique_ptr<EventSocketPriv> priv;
+};
+
+/**
  * A listener object that binds to a TCP socket and accepts new connections.
  */
 class EventListener {
