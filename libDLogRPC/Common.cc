@@ -80,4 +80,19 @@ isPrintable(const void* data, size_t length)
             std::all_of(begin, end, display));
 }
 
+void
+replaceAll(std::string& haystack,
+           const std::string& needle,
+           const std::string& replacement)
+{
+    size_t startPos = 0;
+    while (true) {
+        size_t replacePos = haystack.find(needle, startPos);
+        if (replacePos == haystack.npos)
+            return;
+        haystack.replace(replacePos, needle.length(), replacement);
+        startPos = replacePos + replacement.length();
+    }
+}
+
 } // namespace DLog

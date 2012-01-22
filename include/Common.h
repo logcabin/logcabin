@@ -166,6 +166,18 @@ isPrintable(const char* str);
 bool
 isPrintable(const void* data, size_t length);
 
+/**
+ * For strings, replace all occurrences of 'needle' in 'haystack' with
+ * 'replacement'.
+ *
+ * If this isn't what you're looking for, the standard algorithm std::replace
+ * might help you.
+ */
+void
+replaceAll(std::string& haystack,
+           const std::string& needle,
+           const std::string& replacement);
+
 /// Like sizeof but returns a uint32_t.
 #define sizeof32(x) downCast<uint32_t>(sizeof(x))
 
