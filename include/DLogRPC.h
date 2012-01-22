@@ -71,18 +71,44 @@ class Message {
      * Serialize the message header.
      */
     void serializeHeader();
+    /**
+     * Deserialize the message header.
+     */
     void deserializeHeader();
+    /**
+     * Set the payload and payload length. The caller owns the pointer to the
+     * buffer and must free the memory themselves.
+     */
     void setPayload(void* buf, uint32_t len);
+    /**
+     * Get the payload.
+     */
     void *getPayload();
+    /**
+     * Get the payloads length.
+     */
     uint32_t getPayloadLen();
+    /**
+     * RPC Opcode
+     */
     Opcode rpcOp;
+    /**
+     * RPC Service Id
+     */
     ServiceId rpcService;
+    /**
+     * RPC Message Id
+     */
     MessageId rpcId;
   private:
     /// Header size.
     static const uint32_t HEADER_SIZE = 16;
-    /// Buffer for message header.
-    char header[HEADER_SIZE];
+    /**
+     * Buffer for a serialized message header. A serialized header contains
+     * a four byte payload length, two byte RPC opcode, two byte RPC service,
+     * and a eight byte message id.
+     */
+    uint8_t header[HEADER_SIZE];
     /// Message payload.
     void *payload;
     /// Payload length.
