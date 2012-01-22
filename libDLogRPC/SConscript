@@ -8,6 +8,7 @@ src = [
     "DLogEvent.cc",
     "DLogEventLE2.cc",
     "DLogRPC.cc",
+    "ProtoBuf.cc",
 ]
 env.StaticLibrary("DLogRPC",
                   src,
