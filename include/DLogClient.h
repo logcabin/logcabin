@@ -81,11 +81,23 @@ class Entry {
      * Constructor.
      * In this constructor, the entry ID defaults to NO_ID.
      * \param data
-     *      Data that is owned by the caller.
+     *      Data that is owned by the caller. May be NULL if no data is to be
+     *      associated with this entry.
      * \param length
      *      The number of bytes in data.
+     * \param invalidates
+     *      A list of entry IDs that this entry invalidates.
      */
-    Entry(const void* data, uint32_t length);
+    Entry(const void* data, uint32_t length,
+          const std::vector<EntryId>& invalidates = std::vector<EntryId>());
+    /**
+     * Constructor.
+     * In this constructor, the entry ID defaults to NO_ID and the data is not
+     * set.
+     * \param invalidates
+     *      A list of entry IDs that this entry invalidates.
+     */
+    explicit Entry(const std::vector<EntryId>& invalidates);
     /// Move constructor.
     Entry(Entry&& other);
     /// Destructor.
@@ -94,13 +106,16 @@ class Entry {
     Entry& operator=(Entry&& other);
     /// Return the entry ID.
     EntryId getId() const;
-    /// Return the binary blob of data.
+    /// Return a list of entries that this entry invalidates.
+    std::vector<EntryId> getInvalidates() const;
+    /// Return the binary blob of data, or NULL if none is set.
     const void* getData() const;
     /// Return the number of bytes in data.
     uint32_t getLength() const;
 
   private:
     EntryId id;
+    std::vector<EntryId> invalidates;
     std::unique_ptr<char[]> data;
     uint32_t length;
     Entry(const Entry&) = delete;
@@ -130,10 +145,8 @@ class Log {
 
     /**
      * Append a new entry to the log.
-     * \param data
-     *      The blob to append.
-     * \param invalidates
-     *      A list of previous entries to be removed as part of this operation.
+     * \param entry
+     *      The entry to append.
      * \param previousId
      *      Makes the operation conditional on this being the last ID in the
      *      log. Use NO_ID to unconditionally append.
@@ -143,13 +156,13 @@ class Log {
      * \throw LogDisappearedException
      *      If this log no longer exists because someone deleted it.
      */
-    EntryId append(Entry& data,
-                   const std::vector<EntryId>& invalidates =
-                        std::vector<EntryId>(),
+    EntryId append(const Entry& entry,
                    EntryId previousId = NO_ID);
 
     /**
      * Invalidate entries in the log.
+     * This is just a convenient short-cut to appending an Entry, for appends
+     * with no data.
      * \param invalidates
      *      A list of previous entries to be removed as part of this operation.
      * \param previousId
@@ -164,7 +177,7 @@ class Log {
      *      If this log no longer exists because someone deleted it.
      */
     EntryId invalidate(const std::vector<EntryId>& invalidates,
-                    EntryId previousId = NO_ID);
+                       EntryId previousId = NO_ID);
 
     /**
      * Read the entries starting at 'from' through head of the log.

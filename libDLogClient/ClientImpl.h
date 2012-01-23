@@ -15,6 +15,8 @@
 
 #include "DLogClient.h"
 #include "Ref.h"
+#include "ProtoBuf.h"
+#include "../build/proto/dlog.pb.h"
 
 #ifndef LIBDLOGCLIENT_CLIENTIMPL_H
 #define LIBDLOGCLIENT_CLIENTIMPL_H
@@ -38,18 +40,37 @@ class ClientImpl {
     void deleteLog(const std::string& logName);
     /// See Cluster::listLogs.
     std::vector<std::string> listLogs();
+    /// See Log::append and Log::invalidate.
+    EntryId append(uint64_t logId, const Entry& entry, EntryId previousId);
     /// See Log::read.
     std::vector<Entry> read(uint64_t logId, EntryId from);
-    /// See Log::append.
-    EntryId append(uint64_t logId, Entry* data,
-                   const std::vector<EntryId>& invalidates,
-                   EntryId previousId);
+    /// See Log::getLastId.
+    EntryId getLastId(uint64_t logId);
   private:
     RefHelper<ClientImpl>::RefCount refCount;
     std::unique_ptr<ErrorCallback> errorCallback;
     friend class DLog::RefHelper<ClientImpl>;
     friend class DLog::MakeHelper;
 };
+
+/**
+ * This is a placeholder for an actual RPC system.
+ */
+class PlaceholderRPC {
+  public:
+    typedef ProtoBuf::ClientRPC::OpCode OpCode;
+    virtual ~PlaceholderRPC() {}
+    /**
+     * Send and receive an RPC to server.
+     * This interface ignores any sort of network/host failures that might
+     * occur.
+     */
+    virtual void leader(OpCode opCode,
+                        const google::protobuf::Message& request,
+                        google::protobuf::Message& response) = 0;
+};
+extern PlaceholderRPC* placeholderRPC;
+
 
 } // namespace DLog::Client::Internal
 } // namespace DLog::Client

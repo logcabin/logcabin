@@ -68,16 +68,27 @@ ClientImplRef::operator->() const
 
 // class Entry
 
-Entry::Entry(const void* data, uint32_t length)
+Entry::Entry(const void* data, uint32_t length,
+             const std::vector<EntryId>& invalidates)
     : id(NO_ID)
+    , invalidates(invalidates)
     , data(new char[length])
     , length(length)
 {
     memcpy(this->data.get(), data, length);
 }
 
+Entry::Entry(const std::vector<EntryId>& invalidates)
+    : id(NO_ID)
+    , invalidates(invalidates)
+    , data()
+    , length(0)
+{
+}
+
 Entry::Entry(Entry&& other)
     : id(other.id)
+    , invalidates(std::move(other.invalidates))
     , data(other.data.release())
     , length(other.length)
 {
@@ -100,6 +111,12 @@ EntryId
 Entry::getId() const
 {
     return id;
+}
+
+std::vector<EntryId>
+Entry::getInvalidates() const
+{
+    return invalidates;
 }
 
 const void*
@@ -130,24 +147,29 @@ Log::~Log()
 }
 
 EntryId
-Log::append(Entry& data,
-            const std::vector<EntryId>& invalidates,
-            EntryId previousId)
+Log::append(const Entry& entry, EntryId previousId)
 {
-    return clientImpl->append(logId, &data, invalidates, previousId);
+    return clientImpl->append(logId, entry, previousId);
 }
 
 EntryId
 Log::invalidate(const std::vector<EntryId>& invalidates,
                 EntryId previousId)
 {
-    return clientImpl->append(logId, NULL, invalidates, previousId);
+    Entry entry(invalidates);
+    return clientImpl->append(logId, entry, previousId);
 }
 
 std::vector<Entry>
 Log::read(EntryId from)
 {
     return clientImpl->read(logId, from);
+}
+
+EntryId
+Log::getLastId()
+{
+    return clientImpl->getLastId(logId);
 }
 
 // class Cluster
