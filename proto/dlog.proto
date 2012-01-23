@@ -12,87 +12,191 @@
 // ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 // OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-package DLog;
+package DLog.ProtoBuf.ClientRPC;
 
-// open
+/**
+ * \file
+ * This file contains the formats for RPCs between clients and servers.
+ */
 
-message OpenRequest {
-    required string logName = 1;
-}
+/**
+ * Identifies which RPC is being executed.
+ */
+enum OpCode {
+    // Keep these numbers dense.
+    OPEN_LOG    = 101;
+    DELETE_LOG  = 102;
+    LIST_LOGS   = 103;
+    APPEND      = 104;
+    READ        = 105;
+    GET_LAST_ID = 106;
+};
 
-message OpenResponse {
-    required int32 logId = 1;
-}
-
-// delete
-
-message DeleteRequest {
-    required int32 logId = 1;
-}
-
-message DeleteResponse {
-}
-
-// list
-
-message ListRequest {
-}
-
-message ListResponse {
-    message Log {
-        required string logName = 1;
-        required int32 logId = 2;
+/**
+ * OpenLog RPC: Open or create a log by its name.
+ */
+message OpenLog {
+    message Request {
+        /**
+         * The name of the log, which may or may not exist.
+         */
+        required string log_name = 1;
     }
-    repeated Log logs = 1;
-}
-
-// append
-
-message AppendRequest {
-    required uint64 logId = 1;
-    repeated uint64 invalidates = 2;
-    required bytes blob = 3;
-    optional uint64 lastEntryId = 4;
-}
-
-message AppendResponse {
-    required uint64 entryId = 1;
-}
-
-// invalidate
-
-message InvalidateRequest {
-    required uint64 logId = 1;
-    repeated uint64 invalidates = 2;
-    optional uint64 lastEntryId = 3;
-}
-
-message InvalidateResponse {
-    required uint64 entryId = 1;
-}
-
-// read
-
-message ReadRequest {
-    required uint64 logId = 1;
-    optional uint64 entryId = 2;
-}
-
-message ReadResponse {
-    message Chunk {
-        required uint64 entryId = 1;
-        required bytes blob = 2;
+    message Response {
+        /**
+         * The ID of the newly created or existing log.
+         */
+        required uint64 log_id = 1;
     }
-    repeated Chunk chunks = 1;
 }
 
-// getHead
+/**
+ * DeleteLog RPC: Delete a log by its name.
+ */
+message DeleteLog {
+    message Request {
+        /**
+         * The name of the log, which may or may not exist.
+         */
+        required string log_name = 1;
+    }
 
-message GetHeadRequest {
-    required uint64 logId = 1;
+    message Response {
+    }
 }
 
-message GetHeadResponse {
-    required uint64 entryId = 1;
+/**
+ * ListLogs RPC: List all available logs.
+ */
+
+message ListLogs {
+    message Request {
+    }
+
+    message Response {
+        /**
+         * The name of every known log, in no particular order.
+         */
+        repeated string log_names = 1;
+    }
 }
 
+/**
+ * Append RPC: Append data and/or invalidate a previous append.
+ */
+message Append {
+    message Request {
+        /**
+         * The ID for the log to extend.
+         */
+        required uint64 log_id = 1;
+        /**
+         * If set and not NO_ENTRY_ID, the operation will only proceed if the
+         * head of the log is this entry ID.
+         */
+        optional uint64 previous_entry_id = 2;
+        /**
+         * A list of entry IDs that are no longer needed.
+         */
+        repeated uint64 invalidates = 3;
+        /**
+         * If set, the data stored in this entry.
+         */
+        optional bytes data = 4;
+    }
+    message Response {
+        // The following are mutually exclusive.
+        message OK {
+            /**
+             * Set to the ID of the newly appended entry, or NO_ENTRY_ID if the
+             * operation was rejected due to previous_entry_id being stale.
+             */
+            required uint64 entry_id = 1;
+        }
+        message LogDisappeared {
+        }
+        /**
+         * Set if the operation succeeded or was rejected due to
+         * previous_entry_id.
+         */
+        optional OK ok = 1;
+        /**
+         * Set if the log with the given ID does not exist.
+         */
+        optional LogDisappeared log_disappeared = 2;
+    }
+}
+
+/**
+ * Read RPC: Fetch a suffix of a log.
+ */
+message Read {
+    message Request {
+        required uint64 log_id = 1;
+        required uint64 from_entry_id = 2;
+    }
+
+    message Response {
+        // The following are mutually exclusive.
+        message OK {
+            message Entry {
+                /**
+                 * The ID of the entry.
+                 */
+                required uint64 entry_id = 1;
+                /**
+                 * A list of previous entries that this entry invalidates.
+                 */
+                repeated uint64 invalidates = 2;
+                /**
+                 * The data associated with this entry, if any.
+                 */
+                optional bytes data = 3;
+            }
+            /**
+             * The entries in the log starting at the given from_entry_id,
+             * inclusive.
+             */
+            repeated Entry entry = 1;
+        }
+        message LogDisappeared {
+        }
+        /**
+         * Set if the operation succeeded.
+         */
+        optional OK ok = 1;
+        /**
+         * Set if the log with the given ID does not exist.
+         */
+        optional LogDisappeared log_disappeared = 2;
+    }
+}
+
+/**
+ * GetLastId RPC: Determine the ID for the most recent entry in a log.
+ */
+message GetLastId {
+    message Request {
+        required uint64 log_id = 1;
+    }
+    message Response {
+        // The following are mutually exclusive.
+        message OK {
+            /**
+             * Set to the ID of the head of the log, or NO_ENTRY_ID if the
+             * log is empty.
+             */
+            required uint64 head_entry_id = 1;
+        }
+        message LogDisappeared {
+        }
+        /**
+         * Set if the operation succeeded.
+         */
+        optional OK ok = 1;
+        /**
+         * Set if the log with the given ID does not exist.
+         */
+        optional LogDisappeared log_disappeared = 2;
+    }
+}
