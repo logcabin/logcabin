@@ -37,6 +37,7 @@ class EventSocketPriv {
     virtual ~EventSocketPriv() { }
     virtual bool bind(int fd) = 0;
     virtual bool connect(const char* ip, uint16_t port) = 0;
+    virtual void disconnect() = 0;
     virtual int write(const void* buf, int length) = 0;
     virtual void setReadWatermark(int length) = 0;
     virtual size_t getLength() = 0;

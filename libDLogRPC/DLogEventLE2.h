@@ -59,6 +59,10 @@ class EventSocketLE2Priv : public EventSocketPriv {
      */
     virtual bool connect(const char* ip, uint16_t port);
     /**
+     * \copydoc EventSocket::disconnect
+     */
+    virtual void disconnect();
+    /**
      * \copydoc EventSocket::write
      */
     virtual int write(const void* buf, int length);

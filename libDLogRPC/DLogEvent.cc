@@ -48,6 +48,12 @@ EventSocket::connect(const char* ip, uint16_t port)
     return priv->connect(ip, port);
 }
 
+void
+EventSocket::disconnect()
+{
+    priv->disconnect();
+}
+
 int
 EventSocket::write(const void* buf, int length)
 {

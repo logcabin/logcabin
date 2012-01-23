@@ -83,6 +83,9 @@ EventSocketLE2Priv::EventSocketLE2Priv(EventLoop& loop, EventSocket& s)
 
 EventSocketLE2Priv::~EventSocketLE2Priv()
 {
+    if (bev) {
+        bufferevent_free(bev);
+    }
 }
 
 bool
@@ -138,6 +141,14 @@ EventSocketLE2Priv::connect(const char* ip, uint16_t port)
     }
 
     return true;
+}
+
+void
+EventSocketLE2Priv::disconnect()
+{
+    assert(bev);
+    bufferevent_free(bev);
+    bev = NULL;
 }
 
 int

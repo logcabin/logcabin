@@ -71,6 +71,10 @@ class EventSocket {
      */
     bool connect(const char* ip, uint16_t port);
     /**
+     * Disconnect from the machine.
+     */
+    void disconnect();
+    /**
      * Socket read callback.
      */
     virtual void readCB() = 0;
