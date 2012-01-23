@@ -78,6 +78,18 @@ EventSocket::discard(int length)
     return priv->discard(length);
 }
 
+void
+EventSocket::lock()
+{
+    priv->lock();
+}
+
+void
+EventSocket::unlock()
+{
+    priv->unlock();
+}
+
 EventListener::EventListener(EventLoop& loop)
     : priv(new EventListenerLE2Priv(loop, *this))
 {

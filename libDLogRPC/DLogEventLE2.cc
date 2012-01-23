@@ -29,12 +29,20 @@
 namespace DLog {
 namespace RPC {
 
+/********************************************************************
+ *
+ *
+ * class EventSocketLE2
+ *
+ *
+ ********************************************************************/
+
 static void
 EventSocketLE2ReadCB(struct bufferevent *bev, void *arg)
 {
     EventSocket *es = reinterpret_cast<EventSocket *>(arg);
 
-    es->read();
+    es->readCB();
 }
 
 static void
@@ -42,7 +50,7 @@ EventSocketLE2WriteCB(struct bufferevent *bev, void *arg)
 {
     EventSocket *es = reinterpret_cast<EventSocket *>(arg);
 
-    es->write();
+    es->writeCB();
 }
 
 static void
@@ -51,6 +59,8 @@ EventSocketLE2EventCB(struct bufferevent *bev, int16_t events, void *arg)
     EventSocket::EventMask eventMask = EventSocket::Null;
     int eventErrno = 0;
     EventSocket *es = reinterpret_cast<EventSocket *>(arg);
+
+    // TODO(ali): assert that these are the only event flags received.
 
     if (events & BEV_EVENT_CONNECTED)
         eventMask = EventSocket::EventMask(eventMask | EventSocket::Connected);
@@ -61,7 +71,7 @@ EventSocketLE2EventCB(struct bufferevent *bev, int16_t events, void *arg)
         eventErrno = errno;
     }
 
-    es->event(eventMask, eventErrno);
+    es->eventCB(eventMask, eventErrno);
 }
 
 EventSocketLE2Priv::EventSocketLE2Priv(EventLoop& loop, EventSocket& s)
@@ -166,13 +176,33 @@ EventSocketLE2Priv::discard(int length)
     return evbuffer_drain(input, length);
 }
 
+void
+EventSocketLE2Priv::lock()
+{
+    bufferevent_lock(bev);
+}
+
+void
+EventSocketLE2Priv::unlock()
+{
+    bufferevent_unlock(bev);
+}
+
+/********************************************************************
+ *
+ *
+ * class EventListenerLE2
+ *
+ *
+ ********************************************************************/
+
 static void
 EventListenerLE2AcceptCB(struct evconnlistener *listener, evutil_socket_t fd,
                          struct sockaddr *a, int slen, void *arg)
 {
     EventListener *el = reinterpret_cast<EventListener *>(arg);
 
-    el->accept(fd);
+    el->acceptCB(fd);
 }
 
 static void
@@ -180,7 +210,7 @@ EventListenerLE2ErrorCB(struct evconnlistener *lis, void *arg)
 {
     EventListener *el = reinterpret_cast<EventListener *>(arg);
 
-    el->error();
+    el->errorCB();
 }
 
 EventListenerLE2Priv::EventListenerLE2Priv(EventLoop& loop, EventListener& l)
@@ -223,6 +253,14 @@ EventListenerLE2Priv::bind(uint16_t port)
 
     return true;
 }
+
+/********************************************************************
+ *
+ *
+ * class EventSignalLE2
+ *
+ *
+ ********************************************************************/
 
 /**
  * EventSignal libevent2 C callback function. 
@@ -311,6 +349,14 @@ EventTimerLE2CB(evutil_socket_t fd, int16_t event, void *arg)
         et->addPeriodic(et->getPeriod());
     }
 }
+
+/********************************************************************
+ *
+ *
+ * class EventTimerLE2
+ *
+ *
+ ********************************************************************/
 
 /**
  * Constructor for the libevent EventTimer private object.

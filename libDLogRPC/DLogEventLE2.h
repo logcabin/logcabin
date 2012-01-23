@@ -78,6 +78,14 @@ class EventSocketLE2Priv : public EventSocketPriv {
      * \copydoc EventSocket::discard
      */
     virtual int discard(int length);
+    /**
+     * \copydoc EventSocket::lock
+     */
+    virtual void lock();
+    /**
+     * \copydoc EventSocket::unlock
+     */
+    virtual void unlock();
   private:
     /// libevent bufferevent
     struct bufferevent *bev;

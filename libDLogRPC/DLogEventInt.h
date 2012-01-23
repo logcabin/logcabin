@@ -42,6 +42,8 @@ class EventSocketPriv {
     virtual size_t getLength() = 0;
     virtual int read(void* buf, int length) = 0;
     virtual int discard(int length) = 0;
+    virtual void lock() = 0;
+    virtual void unlock() = 0;
 };
 
 /**

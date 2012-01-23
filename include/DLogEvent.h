@@ -73,15 +73,15 @@ class EventSocket {
     /**
      * Socket read callback.
      */
-    virtual void read() = 0;
+    virtual void readCB() = 0;
     /**
      * Socket write callback.
      */
-    virtual void write() = 0;
+    virtual void writeCB() = 0;
     /**
      * Socket event callback.
      */
-    virtual void event(EventMask events, int errnum) = 0;
+    virtual void eventCB(EventMask events, int errnum) = 0;
     /**
      * Write a specified number of bytes to the socket.
      */
@@ -90,6 +90,16 @@ class EventSocket {
      * Set the read watermark.
      */
     virtual void setReadWatermark(int length);
+    /**
+     * Lock the socket. This is free for use by the application and uses
+     * whatever locking mechanism that is provided by the event loop.
+     */
+    virtual void lock();
+    /**
+     * Unlock the socket. This is free for use by the application and uses
+     * whatever locking mechanism that is provided by the event loop.
+     */
+    virtual void unlock();
   protected:
     /**
      * Get the length of the incoming data.
@@ -128,11 +138,11 @@ class EventListener {
      * Accept callback when a socket is accepted.
      * \param fd Incoming socket fd handle.
      */
-    virtual void accept(int fd) = 0;
+    virtual void acceptCB(int fd) = 0;
     /**
      * Error callback reporting something went wrong.
      */
-    virtual void error(void) = 0;
+    virtual void errorCB(void) = 0;
   private:
     /// Pointer to the private implementation object.
     std::unique_ptr<EventListenerPriv> priv;
