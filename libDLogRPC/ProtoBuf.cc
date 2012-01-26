@@ -73,11 +73,7 @@ void
 fromString(const std::string& str, google::protobuf::Message& protoBuf)
 {
     google::protobuf::LogSilencer _;
-    if (!google::protobuf::TextFormat::ParseFromString(str, &protoBuf)) {
-        throw std::runtime_error(
-                    std::string("Missing fields in protocol buffer: ") +
-                    protoBuf.InitializationErrorString());
-    }
+    google::protobuf::TextFormat::ParseFromString(str, &protoBuf);
 }
 
 } // namespace DLog::ProtoBuf::Internal

@@ -70,11 +70,10 @@ void fromString(const std::string& str, google::protobuf::Message& protoBuf);
  *      A derived class of ProtoBuf::Message.
  * \param str
  *      The string representation of the protocol buffer message.
+ *      Fields that are missing will not throw an error, but the resulting
+ *      protocol buffer may be less useful.
  * \return
  *      The parsed protocol buffer.
- * \throw std::runtime_error
- *      The given string does not define all the required fields for the
- *      protocol buffer.
  */
 template<typename ProtoBuf>
 ProtoBuf

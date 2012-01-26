@@ -48,8 +48,9 @@ TEST(ProtoBufTest, fromString) {
     m = fromString<TestMessage>("field_a: 3, field_b: 5");
     EXPECT_EQ("field_a: 3 field_b: 5", m.ShortDebugString());
 
-    EXPECT_THROW(fromString<TestMessage>(""),
-                 std::runtime_error);
+    // missing fields
+    m = fromString<TestMessage>("");
+    EXPECT_EQ("", m.ShortDebugString());
 }
 
 TEST(ProtoBufTest, dumpString) {
