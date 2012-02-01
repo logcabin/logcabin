@@ -16,6 +16,9 @@
 #include "DLogEvent.h"
 #include "DLogRPC.h"
 
+#ifndef LIBDLOGRPC_DLOGRPCINT_H
+#define LIBDLOGRPC_DLOGRPCINT_H
+
 namespace DLog {
 namespace RPC {
 
@@ -23,27 +26,46 @@ namespace RPC {
  * Server connection object that processing incoming messages, creates
  * message objects, and calls the requested service.
  */
-class ServerConnection : public EventSocket
+class ServerConnection : private EventSocket
 {
   public:
     /**
      * Constructor.
      */
-    ServerConnection();
+    ServerConnection(Server &server,
+                     EventLoop &eventLoop,
+                     ConnectionId id,
+                     int fd);
     virtual ~ServerConnection();
     /**
      * Process incomin data that is pending from the socket.
      */
-    virtual void read();
+    virtual void readCB();
     /**
      * Notify us that socket is ready to transmit more data.
      */
-    virtual void write();
+    virtual void writeCB();
     /**
      * Socket experienced a special event.
      */
-    virtual void event(EventMask events, int errnum);
+    virtual void eventCB(EventMask events, int errnum);
+    /**
+     * Send a response through this connection.
+     */
+    virtual void sendResponse(Message& message);
   private:
+    /// Connection state machine states.
+    enum class ConnectionState {
+        HEADER,
+        BODY,
+    };
+    /// ConnectionId
+    ConnectionId connectionId;
+    /// Temporary message buffer.
+    Message msg;
+    /// Current connection state.
+    ConnectionState connState;
+    /// Pointer to server object.
     Server *server;
     ServerConnection(const ServerConnection&) = delete;
     ServerConnection& operator=(const ServerConnection&) = delete;
@@ -52,24 +74,27 @@ class ServerConnection : public EventSocket
 /**
  * Server listener object that accepts new incoming requests.
  */
-class ServerListener : public EventListener
+class ServerListener : private EventListener
 {
   public:
     /**
      * Constructor.
      */
-    ServerListener();
+    ServerListener(Server &rpcServer, EventLoop &eventLoop);
     virtual ~ServerListener();
+    using EventListener::bind;
     /**
      * A new connection was requested.
      */
-    virtual void accept(int fd);
+    virtual void acceptCB(int fd);
     /**
      * Process an error while trying to establish the listener socket.
      */
-    virtual void error(void);
+    virtual void errorCB(void);
   private:
+    ConnectionId nextId;
     Server *server;
+    EventLoop *loop;
     ServerListener(const ServerListener&) = delete;
     ServerListener& operator=(const ServerListener&) = delete;
 };
@@ -77,3 +102,4 @@ class ServerListener : public EventListener
 } // namespace
 } // namespace
 
+#endif /* LIBDLOGRPC_DLOGRPCINT_H */

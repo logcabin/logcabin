@@ -23,6 +23,11 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <unordered_map>
+#include <mutex>
+#include <condition_variable>
+
+#include "DLogEvent.h"
 
 #ifndef DLOGRPC_H
 #define DLOGRPC_H
@@ -30,18 +35,10 @@
 namespace DLog {
 namespace RPC {
 
-/**
- * This exception is thrown when failing to establish a connection to a host.
- */
-class HostConnectFailure : public std::exception {
-};
-
-/**
- * This exception is thrown when an RPC is attempted while the host is not
- * connected.
- */
-class HostNotConnected : public std::exception {
-};
+// Forward declarations
+class Server;
+class ServerConnection;
+class ServerListener;
 
 /// RPC Service Id
 typedef uint16_t ServiceId;
@@ -49,11 +46,14 @@ typedef uint16_t ServiceId;
 typedef uint16_t Opcode;
 /// RPC Message Id
 typedef uint64_t MessageId;
+/// RPC Connection Id
+typedef uint32_t ConnectionId;
 
 /// RPC Service Ids
-enum {
-    SERVICE_DLOG,
-    SERVICE_REPLICATION,
+enum class RPCServices {
+    ECHO,
+    DLOG,
+    REPLICATION,
 };
 
 /**
@@ -79,15 +79,15 @@ class Message {
      * Set the payload and payload length. The caller owns the pointer to the
      * buffer and must free the memory themselves.
      */
-    void setPayload(void* buf, uint32_t len);
+    void setPayload(char* buf, uint32_t len);
     /**
      * Get the payload.
      */
-    void *getPayload();
+    char *getPayload() const;
     /**
      * Get the payloads length.
      */
-    uint32_t getPayloadLen();
+    uint32_t getPayloadLength() const;
     /**
      * RPC Opcode
      */
@@ -100,9 +100,15 @@ class Message {
      * RPC Message Id
      */
     MessageId rpcId;
-  private:
+    /**
+     * Connection Id. This field is set by the Server or Client object to
+     * identify the connection which the message came from or should be
+     * routed to.
+     */
+    ConnectionId connectionId;
     /// Header size.
     static const uint32_t HEADER_SIZE = 16;
+  private:
     /**
      * Buffer for a serialized message header. A serialized header contains
      * a four byte payload length, two byte RPC opcode, two byte RPC service,
@@ -110,9 +116,11 @@ class Message {
      */
     uint8_t header[HEADER_SIZE];
     /// Message payload.
-    void *payload;
+    char *payload;
     /// Payload length.
     uint32_t payloadLen;
+    friend class Client;
+    friend class ServerConnection;
     Message(const Message&) = delete;
     Message& operator=(const Message&) = delete;
 };
@@ -122,7 +130,7 @@ class Message {
  */
 class Service {
   public:
-    virtual ~Service() = 0;
+    virtual ~Service() { }
     /**
      * Return the service id of this service.
      * \return
@@ -131,18 +139,18 @@ class Service {
     virtual ServiceId getServiceId() const = 0;
     /**
      * Process an incoming service request.
+     * \param server,
+     *      RPC server instance.
      * \param op
      *      RPC opcode
      * \param request
      *      RPC request message
-     * \param reply
-     *      A reply message that has a header already initialized.
-     * \return
-     *      RPC response message.
      */
-    virtual void processMessage(Opcode op,
-                                std::unique_ptr<Message> request,
-                                std::unique_ptr<Message> reply) = 0;
+    virtual void processMessage(Server& server,
+                                Opcode op,
+                                Message& request) = 0;
+  protected:
+    Service() { }
   private:
     Service(const Service&) = delete;
     Service& operator=(const Service&) = delete;
@@ -157,14 +165,21 @@ class Response {
     /**
      * Constructor.
      */
-    Response();
+    explicit Response(MessageId id);
     virtual ~Response();
     /**
      * Is the response ready for processing?
      * \return
-     *      True if the message response is ready, otherwise false.
+     *      True if the message response is ready or failure received,
+     *      otherwise false the request is still in-flight.
      */
     bool isReady();
+    /**
+     * Was this a failed response?
+     * \return
+     *      True if some error or timeout was triggered.
+     */
+    bool isFailed();
     /**
      * Get the message id.
      * \return
@@ -174,7 +189,13 @@ class Response {
     /**
      * Get the message response.
      */
-    virtual Message& getResponse();
+    Message& getResponse();
+    /**
+     * Wait for the message to be received. This function only works if the
+     * default callback methods processResponse and processFailure are called.
+     */
+    void wait();
+  protected:
     /**
      * An event callback a derived class may implement to process the response.
      * \param msg
@@ -187,12 +208,24 @@ class Response {
      */
     virtual void processFailure();
   private:
-    /// Is the message ready?
+    /**
+     * Set the message response object. The ownership of that object is always
+     * transfered to the Response object that will free the message payload.
+     */
+    void setResponse(Message *msg);
+    /// Is the message ready or failed?
     bool ready;
+    /// Was there a failure or is the message valid?
+    bool failed;
     /// Message id
     MessageId msgId;
     /// Message response
-    Message* response;
+    Message *response;
+    /// Response state mutex
+    std::mutex respMutex;
+    /// Response condition variable
+    std::condition_variable respCondition;
+    friend class Client;
     Response(const Response&) = delete;
     Response& operator=(const Response&) = delete;
 };
@@ -203,22 +236,34 @@ class Response {
  */
 class Server {
   public:
-    explicit Server(uint16_t port);
+    Server(EventLoop &eventLoop, uint16_t port);
     ~Server();
     /**
      * Register an Service object with this session.
      * \param s
      *      A pointer to an Service object.
      */
-    void registerService(std::unique_ptr<Service> s);
+    void registerService(Service* s);
     /**
      * Send a reply back to the caller. Only service objects should send this
      * type of message.
      * \param reply
      *      Message to reply back with.
      */
-    void sendResponse(std::unique_ptr<Message> reply);
+    void sendResponse(Message& reply);
   private:
+    /// List of registered services
+    std::unordered_map<ServiceId, Service*> services;
+    /// List of connected connections
+    std::unordered_map<ConnectionId, ServerConnection*> connections;
+    /// Server listener
+    ServerListener* listener;
+    /// Event loop pointer
+    EventLoop *loop;
+    friend class ServerConnection;
+    friend class ServerListener;
+    Server(const Server&) = delete;
+    Server& operator=(const Server&) = delete;
 };
 
 class EventLoop;
@@ -226,7 +271,7 @@ class EventLoop;
 /**
  * RPC clients may only initiate RPC requests and receive responses.
  */
-class Client {
+class Client : private EventSocket {
   public:
     /**
      * Constructor.
@@ -242,18 +287,42 @@ class Client {
      * \param port
      *      Server port number.
      */
-    void connect(const std::string& host, uint16_t port);
+    bool connect(const std::string& host, uint16_t port);
+    /**
+     * Disconnect from server.
+     */
     void disconnect();
     /**
-     * Send a message and register a response object.
-     * \param response
-     *      Response object for this message.
+     * Asynchronously send a message.
      * \param message
      *      Message to transmit.
+     * \return
+     *      A response object that encapsulates a received message.
      */
-    void send(Response& response, Message& message);
-    Response send(Message& message);
+    Response* send(Message& message);
+  protected:
+    /// Read callback
+    virtual void readCB();
+    /// Write callback
+    virtual void writeCB();
+    /// Event callback
+    virtual void eventCB(EventMask events, int errnum);
   private:
+    /// Connection state machine states.
+    enum class ConnectionState {
+        HEADER,
+        BODY,
+    };
+    /// Current connection state.
+    ConnectionState connState;
+    /// Temporary message
+    Message *msg;
+    /// Next message id.
+    MessageId nextId;
+    /// Map of outstanding message requests.
+    std::unordered_map<MessageId, Response*> outstanding;
+    Client(const Client&) = delete;
+    Client& operator=(const Client&) = delete;
 };
 
 } // namespace

@@ -13,11 +13,55 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <string.h>
+#include <pthread.h>
+
+#include <DLogEvent.h>
 #include <DLogRPC.h>
 #include <DLogClient.h>
 
+using namespace DLog;
+
+const char* msg = "Hello World!";
+RPC::EventLoop* eventLoop;
+
+void *enterLoop(void *arg)
+{
+    // XXX: Hack to keep us in the loop until the client connects.
+    while (1)
+        eventLoop->processEvents();
+    return NULL;
+}
+
 int main(int argc, char *argv[])
 {
+    char buf[128];
+    pthread_t loopthread;
+    eventLoop = RPC::EventLoop::makeEventLoop();
+    RPC::Client client(*eventLoop);
+
+    strcpy((char *)&buf, msg);
+    pthread_create(&loopthread, NULL, enterLoop, NULL);
+
+    client.connect("127.0.0.1", 4004);
+    LOG(NOTICE, "Connected!");
+
+    for (int i = 0; i < 1000; i++) {
+        RPC::Message m;
+        RPC::Response *r;
+        m.rpcService = static_cast<RPC::ServiceId>(RPC::RPCServices::ECHO);
+        m.setPayload((char *)&buf, (uint32_t)(strlen(msg) + 1));
+        r = client.send(m);
+        r->wait();
+        LOG(NOTICE, "Message received!");
+        assert(r->isReady());
+        assert(!r->isFailed());
+    }
+
+    LOG(NOTICE, "Finished!");
+
+    exit(0);
+
     return 0;
 }
 

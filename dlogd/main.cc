@@ -22,7 +22,9 @@
 #include "Config.h"
 #include "Debug.h"
 #include "DLogEvent.h"
+#include "DLogRPC.h"
 #include "DLogStorage.h"
+#include "DLogEchoService.h"
 #include "LogManager.h"
 #include "WorkDispatcher.h"
 
@@ -132,7 +134,7 @@ class LogManagerReady : public LogManager::InitializeCallback {
   public:
     void initialized() {
         LOG(NOTICE, "LogManager is ready");
-        PANIC("Initialize the RPC system here...");
+        //PANIC("Initialize the RPC system here...");
     }
     friend class RefHelper<LogManagerReady>;
     friend class MakeHelper;
@@ -165,7 +167,15 @@ int main(int argc, char *argv[])
     // Set up and run the main loop.
     // TODO(ongaro): memory leak
     RPC::EventLoop* eventLoop = RPC::EventLoop::makeEventLoop();
+    RPC::Server rpcServer(*eventLoop, 4004);
+    RPC::EchoService echoService;
+    rpcServer.registerService(&echoService);
+
     workDispatcher->setNotifier(make<WorkDispatcherNotifier>(*eventLoop));
-    while (true)
-        eventLoop->processEvents();
+
+    /**
+     * Start the event processing loop and this should not return until
+     * we close the listening socket and all pending operations complete.
+     */
+    eventLoop->processEvents();
 }

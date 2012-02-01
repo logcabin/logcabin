@@ -5,6 +5,7 @@ src = [
     "Checksum.cc",
     "Config.cc",
     "Debug.c",
+    "DLogEchoService.cc",
     "DLogEvent.cc",
     "DLogEventLE2.cc",
     "DLogRPC.cc",
