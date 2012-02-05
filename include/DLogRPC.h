@@ -139,7 +139,7 @@ class Service {
     virtual ServiceId getServiceId() const = 0;
     /**
      * Process an incoming service request.
-     * \param server,
+     * \param server
      *      RPC server instance.
      * \param op
      *      RPC opcode

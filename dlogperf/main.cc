@@ -40,7 +40,7 @@ int main(int argc, char *argv[])
     eventLoop = RPC::EventLoop::makeEventLoop();
     RPC::Client client(*eventLoop);
 
-    strcpy((char *)&buf, msg);
+    strncpy(buf, msg, sizeof(buf));
     pthread_create(&loopthread, NULL, enterLoop, NULL);
 
     client.connect("127.0.0.1", 4004);
@@ -50,7 +50,7 @@ int main(int argc, char *argv[])
         RPC::Message m;
         RPC::Response *r;
         m.rpcService = static_cast<RPC::ServiceId>(RPC::RPCServices::ECHO);
-        m.setPayload((char *)&buf, (uint32_t)(strlen(msg) + 1));
+        m.setPayload(buf, downCast<uint32_t>(strlen(msg) + 1));
         r = client.send(m);
         r->wait();
         LOG(NOTICE, "Message received!");

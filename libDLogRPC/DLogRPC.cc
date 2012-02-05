@@ -357,7 +357,7 @@ ServerListener::ServerListener(Server &rpcServer, EventLoop &eventLoop)
      * Choose a random starting value for connection id. This should
      * not be necessary, but it just makes debugging a bit easier.
      */
-    nextId = rand();
+    nextId = rand(); // NOLINT
 }
 
 ServerListener::~ServerListener()
@@ -399,7 +399,7 @@ Client::Client(EventLoop& loop)
       nextId(0),
       outstanding()
 {
-    nextId = ((uint64_t)rand() << 32) + rand();
+    nextId = ((uint64_t)rand() << 32) + rand(); // NOLINT
 }
 
 Client::~Client()

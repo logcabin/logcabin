@@ -37,14 +37,7 @@ class ReplicationService : public RPC::Service {
      */
     ReplicationService();
     virtual ~ReplicationService();
-    /**
-     * \copydoc RPC::Service::getServiceId
-     */
     virtual RPC::ServiceId getServiceId() const;
-    /**
-     * Process a replication service request.
-     * \copydetails RPC::Service::processMessage
-     */
     virtual void processMessage(RPC::Opcode op,
                                 std::unique_ptr<RPC::Message> request,
                                 std::unique_ptr<RPC::Message> reply);

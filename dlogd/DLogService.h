@@ -37,14 +37,7 @@ class DLogService : public RPC::Service {
      */
     DLogService();
     virtual ~DLogService();
-    /**
-     * \copydoc RPC::Service::getServiceId
-     */
     virtual RPC::ServiceId getServiceId() const;
-    /**
-     * Process a DLog service request.
-     * \copydetails RPC::Service::processMessage
-     */
     virtual void processMessage(RPC::Opcode op,
                                 std::unique_ptr<RPC::Message> request,
                                 std::unique_ptr<RPC::Message> reply);
