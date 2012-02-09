@@ -22,6 +22,9 @@
 
 namespace DLog {
 
+// The name EventTimerTest clashes with LogCabin::Event::Timer's test, which
+// replaces this one.
+#if 0
 
 class EventTimerTest : public ::testing::Test {
   public:
@@ -86,5 +89,7 @@ TEST_F(EventTimerTest, remove) {
     EXPECT_FALSE(timer.isPending());
     EXPECT_EQ(0, timer.triggerCount);
 }
+
+#endif
 
 } // namespace DLog

@@ -23,10 +23,14 @@
  */
 namespace LibEvent {
 class event_base;
+class event;
 }
 
 namespace LogCabin {
 namespace Event {
+
+// forward declarations
+class Timer;
 
 /**
  * This class contains an event loop based on the libevent2 library.
@@ -65,6 +69,9 @@ class Loop {
      * This is never NULL.
      */
     LibEvent::event_base* base;
+
+    // Event types are friends, since they need to mess with 'base'.
+    friend class Timer;
 
     // EventLoop is not copyable.
     Loop(const Loop&) = delete;

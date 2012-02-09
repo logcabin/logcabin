@@ -33,9 +33,11 @@
 
 namespace LibEvent {
 class event_base;
+class event;
 }
 
 class event_base;
+class event;
 
 /**
  * Converts from fake LibEvent type to actual libevent type.
@@ -47,6 +49,13 @@ unqualify(LibEvent::event_base* base)
     return reinterpret_cast<event_base*>(base);
 }
 
+/// \copydoc unqualify()
+inline event*
+unqualify(LibEvent::event* event)
+{
+    return reinterpret_cast<struct event*>(event);
+}
+
 /**
  * Converts from actual libevent type to fake LibEvent type.
  * Used to avoid polluting the global namespace.
@@ -56,5 +65,13 @@ qualify(event_base* base)
 {
     return reinterpret_cast<LibEvent::event_base*>(base);
 }
+
+/// \copydoc qualify()
+inline LibEvent::event*
+qualify(event* event)
+{
+    return reinterpret_cast<LibEvent::event*>(event);
+}
+
 
 #endif /* LOGCABIN_EVENT_INTERNAL_H */
