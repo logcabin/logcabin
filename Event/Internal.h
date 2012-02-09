@@ -39,6 +39,17 @@ class event;
 class event_base;
 class event;
 
+
+namespace LibEvent {
+
+/**
+ * A bit-wise OR of events such as EV_READ, EV_WRITE.
+ */
+// cpplint complains about the use of short, but it wasn't our choice here.
+typedef short EventMask; // NOLINT
+
+} // namespace LibEvent
+
 /**
  * Converts from fake LibEvent type to actual libevent type.
  * Used to avoid polluting the global namespace.
@@ -72,6 +83,5 @@ qualify(event* event)
 {
     return reinterpret_cast<LibEvent::event*>(event);
 }
-
 
 #endif /* LOGCABIN_EVENT_INTERNAL_H */

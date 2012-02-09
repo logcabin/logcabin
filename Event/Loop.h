@@ -30,6 +30,7 @@ namespace LogCabin {
 namespace Event {
 
 // forward declarations
+class File;
 class Signal;
 class Timer;
 
@@ -72,6 +73,7 @@ class Loop {
     LibEvent::event_base* base;
 
     // Event types are friends, since they need to mess with 'base'.
+    friend class File;
     friend class Signal;
     friend class Timer;
 
