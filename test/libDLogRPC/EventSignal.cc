@@ -22,6 +22,9 @@
 
 namespace DLog {
 
+// The name EventSignalTest clashes with LogCabin::Event::Signal's test, which
+// replaces this one.
+#if 0
 
 class EventSignalTest : public ::testing::Test {
   public:
@@ -84,5 +87,7 @@ TEST_F(EventSignalTest, getSignal) {
     EXPECT_EQ(SIGUSR1, signal.getSignal());
     EXPECT_FALSE(signal.caughtSignal);
 }
+
+#endif
 
 } // namespace DLog
