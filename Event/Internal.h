@@ -48,6 +48,16 @@ namespace LibEvent {
 // cpplint complains about the use of short, but it wasn't our choice here.
 typedef short EventMask; // NOLINT
 
+/**
+ * This allows other files to make sure the libevent library has been
+ * initialized. The concern is that other files may depend on this happening,
+ * but their code may be copied into some other project that doesn't initialize
+ * libevent properly. This boolean allows those files to create a build-time
+ * dependency on this file and Internal.cc. It will always have the value
+ * true.
+ */
+extern const bool initialized;
+
 } // namespace LibEvent
 
 /**

@@ -13,47 +13,21 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <assert.h>
+#include <event2/event.h>
+#include <event2/thread.h>
+
 #include "include/Debug.h"
 #include "Internal.h"
 #include "Loop.h"
 
-#include <event2/event.h>
-#include <event2/thread.h>
-
 namespace LogCabin {
 namespace Event {
-
-namespace {
-
-/**
- * This function runs before main().
- * Thanks to libevent bug #3479058, it's best to run evthread_use_pthreads at
- * initialization time. Calling it twice during execution of the program (or
- * tests) results in uninitialized memory accesses in libevent.
- */
-bool
-init()
-{
-    int r = evthread_use_pthreads();
-    if (r == -1) {
-        PANIC("evthread_use_pthreads failed: "
-              "Make sure you've built libevent with pthreads support "
-              "and linked against libevent_pthreads as well as libevent.");
-    }
-    return true;
-}
-
-/**
- * This will always have the value true.
- * Its purpose is to call init() during initialization.
- */
-bool dummy = init();
-
-} // anonymous namespace
 
 Loop::Loop()
     : base(NULL)
 {
+    assert(LibEvent::initialized);
     base = qualify(event_base_new());
     if (base == NULL) {
         PANIC("event_base_new failed: "
