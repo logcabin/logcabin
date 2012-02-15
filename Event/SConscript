@@ -1,0 +1,10 @@
+Import('env')
+
+src = [
+    "Loop.cc",
+]
+
+env.StaticLibrary("LogCabinEvent",
+                  src,
+                  CPPPATH = [ "#" ])
+

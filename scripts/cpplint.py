@@ -1031,7 +1031,7 @@ def CheckForHeaderGuard(filename, lines, error):
   # for backward compatibility.
   if ifndef != cppvar and not Search(r'\bNOLINT\b', lines[ifndef_linenum]):
     error_level = 0
-    if ifndef != cppvar + '_':
+    if ifndef != cppvar + '_' and ifndef != 'LOGCABIN_' + cppvar:
       error_level = 5
 
     error(filename, ifndef_linenum, 'build/header_guard', error_level,

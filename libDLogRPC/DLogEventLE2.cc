@@ -427,8 +427,12 @@ EventTimerLE2Priv::isPending()
  */
 EventLoopLE2Impl::EventLoopLE2Impl() : base(NULL)
 {
+#if 0
+    // This is done statically in Event/Loop.cc now. It's unsafe to call
+    // evthread_use_pthreads() twice.
     int r = evthread_use_pthreads();
     assert(r == 0);
+#endif
     base = event_base_new();
     assert(base != NULL);
 }

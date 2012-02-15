@@ -14,6 +14,7 @@
  */
 
 #include <stdint.h>
+#include <stdlib.h>
 
 #ifndef DEBUG_H
 #define DEBUG_H
