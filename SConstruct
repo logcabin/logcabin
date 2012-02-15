@@ -68,6 +68,7 @@ SConscript('dlogd/SConscript', variant_dir='build/dlogd')
 SConscript('dlogperf/SConscript', variant_dir='build/dlogperf')
 SConscript('proto/SConscript', variant_dir='build/proto')
 SConscript('test/SConscript', variant_dir='build/test')
+SConscript('Core/SConscript', variant_dir='build/Core')
 SConscript('Event/SConscript', variant_dir='build/Event')
 
 # This function is taken from http://www.scons.org/wiki/PhonyTargets

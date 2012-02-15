@@ -39,6 +39,12 @@ init()
               "and linked against libevent_pthreads as well as libevent.");
     }
 
+    r = evutil_secure_rng_init();
+    if (r == -1) {
+        PANIC("evutil_secure_rng_init failed: "
+              "The random number generator couldn't be seeded.");
+    }
+
     return true;
 }
 

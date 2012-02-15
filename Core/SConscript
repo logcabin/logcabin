@@ -1,0 +1,10 @@
+Import('env')
+
+src = [
+    "Random.cc",
+]
+
+env.StaticLibrary("LogCabinCore",
+                  src,
+                  CPPPATH = [ "#" ])
+

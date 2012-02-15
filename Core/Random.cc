@@ -1,0 +1,70 @@
+/* Copyright (c) 2012 Stanford University
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR(S) DISCLAIM ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL AUTHORS BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+#include <assert.h>
+#include <event2/util.h>
+
+#include "Core/Random.h"
+#include "Event/Internal.h"
+
+namespace LogCabin {
+namespace Core {
+namespace Random {
+
+namespace {
+
+/**
+ * Fill a variable of type T with some random bytes.
+ */
+template<typename T>
+T
+getRandomBytes()
+{
+    assert(LibEvent::initialized);
+
+    T buf;
+    evutil_secure_rng_get_bytes(&buf, sizeof(buf));
+    return buf;
+}
+
+} // anonymous namespace
+
+uint8_t
+random8()
+{
+    return getRandomBytes<uint8_t>();
+}
+
+uint16_t
+random16()
+{
+    return getRandomBytes<uint16_t>();
+}
+
+uint32_t
+random32()
+{
+    return getRandomBytes<uint32_t>();
+}
+
+uint64_t
+random64()
+{
+    return getRandomBytes<uint64_t>();
+}
+
+} // namespace LogCabin::Core::Random
+} // namespace LogCabin::Core
+} // namespace LogCabin

@@ -50,10 +50,11 @@ env.Program("test",
               "#build/libDLogStorage/WorkDispatcher.o",
               "#build/proto/dlog.pb.o",
               "#build/test/libDLogRPC/ProtoBuf.pb.o",
-
-            ] + Glob("#build/Event/*Test.cc"),
-            LIBPATH = [ "#build/test", "#build/Event" ],
-            LIBS = [ "libLogCabinEvent",
+            ] +
+            Glob("#build/Core/*Test.cc") +
+            Glob("#build/Event/*Test.cc"),
+            LIBPATH = [ "#build/test", "#build/Event", "#build/Core" ],
+            LIBS = [ "libLogCabinEvent", "libLogCabinCore",
                      "gtest", "pthread", "protobuf", "rt", "cryptopp",
                      "event_core-2.0", "event_pthreads-2.0" ],
             CPPPATH = ["#", "#include", "#gtest/include"],
