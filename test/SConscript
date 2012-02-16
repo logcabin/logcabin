@@ -10,6 +10,25 @@ env.StaticLibrary("#build/test/gtest",
                  CPPPATH = [ "#gtest", "#gtest/include" ],
                  CPPFLAGS = [ "-g", "-DDEBUG" ],
                  CXXFLAGS = "-std=c++0x")
+
+def SrcToVariant(srcs, variant_dir):
+    """Find the corresponding paths to source files in a variant directory."""
+
+    root = str(Dir('#'))
+    variant_dir = str(Dir(variant_dir))
+    return [str(src).replace(root, variant_dir) for src in srcs]
+
+def GetTestFiles(src_dirs, variant_dir):
+    """Find the test files to build in the given source directories.
+
+    Given a list of source directories, return a list of strings naming the
+    source copies to be placed in variant_dir of files ending in Test.cc that
+    are directly contained in those directories.
+    """
+    return Flatten([SrcToVariant(Glob("%s/*Test.cc" % src_dir),
+                                 variant_dir=variant_dir)
+                    for src_dir in src_dirs])
+
 env.Program("test",
             [
               "TestRunner.cc",
@@ -51,8 +70,10 @@ env.Program("test",
               "#build/proto/dlog.pb.o",
               "#build/test/libDLogRPC/ProtoBuf.pb.o",
             ] +
-            Glob("#build/Core/*Test.cc") +
-            Glob("#build/Event/*Test.cc"),
+            GetTestFiles([
+                "#Core",
+                "#Event",
+            ], variant_dir='#build'),
             LIBPATH = [ "#build/test", "#build/Event", "#build/Core" ],
             LIBS = [ "libLogCabinEvent", "libLogCabinCore",
                      "gtest", "pthread", "protobuf", "rt", "cryptopp",
