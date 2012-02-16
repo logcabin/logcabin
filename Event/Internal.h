@@ -34,11 +34,12 @@
 namespace LibEvent {
 class event_base;
 class event;
+class evconnlistener;
 }
 
 class event_base;
 class event;
-
+class evconnlistener;
 
 namespace LibEvent {
 
@@ -77,6 +78,13 @@ unqualify(LibEvent::event* event)
     return reinterpret_cast<struct event*>(event);
 }
 
+/// \copydoc unqualify()
+inline evconnlistener*
+unqualify(LibEvent::evconnlistener* listener)
+{
+    return reinterpret_cast<struct evconnlistener*>(listener);
+}
+
 /**
  * Converts from actual libevent type to fake LibEvent type.
  * Used to avoid polluting the global namespace.
@@ -92,6 +100,13 @@ inline LibEvent::event*
 qualify(event* event)
 {
     return reinterpret_cast<LibEvent::event*>(event);
+}
+
+/// \copydoc qualify()
+inline LibEvent::evconnlistener*
+qualify(evconnlistener* listener)
+{
+    return reinterpret_cast<LibEvent::evconnlistener*>(listener);
 }
 
 #endif /* LOGCABIN_EVENT_INTERNAL_H */

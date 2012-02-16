@@ -31,6 +31,12 @@ class event;
 }
 
 namespace LogCabin {
+
+// forward declarations
+namespace RPC {
+class TCPListener;
+}
+
 namespace Event {
 
 // forward declarations
@@ -168,6 +174,7 @@ class Loop {
     friend class File;
     friend class Signal;
     friend class Timer;
+    friend class RPC::TCPListener;
 
     // Loop is not copyable.
     Loop(const Loop&) = delete;
