@@ -1,0 +1,10 @@
+Import('env')
+
+src = [
+    "Address.cc",
+]
+
+env.StaticLibrary("LogCabinRPC",
+                  src,
+                  CPPPATH = [ "#" ])
+
