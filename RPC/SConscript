@@ -3,6 +3,7 @@ Import('env')
 src = [
     "Address.cc",
     "Buffer.cc",
+    "MessageSocket.cc",
     "TCPListener.cc",
 ]
 
