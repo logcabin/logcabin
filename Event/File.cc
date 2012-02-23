@@ -107,6 +107,10 @@ File::~File()
 void
 File::setEvents(uint32_t fileEvents)
 {
+    // This Lock is necessary for thread safety when multiple threads are
+    // running within setEvents.
+    Event::Loop::Lock lockGuard(eventLoop);
+
     int r = event_del(unqualify(event));
     if (r == -1) {
         PANIC("event_del failed: "

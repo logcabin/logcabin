@@ -15,20 +15,86 @@
 
 #include <event2/event.h>
 #include <gtest/gtest.h>
+#include <thread>
 
-#include "Internal.h"
-#include "Loop.h"
+#include "Event/Internal.h"
+#include "Event/Loop.h"
+#include "Event/Timer.h"
 
 namespace LogCabin {
 namespace Event {
 namespace {
 
-uint32_t fired;
+class Counter : public Event::Timer {
+    Counter(Event::Loop& eventLoop, uint64_t exitAfter = 0)
+        : Timer(eventLoop)
+        , count(0)
+        , exitAfter(exitAfter)
+    {
+    }
+    void handleTimerEvent() {
+        ++count;
+        if (count > exitAfter)
+            eventLoop.exit();
+        else
+            schedule(0);
+    }
+    uint64_t count;
+    uint64_t exitAfter;
+};
+
 void
-exitEventLoop(evutil_socket_t fd, short events, void* loop) // NOLINT
+lockAndIncrement100(Event::Loop& eventLoop, uint64_t& count)
 {
-    ++fired;
-    static_cast<Loop*>(loop)->exit();
+    for (uint32_t i = 0; i < 100; ++i) {
+        Loop::Lock lock(eventLoop);
+        uint64_t start = count;
+        usleep(5);
+        count = start + 1;
+    }
+}
+
+TEST(EventLoopTest, lock) {
+    Loop loop;
+    Counter counter(loop);
+    counter.schedule(0);
+
+    // acquire lock while the event loop is not running
+    {
+        Loop::Lock lock(loop);
+        // recursive locking doesn't deadlock
+        Loop::Lock lock2(loop);
+        Loop::Lock lock3(loop);
+    }
+
+    // acquire lock while the event loop is running
+    std::thread thread(&Loop::runForever, &loop);
+    {
+        Loop::Lock lock(loop);
+        uint64_t count = counter.count;
+        usleep(1000);
+        EXPECT_EQ(count, counter.count);
+        // recursive locking doesn't deadlock
+        Loop::Lock lock2(loop);
+        Loop::Lock lock3(loop);
+    }
+    loop.exit();
+    thread.join();
+
+    // Locks mutually exclude each other
+    uint64_t count = 0;
+    std::thread thread1(lockAndIncrement100,
+                        std::ref(loop), std::ref(count));
+    std::thread thread2(lockAndIncrement100,
+                        std::ref(loop), std::ref(count));
+    std::thread thread3(lockAndIncrement100,
+                        std::ref(loop), std::ref(count));
+    counter.schedule(1500 * 1000);
+    loop.runForever();
+    thread1.join();
+    thread2.join();
+    thread3.join();
+    EXPECT_EQ(300U, count);
 }
 
 TEST(EventLoopTest, constructor) {
@@ -43,22 +109,28 @@ TEST(EventLoopTest, destructor) {
 
 TEST(EventLoopTest, runForever) {
     Loop loop;
-    // This should actually return right away since no events have been set up.
-    // Unfortunately, if it doesn't, it's going to fail in an obnoxious way:
-    // by never returning.
+    Counter counter(loop, 9);
+    counter.schedule(0);
     loop.runForever();
+    EXPECT_EQ(10U, counter.count);
 }
 
 TEST(EventLoopTest, exit) {
-    fired = 0;
-    struct timeval timeout {0, 0};
+    // The test for runForever already tested exit from within an event.
+
     Loop loop;
-    event* timer = evtimer_new(unqualify(loop.base),
-                               exitEventLoop, &loop);
-    EXPECT_EQ(0, evtimer_add(timer, &timeout));
+    Counter counter(loop);
+    counter.schedule(0);
+
+    // exit before run
+    loop.exit();
     loop.runForever();
-    EXPECT_EQ(1U, fired);
-    event_free(timer);
+    EXPECT_LT(counter.count, 2U);
+
+    // exit from another thread
+    std::thread thread(&Loop::runForever, &loop);
+    loop.exit();
+    thread.join();
 }
 
 } // namespace LogCabin::Event::<anonymous>

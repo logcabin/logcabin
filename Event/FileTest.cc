@@ -72,7 +72,10 @@ TEST_F(EventFileTest, constructor_badFileNotMonitored) {
     MyFile file(loop, -1, 0);
     EXPECT_TRUE(file.event != NULL);
     EXPECT_EQ(-1, file.fd);
-    loop.runForever();
+    // not added
+    EXPECT_EQ(0, event_pending(unqualify(file.event),
+                               EV_READ,
+                               NULL));
 }
 
 TEST_F(EventFileTest, destructor) {
@@ -89,15 +92,17 @@ TEST_F(EventFileTest, fires) {
 TEST_F(EventFileTest, setEvents) {
     MyFile file(loop, pipeFds[0], 0);
     EXPECT_EQ(1, write(pipeFds[1], "x", 1));
-    loop.runForever();
-    EXPECT_EQ(0U, file.triggerCount);
+    EXPECT_EQ(0, event_pending(unqualify(file.event),
+                               EV_READ,
+                               NULL));
     file.setEvents(File::Events::READABLE);
     loop.runForever();
     EXPECT_EQ(1U, file.triggerCount);
     file.triggerCount = 0;
     file.setEvents(0);
-    loop.runForever();
-    EXPECT_EQ(0U, file.triggerCount);
+    EXPECT_EQ(0, event_pending(unqualify(file.event),
+                               EV_READ,
+                               NULL));
 }
 
 TEST_F(EventFileTest, setEvents_badFileNotMonitored) {
@@ -105,8 +110,9 @@ TEST_F(EventFileTest, setEvents_badFileNotMonitored) {
     EXPECT_EQ(1, write(pipeFds[1], "x", 1));
     file.setEvents(0);
     closePipeFds();
-    loop.runForever();
-    EXPECT_EQ(0U, file.triggerCount);
+    EXPECT_EQ(0, event_pending(unqualify(file.event),
+                               EV_READ,
+                               NULL));
 }
 
 } // namespace LogCabin::Event::<anonymous>
