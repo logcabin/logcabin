@@ -34,6 +34,9 @@ namespace RPC {
  *
  * TCPListeners can be created from any thread, but they will always run on
  * the thread running the Event::Loop.
+ *
+ * This is intended for use by RPC::Server only. It's not a very good
+ * abstraction, but it encapsulates knowledge of libevent.
  */
 class TCPListener {
   public:
