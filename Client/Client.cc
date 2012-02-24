@@ -15,58 +15,13 @@
 
 #include <string.h>
 
-#include "ClientImpl.h"
-#include "DLogClient.h"
-#include "Ref.h"
+#include "Client/Client.h"
+#include "Client/ClientImpl.h"
 
-namespace DLog {
+namespace LogCabin {
 namespace Client {
 
-namespace Internal {
-
-// class ClientImplRef
-
-ClientImplRef::ClientImplRef(ClientImpl& clientImpl)
-    : clientImpl(&clientImpl)
-{
-    RefHelper<ClientImpl>::incRefCount(&clientImpl);
-}
-
-ClientImplRef::ClientImplRef(const ClientImplRef& other)
-    : clientImpl(other.clientImpl)
-{
-    RefHelper<ClientImpl>::incRefCount(clientImpl);
-}
-
-ClientImplRef::~ClientImplRef()
-{
-    RefHelper<ClientImpl>::decRefCountAndDestroy(clientImpl);
-}
-
-ClientImplRef&
-ClientImplRef::operator=(const ClientImplRef& other)
-{
-    RefHelper<ClientImpl>::incRefCount(other.clientImpl);
-    RefHelper<ClientImpl>::decRefCountAndDestroy(clientImpl);
-    clientImpl = other.clientImpl;
-    return *this;
-}
-
-ClientImpl&
-ClientImplRef::operator*() const
-{
-    return *clientImpl;
-}
-
-ClientImpl*
-ClientImplRef::operator->() const
-{
-    return clientImpl;
-}
-
-} // namespace DLog::Client::Internal
-
-// class Entry
+////////// Entry //////////
 
 Entry::Entry(const void* data, uint32_t length,
              const std::vector<EntryId>& invalidates)
@@ -131,9 +86,9 @@ Entry::getLength() const
     return length;
 }
 
-// class Log
+////////// Log //////////
 
-Log::Log(Internal::ClientImplRef clientImpl,
+Log::Log(std::shared_ptr<ClientImpl> clientImpl,
          const std::string& name,
          uint64_t logId)
     : clientImpl(clientImpl)
@@ -172,11 +127,12 @@ Log::getLastId()
     return clientImpl->getLastId(logId);
 }
 
-// class Cluster
+////////// Cluster //////////
 
 Cluster::Cluster(const std::string& hosts)
-    : clientImpl(*make<Internal::ClientImpl>())
+    : clientImpl(std::make_shared<ClientImpl>())
 {
+    clientImpl->setSelf(clientImpl);
 }
 
 Cluster::~Cluster()
@@ -207,5 +163,5 @@ Cluster::listLogs()
     return clientImpl->listLogs();
 }
 
-} // namespace DLog::Client
-} // namespace DLog
+} // namespace LogCabin::Client
+} // namespace LogCabin

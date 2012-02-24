@@ -1,4 +1,4 @@
-/* Copyright (c) 2011 Stanford University
+/* Copyright (c) 2011-2012 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -15,7 +15,7 @@
 
 /**
  * \file
- * This file declares the interface for DLog's client library.
+ * This file declares the interface for LogCabin's client library.
  */
 
 #include <cstddef>
@@ -23,13 +23,13 @@
 #include <string>
 #include <vector>
 
-#ifndef DLOGCLIENT_H
-#define DLOGCLIENT_H
+#ifndef LOGCABIN_CLIENT_CLIENT_H
+#define LOGCABIN_CLIENT_CLIENT_H
 
-namespace DLog {
+namespace LogCabin {
 namespace Client {
 
-class Cluster; // forward declaration
+class ClientImpl; // forward declaration
 
 /**
  * The type of a log entry ID.
@@ -42,35 +42,7 @@ typedef uint64_t EntryId;
 /**
  * A reserved log ID.
  */
-static const EntryId NO_ID = ~0ULL;
-
-/**
- * These declarations are for internal use only and should not be accessed
- * outside the library's implementation.
- */
-namespace Internal {
-
-class ClientImpl; // forward declaration
-
-/**
- * A smart pointer to the internal client implementation object.
- * The client implementation is heap-allocated and reference-counted because a
- * Cluster instance and many Log instances (owned by the application) may refer
- * to it.
- */
-class ClientImplRef {
-  public:
-    explicit ClientImplRef(ClientImpl& clientImpl);
-    ClientImplRef(const ClientImplRef& other);
-    ~ClientImplRef();
-    ClientImplRef& operator=(const ClientImplRef& other);
-    ClientImpl& operator*() const;
-    ClientImpl* operator->() const;
-  private:
-    ClientImpl* clientImpl;
-};
-
-} // namespace DLogClient::Internal
+static const EntryId NO_ID = ~0UL;
 
 /**
  * Encapsulates a blob of data in a single log entry.
@@ -118,9 +90,10 @@ class Entry {
     std::vector<EntryId> invalidates;
     std::unique_ptr<char[]> data;
     uint32_t length;
+    // Entry is not copyable
     Entry(const Entry&) = delete;
     Entry& operator=(const Entry&) = delete;
-    friend class Internal::ClientImpl;
+    friend class ClientImpl;
 };
 
 
@@ -137,7 +110,7 @@ class LogDisappearedException : public std::exception {
  */
 class Log {
   private:
-    Log(Internal::ClientImplRef clientImpl,
+    Log(std::shared_ptr<ClientImpl> clientImpl,
         const std::string& name,
         uint64_t logId);
   public:
@@ -201,14 +174,14 @@ class Log {
     EntryId getLastId();
 
   private:
-    Internal::ClientImplRef clientImpl;
+    std::shared_ptr<ClientImpl> clientImpl;
     const std::string name;
     const uint64_t logId;
-    friend class Internal::ClientImpl;
+    friend class ClientImpl;
 };
 
 /**
- * Used to receive notifications of the DLog cluster being inaccessible.
+ * Used to receive notifications of the LogCabin cluster being inaccessible.
  */
 class ErrorCallback {
   public:
@@ -217,7 +190,7 @@ class ErrorCallback {
 };
 
 /**
- * A handle to the DLog cluster.
+ * A handle to the LogCabin cluster.
  */
 class Cluster {
   public:
@@ -244,8 +217,8 @@ class Cluster {
     Log openLog(const std::string& logName);
 
     /**
-     * Open the log by the given name.
-     * If no log by that name exists, one will be created.
+     * Delete the log with the given name.
+     * If no log by that name exists, this will do nothing.
      */
     void deleteLog(const std::string& logName);
 
@@ -257,12 +230,10 @@ class Cluster {
     std::vector<std::string> listLogs();
 
   private:
-    Internal::ClientImplRef clientImpl;
-    Cluster(const Cluster&) = delete;
-    Cluster& operator=(const Cluster&) = delete;
+    std::shared_ptr<ClientImpl> clientImpl;
 };
 
-} // namespace
-} // namespace
+} // namespace LogCabin::Client
+} // namespace LogCabin
 
-#endif /* DLOGCLIENT_H */
+#endif /* LOGCABIN_CLIENT_CLIENT_H */

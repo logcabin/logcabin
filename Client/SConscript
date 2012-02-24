@@ -1,11 +1,12 @@
 Import('env')
 
 src = [
+    "Client.cc",
     "ClientImpl.cc",
-    "DLogClient.cc",
     "#build/proto/dlog.pb.o",
 ]
-env.StaticLibrary("DLogClient",
+
+env.StaticLibrary("LogCabinClient",
                   src,
-                  CPPPATH = [ "#include" ])
+                  CPPPATH = [ "#" ])
 

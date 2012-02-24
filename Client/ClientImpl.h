@@ -13,25 +13,27 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include "DLogClient.h"
-#include "Ref.h"
-#include "ProtoBuf.h"
+#include "Client/Client.h"
+#include "include/ProtoBuf.h"
 #include "../build/proto/dlog.pb.h"
 
-#ifndef LIBDLOGCLIENT_CLIENTIMPL_H
-#define LIBDLOGCLIENT_CLIENTIMPL_H
+#ifndef LOGCABIN_CLIENT_CLIENTIMPL_H
+#define LOGCABIN_CLIENT_CLIENTIMPL_H
 
-namespace DLog {
+namespace LogCabin {
 namespace Client {
-namespace Internal {
+
+namespace ProtoBuf = DLog::ProtoBuf;
 
 /**
  * The implementation of the client library.
- * This is wrapped by the classes in DLogClient.
+ * This is wrapped by Client::Cluster and Client::Log for usability.
  */
 class ClientImpl {
-    ClientImpl();
   public:
+    /// Constructor.
+    ClientImpl();
+    void setSelf(std::weak_ptr<ClientImpl> self);
     /// See Cluster::registerErrorCallback.
     void registerErrorCallback(std::unique_ptr<ErrorCallback> callback);
     /// See Cluster::openLog.
@@ -47,10 +49,8 @@ class ClientImpl {
     /// See Log::getLastId.
     EntryId getLastId(uint64_t logId);
   private:
-    RefHelper<ClientImpl>::RefCount refCount;
     std::unique_ptr<ErrorCallback> errorCallback;
-    friend class DLog::RefHelper<ClientImpl>;
-    friend class DLog::MakeHelper;
+    std::weak_ptr<ClientImpl> self;
 };
 
 /**
@@ -72,8 +72,7 @@ class PlaceholderRPC {
 extern PlaceholderRPC* placeholderRPC;
 
 
-} // namespace DLog::Client::Internal
-} // namespace DLog::Client
-} // namespace DLog
+} // namespace LogCabin::Client
+} // namespace LogCabin
 
-#endif /* LIBDLOGCLIENT_CLIENTIMPL_H */
+#endif /* LOGCABIN_CLIENT_CLIENTIMPL_H */

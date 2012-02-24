@@ -17,13 +17,15 @@
 #include <deque>
 #include <queue>
 
-#include "Common.h"
-#include "DLogClient.h"
-#include "libDLogClient/ClientImpl.h"
-#include "Debug.h"
+#include "include/Common.h"
+#include "include/Debug.h"
+#include "Client/Client.h"
+#include "Client/ClientImpl.h"
 #include "../build/proto/dlog.pb.h"
 
-using namespace DLog;
+namespace ProtoBuf = DLog::ProtoBuf;
+
+namespace LogCabin {
 
 namespace {
 uint32_t errorCallbackCount;
@@ -34,17 +36,17 @@ class MockErrorCallback : public Client::ErrorCallback {
     }
 };
 
-class MockRPC : public Client::Internal::PlaceholderRPC {
+class MockRPC : public Client::PlaceholderRPC {
   public:
     typedef std::unique_ptr<google::protobuf::Message> MessagePtr;
     MockRPC()
         : requestLog()
         , responseQueue()
     {
-        Client::Internal::placeholderRPC = this;
+        Client::placeholderRPC = this;
     }
     ~MockRPC() {
-        Client::Internal::placeholderRPC = NULL;
+        Client::placeholderRPC = NULL;
     }
     void expect(OpCode opCode,
                 const google::protobuf::Message& response) {
@@ -76,8 +78,6 @@ class MockRPC : public Client::Internal::PlaceholderRPC {
     std::queue<std::pair<OpCode, MessagePtr>> responseQueue;
 };
 
-} // anonymous namespace
-
 class ClientClusterTest : public ::testing::Test {
   public:
     ClientClusterTest()
@@ -95,7 +95,7 @@ TEST_F(ClientClusterTest, constructor) {
 }
 
 TEST_F(ClientClusterTest, registerErrorCallback) {
-    cluster->registerErrorCallback(unique<MockErrorCallback>());
+    cluster->registerErrorCallback(DLog::unique<MockErrorCallback>());
     // TODO(ongaro): test
     EXPECT_EQ(0U, errorCallbackCount);
 }
@@ -217,7 +217,7 @@ TEST_F(ClientLogTest, append_previousIdStale)
     Client::Entry entry("hello", 5);
     mockRPC.expect(MockRPC::OpCode::APPEND,
         ProtoBuf::fromString<ProtoBuf::ClientRPC::Append::Response>(
-            format("ok { entry_id: %lu }", Client::NO_ID)));
+            DLog::format("ok { entry_id: %lu }", Client::NO_ID)));
     EXPECT_EQ(Client::NO_ID,
               log->append(entry, 31));
     EXPECT_EQ("log_id: 1 "
@@ -267,7 +267,7 @@ TEST_F(ClientLogTest, invalidate_previousIdStale)
 {
     mockRPC.expect(MockRPC::OpCode::APPEND,
         ProtoBuf::fromString<ProtoBuf::ClientRPC::Append::Response>(
-            format("ok { entry_id: %lu }", Client::NO_ID)));
+            DLog::format("ok { entry_id: %lu }", Client::NO_ID)));
     EXPECT_EQ(Client::NO_ID,
               log->invalidate({1}, 31));
     EXPECT_EQ("log_id: 1 "
@@ -363,7 +363,7 @@ TEST_F(ClientLogTest, getLastId_emptyLog)
 {
     mockRPC.expect(MockRPC::OpCode::GET_LAST_ID,
         ProtoBuf::fromString<ProtoBuf::ClientRPC::GetLastId::Response>(
-            format("ok { head_entry_id: %lu }", Client::NO_ID)));
+            DLog::format("ok { head_entry_id: %lu }", Client::NO_ID)));
     EXPECT_EQ(Client::NO_ID,
               log->getLastId());
     EXPECT_EQ("log_id: 1 ",
@@ -391,3 +391,6 @@ TEST_F(ClientLogTest, getLastId_logDisappeared)
     EXPECT_EQ("log_id: 1 ",
               *mockRPC.popRequest());
 }
+
+} // namespace LogCabin::<anonymous>
+} // namespace LogCabin

@@ -13,25 +13,30 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include "ClientImpl.h"
+#include "include/Debug.h"
+#include "Client/ClientImpl.h"
 
-namespace DLog {
+namespace LogCabin {
 namespace Client {
-namespace Internal {
 
 using ProtoBuf::ClientRPC::OpCode;
 
 PlaceholderRPC* placeholderRPC = NULL;
 
 ClientImpl::ClientImpl()
-    : refCount()
-    , errorCallback()
+    : errorCallback()
+    , self()
 {
 }
 
 void
-ClientImpl::registerErrorCallback(
-                        std::unique_ptr<ErrorCallback> callback)
+ClientImpl::setSelf(std::weak_ptr<ClientImpl> self)
+{
+    this->self = self;
+}
+
+void
+ClientImpl::registerErrorCallback(std::unique_ptr<ErrorCallback> callback)
 {
     this->errorCallback = std::move(callback);
 }
@@ -43,9 +48,7 @@ ClientImpl::openLog(const std::string& logName)
     request.set_log_name(logName);
     ProtoBuf::ClientRPC::OpenLog::Response response;
     placeholderRPC->leader(OpCode::OPEN_LOG, request, response);
-    return Log(ClientImplRef(*this),
-               logName,
-               response.log_id());
+    return Log(self.lock(), logName, response.log_id());
 }
 
 void
@@ -112,7 +115,7 @@ ClientImpl::read(uint64_t logId, EntryId from)
                                              it->invalidates().end());
             if (it->has_data()) {
                 Entry e(it->data().c_str(),
-                        downCast<uint32_t>(it->data().length()),
+                        uint32_t(it->data().length()),
                         invalidates);
                 e.id = it->entry_id();
                 entries.push_back(std::move(e));
@@ -145,6 +148,5 @@ ClientImpl::getLastId(uint64_t logId)
           ProtoBuf::dumpString(response, false).c_str());
 }
 
-} // namespace DLog::Client::Internal
-} // namespace DLog::Client
-} // namespace DLog
+} // namespace LogCabin::Client
+} // namespace LogCabin

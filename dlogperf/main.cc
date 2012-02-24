@@ -18,7 +18,6 @@
 
 #include <DLogEvent.h>
 #include <DLogRPC.h>
-#include <DLogClient.h>
 
 using namespace DLog;
 
