@@ -55,9 +55,12 @@ class Loop {
     /**
      * Lock objects are used to synchronize between the Event::Loop thread and
      * other threads.  As long as a Lock object exists the following guarantees
-     * are in effect: either (a) the thread is the event loop thread or (b) no
-     * other thread has a Lock object and the event loop thread is waiting for
-     * the Lock to be destroyed. Locks may be used recursively.
+     * are in effect: either
+     * (a) the thread is the event loop thread or
+     * (b) no other thread has a Lock object and the event loop thread has
+     *     paused in a safe place (with no event handlers active) waiting for
+     *     the Lock to be destroyed.
+     * Locks may be used recursively.
      */
     class Lock {
       public:
@@ -112,15 +115,20 @@ class Loop {
 
     /**
      * This event is scheduled by Lock and exit() to break out of libevent's
-     * main event loop. (It's not an Event::Timer instance because that creates
-     * strange dependencies. Specifically, Event::Timer wouldn't be able to use
-     * Event::Loop::Lock if it wanted to, and this member's construction would
-     * have to be deferred until the end of the constructor.)
+     * main event loop.
+     *
+     * This is a libevent timer event with an immediate timeout value; it is
+     * designed to fire immediately. (It's not an Event::Timer instance because
+     * that creates strange dependencies. Specifically, Event::Timer wouldn't
+     * be able to use Event::Loop::Lock if it wanted to, and this member's
+     * construction would have to be deferred until the end of the
+     * constructor.)
      */
-    LibEvent::event* exitEvent;
+    LibEvent::event* breakEvent;
 
     /**
-     * This mutex protects the rest of the members of this class.
+     * This mutex protects all of the members of this class defined below this
+     * point.
      */
     std::mutex mutex;
 
@@ -160,15 +168,16 @@ class Loop {
     uint64_t lockOwner;
 
     /**
-     * Lock instances wait on this for the event loop to leave libevent's main
-     * loop.
+     * Signaled when it may be safe for a Lock constructor to complete. This
+     * happens either because runForever() just reached its safe place or
+     * because some other Lock was destroyed.
      */
-    std::condition_variable eventLoopIdle;
+    std::condition_variable safeToLock;
 
     /**
-     * runForever() waits on this for Locks to be released.
+     * Signaled when there are no longer any Locks active.
      */
-    std::condition_variable lockGone;
+    std::condition_variable unlocked;
 
     // Event types are friends, since they need to mess with 'base'.
     friend class File;

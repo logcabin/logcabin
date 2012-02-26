@@ -27,9 +27,12 @@ namespace Event {
 
 namespace {
 
-/// Libevent callback to break out of the event loop.
+/**
+ * Libevent callback to break out of the event loop.
+ * This is called when Event::Loop::breakEvent becomes active.
+ */
 void
-exitEventLoop(evutil_socket_t fd, short events, void* base) // NOLINT
+returnFromLibevent(evutil_socket_t fd, short events, void* base) // NOLINT
 {
     int r = event_base_loopbreak(static_cast<event_base*>(base));
     if (r == -1) {
@@ -38,12 +41,15 @@ exitEventLoop(evutil_socket_t fd, short events, void* base) // NOLINT
     }
 }
 
-/// Schedule exitEventLoop() to be called next time libevent gets around to it.
+/**
+ * Schedule returnFromLibevent() to be called next time libevent gets around
+ * to it.
+ */
 void
-scheduleExit(LibEvent::event* exitEvent)
+scheduleReturnFromLibevent(LibEvent::event* breakEvent)
 {
     struct timeval timeout = {0, 0};
-    int r = evtimer_add(unqualify(exitEvent), &timeout);
+    int r = evtimer_add(unqualify(breakEvent), &timeout);
     if (r == -1) {
         PANIC("evtimer_add failed: "
               "No information is available from libevent about this error.");
@@ -63,17 +69,12 @@ Loop::Lock::Lock(Event::Loop& eventLoop)
         eventLoop.lockOwner != Core::ThreadId::get()) {
         // This is an actual lock: we're not running inside the event loop, and
         //                         we're not recursively locking.
-        // Wait for runForever() to stop running
-        while (eventLoop.runningThread != Core::ThreadId::NONE) {
-            scheduleExit(eventLoop.exitEvent);
-            eventLoop.eventLoopIdle.wait(lockGuard);
+        if (eventLoop.runningThread != Core::ThreadId::NONE)
+            scheduleReturnFromLibevent(eventLoop.breakEvent);
+        while (eventLoop.runningThread != Core::ThreadId::NONE ||
+               eventLoop.lockOwner != Core::ThreadId::NONE) {
+            eventLoop.safeToLock.wait(lockGuard);
         }
-        // Wait for other Locks to unlock
-        while (eventLoop.lockOwner != Core::ThreadId::NONE)
-            eventLoop.lockGone.wait(lockGuard);
-        // runForever couldn't have jumped into libevent again, since numLocks
-        // has remained positive.
-        assert(eventLoop.runningThread == Core::ThreadId::NONE);
         // Take ownership of the lock
         eventLoop.lockOwner = Core::ThreadId::get();
     }
@@ -87,7 +88,10 @@ Loop::Lock::~Lock()
     --eventLoop.numActiveLocks;
     if (eventLoop.numActiveLocks == 0) {
         eventLoop.lockOwner = Core::ThreadId::NONE;
-        eventLoop.lockGone.notify_all();
+        if (eventLoop.numLocks == 0)
+            eventLoop.unlocked.notify_one();
+        else
+            eventLoop.safeToLock.notify_one();
     }
 }
 
@@ -95,15 +99,15 @@ Loop::Lock::~Lock()
 
 Loop::Loop()
     : base(NULL)
-    , exitEvent(NULL)
+    , breakEvent(NULL)
     , mutex()
     , runningThread(Core::ThreadId::NONE)
     , shouldExit(false)
     , numLocks(0)
     , numActiveLocks(0)
     , lockOwner(Core::ThreadId::NONE)
-    , eventLoopIdle()
-    , lockGone()
+    , safeToLock()
+    , unlocked()
 {
     assert(LibEvent::initialized);
     base = qualify(event_base_new());
@@ -115,21 +119,21 @@ Loop::Loop()
     // Set the number of priority levels to 2.
     // Then by default, events will get priority 2/2=1.
     // Smaller priority numbers will run first.
-    // We'll use priority 0 for exitEvent only, which should run quickly.
+    // We'll use priority 0 for breakEvent only, which should run quickly.
     int r = event_base_priority_init(unqualify(base), 2);
     if (r != 0) {
         PANIC("event_base_priority_init failed: "
               "No information is available from libevent about this error.");
     }
 
-    exitEvent = qualify(evtimer_new(unqualify(base),
-                                    exitEventLoop, unqualify(base)));
-    if (exitEvent == NULL) {
+    breakEvent = qualify(evtimer_new(unqualify(base),
+                                    returnFromLibevent, unqualify(base)));
+    if (breakEvent == NULL) {
         PANIC("evtimer_new failed: "
               "No information is available from libevent about this error.");
     }
 
-    r = event_priority_set(unqualify(exitEvent), 0);
+    r = event_priority_set(unqualify(breakEvent), 0);
     if (r != 0) {
         PANIC("event_priority_set failed: "
               "No information is available from libevent about this error.");
@@ -138,7 +142,7 @@ Loop::Loop()
 
 Loop::~Loop()
 {
-    event_free(unqualify(exitEvent));
+    event_free(unqualify(breakEvent));
     event_base_free(unqualify(base));
 }
 
@@ -151,8 +155,8 @@ Loop::runForever()
             runningThread = Core::ThreadId::NONE;
             // Wait for all Locks to finish up
             while (numLocks > 0) {
-                eventLoopIdle.notify_all();
-                lockGone.wait(lockGuard);
+                safeToLock.notify_one();
+                unlocked.wait(lockGuard);
             }
             if (shouldExit) {
                 shouldExit = false;
@@ -178,7 +182,7 @@ Loop::exit()
     }
 
     // Convince run() to break out of libevent.
-    scheduleExit(this->exitEvent);
+    scheduleReturnFromLibevent(this->breakEvent);
 }
 
 } // namespace LogCabin::Event
