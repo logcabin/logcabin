@@ -72,7 +72,14 @@ Server::ServerMessageSocket::onReceiveMessage(MessageId messageId,
 void
 Server::ServerMessageSocket::onDisconnect()
 {
+    close();
+}
+
+void
+Server::ServerMessageSocket::close()
+{
     if (server != NULL) {
+        Event::Loop::Lock lock(server->eventLoop);
         auto& sockets = server->sockets;
         std::swap(sockets[socketsIndex], sockets[sockets.size() - 1]);
         sockets[socketsIndex]->socketsIndex = socketsIndex;

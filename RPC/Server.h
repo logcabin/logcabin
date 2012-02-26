@@ -114,6 +114,12 @@ class Server {
         void onReceiveMessage(MessageId messageId, Buffer message);
         void onDisconnect();
         /**
+         * Disconnect this socket. This drops the reference count on the
+         * socket, so it will be closed soon after this method returns.
+         * This may be called from any thread.
+         */
+        void close();
+        /**
          * The Server which keeps a strong reference to this object, or NULL if
          * the server has gone away.
          */

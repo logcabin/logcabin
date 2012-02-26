@@ -52,6 +52,15 @@ ServerRPC::operator=(ServerRPC&& other)
 }
 
 void
+ServerRPC::closeSession()
+{
+    std::shared_ptr<Server::ServerMessageSocket> socket = messageSocket.lock();
+    if (socket)
+        socket->close();
+    messageSocket.reset();
+}
+
+void
 ServerRPC::sendReply()
 {
     std::shared_ptr<Server::ServerMessageSocket> socket = messageSocket.lock();

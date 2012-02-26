@@ -29,6 +29,9 @@ namespace RPC {
  * This class represents the server side of a remote procedure call.
  * A Server returns an instance when an RPC is initiated. This is used to send
  * the reply.
+ *
+ * This class may be used from any thread, but each object is meant to be
+ * accessed by only one thread at a time.
  */
 class ServerRPC {
     /**
@@ -61,11 +64,16 @@ class ServerRPC {
     ServerRPC& operator=(ServerRPC&& other);
 
     /**
+     * Close the session on which this request originated.
+     * This is an impolite thing to do to a client but can be useful
+     * occasionally, for example for testing.
+     */
+    void closeSession();
+
+    /**
      * Send the response back to the client.
      * This will reset #response to an empty state, and further replies on this
      * object will not do anything.
-     * This may be called from any thread (but only from one thread at a time
-     * for this RPC).
      */
     void sendReply();
 

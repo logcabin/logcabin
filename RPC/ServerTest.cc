@@ -100,6 +100,10 @@ TEST_F(RPCServerTest, MessageSocket_onDisconnect) {
     EXPECT_EQ(0U, server.sockets.at(0)->socketsIndex);
 }
 
+TEST_F(RPCServerTest, MessageSocket_close) {
+    // tested by onDisconnect
+}
+
 TEST_F(RPCServerTest, constructor) {
     // tested sufficiently in other tests
 }
