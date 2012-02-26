@@ -14,16 +14,13 @@
  */
 
 #include "Client/Client.h"
-#include "include/ProtoBuf.h"
-#include "../build/proto/dlog.pb.h"
+#include "Client/LeaderRPC.h"
 
 #ifndef LOGCABIN_CLIENT_CLIENTIMPL_H
 #define LOGCABIN_CLIENT_CLIENTIMPL_H
 
 namespace LogCabin {
 namespace Client {
-
-namespace ProtoBuf = DLog::ProtoBuf;
 
 /**
  * The implementation of the client library.
@@ -33,9 +30,26 @@ class ClientImpl {
   public:
     /// Constructor.
     ClientImpl();
-    void setSelf(std::weak_ptr<ClientImpl> self);
-    /// See Cluster::registerErrorCallback.
-    void registerErrorCallback(std::unique_ptr<ErrorCallback> callback);
+    /**
+     * Initialize this object. This must be called directly after the
+     * constructor.
+     * \param self
+     *      This object needs a reference to itself so that it can keep itself
+     *      alive while there are outstanding Log objects.
+     * \param hosts
+     *      A string describing the hosts in the cluster. This should be of the
+     *      form host:port, where host is usually a DNS name that resolves to
+     *      multiple IP addresses.
+     * \param mockRPC
+     *      This argument is used for unit testing only; some tests provide a
+     *      LeaderRPCMock instance here that replaces #leaderRPC. In this case,
+     *      'hosts' is ignored.
+     */
+    void init(std::weak_ptr<ClientImpl> self,
+              const std::string& hosts,
+              std::unique_ptr<LeaderRPCBase> mockRPC =
+                    std::unique_ptr<LeaderRPCBase>());
+
     /// See Cluster::openLog.
     Log openLog(const std::string& logName);
     /// See Cluster::deleteLog.
@@ -49,28 +63,34 @@ class ClientImpl {
     /// See Log::getLastId.
     EntryId getLastId(uint64_t logId);
   private:
-    std::unique_ptr<ErrorCallback> errorCallback;
-    std::weak_ptr<ClientImpl> self;
-};
-
-/**
- * This is a placeholder for an actual RPC system.
- */
-class PlaceholderRPC {
-  public:
-    typedef ProtoBuf::ClientRPC::OpCode OpCode;
-    virtual ~PlaceholderRPC() {}
     /**
-     * Send and receive an RPC to server.
-     * This interface ignores any sort of network/host failures that might
-     * occur.
+     * Asks the cluster leader for the range of supported RPC protocol
+     * versions, and select the best one. This is used to make sure the client
+     * and server are speaking the same version of the RPC protocol.
      */
-    virtual void leader(OpCode opCode,
-                        const google::protobuf::Message& request,
-                        google::protobuf::Message& response) = 0;
-};
-extern PlaceholderRPC* placeholderRPC;
+    uint32_t negotiateRPCVersion();
 
+    /**
+     * Used to send RPCs to the leader of the LogCabin cluster.
+     */
+    std::unique_ptr<LeaderRPCBase> leaderRPC;
+
+    /**
+     * The version of the RPC protocol to use when speaking to the cluster
+     * leader. (This is the result of negotiateRPCVersion().)
+     */
+    uint32_t rpcProtocolVersion;
+
+    /**
+     * This is used to keep this object alive while there are outstanding
+     * Log objects.
+     */
+    std::weak_ptr<ClientImpl> self;
+
+    // ClientImpl is not copyable
+    ClientImpl(const ClientImpl&) = delete;
+    ClientImpl& operator=(const ClientImpl&) = delete;
+};
 
 } // namespace LogCabin::Client
 } // namespace LogCabin

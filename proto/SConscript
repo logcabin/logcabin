@@ -11,3 +11,5 @@ env.StaticObject("#build/proto/dlog.pb.o",
                  CPPPATH = "#",
                  CXXFLAGS = "-std=c++0x")
 
+env.StaticObject("Client.cc",
+                 CPPPATH = "#")

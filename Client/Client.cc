@@ -132,17 +132,15 @@ Log::getLastId()
 Cluster::Cluster(const std::string& hosts)
     : clientImpl(std::make_shared<ClientImpl>())
 {
-    clientImpl->setSelf(clientImpl);
+#if DEBUG // for testing purposes only
+    if (hosts == "-MOCK-SKIP-INIT-")
+        return;
+#endif
+    clientImpl->init(clientImpl, hosts);
 }
 
 Cluster::~Cluster()
 {
-}
-
-void
-Cluster::registerErrorCallback(std::unique_ptr<ErrorCallback> callback)
-{
-    clientImpl->registerErrorCallback(std::move(callback));
 }
 
 Log

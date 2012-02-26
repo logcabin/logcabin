@@ -15,31 +15,67 @@
 
 #include "include/Debug.h"
 #include "Client/ClientImpl.h"
+#include "RPC/Address.h"
 
 namespace LogCabin {
 namespace Client {
 
+namespace {
+/**
+ * The oldest RPC protocol version that this client library supports.
+ */
+const uint32_t MIN_RPC_PROTOCOL_VERSION = 1;
+
+/**
+ * The newest RPC protocol version that this client library supports.
+ */
+const uint32_t MAX_RPC_PROTOCOL_VERSION = 1;
+}
+
 using ProtoBuf::ClientRPC::OpCode;
 
-PlaceholderRPC* placeholderRPC = NULL;
-
 ClientImpl::ClientImpl()
-    : errorCallback()
-    , self()
+    : leaderRPC()             // set in init()
+    , rpcProtocolVersion(~0U) // set in init()
+    , self()                  // set in init()
 {
 }
 
 void
-ClientImpl::setSelf(std::weak_ptr<ClientImpl> self)
+ClientImpl::init(std::weak_ptr<ClientImpl> self,
+                 const std::string& hosts,
+                 std::unique_ptr<LeaderRPCBase> mockRPC)
 {
     this->self = self;
+    leaderRPC = std::move(mockRPC);
+    if (!leaderRPC)
+        leaderRPC.reset(new LeaderRPC(RPC::Address(hosts, 0)));
+    rpcProtocolVersion = negotiateRPCVersion();
 }
 
-void
-ClientImpl::registerErrorCallback(std::unique_ptr<ErrorCallback> callback)
+uint32_t
+ClientImpl::negotiateRPCVersion()
 {
-    this->errorCallback = std::move(callback);
+    ProtoBuf::ClientRPC::GetSupportedRPCVersions::Request request;
+    ProtoBuf::ClientRPC::GetSupportedRPCVersions::Response response;
+    leaderRPC->call(OpCode::GET_SUPPORTED_RPC_VERSIONS,
+                    request, response);
+    uint32_t serverMin = response.min_version();
+    uint32_t serverMax = response.max_version();
+    if (MAX_RPC_PROTOCOL_VERSION < serverMin) {
+        PANIC("This client is too old to talk to your LogCabin cluster. "
+              "You'll need to update your LogCabin client library.");
+    } else if (MIN_RPC_PROTOCOL_VERSION > serverMax) {
+        PANIC("This client is too new to talk to your LogCabin cluster. "
+              "You'll need to upgrade your LogCabin cluster or "
+              "downgrade your LogCabin client library.");
+    } else {
+        // There exists a protocol version both the client and server speak.
+        // The preferred one is the maximum one they both support.
+        return std::min(MAX_RPC_PROTOCOL_VERSION, serverMax);
+    }
 }
+
 
 Log
 ClientImpl::openLog(const std::string& logName)
@@ -47,7 +83,7 @@ ClientImpl::openLog(const std::string& logName)
     ProtoBuf::ClientRPC::OpenLog::Request request;
     request.set_log_name(logName);
     ProtoBuf::ClientRPC::OpenLog::Response response;
-    placeholderRPC->leader(OpCode::OPEN_LOG, request, response);
+    leaderRPC->call(OpCode::OPEN_LOG, request, response);
     return Log(self.lock(), logName, response.log_id());
 }
 
@@ -57,7 +93,7 @@ ClientImpl::deleteLog(const std::string& logName)
     ProtoBuf::ClientRPC::DeleteLog::Request request;
     request.set_log_name(logName);
     ProtoBuf::ClientRPC::DeleteLog::Response response;
-    placeholderRPC->leader(OpCode::DELETE_LOG, request, response);
+    leaderRPC->call(OpCode::DELETE_LOG, request, response);
 }
 
 std::vector<std::string>
@@ -65,7 +101,7 @@ ClientImpl::listLogs()
 {
     ProtoBuf::ClientRPC::ListLogs::Request request;
     ProtoBuf::ClientRPC::ListLogs::Response response;
-    placeholderRPC->leader(OpCode::LIST_LOGS, request, response);
+    leaderRPC->call(OpCode::LIST_LOGS, request, response);
     std::vector<std::string> logNames(response.log_names().begin(),
                                       response.log_names().end());
     std::sort(logNames.begin(), logNames.end());
@@ -87,7 +123,7 @@ ClientImpl::append(uint64_t logId, const Entry& entry, EntryId previousId)
     if (entry.getData() != NULL)
         request.set_data(entry.getData(), entry.getLength());
     ProtoBuf::ClientRPC::Append::Response response;
-    placeholderRPC->leader(OpCode::APPEND, request, response);
+    leaderRPC->call(OpCode::APPEND, request, response);
     if (response.has_ok())
         return response.ok().entry_id();
     if (response.has_log_disappeared())
@@ -103,7 +139,7 @@ ClientImpl::read(uint64_t logId, EntryId from)
     request.set_log_id(logId);
     request.set_from_entry_id(from);
     ProtoBuf::ClientRPC::Read::Response response;
-    placeholderRPC->leader(OpCode::READ, request, response);
+    leaderRPC->call(OpCode::READ, request, response);
     if (response.has_ok()) {
         const auto& returnedEntries = response.ok().entry();
         std::vector<Entry> entries;
@@ -139,7 +175,7 @@ ClientImpl::getLastId(uint64_t logId)
     ProtoBuf::ClientRPC::GetLastId::Request request;
     request.set_log_id(logId);
     ProtoBuf::ClientRPC::GetLastId::Response response;
-    placeholderRPC->leader(OpCode::GET_LAST_ID, request, response);
+    leaderRPC->call(OpCode::GET_LAST_ID, request, response);
     if (response.has_ok())
         return response.ok().head_entry_id();
     if (response.has_log_disappeared())

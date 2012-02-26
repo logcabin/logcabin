@@ -21,115 +21,72 @@
 #include "include/Debug.h"
 #include "Client/Client.h"
 #include "Client/ClientImpl.h"
+#include "Client/LeaderRPCMock.h"
 #include "../build/proto/dlog.pb.h"
 
 namespace ProtoBuf = DLog::ProtoBuf;
 
 namespace LogCabin {
-
 namespace {
-uint32_t errorCallbackCount;
-class MockErrorCallback : public Client::ErrorCallback {
-  public:
-    void callback() {
-        ++errorCallbackCount;
-    }
-};
-
-class MockRPC : public Client::PlaceholderRPC {
-  public:
-    typedef std::unique_ptr<google::protobuf::Message> MessagePtr;
-    MockRPC()
-        : requestLog()
-        , responseQueue()
-    {
-        Client::placeholderRPC = this;
-    }
-    ~MockRPC() {
-        Client::placeholderRPC = NULL;
-    }
-    void expect(OpCode opCode,
-                const google::protobuf::Message& response) {
-        MessagePtr responseCopy(response.New());
-        responseCopy->CopyFrom(response);
-        responseQueue.push({opCode, std::move(responseCopy)});
-    }
-    MessagePtr popRequest() {
-        MessagePtr request = std::move(requestLog.at(0).second);
-        requestLog.pop_front();
-        return std::move(request);
-    }
-    void leader(OpCode opCode,
-                const google::protobuf::Message& request,
-                google::protobuf::Message& response) {
-        MessagePtr requestCopy(request.New());
-        requestCopy->CopyFrom(request);
-        requestLog.push_back({opCode, std::move(requestCopy)});
-        ASSERT_LT(0U, responseQueue.size())
-            << "The client sent an unexpected RPC:\n"
-            << request.GetTypeName() << ":\n"
-            << ProtoBuf::dumpString(request, false);
-        auto& opCodeMsgPair = responseQueue.front();
-        EXPECT_EQ(opCode, opCodeMsgPair.first);
-        response.CopyFrom(*opCodeMsgPair.second);
-        responseQueue.pop();
-    }
-    std::deque<std::pair<OpCode, MessagePtr>> requestLog;
-    std::queue<std::pair<OpCode, MessagePtr>> responseQueue;
-};
 
 class ClientClusterTest : public ::testing::Test {
   public:
+    typedef Client::LeaderRPCMock::OpCode OpCode;
     ClientClusterTest()
-        : mockRPC()
-        , cluster(new Client::Cluster("127.0.0.1:2106"))
+        : cluster(new Client::Cluster("-MOCK-SKIP-INIT-"))
+        , mockRPC()
     {
-        errorCallbackCount = 0;
+        mockRPC = new Client::LeaderRPCMock();
+        mockRPC->expect(OpCode::GET_SUPPORTED_RPC_VERSIONS,
+            ProtoBuf::fromString<
+                    ProtoBuf::ClientRPC::GetSupportedRPCVersions::Response>(
+                        "min_version: 1, max_version: 1"));
+        cluster->clientImpl->init(
+                    cluster->clientImpl,
+                    "127.0.0.1:0",
+                    std::unique_ptr<Client::LeaderRPCBase>(mockRPC));
+        mockRPC->popRequest();
     }
-    MockRPC mockRPC;
     std::unique_ptr<Client::Cluster> cluster;
+    Client::LeaderRPCMock* mockRPC;
+    ClientClusterTest(const ClientClusterTest&) = delete;
+    ClientClusterTest& operator=(const ClientClusterTest&) = delete;
 };
 
 TEST_F(ClientClusterTest, constructor) {
     // TODO(ongaro): test
 }
 
-TEST_F(ClientClusterTest, registerErrorCallback) {
-    cluster->registerErrorCallback(DLog::unique<MockErrorCallback>());
-    // TODO(ongaro): test
-    EXPECT_EQ(0U, errorCallbackCount);
-}
-
 TEST_F(ClientClusterTest, openLog) {
-    mockRPC.expect(MockRPC::OpCode::OPEN_LOG,
+    mockRPC->expect(OpCode::OPEN_LOG,
         ProtoBuf::fromString<ProtoBuf::ClientRPC::OpenLog::Response>(
             "log_id: 1"));
     Client::Log log = cluster->openLog("testLog");
     EXPECT_EQ("log_name: 'testLog'",
-              *mockRPC.requestLog.at(0).second);
+              *mockRPC->requestLog.at(0).second);
     EXPECT_EQ("testLog", log.name);
     EXPECT_EQ(1U, log.logId);
 }
 
 TEST_F(ClientClusterTest, deleteLog) {
-    mockRPC.expect(MockRPC::OpCode::DELETE_LOG,
+    mockRPC->expect(OpCode::DELETE_LOG,
         ProtoBuf::fromString<ProtoBuf::ClientRPC::DeleteLog::Response>(""));
     cluster->deleteLog("testLog");
     EXPECT_EQ("log_name: 'testLog'",
-              *mockRPC.popRequest());
+              *mockRPC->popRequest());
 }
 
 TEST_F(ClientClusterTest, listLogs_none) {
-    mockRPC.expect(MockRPC::OpCode::LIST_LOGS,
+    mockRPC->expect(OpCode::LIST_LOGS,
         ProtoBuf::fromString<ProtoBuf::ClientRPC::ListLogs::Response>(
             ""));
     EXPECT_EQ((std::vector<std::string> {}),
               cluster->listLogs());
-    EXPECT_EQ("", *mockRPC.popRequest());
+    EXPECT_EQ("", *mockRPC->popRequest());
 }
 
 TEST_F(ClientClusterTest, listLogs_normal) {
-    mockRPC.expect(MockRPC::OpCode::LIST_LOGS,
+    mockRPC->expect(OpCode::LIST_LOGS,
         ProtoBuf::fromString<ProtoBuf::ClientRPC::ListLogs::Response>(
             "log_names: ['testLog2', 'testLog3', 'testLog1']"));
     EXPECT_EQ((std::vector<std::string> {
@@ -138,7 +95,7 @@ TEST_F(ClientClusterTest, listLogs_normal) {
                "testLog3",
               }),
               cluster->listLogs());
-    EXPECT_EQ("", *mockRPC.popRequest());
+    EXPECT_EQ("", *mockRPC->popRequest());
 }
 
 class ClientLogTest : public ClientClusterTest {
@@ -146,11 +103,11 @@ class ClientLogTest : public ClientClusterTest {
     ClientLogTest()
         : log()
     {
-        mockRPC.expect(MockRPC::OpCode::OPEN_LOG,
+        mockRPC->expect(OpCode::OPEN_LOG,
             ProtoBuf::fromString<ProtoBuf::ClientRPC::OpenLog::Response>(
                 "log_id: 1"));
         log.reset(new Client::Log(cluster->openLog("testLog")));
-        mockRPC.popRequest();
+        mockRPC->popRequest();
     }
     std::unique_ptr<Client::Log> log;
 };
@@ -158,13 +115,13 @@ class ClientLogTest : public ClientClusterTest {
 TEST_F(ClientLogTest, append_empty)
 {
     Client::Entry entry("empty", 0);
-    mockRPC.expect(MockRPC::OpCode::APPEND,
+    mockRPC->expect(OpCode::APPEND,
         ProtoBuf::fromString<ProtoBuf::ClientRPC::Append::Response>(
             "ok { entry_id: 32 }"));
     EXPECT_EQ(32U,
               log->append(entry));
     ProtoBuf::ClientRPC::Append::Request request;
-    request.CopyFrom(*mockRPC.popRequest());
+    request.CopyFrom(*mockRPC->popRequest());
     EXPECT_EQ("log_id: 1 "
               "data: '' ",
               request);
@@ -175,33 +132,33 @@ TEST_F(ClientLogTest, append_empty)
 TEST_F(ClientLogTest, append_justData)
 {
     Client::Entry entry("hello", 5);
-    mockRPC.expect(MockRPC::OpCode::APPEND,
+    mockRPC->expect(OpCode::APPEND,
         ProtoBuf::fromString<ProtoBuf::ClientRPC::Append::Response>(
             "ok { entry_id: 32 }"));
     EXPECT_EQ(32U,
               log->append(entry));
     EXPECT_EQ("log_id: 1 "
               "data: 'hello' ",
-              *mockRPC.popRequest());
+              *mockRPC->popRequest());
 }
 
 TEST_F(ClientLogTest, append_withInvalidates)
 {
     Client::Entry entry("hello", 5, { 10, 12, 14 });
-    mockRPC.expect(MockRPC::OpCode::APPEND,
+    mockRPC->expect(OpCode::APPEND,
         ProtoBuf::fromString<ProtoBuf::ClientRPC::Append::Response>(
             "ok { entry_id: 32 }"));
     EXPECT_EQ(32U, log->append(entry));
     EXPECT_EQ("log_id: 1 "
               "data: 'hello' "
               "invalidates: [10, 12, 14]",
-              *mockRPC.popRequest());
+              *mockRPC->popRequest());
 }
 
 TEST_F(ClientLogTest, append_previousIdOk)
 {
     Client::Entry entry("hello", 5);
-    mockRPC.expect(MockRPC::OpCode::APPEND,
+    mockRPC->expect(OpCode::APPEND,
         ProtoBuf::fromString<ProtoBuf::ClientRPC::Append::Response>(
             "ok { entry_id: 32 }"));
     EXPECT_EQ(32U,
@@ -209,13 +166,13 @@ TEST_F(ClientLogTest, append_previousIdOk)
     EXPECT_EQ("log_id: 1 "
               "data: 'hello' "
               "previous_entry_id: 31",
-              *mockRPC.popRequest());
+              *mockRPC->popRequest());
 }
 
 TEST_F(ClientLogTest, append_previousIdStale)
 {
     Client::Entry entry("hello", 5);
-    mockRPC.expect(MockRPC::OpCode::APPEND,
+    mockRPC->expect(OpCode::APPEND,
         ProtoBuf::fromString<ProtoBuf::ClientRPC::Append::Response>(
             DLog::format("ok { entry_id: %lu }", Client::NO_ID)));
     EXPECT_EQ(Client::NO_ID,
@@ -223,36 +180,36 @@ TEST_F(ClientLogTest, append_previousIdStale)
     EXPECT_EQ("log_id: 1 "
               "data: 'hello' "
               "previous_entry_id: 31",
-              *mockRPC.popRequest());
+              *mockRPC->popRequest());
 }
 
 TEST_F(ClientLogTest, append_logDisappeared)
 {
     Client::Entry entry("hello", 5);
-    mockRPC.expect(MockRPC::OpCode::APPEND,
+    mockRPC->expect(OpCode::APPEND,
         ProtoBuf::fromString<ProtoBuf::ClientRPC::Append::Response>(
             "log_disappeared {}"));
     EXPECT_THROW(log->append(entry),
                  Client::LogDisappearedException);
     EXPECT_EQ("log_id: 1 "
               "data: 'hello' ",
-              *mockRPC.popRequest());
+              *mockRPC->popRequest());
 }
 
 TEST_F(ClientLogTest, invalidate_empty)
 {
-    mockRPC.expect(MockRPC::OpCode::APPEND,
+    mockRPC->expect(OpCode::APPEND,
         ProtoBuf::fromString<ProtoBuf::ClientRPC::Append::Response>(
             "ok { entry_id: 32 }"));
     EXPECT_EQ(32U,
               log->invalidate({}));
     EXPECT_EQ("log_id: 1 ",
-              *mockRPC.popRequest());
+              *mockRPC->popRequest());
 }
 
 TEST_F(ClientLogTest, invalidate_previousIdOK)
 {
-    mockRPC.expect(MockRPC::OpCode::APPEND,
+    mockRPC->expect(OpCode::APPEND,
         ProtoBuf::fromString<ProtoBuf::ClientRPC::Append::Response>(
             "ok { entry_id: 32 }"));
     EXPECT_EQ(32U,
@@ -260,12 +217,12 @@ TEST_F(ClientLogTest, invalidate_previousIdOK)
     EXPECT_EQ("log_id: 1 "
               "invalidates: [1] "
               "previous_entry_id: 31 ",
-              *mockRPC.popRequest());
+              *mockRPC->popRequest());
 }
 
 TEST_F(ClientLogTest, invalidate_previousIdStale)
 {
-    mockRPC.expect(MockRPC::OpCode::APPEND,
+    mockRPC->expect(OpCode::APPEND,
         ProtoBuf::fromString<ProtoBuf::ClientRPC::Append::Response>(
             DLog::format("ok { entry_id: %lu }", Client::NO_ID)));
     EXPECT_EQ(Client::NO_ID,
@@ -273,19 +230,19 @@ TEST_F(ClientLogTest, invalidate_previousIdStale)
     EXPECT_EQ("log_id: 1 "
               "invalidates: [1] "
               "previous_entry_id: 31 ",
-              *mockRPC.popRequest());
+              *mockRPC->popRequest());
 }
 
 TEST_F(ClientLogTest, invalidate_logDisappeared)
 {
-    mockRPC.expect(MockRPC::OpCode::APPEND,
+    mockRPC->expect(OpCode::APPEND,
         ProtoBuf::fromString<ProtoBuf::ClientRPC::Append::Response>(
             "log_disappeared {}"));
     EXPECT_THROW(log->invalidate({1}),
                  Client::LogDisappearedException);
     EXPECT_EQ("log_id: 1 "
               "invalidates: [1] ",
-              *mockRPC.popRequest());
+              *mockRPC->popRequest());
 }
 
 namespace {
@@ -298,7 +255,7 @@ std::string entryDataString(const Client::Entry& entry)
 
 TEST_F(ClientLogTest, read_normal)
 {
-    mockRPC.expect(MockRPC::OpCode::READ,
+    mockRPC->expect(OpCode::READ,
         ProtoBuf::fromString<ProtoBuf::ClientRPC::Read::Response>(
             "ok { "
             "   entry: { entry_id: 20 } "
@@ -333,63 +290,63 @@ TEST_F(ClientLogTest, read_normal)
               entries[4].getInvalidates());
     EXPECT_EQ("log_id: 1 "
               "from_entry_id: 20 ",
-              *mockRPC.popRequest());
+              *mockRPC->popRequest());
 }
 
 TEST_F(ClientLogTest, read_pastHead)
 {
-    mockRPC.expect(MockRPC::OpCode::READ,
+    mockRPC->expect(OpCode::READ,
         ProtoBuf::fromString<ProtoBuf::ClientRPC::Read::Response>(
             "ok {}"));
     EXPECT_EQ(0U, log->read(20).size());
     EXPECT_EQ("log_id: 1 "
               "from_entry_id: 20 ",
-              *mockRPC.popRequest());
+              *mockRPC->popRequest());
 }
 
 TEST_F(ClientLogTest, read_logDisappeared)
 {
-    mockRPC.expect(MockRPC::OpCode::READ,
+    mockRPC->expect(OpCode::READ,
         ProtoBuf::fromString<ProtoBuf::ClientRPC::Read::Response>(
             "log_disappeared {}"));
     EXPECT_THROW(log->read(20),
                  Client::LogDisappearedException);
     EXPECT_EQ("log_id: 1 "
               "from_entry_id: 20 ",
-              *mockRPC.popRequest());
+              *mockRPC->popRequest());
 }
 
 TEST_F(ClientLogTest, getLastId_emptyLog)
 {
-    mockRPC.expect(MockRPC::OpCode::GET_LAST_ID,
+    mockRPC->expect(OpCode::GET_LAST_ID,
         ProtoBuf::fromString<ProtoBuf::ClientRPC::GetLastId::Response>(
             DLog::format("ok { head_entry_id: %lu }", Client::NO_ID)));
     EXPECT_EQ(Client::NO_ID,
               log->getLastId());
     EXPECT_EQ("log_id: 1 ",
-              *mockRPC.popRequest());
+              *mockRPC->popRequest());
 }
 
 TEST_F(ClientLogTest, getLastId_normal)
 {
-    mockRPC.expect(MockRPC::OpCode::GET_LAST_ID,
+    mockRPC->expect(OpCode::GET_LAST_ID,
         ProtoBuf::fromString<ProtoBuf::ClientRPC::GetLastId::Response>(
             "ok { head_entry_id: 20 }"));
     EXPECT_EQ(20U,
               log->getLastId());
     EXPECT_EQ("log_id: 1 ",
-              *mockRPC.popRequest());
+              *mockRPC->popRequest());
 }
 
 TEST_F(ClientLogTest, getLastId_logDisappeared)
 {
-    mockRPC.expect(MockRPC::OpCode::GET_LAST_ID,
+    mockRPC->expect(OpCode::GET_LAST_ID,
         ProtoBuf::fromString<ProtoBuf::ClientRPC::GetLastId::Response>(
             "log_disappeared {}"));
     EXPECT_THROW(log->getLastId(),
                  Client::LogDisappearedException);
     EXPECT_EQ("log_id: 1 ",
-              *mockRPC.popRequest());
+              *mockRPC->popRequest());
 }
 
 } // namespace LogCabin::<anonymous>

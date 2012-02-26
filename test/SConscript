@@ -25,7 +25,8 @@ def GetTestFiles(src_dirs, variant_dir):
     source copies to be placed in variant_dir of files ending in Test.cc that
     are directly contained in those directories.
     """
-    return Flatten([SrcToVariant(Glob("%s/*Test.cc" % src_dir),
+    return Flatten([SrcToVariant(Glob("%s/*Test.cc" % src_dir) +
+                                 Glob("%s/*Mock.cc" % src_dir),
                                  variant_dir=variant_dir)
                     for src_dir in src_dirs])
 

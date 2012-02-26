@@ -24,13 +24,33 @@ package DLog.ProtoBuf.ClientRPC;
  */
 enum OpCode {
     // Keep these numbers dense.
-    OPEN_LOG    = 101;
-    DELETE_LOG  = 102;
-    LIST_LOGS   = 103;
-    APPEND      = 104;
-    READ        = 105;
-    GET_LAST_ID = 106;
+    GET_SUPPORTED_RPC_VERSIONS = 0;
+    OPEN_LOG    = 1;
+    DELETE_LOG  = 2;
+    LIST_LOGS   = 3;
+    APPEND      = 4;
+    READ        = 5;
+    GET_LAST_ID = 6;
 };
+
+/**
+ * GetSupportedRPCVersions RPC: Find out the range of RPC protocol versions the
+ * cluster supports. This should be the first RPC sent by the client.
+ */
+message GetSupportedRPCVersions {
+    message Request {
+    }
+    message Response {
+        /**
+         * The minimum RPC protocol version this cluster will accept.
+         */
+        required uint32 min_version = 1;
+        /**
+         * The maximum RPC protocol version this cluster will accept.
+         */
+        required uint32 max_version = 2;
+    }
+}
 
 /**
  * OpenLog RPC: Open or create a log by its name.

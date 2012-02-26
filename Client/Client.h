@@ -181,15 +181,6 @@ class Log {
 };
 
 /**
- * Used to receive notifications of the LogCabin cluster being inaccessible.
- */
-class ErrorCallback {
-  public:
-    virtual ~ErrorCallback() {}
-    virtual void callback(/* ... */) = 0;
-};
-
-/**
  * A handle to the LogCabin cluster.
  */
 class Cluster {
@@ -197,18 +188,12 @@ class Cluster {
     /**
      * Constructor.
      * \param hosts
-     *      A comma-separated list of host:port, for example,
-     *      192.168.1.10:2106,192.168.1.11:2106,192.168.1.12:2106
+     *      A string describing the hosts in the cluster. This should be of the
+     *      form host:port, where host is usually a DNS name that resolves to
+     *      multiple IP addresses.
      */
     explicit Cluster(const std::string& hosts);
     ~Cluster();
-
-    /**
-     * Register a callback for the cluster being inaccessible.
-     * \param callback
-     *      The new callback.
-     */
-    void registerErrorCallback(std::unique_ptr<ErrorCallback> callback);
 
     /**
      * Open the log by the given name.
