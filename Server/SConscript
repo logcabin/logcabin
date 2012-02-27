@@ -1,0 +1,12 @@
+Import('env')
+
+src = [
+    "ClientService.cc",
+    "#build/proto/dlog.pb.o",
+    "#build/proto/Client.o",
+]
+
+env.StaticLibrary("LogCabinServer",
+                  src,
+                  CPPPATH = [ "#" ])
+
