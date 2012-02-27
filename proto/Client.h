@@ -36,10 +36,13 @@ namespace Client {
 const uint32_t MAX_MESSAGE_LENGTH = 1024 + 1024 * 1024;
 
 /**
- * In version 1 of the protocol, this is the header format for requests from
- * clients to servers.
+ * This is the first part of the request header that clients send, common to
+ * all versions of the protocol. Servers can always expect to receive this and
+ * clients must always send this.
+ * This needs to be separate struct because when a server receives a request,
+ * it does not know the type of the request, as that depends on its version.
  */
-struct RequestHeaderVersion1 {
+struct RequestHeaderPrefix {
     /**
      * Convert the contents to host order from big endian (how this header
      * should be transferred on the network).
@@ -56,6 +59,33 @@ struct RequestHeaderVersion1 {
      * now.
      */
     uint8_t version;
+};
+
+/**
+ * In version 1 of the protocol, this is the header format for requests from
+ * clients to servers.
+ */
+struct RequestHeaderVersion1 {
+    /**
+     * Convert the contents to host order from big endian (how this header
+     * should be transferred on the network).
+     * \warning
+     *      This does not modify #prefix.
+     */
+    void fromBigEndian();
+    /**
+     * Convert the contents to big endian (how this header should be
+     * transferred on the network) from host order.
+     * \warning
+     *      This does not modify #prefix.
+     */
+    void toBigEndian();
+
+    /**
+     * This is common to all versions of the protocol. Servers can always
+     * expect to receive this and clients must always send this.
+     */
+    RequestHeaderPrefix prefix;
 
     /**
      * This identifies which RPC is being executed.
@@ -99,10 +129,14 @@ enum class Status : uint8_t {
 };
 
 /**
- * In version 1 of the protocol, this is the header format for responses from
- * servers to clients.
+ * This is the first part of the response header that servers send, common to
+ * all versions of the protocol. Clients can always expect to receive this and
+ * servers must always send this.
+ * This needs to be separate struct because when a client receives a response,
+ * it might have a status of INVALID_VERSION, in which case the client may not
+ * assume anything about the remaining bytes in the message.
  */
-struct ResponseHeaderVersion1 {
+struct ResponseHeaderPrefix {
     /**
      * Convert the contents to host order from big endian (how this header
      * should be transferred on the network).
@@ -119,9 +153,42 @@ struct ResponseHeaderVersion1 {
      */
     Status status;
 
-    // If status == OK, a protocol buffer follows with the response.
-    // If status == NOT_LEADER, a null-terminated character string may follow
-    //                          describing where to find the leader.
+    // If status != INVALID_VERSION, the response should be cast
+    // to the appropriate ResponseHeaderVersion# struct.
+};
+
+/**
+ * In version 1 of the protocol, this is the header format for responses from
+ * servers to clients.
+ */
+struct ResponseHeaderVersion1 {
+    /**
+     * Convert the contents to host order from big endian (how this header
+     * should be transferred on the network). This is just here for
+     * completeness, as this header has no fields of its own.
+     * \warning
+     *      This does not modify #prefix.
+     */
+    void fromBigEndian();
+    /**
+     * Convert the contents to big endian (how this header should be
+     * transferred on the network) from host order. This is just here for
+     * completeness, as this header has no fields of its own.
+     * \warning
+     *      This does not modify #prefix.
+     */
+    void toBigEndian();
+
+    /**
+     * This is common to all versions of the protocol. Clients can always
+     * expect to receive this and servers must always send this.
+     */
+    ResponseHeaderPrefix prefix;
+
+    // If prefix.status == OK, a protocol buffer follows with the response.
+    // If prefix.status == NOT_LEADER, a null-terminated character string may
+    //                                 follow describing where to find the
+    //                                 leader.
 
 } __attribute__((packed));
 

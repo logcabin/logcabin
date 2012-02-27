@@ -21,29 +21,51 @@ namespace Protocol {
 namespace Client {
 
 void
-RequestHeaderVersion1::fromBigEndian()
+RequestHeaderPrefix::fromBigEndian()
 {
     // version is only 1 byte, nothing to flip
+}
+
+void
+RequestHeaderPrefix::toBigEndian()
+{
+    // version is only 1 byte, nothing to flip
+}
+
+void
+RequestHeaderVersion1::fromBigEndian()
+{
     // opCode is only 1 byte, nothing to flip
 }
 
 void
 RequestHeaderVersion1::toBigEndian()
 {
-    // version is only 1 byte, nothing to flip
     // opCode is only 1 byte, nothing to flip
+}
+
+void
+ResponseHeaderPrefix::fromBigEndian()
+{
+    // status is only 1 byte, nothing to flip
+}
+
+void
+ResponseHeaderPrefix::toBigEndian()
+{
+    // status is only 1 byte, nothing to flip
 }
 
 void
 ResponseHeaderVersion1::fromBigEndian()
 {
-    // status is only 1 byte, nothing to flip
+    // no fields, nothing to flip
 }
 
 void
 ResponseHeaderVersion1::toBigEndian()
 {
-    // status is only 1 byte, nothing to flip
+    // no fields, nothing to flip
 }
 
 } // namespace LogCabin::Protocol::Client

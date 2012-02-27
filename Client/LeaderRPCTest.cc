@@ -28,7 +28,9 @@ namespace LogCabin {
 namespace Client {
 namespace {
 
+using Protocol::Client::RequestHeaderPrefix;
 using Protocol::Client::RequestHeaderVersion1;
+using Protocol::Client::ResponseHeaderPrefix;
 using Protocol::Client::ResponseHeaderVersion1;
 using Protocol::Client::Status;
 using ProtoBuf::ClientRPC::OpCode;
@@ -53,7 +55,8 @@ expectedRequest(uint8_t version,
                              sizeof(RequestHeaderVersion1));
     auto& requestHeader =
         *static_cast<RequestHeaderVersion1*>(buffer.getData());
-    requestHeader.version = version;
+    requestHeader.prefix.version = version;
+    requestHeader.prefix.toBigEndian();
     requestHeader.opCode = opCode;
     requestHeader.toBigEndian();
     return buffer;
@@ -67,7 +70,8 @@ successfulResponse(const google::protobuf::Message& payload)
                              sizeof(ResponseHeaderVersion1));
     auto& responseHeader =
         *static_cast<ResponseHeaderVersion1*>(buffer.getData());
-    responseHeader.status = Status::OK;
+    responseHeader.prefix.status = Status::OK;
+    responseHeader.prefix.toBigEndian();
     responseHeader.toBigEndian();
     return buffer;
 }
@@ -83,7 +87,8 @@ failedResponse(Status status,
                        RPC::Buffer::deleteArrayFn<char>);
     auto& responseHeader =
         *static_cast<ResponseHeaderVersion1*>(buffer.getData());
-    responseHeader.status = status;
+    responseHeader.prefix.status = status;
+    responseHeader.prefix.toBigEndian();
     responseHeader.toBigEndian();
     memcpy(&responseHeader + 1, extra.getData(), extra.getLength());
     return buffer;
@@ -191,13 +196,13 @@ TEST_F(ClientLeaderRPCTest, callServerNotListening) {
     EXPECT_EQ(expResponse, response);
 }
 
-TEST_F(ClientLeaderRPCTest, callOKButUnparsableResponse) {
+TEST_F(ClientLeaderRPCTest, callResponseTooShortForPrefix) {
     EXPECT_DEATH(
             init();
             service.expect(expectedRequest(1, OpCode::OPEN_LOG, request),
-                           failedResponse(Status::OK));
+                           RPC::Buffer());
             leaderRPC->call(OpCode::OPEN_LOG, request, response),
-        "Could not parse server response");
+        "too short");
 }
 
 TEST_F(ClientLeaderRPCTest, callInvalidVersion) {
@@ -207,6 +212,21 @@ TEST_F(ClientLeaderRPCTest, callInvalidVersion) {
                            failedResponse(Status::INVALID_VERSION));
             leaderRPC->call(OpCode::OPEN_LOG, request, response),
         "client is too old");
+}
+
+TEST_F(ClientLeaderRPCTest, callResponseTooShortForHeader) {
+    // It's actually impossible to test this right now,
+    // since sizeof(ResponseHeaderPrefix) ==
+    //       sizeof(ResponseHeaderVersion1)
+}
+
+TEST_F(ClientLeaderRPCTest, callOKButUnparsableResponse) {
+    EXPECT_DEATH(
+            init();
+            service.expect(expectedRequest(1, OpCode::OPEN_LOG, request),
+                           failedResponse(Status::OK));
+            leaderRPC->call(OpCode::OPEN_LOG, request, response),
+        "Could not parse server response");
 }
 
 TEST_F(ClientLeaderRPCTest, callInvalidRequest) {

@@ -23,7 +23,9 @@
 namespace LogCabin {
 namespace Client {
 
+using Protocol::Client::RequestHeaderPrefix;
 using Protocol::Client::RequestHeaderVersion1;
+using Protocol::Client::ResponseHeaderPrefix;
 using Protocol::Client::ResponseHeaderVersion1;
 using Protocol::Client::Status;
 
@@ -60,7 +62,8 @@ LeaderRPC::call(OpCode opCode,
                                  sizeof(RequestHeaderVersion1));
         auto& requestHeader =
             *static_cast<RequestHeaderVersion1*>(requestBuffer.getData());
-        requestHeader.version = 1;
+        requestHeader.prefix.version = 1;
+        requestHeader.prefix.toBigEndian();
         requestHeader.opCode = opCode;
         requestHeader.toBigEndian();
 
@@ -88,10 +91,31 @@ LeaderRPC::call(OpCode opCode,
 
         // Extract the response's status field.
         RPC::Buffer responseBuffer = rpc.extractReply();
+        if (responseBuffer.getLength() < sizeof(ResponseHeaderPrefix)) {
+            PANIC("The response from the server was too short to be valid. "
+                  "This probably indicates network or memory corruption.");
+        }
+        auto& responseHeaderPrefix =
+            *static_cast<ResponseHeaderPrefix*>(responseBuffer.getData());
+        responseHeaderPrefix.fromBigEndian();
+        if (responseHeaderPrefix.status == Status::INVALID_VERSION) {
+            // The server doesn't understand this version of the header
+            // protocol. Since this library only runs version 1 of the
+            // protocol, this shouldn't happen if servers continue supporting
+            // version 1.
+            PANIC("This client is too old to talk to your LogCabin cluster. "
+                  "You'll need to update your LogCabin client library.");
+        }
+
+        if (responseBuffer.getLength() < sizeof(ResponseHeaderVersion1)) {
+            PANIC("The response from the server was too short to be valid. "
+                  "This probably indicates network or memory corruption.");
+        }
         auto& responseHeader =
             *static_cast<ResponseHeaderVersion1*>(responseBuffer.getData());
         responseHeader.fromBigEndian();
-        switch (responseHeader.status) {
+
+        switch (responseHeader.prefix.status) {
 
             // The RPC succeeded. Parse the response into a protocol buffer.
             case Status::OK:
@@ -101,16 +125,6 @@ LeaderRPC::call(OpCode opCode,
                 }
                 return;
 
-            // The server doesn't understand this version of the header
-            // protocol. Since this library only runs version 1 of the
-            // protocol, this shouldn't happen if servers continue supporting
-            // version 1.
-            case Status::INVALID_VERSION: {
-                PANIC("This client is too old to talk to your "
-                      "LogCabin cluster. You'll need to update your "
-                      "LogCabin client library.");
-                break;
-            }
 
             // The server disliked our request. This shouldn't happen because
             // the higher layers of software were supposed to negotiate an RPC
@@ -143,7 +157,7 @@ LeaderRPC::call(OpCode opCode,
                 PANIC("Unknown status %u returned from server after sending "
                       "it protocol version 1 in the request header. This "
                       "probably indicates a bug in the server.",
-                      responseHeader.status);
+                      responseHeader.prefix.status);
         }
     }
 }
