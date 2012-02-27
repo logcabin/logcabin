@@ -32,7 +32,8 @@ namespace {
 std::string
 truncateEnd(std::string str)
 {
-    str.resize(str.length() - 1);
+    if (!str.empty())
+        str.resize(str.length() - 1, 0);
     return str;
 }
 
