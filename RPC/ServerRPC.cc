@@ -18,6 +18,14 @@
 namespace LogCabin {
 namespace RPC {
 
+ServerRPC::ServerRPC()
+    : request()
+    , response()
+    , messageSocket()
+    , messageId(~0UL)
+{
+}
+
 ServerRPC::ServerRPC(
         std::weak_ptr<Server::ServerMessageSocket> messageSocket,
         MessageSocket::MessageId messageId,

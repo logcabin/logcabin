@@ -24,6 +24,15 @@ namespace {
 // There's not much here to test except for sendReply, which is difficult to
 // test.
 
+TEST(RPCServerRPCTest, constructor_default)
+{
+    // make sure a default-constructed ServerRPC is harmless
+    ServerRPC rpc;
+    rpc.sendReply();
+    rpc.closeSession();
+}
+
+
 } // namespace LogCabin::RPC::<anonymous>
 } // namespace LogCabin::RPC
 } // namespace LogCabin

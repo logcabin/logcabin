@@ -10,6 +10,7 @@ src = [
     "ServerRPC.cc",
     "Server.cc",
     "TCPListener.cc",
+    "ThreadDispatchService.cc",
 ]
 
 env.StaticLibrary("LogCabinRPC",

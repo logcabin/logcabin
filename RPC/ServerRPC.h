@@ -49,6 +49,13 @@ class ServerRPC {
 
   public:
     /**
+     * Default constructor for empty RPC that can't be replied to.
+     * This is useful as a placeholder for a real ServerRPC.
+     */
+    ServerRPC();
+
+
+    /**
      * Move constructor.
      */
     ServerRPC(ServerRPC&& other);
