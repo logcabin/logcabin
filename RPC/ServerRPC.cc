@@ -23,6 +23,7 @@ ServerRPC::ServerRPC()
     , response()
     , messageSocket()
     , messageId(~0UL)
+    , responseTarget(NULL)
 {
 }
 
@@ -34,6 +35,7 @@ ServerRPC::ServerRPC(
     , response()
     , messageSocket(messageSocket)
     , messageId(messageId)
+    , responseTarget(NULL)
 {
 }
 
@@ -42,6 +44,7 @@ ServerRPC::ServerRPC(ServerRPC&& other)
     , response(std::move(other.response))
     , messageSocket(std::move(other.messageSocket))
     , messageId(std::move(other.messageId))
+    , responseTarget(std::move(other.responseTarget))
 {
 }
 
@@ -56,6 +59,7 @@ ServerRPC::operator=(ServerRPC&& other)
     response = std::move(other.response);
     messageSocket = std::move(other.messageSocket);
     messageId = std::move(other.messageId);
+    responseTarget = std::move(other.responseTarget);
     return *this;
 }
 
@@ -66,6 +70,7 @@ ServerRPC::closeSession()
     if (socket)
         socket->close();
     messageSocket.reset();
+    responseTarget = NULL;
 }
 
 void
@@ -75,8 +80,17 @@ ServerRPC::sendReply()
     if (socket) {
         socket->sendMessage(messageId, std::move(response));
     } else {
-        // Either the socket has been disconnected or the reply has already
-        // been sent. Either way, drop it on the floor.
+        // During normal operation, this indicates that either the socket has
+        // been disconnected or the reply has already been sent.
+
+        // For unit testing only, we can store replies from mock RPCs
+        // that have no sessions.
+        if (responseTarget != NULL) {
+            *responseTarget = std::move(response);
+            responseTarget = NULL;
+        }
+
+        // Drop the reply on the floor.
         response.reset();
     }
     // Prevent the server from replying again.

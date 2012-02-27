@@ -107,6 +107,13 @@ class ServerRPC {
      */
     MessageSocket::MessageId messageId;
 
+    /**
+     * This is used in unit testing only. During normal operation, this is
+     * always NULL. If this is not NULL when sendReply() is invoked, the reply
+     * will be moved here.
+     */
+    Buffer* responseTarget;
+
     // The Server class uses the private members of this object.
     friend class Server;
 
