@@ -206,8 +206,8 @@ MessageSocket::read(void* buf, size_t maxBytes)
     ssize_t actual = recv(socket.fd, buf, maxBytes, MSG_DONTWAIT);
     if (actual > 0)
         return actual;
-    if (actual == 0) {
-        // peer performed orderly shutdown.
+    if (actual == 0 || // peer performed orderly shutdown.
+        errno == ECONNRESET || errno == ETIMEDOUT) {
         socket.close();
         // This must be the last line to touch this object, in case
         // onDisconnect() deletes this object.
