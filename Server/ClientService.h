@@ -13,6 +13,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <cinttypes>
+
 #include "RPC/Service.h"
 
 #ifndef LOGCABIN_SERVER_CLIENTSERVICE_H
@@ -21,6 +23,9 @@
 namespace LogCabin {
 namespace Server {
 
+// forward declaration
+class Globals;
+
 /**
  * This is LogCabin's application-facing RPC service. As some of these RPCs may
  * be long-running, this is intended to run under a RPC::ThreadDispatchService.
@@ -28,7 +33,7 @@ namespace Server {
 class ClientService : public RPC::Service {
   public:
     /// Constructor.
-    ClientService();
+    explicit ClientService(Globals& globals);
 
     /// Destructor.
     ~ClientService();
@@ -41,6 +46,11 @@ class ClientService : public RPC::Service {
 
     void getSupportedRPCVersions(RPC::ServerRPC rpc, uint32_t skipBytes);
 
+
+    /**
+     * The LogCabin daemon's top-level objects.
+     */
+    Globals& globals;
 
     // ClientService is non-copyable.
     ClientService(const ClientService&) = delete;

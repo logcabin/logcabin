@@ -22,6 +22,7 @@
 #include "RPC/ProtoBuf.h"
 #include "RPC/ServerRPC.h"
 #include "Server/ClientService.h"
+#include "Server/Globals.h"
 
 namespace LogCabin {
 namespace Server {
@@ -38,7 +39,8 @@ using RPC::Buffer;
 
 class ServerClientServiceTest : public ::testing::Test {
     ServerClientServiceTest()
-        : service()
+        : globals()
+        , service(globals)
         , reply()
     {
     }
@@ -76,6 +78,7 @@ class ServerClientServiceTest : public ::testing::Test {
                                          sizeof(ResponseHeaderVersion1)));
     }
 
+    Globals globals;
     ClientService service;
     Buffer reply;
 };

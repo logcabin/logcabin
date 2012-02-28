@@ -2,6 +2,7 @@ Import('env')
 
 src = [
     "ClientService.cc",
+    "Globals.cc",
     "#build/proto/dlog.pb.o",
     "#build/proto/Client.o",
 ]
@@ -10,3 +11,19 @@ env.StaticLibrary("LogCabinServer",
                   src,
                   CPPPATH = [ "#" ])
 
+env.Program("LogCabin", "Main.cc",
+            LIBPATH = [
+                "#build/libDLogRPC",
+                "#build/Server",
+                "#build/RPC",
+                "#build/Event",
+                "#build/Core",
+            ],
+            LIBS = [ "libLogCabinServer",
+                     "libLogCabinRPC",
+                     "libLogCabinEvent",
+                     "libLogCabinCore",
+                     "libDLogRPC",
+                     "pthread", "protobuf", "rt", "cryptopp",
+                     "event_core-2.0", "event_pthreads-2.0" ],
+            CPPPATH = [ "#include", "#" ])

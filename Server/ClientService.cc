@@ -22,6 +22,7 @@
 #include "RPC/ProtoBuf.h"
 #include "RPC/ServerRPC.h"
 #include "Server/ClientService.h"
+#include "Server/Globals.h"
 
 namespace LogCabin {
 namespace Server {
@@ -93,7 +94,8 @@ fail(ServerRPC rpc,
 
 } // anonymous namespace
 
-ClientService::ClientService()
+ClientService::ClientService(Globals& globals)
+    : globals(globals)
 {
 }
 
