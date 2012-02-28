@@ -56,8 +56,14 @@ ClientRPC::operator=(ClientRPC&& other)
 void
 ClientRPC::cancel()
 {
-    if (!ready)
+    if (ready)
+        return;
+    if (session)
         session->cancel(*this);
+    ready = true;
+    session.reset();
+    reply.reset();
+    errorMessage = "RPC canceled by user";
 }
 
 Buffer
@@ -70,14 +76,14 @@ ClientRPC::extractReply()
 }
 
 std::string
-ClientRPC::getErrorMessage() const
+ClientRPC::getErrorMessage()
 {
     update();
     return errorMessage;
 }
 
 bool
-ClientRPC::isReady() const
+ClientRPC::isReady()
 {
     update();
     return ready;
@@ -93,30 +99,26 @@ ClientRPC::peekReply()
         return NULL;
 }
 
-const Buffer*
-ClientRPC::peekReply() const
-{
-    update();
-    if (ready && errorMessage.empty())
-        return &reply;
-    else
-        return NULL;
-}
-
 void
-ClientRPC::waitForReply() const
+ClientRPC::waitForReply()
 {
-    if (!ready)
-        session->wait(*const_cast<ClientRPC*>(this));
+    if (ready)
+        return;
+    if (session) {
+        session->wait(*this);
+    } else {
+        ready = true;
+        errorMessage = "This RPC was never associated with a ClientSession.";
+    }
 }
 
 ///// private methods /////
 
 void
-ClientRPC::update() const
+ClientRPC::update()
 {
-    if (!ready)
-        session->update(*const_cast<ClientRPC*>(this));
+    if (!ready && session)
+        session->update(*this);
 }
 
 } // namespace LogCabin::RPC

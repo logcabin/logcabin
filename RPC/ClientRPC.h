@@ -43,13 +43,12 @@ class ClientRPC {
             : std::runtime_error(message) {}
     };
 
-  private:
     /**
-     * Constructor for ClientRPC. This is called by ClientSession.
+     * Default constructor. This doesn't create a valid RPC, but it is useful
+     * as a placeholder.
      */
     ClientRPC();
 
-  public:
     /**
      * Move constructor.
      */
@@ -103,7 +102,7 @@ class ClientRPC {
      *      If an error has occurred, a message describing that error.
      *      Otherwise, an empty string.
      */
-    std::string getErrorMessage() const;
+    std::string getErrorMessage();
 
     /**
      * Indicate whether a response or error has been received for
@@ -111,7 +110,7 @@ class ClientRPC {
      * \return
      *      True means the reply is ready or an error has occurred.
      */
-    bool isReady() const;
+    bool isReady();
 
     /**
      * Look at the reply buffer.
@@ -124,26 +123,20 @@ class ClientRPC {
     Buffer* peekReply();
 
     /**
-     * Look at the reply buffer (const variant).
-     * \copydetails peekReply()
-     */
-    const Buffer* peekReply() const;
-
-    /**
      * Block until the reply is ready or an error has occurred.
      *
      * This may be used from worker threads only, because ClientRPC objects
      * rely on the event loop servicing their ClientSession in order to make
      * progress.
      */
-    void waitForReply() const;
+    void waitForReply();
 
   private:
 
     /**
      * Update the fields of this object if the RPC has not completed.
      */
-    void update() const;
+    void update();
 
     /**
      * The session on which this RPC is executing.

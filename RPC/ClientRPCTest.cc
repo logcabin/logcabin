@@ -23,7 +23,22 @@ namespace RPC {
 namespace {
 
 TEST(RPCClientRPCTest, constructor_default) {
-    // nothing to test
+    // make sure a default-constructed RPC object behaves sensibly
+    ClientRPC rpc;
+    EXPECT_EQ("", rpc.getErrorMessage());
+    EXPECT_FALSE(rpc.isReady());
+    EXPECT_THROW(rpc.extractReply(),
+                 ClientRPC::Error);
+    rpc.waitForReply();
+    EXPECT_TRUE(rpc.isReady());
+    EXPECT_EQ("This RPC was never associated with a ClientSession.",
+              rpc.getErrorMessage());
+
+    rpc = ClientRPC();
+    rpc.cancel();
+    EXPECT_TRUE(rpc.isReady());
+    EXPECT_EQ("RPC canceled by user",
+              rpc.getErrorMessage());
 }
 
 TEST(RPCClientRPCTest, constructor_move) {
@@ -71,12 +86,9 @@ TEST(RPCClientRPCTest, peekReply) {
     ClientRPC rpc;
     rpc.ready = true;
     rpc.reply = Buffer(NULL, 3, NULL);
-    const ClientRPC& constRPC = rpc;
     EXPECT_EQ(3U, rpc.peekReply()->getLength());
-    EXPECT_EQ(3U, constRPC.peekReply()->getLength());
     rpc.errorMessage = "foo";
     EXPECT_TRUE(rpc.peekReply() == NULL);
-    EXPECT_TRUE(constRPC.peekReply() == NULL);
 }
 
 TEST(RPCClientRPCTest, waitForReply) {

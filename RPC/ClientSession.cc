@@ -163,11 +163,6 @@ ClientSession::cancel(ClientRPC& rpc)
     // we return from this method. It must be the first line in this method.
     std::shared_ptr<ClientSession> selfGuard(self.lock());
 
-    rpc.ready = true;
-    rpc.session.reset();
-    rpc.reply.reset();
-    rpc.errorMessage = "RPC canceled by user";
-
     std::unique_lock<std::mutex> mutexGuard(mutex);
     auto it = responses.find(rpc.responseToken);
     assert(it != responses.end());
