@@ -70,7 +70,10 @@ MessageSocket::RawSocket::handleFileEvent(uint32_t events)
 {
     if (events & Events::READABLE)
         messageSocket.readable();
-    if (events & Events::WRITABLE)
+    // It's important to not call writable if closed is false:
+    // readable may close the socket, but writable assumes the socket is still
+    // open (so that it may be written to).
+    if (!closed && events & Events::WRITABLE)
         messageSocket.writable();
 }
 
@@ -287,7 +290,7 @@ MessageSocket::writable()
         return;
     }
     // Unexpected error.
-    PANIC("Error while writing to socket: %s", strerror(errno));
+    PANIC("Error while writing to socket %d: %s", socket.fd, strerror(errno));
 }
 
 } // namespace LogCabin::RPC
