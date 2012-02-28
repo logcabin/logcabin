@@ -70,6 +70,7 @@ SConscript('test/SConscript', variant_dir='build/test')
 SConscript('Client/SConscript', variant_dir='build/Client')
 SConscript('Core/SConscript', variant_dir='build/Core')
 SConscript('Event/SConscript', variant_dir='build/Event')
+SConscript('Examples/SConscript', variant_dir='build/Examples')
 SConscript('RPC/SConscript', variant_dir='build/RPC')
 SConscript('Server/SConscript', variant_dir='build/Server')
 

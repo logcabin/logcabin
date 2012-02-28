@@ -1,0 +1,19 @@
+Import('env')
+
+env.Program("HelloWorld",
+            "HelloWorld.cc",
+            LIBPATH = [
+                "#build/libDLogRPC",
+                "#build/Client",
+                "#build/RPC",
+                "#build/Event",
+                "#build/Core",
+            ],
+            LIBS = [ "libLogCabinClient",
+                     "libLogCabinRPC",
+                     "libLogCabinEvent",
+                     "libLogCabinCore",
+                     "libDLogRPC",
+                     "pthread", "protobuf", "rt", "cryptopp",
+                     "event_core-2.0", "event_pthreads-2.0" ],
+            CPPPATH = [ "#include", "#" ])
