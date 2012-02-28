@@ -132,6 +132,9 @@ ClientService::handleRPC(ServerRPC rpc)
         case OpCode::GET_SUPPORTED_RPC_VERSIONS:
             getSupportedRPCVersions(std::move(rpc), skipBytes);
             break;
+        case OpCode::LIST_LOGS:
+            listLogs(std::move(rpc), skipBytes);
+            break;
         default:
             fail(std::move(rpc), Status::INVALID_REQUEST);
     }
@@ -156,6 +159,16 @@ ClientService::getSupportedRPCVersions(ServerRPC rpc, uint32_t skipBytes)
     PRELUDE(GetSupportedRPCVersions);
     response.set_min_version(1);
     response.set_max_version(1);
+    reply(std::move(rpc), response);
+}
+
+void
+ClientService::listLogs(ServerRPC rpc, uint32_t skipBytes)
+{
+    PRELUDE(ListLogs);
+    response.add_log_names("not");
+    response.add_log_names("yet");
+    response.add_log_names("implemented");
     reply(std::move(rpc), response);
 }
 

@@ -13,10 +13,21 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <unistd.h>
+#include <iostream>
+
 #include "Client/Client.h"
 
 int
 main(int argc, char** argv)
 {
     LogCabin::Client::Cluster cluster("localhost:61023");
+    while (true) {
+        std::vector<std::string> logNames = cluster.listLogs();
+        std::cout << "Logs:" << std::endl;
+        for (auto it = logNames.begin(); it != logNames.end(); ++it)
+            std::cout << "- " << *it << std::endl;
+        std::cout << std::endl;
+        usleep(5000);
+    }
 }
