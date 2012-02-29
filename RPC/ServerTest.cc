@@ -89,6 +89,14 @@ TEST_F(RPCServerTest, MessageSocket_onReceiveMessage) {
     EXPECT_EQ(1U, service.lastRPC->messageId);
 }
 
+TEST_F(RPCServerTest, MessageSocket_onReceiveMessage_ping) {
+    server.listener.handleNewConnection(fd1);
+    Server::ServerMessageSocket& socket = *server.sockets.at(0);
+    socket.onReceiveMessage(0, Buffer());
+    ASSERT_FALSE(service.lastRPC);
+    EXPECT_EQ(1U, socket.outboundQueue.size());
+}
+
 TEST_F(RPCServerTest, MessageSocket_onDisconnect) {
     server.listener.handleNewConnection(fd1);
     fd1 = -1;

@@ -21,6 +21,12 @@
 #include "RPC/ServerRPC.h"
 #include "RPC/Service.h"
 
+/**
+ * A message ID reserved for ping messages used to check the server's liveness.
+ * No real RPC will ever be assigned this ID.
+ */
+enum { PING_MESSAGE_ID = 0 };
+
 namespace LogCabin {
 namespace RPC {
 
@@ -63,7 +69,14 @@ void
 Server::ServerMessageSocket::onReceiveMessage(MessageId messageId,
                                               Buffer message)
 {
+    // Reply to ping requests here.
+    if (messageId == PING_MESSAGE_ID) {
+        LOG(DBG, "Responding to ping");
+        sendMessage(PING_MESSAGE_ID, Buffer());
+        return;
+    }
     if (server != NULL) {
+        LOG(DBG, "Handling RPC");
         ServerRPC rpc(self, messageId, std::move(message));
         server->service.handleRPC(std::move(rpc));
     }
@@ -72,6 +85,7 @@ Server::ServerMessageSocket::onReceiveMessage(MessageId messageId,
 void
 Server::ServerMessageSocket::onDisconnect()
 {
+    LOG(DBG, "Disconnected from client");
     close();
 }
 

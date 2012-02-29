@@ -19,6 +19,7 @@
 #include <string>
 #include <unordered_map>
 
+#include "Event/Timer.h"
 #include "RPC/Address.h"
 #include "RPC/Buffer.h"
 #include "RPC/ClientRPC.h"
@@ -40,7 +41,6 @@ namespace RPC {
  * A ClientSession is used to initiate ClientRPCs. It encapsulates a connection
  * to a server. Sessions can be relatively expensive to create, so clients
  * should keep them around.
- * TODO(ongaro): Implement RPC/Session timeouts.
  */
 class ClientSession {
   private:
@@ -142,6 +142,19 @@ class ClientSession {
         Buffer reply;
     };
 
+    /**
+     * This is used to time out RPCs and sessions when the server is no longer
+     * responding. After a timeout period, the client will send a ping to the
+     * server. If no response is received within another timeout period, the
+     * session is closed.
+     */
+    class Timer : public Event::Timer {
+      public:
+        explicit Timer(ClientSession& session);
+        void handleTimerEvent();
+        ClientSession& session;
+    };
+
     // The cancel(), update(), and wait() methods are used by ClientRPC.
     friend class ClientRPC;
 
@@ -183,14 +196,21 @@ class ClientSession {
     std::unique_ptr<ClientMessageSocket> messageSocket;
 
     /**
-     * Provides mutual exclusion for #nextMessageId, #responseReceived,
-     * #responses, and #errorMessage.
+     * This is used to time out RPCs and sessions when the server is no longer
+     * responding. See Timer.
+     */
+    Timer timer;
+
+    /**
+     * This mutex protects all of the members of this class defined below this
+     * point.
      */
     mutable std::mutex mutex;
 
     /**
-     * The message ID to assign to the next RPC. These start at 0 and
-     * increment from there.
+     * The message ID to assign to the next RPC. These start at 1 and
+     * increment from there; the value 0 is reserved for ping messages to check
+     * server liveness.
      */
     MessageSocket::MessageId nextMessageId;
 
@@ -214,6 +234,20 @@ class ClientSession {
      * Otherwise, this is the empty string.
      */
     std::string errorMessage;
+
+    /**
+     * The number of outstanding RPC requests that have been sent but whose
+     * responses have not yet been received. This does not include ping
+     * requests sent by the #timer (which aren't real RPCs).
+     */
+    uint32_t numActiveRPCs;
+
+    /**
+     * When numActiveRPCs is > 0, this field indicates that we are waiting for
+     * a ping response as evidence that the server is still alive.
+     * When numActiveRPCs = 0, this field is undefined.
+     */
+    bool activePing;
 
     // ClientSession is non-copyable.
     ClientSession(const ClientSession&) = delete;

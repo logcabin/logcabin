@@ -77,23 +77,68 @@ buf(const char* stringLiteral)
 }
 
 TEST_F(RPCClientSessionTest, onReceiveMessage) {
+    session->numActiveRPCs = 1;
+
     // Unexpected
-    session->messageSocket->onReceiveMessage(0, buf("a"));
+    session->messageSocket->onReceiveMessage(1, buf("a"));
 
     // Normal
-    session->responses[0] = new ClientSession::Response();
-    session->messageSocket->onReceiveMessage(0, buf("b"));
-    EXPECT_TRUE(session->responses[0]->ready);
-    EXPECT_EQ("b", str(session->responses[0]->reply));
+    session->timer.schedule(1);
+    session->responses[1] = new ClientSession::Response();
+    session->messageSocket->onReceiveMessage(1, buf("b"));
+    EXPECT_TRUE(session->responses[1]->ready);
+    EXPECT_EQ("b", str(session->responses[1]->reply));
+    EXPECT_EQ(0U, session->numActiveRPCs);
+    EXPECT_FALSE(session->timer.isScheduled());
 
     // Already ready
-    session->messageSocket->onReceiveMessage(0, buf("c"));
-    EXPECT_EQ("b", str(session->responses[0]->reply));
+    session->messageSocket->onReceiveMessage(1, buf("c"));
+    EXPECT_EQ("b", str(session->responses[1]->reply));
+    EXPECT_EQ(0U, session->numActiveRPCs);
+}
+
+TEST_F(RPCClientSessionTest, onReceiveMessage_ping) {
+    // spurious
+    session->messageSocket->onReceiveMessage(0, Buffer());
+
+    // ping requested
+    session->numActiveRPCs = 1;
+    session->activePing = true;
+    session->messageSocket->onReceiveMessage(0, Buffer());
+    session->numActiveRPCs = 0;
+    EXPECT_FALSE(session->activePing);
+    EXPECT_TRUE(session->timer.isScheduled());
 }
 
 TEST_F(RPCClientSessionTest, onDisconnect) {
     session->messageSocket->onDisconnect();
     EXPECT_EQ("Disconnected from server", session->errorMessage);
+}
+
+TEST_F(RPCClientSessionTest, handleTimerEvent) {
+    // spurious
+    std::unique_ptr<ClientSession::ClientMessageSocket> oldMessageSocket;
+    std::swap(oldMessageSocket, session->messageSocket);
+    session->timer.handleTimerEvent();
+    std::swap(oldMessageSocket, session->messageSocket);
+    session->timer.handleTimerEvent();
+    // make sure no actions were taken:
+    EXPECT_FALSE(session->timer.isScheduled());
+    EXPECT_EQ("", session->errorMessage);
+
+    // need to send ping
+    session->numActiveRPCs = 1;
+    session->timer.handleTimerEvent();
+    EXPECT_TRUE(session->activePing);
+    char b;
+    EXPECT_EQ(1U, read(remote, &b, 1));
+    EXPECT_TRUE(session->timer.isScheduled());
+
+    // need to time out session
+    session->numActiveRPCs = 1;
+    session->timer.handleTimerEvent();
+    EXPECT_EQ("Server timed out", session->errorMessage);
+    session->numActiveRPCs = 0;
 }
 
 TEST_F(RPCClientSessionTest, constructor) {
@@ -115,13 +160,17 @@ TEST_F(RPCClientSessionTest, destructor) {
 }
 
 TEST_F(RPCClientSessionTest, sendRequest) {
-    EXPECT_EQ(0U, session->nextMessageId);
-    ClientRPC rpc = session->sendRequest(buf("hi"));
-    EXPECT_EQ(session, rpc.session);
-    EXPECT_EQ(0U, rpc.responseToken);
-    EXPECT_FALSE(rpc.ready);
     EXPECT_EQ(1U, session->nextMessageId);
-    auto it = session->responses.find(0);
+    session->activePing = true;
+    ClientRPC rpc = session->sendRequest(buf("hi"));
+    EXPECT_EQ(1U, session->numActiveRPCs);
+    EXPECT_FALSE(session->activePing);
+    EXPECT_TRUE(session->timer.isScheduled());
+    EXPECT_EQ(session, rpc.session);
+    EXPECT_EQ(1U, rpc.responseToken);
+    EXPECT_FALSE(rpc.ready);
+    EXPECT_EQ(2U, session->nextMessageId);
+    auto it = session->responses.find(1);
     ASSERT_TRUE(it != session->responses.end());
     ClientSession::Response& response = *it->second;
     EXPECT_FALSE(response.ready);
@@ -135,7 +184,9 @@ TEST_F(RPCClientSessionTest, getErrorMessage) {
 
 TEST_F(RPCClientSessionTest, cancel) {
     ClientRPC rpc = session->sendRequest(buf("hi"));
+    EXPECT_EQ(1U, session->numActiveRPCs);
     rpc.cancel();
+    EXPECT_EQ(0U, session->numActiveRPCs);
     EXPECT_TRUE(rpc.ready);
     EXPECT_FALSE(rpc.session);
     EXPECT_EQ(0U, rpc.reply.getLength());
@@ -154,7 +205,7 @@ TEST_F(RPCClientSessionTest, updateNotReady) {
 
 TEST_F(RPCClientSessionTest, updateReady) {
     ClientRPC rpc = session->sendRequest(buf("hi"));
-    auto it = session->responses.find(0);
+    auto it = session->responses.find(1);
     ASSERT_TRUE(it != session->responses.end());
     ClientSession::Response& response = *it->second;
     response.ready = true;
@@ -184,7 +235,7 @@ TEST_F(RPCClientSessionTest, waitNotReady) {
 
 TEST_F(RPCClientSessionTest, waitReady) {
     ClientRPC rpc = session->sendRequest(buf("hi"));
-    auto it = session->responses.find(0);
+    auto it = session->responses.find(1);
     ASSERT_TRUE(it != session->responses.end());
     ClientSession::Response& response = *it->second;
     response.ready = true;

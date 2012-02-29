@@ -18,6 +18,26 @@
 #include "include/Debug.h"
 #include "RPC/ClientSession.h"
 
+/**
+ * The number of milliseconds to wait until the client gets suspicious about
+ * the server not responding. After this amount of time elapses, the client
+ * will send a ping to the server. If no response is received within another
+ * TIMEOUT_MS milliseconds, the session is closed.
+ *
+ * TODO(ongaro): How should this value be chosen?
+ * Ideally, you probably want this to be set to something like the 99-th
+ * percentile of your RPC latency.
+ *
+ * TODO(ongaro): How does this interact with TCP?
+ */
+enum { TIMEOUT_MS = 100 };
+
+/**
+ * A message ID reserved for ping messages used to check the server's liveness.
+ * No real RPC will ever be assigned this ID.
+ */
+enum { PING_MESSAGE_ID = 0 };
+
 namespace LogCabin {
 namespace RPC {
 
@@ -37,6 +57,23 @@ ClientSession::ClientMessageSocket::onReceiveMessage(MessageId messageId,
                                                      Buffer message)
 {
     std::unique_lock<std::mutex> mutexGuard(session.mutex);
+
+    if (messageId == PING_MESSAGE_ID) {
+        if (session.numActiveRPCs > 0 && session.activePing) {
+            // The server has shown that it is alive for now.
+            // Let's get suspicious again in another TIMEOUT_MS.
+            session.activePing = false;
+            session.timer.schedule(TIMEOUT_MS * 1000 * 1000);
+        } else {
+            LOG(DBG, "Received an unexpected ping response. This can happen "
+                     "for a number of reasons and is no cause for alarm. For "
+                     "example, this happens if a ping request was sent out, "
+                     "then all RPCs completed before the ping response "
+                     "arrived.");
+        }
+        return;
+    }
+
     auto it = session.responses.find(messageId);
     if (it == session.responses.end()) {
         LOG(DBG, "Received an unexpected response with message ID %lu. "
@@ -55,6 +92,15 @@ ClientSession::ClientMessageSocket::onReceiveMessage(MessageId messageId,
             messageId);
         return;
     }
+
+    // Book-keeping for timeouts
+    --session.numActiveRPCs;
+    if (session.numActiveRPCs == 0)
+        session.timer.deschedule();
+    else
+        session.timer.schedule(TIMEOUT_MS * 1000 * 1000);
+
+    // Fill in the response
     response.ready = true;
     response.reply = std::move(message);
     // This is inefficient when there are many RPCs outstanding, but that's
@@ -65,11 +111,14 @@ ClientSession::ClientMessageSocket::onReceiveMessage(MessageId messageId,
 void
 ClientSession::ClientMessageSocket::onDisconnect()
 {
+    LOG(DBG, "Disconnected from server");
     std::unique_lock<std::mutex> mutexGuard(session.mutex);
-    // Fail all current and future RPCs.
-    session.errorMessage = "Disconnected from server";
-    // Notify any waiting RPCs.
-    session.responseReceived.notify_all();
+    if (session.errorMessage.empty()) {
+        // Fail all current and future RPCs.
+        session.errorMessage = "Disconnected from server";
+        // Notify any waiting RPCs.
+        session.responseReceived.notify_all();
+    }
 }
 
 ////////// ClientSession::Response //////////
@@ -80,6 +129,41 @@ ClientSession::Response::Response()
 {
 }
 
+////////// ClientSession::Timer //////////
+
+ClientSession::Timer::Timer(ClientSession& session)
+    : Event::Timer(session.eventLoop)
+    , session(session)
+{
+}
+
+void
+ClientSession::Timer::handleTimerEvent()
+{
+    std::unique_lock<std::mutex> mutexGuard(session.mutex);
+
+    // Handle "spurious" wake-ups.
+    if (!session.messageSocket ||
+        session.numActiveRPCs == 0 ||
+        !session.errorMessage.empty()) {
+        return;
+    }
+
+    // Send a ping or expire the session.
+    if (!session.activePing) {
+        LOG(DBG, "ClientSession is suspicious. Sending ping.");
+        session.activePing = true;
+        session.messageSocket->sendMessage(PING_MESSAGE_ID, Buffer());
+        schedule(TIMEOUT_MS * 1000 * 1000);
+    } else {
+        LOG(DBG, "ClientSession timed out.");
+        // Fail all current and future RPCs.
+        session.errorMessage = "Server timed out";
+        // Notify any waiting RPCs.
+        session.responseReceived.notify_all();
+    }
+}
+
 ////////// ClientSession //////////
 
 ClientSession::ClientSession(Event::Loop& eventLoop,
@@ -88,11 +172,14 @@ ClientSession::ClientSession(Event::Loop& eventLoop,
     : self() // makeSession will fill this in shortly
     , eventLoop(eventLoop)
     , messageSocket()
+    , timer(*this)
     , mutex()
-    , nextMessageId(0)
+    , nextMessageId(1) // 0 is reserved for PING_MESSAGE_ID
     , responseReceived()
     , responses()
     , errorMessage()
+    , numActiveRPCs(0)
+    , activePing(false)
 {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
@@ -124,6 +211,7 @@ ClientSession::makeSession(Event::Loop& eventLoop,
 
 ClientSession::~ClientSession()
 {
+    timer.deschedule();
     for (auto it = responses.begin(); it != responses.end(); ++it)
         delete it->second;
 }
@@ -137,6 +225,13 @@ ClientSession::sendRequest(Buffer request)
         messageId = nextMessageId;
         ++nextMessageId;
         responses[messageId] = new Response();
+
+        ++numActiveRPCs;
+        if (numActiveRPCs == 1) {
+            // activePing's value was undefined while numActiveRPCs = 0
+            activePing = false;
+            timer.schedule(TIMEOUT_MS * 1000 * 1000);
+        }
     }
     // Release the mutex before sending so that receives can be processed
     // simultaneously with sends.
@@ -164,6 +259,13 @@ ClientSession::cancel(ClientRPC& rpc)
     std::shared_ptr<ClientSession> selfGuard(self.lock());
 
     std::unique_lock<std::mutex> mutexGuard(mutex);
+
+    --numActiveRPCs;
+    // Even if numActiveRPCs == 0, it's simpler here to just let the timer wake
+    // up an extra time and clean up. Otherwise, we'd need to grab an
+    // Event::Loop::Lock prior to the mutex to call deschedule() without
+    // inducing deadlock.
+
     auto it = responses.find(rpc.responseToken);
     assert(it != responses.end());
     delete it->second;
