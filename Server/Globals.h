@@ -15,7 +15,7 @@
 
 #include <memory>
 
-#include "include/Config.h"
+#include "Core/Config.h"
 #include "Event/Loop.h"
 #include "Event/Signal.h"
 
@@ -75,7 +75,7 @@ class Globals {
     /**
      * Global configuration options.
      */
-    DLog::Config config;
+    Core::Config config;
 
     /**
      * The event loop that runs the RPC system.

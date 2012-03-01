@@ -1,6 +1,7 @@
 Import('env')
 
 src = [
+    "Config.cc",
     "Random.cc",
     "ThreadId.cc",
 ]
