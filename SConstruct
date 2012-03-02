@@ -73,6 +73,7 @@ SConscript('Event/SConscript', variant_dir='build/Event')
 SConscript('Examples/SConscript', variant_dir='build/Examples')
 SConscript('RPC/SConscript', variant_dir='build/RPC')
 SConscript('Server/SConscript', variant_dir='build/Server')
+SConscript('Storage/SConscript', variant_dir='build/Storage')
 
 # This function is taken from http://www.scons.org/wiki/PhonyTargets
 def PhonyTargets(env = None, **kw):

@@ -1,0 +1,12 @@
+Import('env')
+
+src = [
+    "LogEntry.cc",
+    "Factory.cc",
+    "MemoryModule.cc",
+]
+
+env.StaticLibrary("LogCabinStorage",
+                  src,
+                  CPPPATH = [ "#" ])
+
