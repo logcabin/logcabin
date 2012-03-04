@@ -23,6 +23,8 @@ namespace {
 
 TEST(ServerGlobalsTest, basics) {
     Globals globals;
+    globals.config.set("storageModule", "memory");
+    globals.config.set("uuid", "my-fake-uuid-123");
     globals.init();
     globals.eventLoop.exit();
     globals.run();

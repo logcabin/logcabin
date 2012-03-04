@@ -16,6 +16,7 @@
 #include <memory>
 
 #include "Core/Config.h"
+#include "Core/RWPtr.h"
 #include "Event/Loop.h"
 #include "Event/Signal.h"
 
@@ -32,8 +33,9 @@ class Server;
 
 namespace Server {
 
-// forward declaration
+// forward declarations
 class ClientService;
+class LogManager;
 
 /**
  * Holds the LogCabin daemon's top-level objects.
@@ -89,6 +91,13 @@ class Globals {
      */
     SigIntHandler sigIntHandler;
 
+  public:
+    /**
+     * Used by #clientService for managing and accessing logs.
+     */
+    Core::RWManager<LogManager> logManager;
+
+  private:
     /**
      * The application-facing facing RPC service.
      */

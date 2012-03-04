@@ -17,10 +17,11 @@
 
 #include "include/Debug.h"
 #include "proto/Client.h"
-#include "Server/ClientService.h"
-#include "Server/Globals.h"
 #include "RPC/Server.h"
 #include "RPC/ThreadDispatchService.h"
+#include "Server/ClientService.h"
+#include "Server/Globals.h"
+#include "Server/LogManager.h"
 
 namespace LogCabin {
 namespace Server {
@@ -45,6 +46,7 @@ Globals::Globals()
     : config()
     , eventLoop()
     , sigIntHandler(eventLoop)
+    , logManager()
     , clientService()
     , dispatchService()
     , rpcServer()
@@ -53,11 +55,18 @@ Globals::Globals()
 
 Globals::~Globals()
 {
+    // LogManager assumes it and its logs have no active users when it is
+    // destroyed. Currently, the only user is clientService, and this is
+    // guaranteed by clientService's destructor.
 }
 
 void
 Globals::init()
 {
+    if (logManager.getExclusiveAccess().get() == NULL) {
+        logManager.reset(new LogManager(config));
+    }
+
     if (!clientService) {
         clientService.reset(new Server::ClientService(*this));
     }
