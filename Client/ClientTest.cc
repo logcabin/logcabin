@@ -155,31 +155,31 @@ TEST_F(ClientLogTest, append_withInvalidates)
               *mockRPC->popRequest());
 }
 
-TEST_F(ClientLogTest, append_previousIdOk)
+TEST_F(ClientLogTest, append_expectedIdOk)
 {
     Client::Entry entry("hello", 5);
     mockRPC->expect(OpCode::APPEND,
         ProtoBuf::fromString<ProtoBuf::ClientRPC::Append::Response>(
             "ok { entry_id: 32 }"));
     EXPECT_EQ(32U,
-              log->append(entry, 31));
+              log->append(entry, 32));
     EXPECT_EQ("log_id: 1 "
               "data: 'hello' "
-              "previous_entry_id: 31",
+              "expected_entry_id: 32",
               *mockRPC->popRequest());
 }
 
-TEST_F(ClientLogTest, append_previousIdStale)
+TEST_F(ClientLogTest, append_expectedIdStale)
 {
     Client::Entry entry("hello", 5);
     mockRPC->expect(OpCode::APPEND,
         ProtoBuf::fromString<ProtoBuf::ClientRPC::Append::Response>(
             DLog::format("ok { entry_id: %lu }", Client::NO_ID)));
     EXPECT_EQ(Client::NO_ID,
-              log->append(entry, 31));
+              log->append(entry, 32));
     EXPECT_EQ("log_id: 1 "
               "data: 'hello' "
-              "previous_entry_id: 31",
+              "expected_entry_id: 32",
               *mockRPC->popRequest());
 }
 
@@ -207,29 +207,29 @@ TEST_F(ClientLogTest, invalidate_empty)
               *mockRPC->popRequest());
 }
 
-TEST_F(ClientLogTest, invalidate_previousIdOK)
+TEST_F(ClientLogTest, invalidate_expectedIdOK)
 {
     mockRPC->expect(OpCode::APPEND,
         ProtoBuf::fromString<ProtoBuf::ClientRPC::Append::Response>(
             "ok { entry_id: 32 }"));
     EXPECT_EQ(32U,
-              log->invalidate({1}, 31));
+              log->invalidate({1}, 32));
     EXPECT_EQ("log_id: 1 "
               "invalidates: [1] "
-              "previous_entry_id: 31 ",
+              "expected_entry_id: 32 ",
               *mockRPC->popRequest());
 }
 
-TEST_F(ClientLogTest, invalidate_previousIdStale)
+TEST_F(ClientLogTest, invalidate_expectedIdStale)
 {
     mockRPC->expect(OpCode::APPEND,
         ProtoBuf::fromString<ProtoBuf::ClientRPC::Append::Response>(
             DLog::format("ok { entry_id: %lu }", Client::NO_ID)));
     EXPECT_EQ(Client::NO_ID,
-              log->invalidate({1}, 31));
+              log->invalidate({1}, 32));
     EXPECT_EQ("log_id: 1 "
               "invalidates: [1] "
-              "previous_entry_id: 31 ",
+              "expected_entry_id: 32 ",
               *mockRPC->popRequest());
 }
 

@@ -57,7 +57,7 @@ class ClientImpl {
     /// See Cluster::listLogs.
     std::vector<std::string> listLogs();
     /// See Log::append and Log::invalidate.
-    EntryId append(uint64_t logId, const Entry& entry, EntryId previousId);
+    EntryId append(uint64_t logId, const Entry& entry, EntryId expectedId);
     /// See Log::read.
     std::vector<Entry> read(uint64_t logId, EntryId from);
     /// See Log::getLastId.

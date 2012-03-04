@@ -102,17 +102,17 @@ Log::~Log()
 }
 
 EntryId
-Log::append(const Entry& entry, EntryId previousId)
+Log::append(const Entry& entry, EntryId expectedId)
 {
-    return clientImpl->append(logId, entry, previousId);
+    return clientImpl->append(logId, entry, expectedId);
 }
 
 EntryId
 Log::invalidate(const std::vector<EntryId>& invalidates,
-                EntryId previousId)
+                EntryId expectedId)
 {
     Entry entry(invalidates);
-    return clientImpl->append(logId, entry, previousId);
+    return clientImpl->append(logId, entry, expectedId);
 }
 
 std::vector<Entry>

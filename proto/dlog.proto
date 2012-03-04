@@ -111,10 +111,11 @@ message Append {
          */
         required uint64 log_id = 1;
         /**
-         * If set and not NO_ENTRY_ID, the operation will only proceed if the
-         * head of the log is this entry ID.
+         * If set, the operation will only proceed if the appended entry is
+         * assigned this entry ID. This may be left unset or set to NO_ENTRY_ID
+         * to unconditionally append.
          */
-        optional uint64 previous_entry_id = 2;
+        optional uint64 expected_entry_id = 2;
         /**
          * A list of entry IDs that are no longer needed.
          */

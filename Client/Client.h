@@ -120,17 +120,18 @@ class Log {
      * Append a new entry to the log.
      * \param entry
      *      The entry to append.
-     * \param previousId
-     *      Makes the operation conditional on this being the last ID in the
-     *      log. Use NO_ID to unconditionally append.
+     * \param expectedId
+     *      Makes the operation conditional on this being the ID assigned to
+     *      this log entry. For example, 0 would indicate the log must be empty
+     *      for the operation to succeed. Use NO_ID to unconditionally append.
      * \return
-     *      The created entry ID, or NO_ID if the condition given by previousId
+     *      The created entry ID, or NO_ID if the condition given by expectedId
      *      failed.
      * \throw LogDisappearedException
      *      If this log no longer exists because someone deleted it.
      */
     EntryId append(const Entry& entry,
-                   EntryId previousId = NO_ID);
+                   EntryId expectedId = NO_ID);
 
     /**
      * Invalidate entries in the log.
@@ -138,19 +139,20 @@ class Log {
      * with no data.
      * \param invalidates
      *      A list of previous entries to be removed as part of this operation.
-     * \param previousId
-     *      Makes the operation conditional on this being the last ID in the
-     *      log. Use NO_ID to unconditionally append.
+     * \param expectedId
+     *      Makes the operation conditional on this being the ID assigned to
+     *      this log entry. For example, 0 would indicate the log must be empty
+     *      for the operation to succeed. Use NO_ID to unconditionally append.
      * \return
-     *      The created entry ID, or NO_ID if the condition given by previousId
+     *      The created entry ID, or NO_ID if the condition given by expectedId
      *      failed. There's no need to invalidate this returned ID. It is the
-     *      new head of the log, so it should be passed in future conditions as
-     *      the previousId argument.
+     *      new head of the log, so one plus this should be passed in future
+     *      conditions as the expectedId argument.
      * \throw LogDisappearedException
      *      If this log no longer exists because someone deleted it.
      */
     EntryId invalidate(const std::vector<EntryId>& invalidates,
-                       EntryId previousId = NO_ID);
+                       EntryId expectedId = NO_ID);
 
     /**
      * Read the entries starting at 'from' through head of the log.

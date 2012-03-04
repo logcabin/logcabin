@@ -109,12 +109,12 @@ ClientImpl::listLogs()
 }
 
 EntryId
-ClientImpl::append(uint64_t logId, const Entry& entry, EntryId previousId)
+ClientImpl::append(uint64_t logId, const Entry& entry, EntryId expectedId)
 {
     ProtoBuf::ClientRPC::Append::Request request;
     request.set_log_id(logId);
-    if (previousId != NO_ID)
-        request.set_previous_entry_id(previousId);
+    if (expectedId != NO_ID)
+        request.set_expected_entry_id(expectedId);
     for (auto it = entry.invalidates.begin();
          it != entry.invalidates.end();
          ++it) {
