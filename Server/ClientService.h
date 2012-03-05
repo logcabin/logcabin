@@ -45,7 +45,12 @@ class ClientService : public RPC::Service {
     ////////// RPC handlers //////////
 
     void getSupportedRPCVersions(RPC::ServerRPC rpc, uint32_t skipBytes);
+    void openLog(RPC::ServerRPC rpc, uint32_t skipBytes);
+    void deleteLog(RPC::ServerRPC rpc, uint32_t skipBytes);
     void listLogs(RPC::ServerRPC rpc, uint32_t skipBytes);
+    void append(RPC::ServerRPC rpc, uint32_t skipBytes);
+    void read(RPC::ServerRPC rpc, uint32_t skipBytes);
+    void getLastId(RPC::ServerRPC rpc, uint32_t skipBytes);
 
 
     /**

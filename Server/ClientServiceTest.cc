@@ -23,6 +23,9 @@
 #include "RPC/ServerRPC.h"
 #include "Server/ClientService.h"
 #include "Server/Globals.h"
+#include "Server/LogManager.h"
+#include "Storage/Log.h"
+#include "Storage/LogEntry.h"
 
 namespace LogCabin {
 namespace Server {
@@ -40,16 +43,18 @@ using RPC::Buffer;
 class ServerClientServiceTest : public ::testing::Test {
     ServerClientServiceTest()
         : globals()
-        , service(globals)
         , reply()
     {
+        globals.config.set("storageModule", "memory");
+        globals.config.set("uuid", "my-fake-uuid-123");
+        globals.init();
     }
 
     Status rpc(RPC::Buffer request) {
         RPC::ServerRPC mockRPC;
         mockRPC.request = std::move(request);
         mockRPC.responseTarget = &reply;
-        service.handleRPC(std::move(mockRPC));
+        globals.clientService->handleRPC(std::move(mockRPC));
         EXPECT_GE(reply.getLength(), sizeof(ResponseHeaderPrefix));
         ResponseHeaderPrefix prefix =
             *static_cast<const ResponseHeaderPrefix*>(reply.getData());
@@ -79,7 +84,6 @@ class ServerClientServiceTest : public ::testing::Test {
     }
 
     Globals globals;
-    ClientService service;
     Buffer reply;
 };
 
@@ -137,6 +141,152 @@ TEST_F(ServerClientServiceTest, getSupportedRPCVersions) {
     rpc(OpCode::GET_SUPPORTED_RPC_VERSIONS, request, response);
     EXPECT_EQ("min_version: 1"
               "max_version: 1", response);
+}
+
+TEST_F(ServerClientServiceTest, openLog) {
+    ProtoBuf::ClientRPC::OpenLog::Request request;
+    request.set_log_name("foo");
+    ProtoBuf::ClientRPC::OpenLog::Response response;
+    rpc(OpCode::OPEN_LOG, request, response);
+    EXPECT_EQ("log_id: 1", response);
+    rpc(OpCode::OPEN_LOG, request, response);
+    EXPECT_EQ("log_id: 1", response);
+    request.set_log_name("bar");
+    rpc(OpCode::OPEN_LOG, request, response);
+    EXPECT_EQ("log_id: 2", response);
+}
+
+TEST_F(ServerClientServiceTest, deleteLog) {
+    ProtoBuf::ClientRPC::DeleteLog::Request request;
+    globals.logManager.getExclusiveAccess()->createLog("foo");
+    request.set_log_name("foo");
+    ProtoBuf::ClientRPC::DeleteLog::Response response;
+    rpc(OpCode::DELETE_LOG, request, response);
+    rpc(OpCode::DELETE_LOG, request, response);
+    EXPECT_EQ((std::vector<std::string> {}),
+              globals.logManager.getExclusiveAccess()->listLogs());
+}
+
+TEST_F(ServerClientServiceTest, listLogs) {
+    ProtoBuf::ClientRPC::ListLogs::Request request;
+    ProtoBuf::ClientRPC::ListLogs::Response response;
+    rpc(OpCode::LIST_LOGS, request, response);
+    EXPECT_EQ("",
+              response);
+    globals.logManager.getExclusiveAccess()->createLog("foo");
+    globals.logManager.getExclusiveAccess()->createLog("bar");
+    EXPECT_EQ("log_names: foo"
+              "log_names: bar",
+              response);
+}
+
+TEST_F(ServerClientServiceTest, append) {
+    globals.logManager.getExclusiveAccess()->createLog("foo");
+    ProtoBuf::ClientRPC::Append::Request request;
+    ProtoBuf::ClientRPC::Append::Response response;
+    request.set_log_id(1);
+    request.add_invalidates(10);
+    request.add_invalidates(11);
+
+    // without data append ok
+    rpc(OpCode::APPEND, request, response);
+    EXPECT_EQ("ok: { entry_id: 0 }",
+              response);
+
+    // with data append ok
+    request.set_data("hello");
+    rpc(OpCode::APPEND, request, response);
+    EXPECT_EQ("ok: { entry_id: 1 }",
+              response);
+
+    // expected_entry_id mismatch
+    request.set_expected_entry_id(1);
+    rpc(OpCode::APPEND, request, response);
+    EXPECT_EQ("ok: { entry_id: 0xFFFFFFFFFFFFFFFF }",
+              response);
+
+    // log disappeared
+    request.set_log_id(2);
+    rpc(OpCode::APPEND, request, response);
+    EXPECT_EQ("log_disappeared: {}",
+              response);
+
+    Core::RWPtr<Storage::Log> log = globals.logManager.getExclusiveAccess()->
+                                        getLogExclusive(1);
+    std::deque<const Storage::LogEntry*> entries = log->readFrom(0);
+    EXPECT_EQ(2U, entries.size());
+    EXPECT_EQ("(1, 0) NODATA [inv 10, 11]",
+              entries.at(0)->toString());
+    EXPECT_EQ("(1, 1) BINARY [inv 10, 11]",
+              entries.at(1)->toString());
+}
+
+TEST_F(ServerClientServiceTest, read) {
+    ProtoBuf::ClientRPC::Read::Request request;
+    ProtoBuf::ClientRPC::Read::Response response;
+    request.set_log_id(1);
+    request.set_from_entry_id(1);
+
+    // log disappeared
+    rpc(OpCode::READ, request, response);
+    EXPECT_EQ("log_disappeared: {}",
+              response);
+    globals.logManager.getExclusiveAccess()->createLog("foo");
+
+    // empty response
+    rpc(OpCode::READ, request, response);
+    EXPECT_EQ("ok: {}",
+              response);
+
+    // with and without data
+    {
+        auto mgr = globals.logManager.getExclusiveAccess();
+        auto log = mgr->getLogExclusive(1);
+        log->append(Storage::LogEntry(0, RPC::Buffer()));
+        log->append(Storage::LogEntry(0, std::vector<Storage::EntryId>{}));
+        char hello[] = "hello";
+        log->append(Storage::LogEntry(0, RPC::Buffer(hello, 5, NULL)));
+        log->append(Storage::LogEntry(0, { 10, 11 }));
+    }
+    rpc(OpCode::READ, request, response);
+    EXPECT_EQ("ok {"
+              "  entry {"
+              "    entry_id: 1"
+              "  }"
+              "  entry {"
+              "    entry_id: 2"
+              "    data: 'hello'"
+              "  }"
+              "  entry {"
+              "    entry_id: 3"
+              "    invalidates: [10, 11]"
+              "  }"
+              "}",
+              response);
+}
+
+TEST_F(ServerClientServiceTest, getLastId) {
+    ProtoBuf::ClientRPC::GetLastId::Request request;
+    request.set_log_id(1);
+    ProtoBuf::ClientRPC::GetLastId::Response response;
+    rpc(OpCode::GET_LAST_ID, request, response);
+    EXPECT_EQ("log_disappeared: {}",
+              response);
+    {
+        auto mgr = globals.logManager.getExclusiveAccess();
+        mgr->createLog("foo");
+    }
+    rpc(OpCode::GET_LAST_ID, request, response);
+    EXPECT_EQ("ok: { head_entry_id: 0xFFFFFFFFFFFFFFFF }",
+              response);
+    {
+        auto mgr = globals.logManager.getExclusiveAccess();
+        auto log = mgr->getLogExclusive(1);
+        log->append(Storage::LogEntry(0, RPC::Buffer()));
+    }
+    rpc(OpCode::GET_LAST_ID, request, response);
+    EXPECT_EQ("ok: { head_entry_id: 0 }",
+              response);
 }
 
 } // namespace LogCabin::Server::<anonymous>
