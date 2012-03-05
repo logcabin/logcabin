@@ -18,8 +18,8 @@
 #include "build/Server/InternalLog.pb.h"
 #include "include/Common.h"
 #include "include/Debug.h"
-#include "include/ProtoBuf.h"
 #include "Core/Config.h"
+#include "Core/ProtoBuf.h"
 #include "RPC/ProtoBuf.h"
 #include "Server/LogManager.h"
 #include "Storage/Factory.h"
@@ -242,7 +242,7 @@ LogManager::replayLogEntry(const Storage::LogEntry& entry)
                   "does not match its contents [%s]. "
                   "This is probably a nasty bug.",
                   contents.type(), entry.entryId,
-                  DLog::ProtoBuf::dumpString(contents, false).c_str());
+                  Core::ProtoBuf::dumpString(contents, false).c_str());
         }
     }
 

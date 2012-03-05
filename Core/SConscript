@@ -2,11 +2,23 @@ Import('env')
 
 src = [
     "Config.cc",
+    "ProtoBuf.cc",
     "Random.cc",
     "ThreadId.cc",
+    "#build/Core/ProtoBufTest.pb.o",
 ]
 
 env.StaticLibrary("LogCabinCore",
                   src,
                   CPPPATH = [ "#" ])
 
+env.Protoc([],
+           "ProtoBufTest.proto",
+           PROTOCPROTOPATH = ['.'],
+           PROTOCPYTHONOUTDIR = None,
+           PROTOCOUTDIR = '.')
+
+env.StaticObject("#build/Core/ProtoBufTest.pb.o",
+                 "#build/Core/ProtoBufTest.pb.cc",
+                 CPPPATH = "#",
+                 CXXFLAGS = "-std=c++0x")

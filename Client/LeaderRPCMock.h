@@ -18,7 +18,7 @@
 #include <memory>
 #include <utility>
 
-#include "include/ProtoBuf.h"
+#include "Core/ProtoBuf.h"
 #include "Client/LeaderRPC.h"
 
 #ifndef LOGCABIN_CLIENT_LEADERRPCMOCK_H

@@ -16,7 +16,7 @@
 #include <string>
 
 #include "include/Debug.h"
-#include "include/ProtoBuf.h"
+#include "Core/ProtoBuf.h"
 #include "RPC/ProtoBuf.h"
 
 namespace LogCabin {
@@ -53,7 +53,7 @@ parse(const RPC::Buffer& from,
     }
     LOG(DBG, "%s:\n%s",
         to.GetTypeName().c_str(),
-        truncateEnd(DLog::ProtoBuf::dumpString(to)).c_str());
+        truncateEnd(Core::ProtoBuf::dumpString(to)).c_str());
     return true;
 }
 

@@ -15,6 +15,7 @@
 
 #include "include/Debug.h"
 #include "Client/LeaderRPC.h"
+#include "Core/ProtoBuf.h"
 #include "RPC/Buffer.h"
 #include "RPC/ClientSession.h"
 #include "RPC/ProtoBuf.h"
@@ -131,7 +132,7 @@ LeaderRPC::call(OpCode opCode,
             // protocol version.
             case Status::INVALID_REQUEST:
                 PANIC("The server found this request to be invalid.\n%s",
-                      DLog::ProtoBuf::dumpString(request).c_str());
+                      Core::ProtoBuf::dumpString(request).c_str());
 
             // The server we tried is not the current cluster leader.
             case Status::NOT_LEADER: {

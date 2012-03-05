@@ -15,12 +15,13 @@
 
 #include <memory>
 #include <sstream>
-#include "ProtoBuf.h"
+
+#include "include/Common.h"
+#include "Core/ProtoBuf.h"
 
 namespace google {
 namespace protobuf {
 
-#if 0 // Moved to Core::ProtoBuf
 bool
 operator==(const Message& a, const Message& b)
 {
@@ -61,12 +62,12 @@ operator!=(const std::string& a, const Message& b)
 {
     return !(a == b);
 }
-#endif
 
 } // namespace google::protobuf
 } // namespace google
 
-namespace DLog {
+namespace LogCabin {
+namespace Core {
 namespace ProtoBuf {
 
 namespace Internal {
@@ -78,7 +79,7 @@ fromString(const std::string& str, google::protobuf::Message& protoBuf)
     google::protobuf::TextFormat::ParseFromString(str, &protoBuf);
 }
 
-} // namespace DLog::ProtoBuf::Internal
+} // namespace LogCabin::ProtoBuf::Internal
 
 std::string
 dumpString(const google::protobuf::Message& protoBuf,
@@ -101,9 +102,9 @@ dumpString(const google::protobuf::Message& protoBuf,
     printer.PrintToString(protoBuf, &output);
     if (forCopyingIntoTest) {
         // TextFormat::Printer escapes ' already.
-        replaceAll(output, "\"", "'");
-        replaceAll(output, "                ", "              \"");
-        replaceAll(output, "\n", "\"\n");
+        DLog::replaceAll(output, "\"", "'");
+        DLog::replaceAll(output, "                ", "              \"");
+        DLog::replaceAll(output, "\n", "\"\n");
     }
     if (!protoBuf.IsInitialized()) {
         std::vector<std::string> errors;
@@ -122,5 +123,6 @@ dumpString(const google::protobuf::Message& protoBuf,
     return output;
 }
 
-} // namespace DLog::ProtoBuf
-} // namespace DLog
+} // namespace LogCabin::Core::ProtoBuf
+} // namespace LogCabin::Core
+} // namespace LogCabin

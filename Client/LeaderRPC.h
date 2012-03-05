@@ -19,7 +19,6 @@
 #include <thread>
 
 #include "../build/proto/dlog.pb.h"
-#include "include/ProtoBuf.h"
 #include "Event/Loop.h"
 #include "RPC/Address.h"
 

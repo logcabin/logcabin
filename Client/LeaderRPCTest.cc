@@ -18,6 +18,7 @@
 #include <thread>
 
 #include "Client/LeaderRPC.h"
+#include "Core/ProtoBuf.h"
 #include "proto/Client.h"
 #include "RPC/ProtoBuf.h"
 #include "RPC/Server.h"

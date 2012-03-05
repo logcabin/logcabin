@@ -18,8 +18,8 @@
 
 #include "build/Server/InternalLog.pb.h"
 #include "include/Common.h"
-#include "include/ProtoBuf.h"
 #include "Core/Config.h"
+#include "Core/ProtoBuf.h"
 #include "RPC/ProtoBuf.h"
 #include "Server/LogManager.h"
 #include "Storage/LogEntry.h"

@@ -13,8 +13,11 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <algorithm>
+
 #include "include/Debug.h"
 #include "Client/ClientImpl.h"
+#include "Core/ProtoBuf.h"
 #include "RPC/Address.h"
 
 namespace LogCabin {
@@ -129,7 +132,7 @@ ClientImpl::append(uint64_t logId, const Entry& entry, EntryId expectedId)
     if (response.has_log_disappeared())
         throw LogDisappearedException();
     PANIC("Did not understand server response to append RPC:\n%s",
-          ProtoBuf::dumpString(response, false).c_str());
+          Core::ProtoBuf::dumpString(response, false).c_str());
 }
 
 std::vector<Entry>
@@ -166,7 +169,7 @@ ClientImpl::read(uint64_t logId, EntryId from)
     if (response.has_log_disappeared())
         throw LogDisappearedException();
     PANIC("Did not understand server response to append RPC:\n%s",
-          ProtoBuf::dumpString(response, false).c_str());
+          Core::ProtoBuf::dumpString(response, false).c_str());
 }
 
 EntryId
@@ -181,7 +184,7 @@ ClientImpl::getLastId(uint64_t logId)
     if (response.has_log_disappeared())
         throw LogDisappearedException();
     PANIC("Did not understand server response to append RPC:\n%s",
-          ProtoBuf::dumpString(response, false).c_str());
+          Core::ProtoBuf::dumpString(response, false).c_str());
 }
 
 } // namespace LogCabin::Client

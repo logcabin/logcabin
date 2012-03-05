@@ -17,6 +17,7 @@
 
 #include "include/Debug.h"
 #include "Client/LeaderRPCMock.h"
+#include "Core/ProtoBuf.h"
 
 namespace LogCabin {
 namespace Client {
@@ -59,7 +60,7 @@ LeaderRPCMock::call(OpCode opCode,
     ASSERT_LT(0U, responseQueue.size())
         << "The client sent an unexpected RPC:\n"
         << request.GetTypeName() << ":\n"
-        << ProtoBuf::dumpString(request, false);
+        << Core::ProtoBuf::dumpString(request, false);
     auto& opCodeMsgPair = responseQueue.front();
     EXPECT_EQ(opCode, opCodeMsgPair.first);
     response.CopyFrom(*opCodeMsgPair.second);

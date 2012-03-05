@@ -15,9 +15,9 @@
 
 #include <gtest/gtest.h>
 
-#include "include/ProtoBuf.h"
 #include "../proto/dlog.pb.h"
 #include "proto/Client.h"
+#include "Core/ProtoBuf.h"
 #include "RPC/Buffer.h"
 #include "RPC/ProtoBuf.h"
 #include "RPC/ServerRPC.h"
