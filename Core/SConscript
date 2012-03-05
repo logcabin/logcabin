@@ -1,6 +1,7 @@
 Import('env')
 
 src = [
+    "Checksum.cc",
     "Config.cc",
     "ProtoBuf.cc",
     "Random.cc",

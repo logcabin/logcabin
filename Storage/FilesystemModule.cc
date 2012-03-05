@@ -22,8 +22,9 @@
 
 #include <algorithm>
 
-#include "include/Checksum.h"
+#include "include/Common.h"
 #include "include/Debug.h"
+#include "Core/Checksum.h"
 #include "Core/Config.h"
 #include "Storage/FilesystemModule.h"
 #include "Storage/FilesystemUtil.h"
@@ -39,8 +40,8 @@ FilesystemModule::FilesystemModule(const Core::Config& config)
     , checksumAlgorithm(config.read<std::string>("checksum", "SHA-1"))
 {
     { // Ensure the checksum algorithm is valid.
-        char buf[DLog::Checksum::MAX_LENGTH];
-        DLog::Checksum::calculate(checksumAlgorithm.c_str(), "", 0, buf);
+        char buf[Core::Checksum::MAX_LENGTH];
+        Core::Checksum::calculate(checksumAlgorithm.c_str(), "", 0, buf);
     }
 
     LOG(NOTICE, "Using filesystem storage module at %s", path.c_str());
@@ -268,10 +269,10 @@ FilesystemLog::read(EntryId entryId)
     uint32_t fileOffset = 0;
 
     // Copy out the checksum.
-    char checksum[DLog::Checksum::MAX_LENGTH];
+    char checksum[Core::Checksum::MAX_LENGTH];
     uint32_t bytesRead = file.copyPartial(fileOffset,
                                           checksum, sizeof32(checksum));
-    uint32_t checksumBytes = DLog::Checksum::length(checksum, bytesRead);
+    uint32_t checksumBytes = Core::Checksum::length(checksum, bytesRead);
     if (checksumBytes == 0)
         PANIC("File %s corrupt", entryPath.c_str());
     fileOffset += checksumBytes;
@@ -286,7 +287,7 @@ FilesystemLog::read(EntryId entryId)
     const void* checksumArea = file.get(fileOffset,
                                         fixedHeader.checksumCoverage);
     fileOffset += sizeof32(fixedHeader);
-    std::string error = DLog::Checksum::verify(checksum,
+    std::string error = Core::Checksum::verify(checksum,
                                                checksumArea,
                                                fixedHeader.checksumCoverage);
     if (!error.empty()) {
@@ -339,13 +340,13 @@ FilesystemLog::read(EntryId entryId)
         const char* dataChecksum =
             file.get<char>(fileOffset, header.dataChecksumLen);
         fileOffset += header.dataChecksumLen;
-        if (DLog::Checksum::length(dataChecksum, header.dataChecksumLen) !=
+        if (Core::Checksum::length(dataChecksum, header.dataChecksumLen) !=
             header.dataChecksumLen) {
             PANIC("File %s corrupt", entryPath.c_str());
         }
         const void* rawData = file.get(fileOffset, header.dataLen);
         fileOffset += header.dataLen;
-        error = DLog::Checksum::verify(dataChecksum, rawData, header.dataLen);
+        error = Core::Checksum::verify(dataChecksum, rawData, header.dataLen);
         if (!error.empty()) {
             PANIC("Checksum verification failure on %s: %s",
                   entryPath.c_str(), error.c_str());
@@ -374,10 +375,10 @@ void
 FilesystemLog::write(const LogEntry& entry)
 {
     // Calculate the data checksum.
-    char dataChecksum[DLog::Checksum::MAX_LENGTH];
+    char dataChecksum[Core::Checksum::MAX_LENGTH];
     uint32_t dataChecksumLen = 0;
     if (entry.hasData) {
-        dataChecksumLen = DLog::Checksum::calculate(checksumAlgorithm.c_str(),
+        dataChecksumLen = Core::Checksum::calculate(checksumAlgorithm.c_str(),
                                                     entry.data.getData(),
                                                     entry.data.getLength(),
                                                     dataChecksum);
@@ -410,8 +411,8 @@ FilesystemLog::write(const LogEntry& entry)
     header.toBigEndian();
 
     // Calculate the checksum.
-    char checksum[DLog::Checksum::MAX_LENGTH];
-    uint32_t checksumLen = DLog::Checksum::calculate(
+    char checksum[Core::Checksum::MAX_LENGTH];
+    uint32_t checksumLen = Core::Checksum::calculate(
                 checksumAlgorithm.c_str(),
                 {{ &fixedHeader, sizeof32(fixedHeader) },
                  { &header, sizeof32(header) },
