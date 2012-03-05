@@ -579,11 +579,7 @@ WARN_LOGFILE           =
 # directories like "/usr/src/myproject". Separate the files or directories
 # with spaces.
 
-# dlogd/LogManager.h is listed separately so that it gets processed before
-# dlogd/LogManager.cc. This works around a bug in which doxygen throws a bunch
-# of internal inconsistency errors and warnings in LogManager.cc, thinking that
-# LogManager is a namespace instead of a class.
-INPUT                  = dlogd/LogManager.h .
+INPUT                  = .
 
 # This tag can be used to specify the character encoding of the source files
 # that doxygen parses. Internally doxygen uses the UTF-8 encoding, which is

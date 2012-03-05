@@ -20,7 +20,7 @@
 
 #include "Core/Debug.h"
 #include "Core/Config.h"
-#include "libDLogStorage/FilesystemUtil.h"
+#include "Storage/FilesystemUtil.h"
 
 namespace LogCabin {
 namespace Core {
@@ -31,7 +31,7 @@ using std::string;
 class CoreConfigTest : public ::testing::Test {
   public:
     CoreConfigTest()
-        : tmpdir(DLog::Storage::FilesystemUtil::tmpnam())
+        : tmpdir(Storage::FilesystemUtil::tmpnam())
     {
         if (mkdir(tmpdir.c_str(), 0755) != 0)
             PANIC("Couldn't create temporary directory for tests");
@@ -49,13 +49,13 @@ class CoreConfigTest : public ::testing::Test {
             "                strange\n"
             "# just a comment\n"
             " empty  =  \n";
-        using DLog::Storage::FilesystemUtil::write;
+        using Storage::FilesystemUtil::write;
         if (write(fd, file, uint32_t(strlen(file))) == -1)
             PANIC("Couldn't write to temp file");
         close(fd);
     }
     ~CoreConfigTest() {
-        DLog::Storage::FilesystemUtil::remove(tmpdir);
+        Storage::FilesystemUtil::remove(tmpdir);
     }
     std::string tmpdir;
 };

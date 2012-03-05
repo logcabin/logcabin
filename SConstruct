@@ -61,10 +61,6 @@ def GetNumCPUs():
 env.SetOption('num_jobs', GetNumCPUs())
 
 Export('env')
-SConscript('libDLogRPC/SConscript', variant_dir='build/libDLogRPC')
-SConscript('libDLogStorage/SConscript', variant_dir='build/libDLogStorage')
-SConscript('dlogd/SConscript', variant_dir='build/dlogd')
-SConscript('dlogperf/SConscript', variant_dir='build/dlogperf')
 SConscript('proto/SConscript', variant_dir='build/proto')
 SConscript('test/SConscript', variant_dir='build/test')
 SConscript('Client/SConscript', variant_dir='build/Client')

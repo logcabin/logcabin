@@ -16,13 +16,13 @@
 #include <gtest/gtest.h>
 
 #include "RPC/ProtoBuf.h"
-#include "../test/libDLogRPC/ProtoBuf.pb.h"
+#include "build/Core/ProtoBufTest.pb.h"
 
 namespace LogCabin {
 namespace RPC {
 namespace {
 
-using DLog::ProtoBuf::TestMessage;
+using LogCabin::ProtoBuf::TestMessage;
 
 TEST(ProtoBufTest, parse) {
     RPC::Buffer rpc;
