@@ -61,12 +61,12 @@ def GetNumCPUs():
 env.SetOption('num_jobs', GetNumCPUs())
 
 Export('env')
-SConscript('proto/SConscript', variant_dir='build/proto')
 SConscript('test/SConscript', variant_dir='build/test')
 SConscript('Client/SConscript', variant_dir='build/Client')
 SConscript('Core/SConscript', variant_dir='build/Core')
 SConscript('Event/SConscript', variant_dir='build/Event')
 SConscript('Examples/SConscript', variant_dir='build/Examples')
+SConscript('Protocol/SConscript', variant_dir='build/Protocol')
 SConscript('RPC/SConscript', variant_dir='build/RPC')
 SConscript('Server/SConscript', variant_dir='build/Server')
 SConscript('Storage/SConscript', variant_dir='build/Storage')

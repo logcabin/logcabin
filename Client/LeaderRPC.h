@@ -18,7 +18,7 @@
 #include <mutex>
 #include <thread>
 
-#include "../build/proto/dlog.pb.h"
+#include "build/Protocol/LogCabin.pb.h"
 #include "Event/Loop.h"
 #include "RPC/Address.h"
 
@@ -33,8 +33,6 @@ class ClientSession;
 }
 
 namespace Client {
-
-namespace ProtoBuf = DLog::ProtoBuf;
 
 /**
  * This class is used to send RPCs from clients to the leader of the LogCabin

@@ -21,8 +21,8 @@
 
 #include <cinttypes>
 
-#ifndef LOGCABIN_PROTO_CLIENT_H
-#define LOGCABIN_PROTO_CLIENT_H
+#ifndef LOGCABIN_PROTOCOL_CLIENT_H
+#define LOGCABIN_PROTOCOL_CLIENT_H
 
 namespace LogCabin {
 namespace Protocol {
@@ -196,4 +196,4 @@ struct ResponseHeaderVersion1 {
 } // namespace LogCabin::Protocol
 } // namespace LogCabin
 
-#endif // LOGCABIN_PROTO_CLIENT_H
+#endif // LOGCABIN_PROTOCOL_CLIENT_H

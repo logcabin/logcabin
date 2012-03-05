@@ -15,8 +15,8 @@
 
 #include <gtest/gtest.h>
 
-#include "../proto/dlog.pb.h"
-#include "proto/Client.h"
+#include "build/Protocol/LogCabin.pb.h"
+#include "Protocol/Client.h"
 #include "Core/ProtoBuf.h"
 #include "RPC/Buffer.h"
 #include "RPC/ProtoBuf.h"
@@ -31,7 +31,6 @@ namespace LogCabin {
 namespace Server {
 namespace {
 
-namespace ProtoBuf = DLog::ProtoBuf;
 using ProtoBuf::ClientRPC::OpCode;
 using Protocol::Client::Status;
 using Protocol::Client::RequestHeaderPrefix;

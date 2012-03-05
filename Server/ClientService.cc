@@ -16,8 +16,8 @@
 #include <string.h>
 #include <utility>
 
-#include "../proto/dlog.pb.h"
-#include "proto/Client.h"
+#include "build/Protocol/LogCabin.pb.h"
+#include "Protocol/Client.h"
 #include "RPC/Buffer.h"
 #include "RPC/ProtoBuf.h"
 #include "RPC/ServerRPC.h"
@@ -32,7 +32,6 @@ namespace Server {
 
 namespace {
 
-namespace ProtoBuf = DLog::ProtoBuf;
 using ProtoBuf::ClientRPC::OpCode;
 using Protocol::Client::RequestHeaderPrefix;
 using Protocol::Client::RequestHeaderVersion1;

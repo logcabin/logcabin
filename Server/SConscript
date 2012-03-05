@@ -4,8 +4,6 @@ src = [
     "ClientService.cc",
     "Globals.cc",
     "LogManager.cc",
-    "#build/proto/dlog.pb.o",
-    "#build/proto/Client.o",
     "#build/Server/InternalLog.pb.o",
 ]
 
@@ -17,12 +15,14 @@ env.Program("LogCabin", "Main.cc",
             LIBPATH = [
                 "#build/Server",
                 "#build/Storage",
+                "#build/Protocol",
                 "#build/RPC",
                 "#build/Event",
                 "#build/Core",
             ],
             LIBS = [ "libLogCabinServer",
                      "libLogCabinStorage",
+                     "libLogCabinProtocol",
                      "libLogCabinRPC",
                      "libLogCabinEvent",
                      "libLogCabinCore",

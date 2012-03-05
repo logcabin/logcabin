@@ -16,10 +16,10 @@
 #include "Core/Debug.h"
 #include "Client/LeaderRPC.h"
 #include "Core/ProtoBuf.h"
+#include "Protocol/Client.h"
 #include "RPC/Buffer.h"
 #include "RPC/ClientSession.h"
 #include "RPC/ProtoBuf.h"
-#include "proto/Client.h"
 
 namespace LogCabin {
 namespace Client {

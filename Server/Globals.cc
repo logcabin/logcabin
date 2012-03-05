@@ -16,7 +16,7 @@
 #include <signal.h>
 
 #include "Core/Debug.h"
-#include "proto/Client.h"
+#include "Protocol/Client.h"
 #include "RPC/Server.h"
 #include "RPC/ThreadDispatchService.h"
 #include "Server/ClientService.h"

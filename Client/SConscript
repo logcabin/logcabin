@@ -4,8 +4,6 @@ src = [
     "Client.cc",
     "ClientImpl.cc",
     "LeaderRPC.cc",
-    "#build/proto/dlog.pb.o",
-    "#build/proto/Client.o",
 ]
 
 env.StaticLibrary("LogCabinClient",

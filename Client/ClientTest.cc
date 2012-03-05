@@ -23,9 +23,7 @@
 #include "Client/ClientImpl.h"
 #include "Client/LeaderRPCMock.h"
 #include "Core/ProtoBuf.h"
-#include "build/proto/dlog.pb.h"
-
-namespace ProtoBuf = DLog::ProtoBuf;
+#include "build/Protocol/LogCabin.pb.h"
 
 namespace LogCabin {
 namespace {

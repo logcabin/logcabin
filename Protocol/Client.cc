@@ -14,7 +14,7 @@
  */
 
 #include <endian.h>
-#include "proto/Client.h"
+#include "Protocol/Client.h"
 
 namespace LogCabin {
 namespace Protocol {

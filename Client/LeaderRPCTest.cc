@@ -19,7 +19,7 @@
 
 #include "Client/LeaderRPC.h"
 #include "Core/ProtoBuf.h"
-#include "proto/Client.h"
+#include "Protocol/Client.h"
 #include "RPC/ProtoBuf.h"
 #include "RPC/Server.h"
 #include "RPC/ServerRPC.h"
