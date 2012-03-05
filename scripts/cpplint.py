@@ -982,8 +982,7 @@ def GetHeaderGuardCPPVariable(filename):
 
   """
 
-  fileinfo = FileInfo(filename).RepositoryName()
-  fileinfo = re.sub(r'^include/', '', fileinfo)
+  fileinfo = 'LogCabin/%s' % FileInfo(filename).RepositoryName()
   return re.sub(r'[-./\s]', '_', fileinfo).upper()
 
 
@@ -1031,7 +1030,7 @@ def CheckForHeaderGuard(filename, lines, error):
   # for backward compatibility.
   if ifndef != cppvar and not Search(r'\bNOLINT\b', lines[ifndef_linenum]):
     error_level = 0
-    if ifndef != cppvar + '_' and ifndef != 'LOGCABIN_' + cppvar:
+    if ifndef != cppvar + '_':
       error_level = 5
 
     error(filename, ifndef_linenum, 'build/header_guard', error_level,
@@ -2507,7 +2506,7 @@ def CheckLanguage(filename, clean_lines, linenum, file_extension, include_state,
           % (match.group(1), match.group(2)))
 
   if (Search(r'\busing namespace\b', line) and
-      not Search(r'\busing namespace DLog\b', line)):
+      not Search(r'\busing namespace LogCabin\b', line)):
     error(filename, linenum, 'build/namespaces', 5,
           'Do not use namespace using-directives.  '
           'Use using-declarations instead.')
