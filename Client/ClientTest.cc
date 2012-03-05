@@ -18,7 +18,7 @@
 #include <queue>
 
 #include "include/Common.h"
-#include "include/Debug.h"
+#include "Core/Debug.h"
 #include "Client/Client.h"
 #include "Client/ClientImpl.h"
 #include "Client/LeaderRPCMock.h"

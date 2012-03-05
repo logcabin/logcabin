@@ -24,7 +24,7 @@
 #include <vector>
 
 #include "include/Common.h"
-#include "include/Debug.h"
+#include "Core/Debug.h"
 #include "Storage/FilesystemUtil.h"
 
 namespace LogCabin {

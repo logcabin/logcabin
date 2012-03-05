@@ -17,7 +17,7 @@
 #include <gtest/gtest.h>
 #include <unistd.h>
 
-#include "include/Debug.h"
+#include "Core/Debug.h"
 #include "Internal.h"
 #include "File.h"
 

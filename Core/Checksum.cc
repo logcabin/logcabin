@@ -27,7 +27,7 @@
 #include <cryptopp/ripemd.h>
 
 #include "include/Common.h"
-#include "include/Debug.h"
+#include "Core/Debug.h"
 #include "Core/Checksum.h"
 
 namespace LogCabin {

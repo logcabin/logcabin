@@ -18,7 +18,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
-#include "include/Debug.h"
+#include "Core/Debug.h"
 #include "RPC/MessageSocket.h"
 
 namespace LogCabin {

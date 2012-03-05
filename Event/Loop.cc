@@ -17,7 +17,7 @@
 #include <event2/event.h>
 #include <event2/thread.h>
 
-#include "include/Debug.h"
+#include "Core/Debug.h"
 #include "Core/ThreadId.h"
 #include "Event/Internal.h"
 #include "Event/Loop.h"

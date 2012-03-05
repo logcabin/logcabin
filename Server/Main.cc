@@ -19,7 +19,7 @@
 #include <iostream>
 #include <string>
 
-#include "include/Debug.h"
+#include "Core/Debug.h"
 #include "Server/Globals.h"
 
 namespace {

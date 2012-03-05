@@ -49,6 +49,7 @@ class LogManager::NoOpStorageDeleteCallback
 };
 
 
+#ifndef DOXYGEN
 LogManager::LogManager(const Config& config,
                        Ref<StorageModule> storageModule,
                        Ref<InitializeCallback> initializeCompletion)
@@ -70,6 +71,7 @@ LogManager::LogManager(const Config& config,
                 Ref<LogManager>(*this),
                 initializeCompletion));
 }
+#endif
 
 /**
  * This continues the constructor once the internal log has been opened.

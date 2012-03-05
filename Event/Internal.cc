@@ -13,7 +13,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include "include/Debug.h"
+#include "Core/Debug.h"
 #include "Event/Internal.h"
 
 #include <event2/thread.h>

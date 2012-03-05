@@ -15,7 +15,7 @@
 
 #include <gtest/gtest.h>
 
-#include "include/Debug.h"
+#include "Core/Debug.h"
 #include "RPC/Server.h"
 #include "RPC/ServerRPC.h"
 #include "RPC/Service.h"

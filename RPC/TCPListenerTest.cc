@@ -16,7 +16,7 @@
 #include <gtest/gtest.h>
 #include <thread>
 
-#include "include/Debug.h"
+#include "Core/Debug.h"
 #include "RPC/TCPListener.h"
 
 namespace LogCabin {

@@ -17,7 +17,7 @@
 
 #include "build/Server/InternalLog.pb.h"
 #include "include/Common.h"
-#include "include/Debug.h"
+#include "Core/Debug.h"
 #include "Core/Config.h"
 #include "Core/ProtoBuf.h"
 #include "RPC/ProtoBuf.h"

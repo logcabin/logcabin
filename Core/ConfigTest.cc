@@ -18,7 +18,7 @@
 
 #include <gtest/gtest.h>
 
-#include "include/Debug.h"
+#include "Core/Debug.h"
 #include "Core/Config.h"
 #include "libDLogStorage/FilesystemUtil.h"
 
