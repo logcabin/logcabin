@@ -18,6 +18,7 @@
 #include "include/Debug.h"
 #include "Core/Config.h"
 #include "Storage/Factory.h"
+#include "Storage/FilesystemModule.h"
 #include "Storage/MemoryModule.h"
 
 namespace LogCabin {
@@ -32,9 +33,11 @@ createStorageModule(const Core::Config& config)
     LOG(NOTICE, "Using '%s' storage module", moduleName.c_str());
     if (moduleName == "memory") {
         module.reset(new MemoryModule());
+    } else if (moduleName == "filesystem") {
+        module.reset(new FilesystemModule(config));
     } else {
         PANIC("Bad storage module given: %s\n"
-              "Choices are: memory (more to come)",
+              "Choices are: memory, filesystem",
               moduleName.c_str());
     }
     return module;

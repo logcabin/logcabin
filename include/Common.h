@@ -179,7 +179,7 @@ replaceAll(std::string& haystack,
            const std::string& replacement);
 
 /// Like sizeof but returns a uint32_t.
-#define sizeof32(x) downCast<uint32_t>(sizeof(x))
+#define sizeof32(x) DLog::downCast<uint32_t>(sizeof(x))
 
 } // namespace DLog
 
