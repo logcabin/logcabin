@@ -13,21 +13,49 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <unistd.h>
 #include <iostream>
 
 #include "Client/Client.h"
 
+namespace {
+
+using LogCabin::Client::Cluster;
+using LogCabin::Client::Entry;
+using LogCabin::Client::Log;
+
+void
+printLogContents(Log& log, const char* logName)
+{
+    std::vector<Entry> entries = log.read(0);
+    std::cout << "Log " << logName << ":" << std::endl;
+    for (auto it = entries.begin(); it != entries.end(); ++it) {
+        std::cout << "- " << it->getId() << ": "
+                  << std::string(static_cast<const char*>(it->getData()),
+                                 it->getLength())
+                  << std::endl;
+    }
+    std::cout << std::endl;
+}
+
+} // anonymous namespace
+
 int
 main(int argc, char** argv)
 {
-    LogCabin::Client::Cluster cluster("localhost:61023");
-    while (true) {
-        std::vector<std::string> logNames = cluster.listLogs();
-        std::cout << "Logs:" << std::endl;
-        for (auto it = logNames.begin(); it != logNames.end(); ++it)
-            std::cout << "- " << *it << std::endl;
-        std::cout << std::endl;
-        usleep(5000);
+    Cluster cluster("localhost:61023");
+    std::vector<std::string> logNames = cluster.listLogs();
+    std::cout << "Logs:" << std::endl;
+    for (auto it = logNames.begin(); it != logNames.end(); ++it)
+        std::cout << "- " << *it << std::endl;
+    std::cout << std::endl;
+
+    Log log = cluster.openLog("greetings");
+    std::string hello = "hello world";
+    Entry entry(hello.c_str(), uint32_t(hello.length() + 1));
+
+    printLogContents(log, "greetings");
+    for (int i = 0; i < 10; ++i) {
+        log.append(entry);
+        printLogContents(log, "greetings");
     }
 }
