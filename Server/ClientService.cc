@@ -17,7 +17,6 @@
 #include <utility>
 
 #include "../proto/dlog.pb.h"
-#include "include/Common.h"
 #include "proto/Client.h"
 #include "RPC/Buffer.h"
 #include "RPC/ProtoBuf.h"

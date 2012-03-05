@@ -17,9 +17,9 @@
 #include <gtest/gtest.h>
 
 #include "build/Server/InternalLog.pb.h"
-#include "include/Common.h"
 #include "Core/Config.h"
 #include "Core/ProtoBuf.h"
+#include "Core/STLUtil.h"
 #include "RPC/ProtoBuf.h"
 #include "Server/LogManager.h"
 #include "Storage/LogEntry.h"
@@ -30,7 +30,8 @@ namespace Server {
 namespace {
 
 using namespace Storage; // NOLINT
-using DLog::getKeys;
+using Core::STLUtil::getKeys;
+using Core::STLUtil::sorted;
 using std::string;
 using std::vector;
 
@@ -104,7 +105,7 @@ TEST_F(ServerLogManagerTest, constructor_replayLog) {
     EXPECT_EQ(3U, mgr->createLog("baz"));
     destroyManager();
     EXPECT_EQ((vector<LogId> { 0, 1, 2, 3 }),
-              DLog::sorted(preStorage->getLogs()));
+              sorted(preStorage->getLogs()));
     MemoryLog* log = preStorage->openLog(LogManager::INTERNAL_LOG_ID);
     --log->headId;
     log->entries.pop_back();
@@ -112,7 +113,7 @@ TEST_F(ServerLogManagerTest, constructor_replayLog) {
     preStorage->putLog(log);
     preStorage->deleteLog(2); // delete "bar" from storage
     EXPECT_EQ((vector<LogId> { 0, 1, 3 }),
-              DLog::sorted(preStorage->getLogs()));
+              sorted(preStorage->getLogs()));
 
     // begin test: the manager should delete the baz log and create the bar log
     createManager();
@@ -122,7 +123,7 @@ TEST_F(ServerLogManagerTest, constructor_replayLog) {
     EXPECT_EQ("my-fake-uuid-123", mgr->uuid);
     destroyManager();
     EXPECT_EQ((vector<LogId> { 0, 1, 2 }),
-              DLog::sorted(preStorage->getLogs()));
+              sorted(preStorage->getLogs()));
 }
 
 TEST_F(ServerLogManagerTest, initializeStorage) {
@@ -277,7 +278,7 @@ TEST_F(ServerLogManagerTest, replayLogInvalidation) {
     mgr->replayLogEntry(entry);
     destroyManager();
     EXPECT_EQ((vector<LogId> { 0 }),
-              DLog::sorted(preStorage->getLogs()));
+              sorted(preStorage->getLogs()));
 }
 
 TEST_F(ServerLogManagerTest, replayMetadataEntry_ok) {

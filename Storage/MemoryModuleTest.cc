@@ -15,10 +15,11 @@
 
 #include <algorithm>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <gtest/gtest.h>
 
-#include "include/Common.h"
+#include "Core/STLUtil.h"
 #include "Storage/LogEntry.h"
 #include "Storage/MemoryModule.h"
 
@@ -26,6 +27,7 @@ namespace LogCabin {
 namespace Storage {
 namespace {
 
+using Core::STLUtil::sorted;
 using std::string;
 using std::vector;
 using std::deque;
@@ -109,22 +111,22 @@ class StorageMemoryModuleTest : public ::testing::Test {
 
 TEST_F(StorageMemoryModuleTest, getLogs) {
     EXPECT_EQ((vector<LogId>{}),
-              DLog::sorted(sm.getLogs()));
+              sorted(sm.getLogs()));
     sm.putLog(sm.openLog(38));
     sm.putLog(sm.openLog(755));
     sm.putLog(sm.openLog(129));
     EXPECT_EQ((vector<LogId>{38, 129, 755}),
-              DLog::sorted(sm.getLogs()));
+              sorted(sm.getLogs()));
 }
 
 TEST_F(StorageMemoryModuleTest, openLog) {
     std::unique_ptr<MemoryLog> log(sm.openLog(12));
     EXPECT_EQ(12U, log->logId);
     EXPECT_EQ((vector<LogId>{}),
-              DLog::sorted(sm.getLogs()));
+              sorted(sm.getLogs()));
     sm.putLog(log.release());
     EXPECT_EQ((vector<LogId>{12}),
-              DLog::sorted(sm.getLogs()));
+              sorted(sm.getLogs()));
 }
 
 TEST_F(StorageMemoryModuleTest, deleteLog) {
@@ -132,7 +134,7 @@ TEST_F(StorageMemoryModuleTest, deleteLog) {
     sm.deleteLog(10);
     sm.deleteLog(12);
     EXPECT_EQ((vector<LogId>{}),
-              DLog::sorted(sm.getLogs()));
+              sorted(sm.getLogs()));
 }
 
 TEST_F(StorageMemoryModuleTest, putLog) {
@@ -140,11 +142,11 @@ TEST_F(StorageMemoryModuleTest, putLog) {
     sm.putLog(log);
     delete sm.openLog(10);
     EXPECT_EQ((vector<LogId>{12}),
-              DLog::sorted(sm.getLogs()));
+              sorted(sm.getLogs()));
     EXPECT_EQ(log, sm.openLog(12));
     delete log;
     EXPECT_EQ((vector<LogId>{}),
-              DLog::sorted(sm.getLogs()));
+              sorted(sm.getLogs()));
 }
 
 } // anonymous namespace

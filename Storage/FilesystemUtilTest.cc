@@ -23,8 +23,8 @@
 #include <string>
 #include <vector>
 
-#include "include/Common.h"
 #include "Core/Debug.h"
+#include "Core/STLUtil.h"
 #include "Storage/FilesystemUtil.h"
 
 namespace LogCabin {
@@ -102,7 +102,7 @@ TEST_F(StorageFilesystemUtilTest, ls) {
     // TODO(ongaro): Test readdir_r failure.
 
     EXPECT_EQ((vector<string> {}),
-              DLog::sorted(FilesystemUtil::ls(tmpdir)));
+              Core::STLUtil::sorted(FilesystemUtil::ls(tmpdir)));
 
     EXPECT_EQ(0, mkdir((tmpdir + "/a").c_str(), 0755));
     int fd = open((tmpdir + "/b").c_str(), O_WRONLY|O_CREAT, 0644);
@@ -110,7 +110,7 @@ TEST_F(StorageFilesystemUtilTest, ls) {
     EXPECT_EQ(0, close(fd));
     EXPECT_EQ(0, mkdir((tmpdir + "/c").c_str(), 0755));
     EXPECT_EQ((vector<string> { "a", "b", "c" }),
-              DLog::sorted(FilesystemUtil::ls(tmpdir)));
+              Core::STLUtil::sorted(FilesystemUtil::ls(tmpdir)));
 }
 
 TEST_F(StorageFilesystemUtilTest, remove) {
@@ -134,7 +134,7 @@ TEST_F(StorageFilesystemUtilTest, remove) {
     FilesystemUtil::remove(tmpdir + "/d");
 
     EXPECT_EQ((vector<string> {}),
-              DLog::sorted(FilesystemUtil::ls(tmpdir)));
+              Core::STLUtil::sorted(FilesystemUtil::ls(tmpdir)));
 
     // error
     EXPECT_EQ(0, mkdir((tmpdir + "/g").c_str(), 0755));

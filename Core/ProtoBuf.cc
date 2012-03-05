@@ -16,8 +16,8 @@
 #include <memory>
 #include <sstream>
 
-#include "include/Common.h"
 #include "Core/ProtoBuf.h"
+#include "Core/StringUtil.h"
 
 namespace google {
 namespace protobuf {
@@ -70,6 +70,8 @@ namespace LogCabin {
 namespace Core {
 namespace ProtoBuf {
 
+using Core::StringUtil::replaceAll;
+
 namespace Internal {
 
 void
@@ -102,9 +104,9 @@ dumpString(const google::protobuf::Message& protoBuf,
     printer.PrintToString(protoBuf, &output);
     if (forCopyingIntoTest) {
         // TextFormat::Printer escapes ' already.
-        DLog::replaceAll(output, "\"", "'");
-        DLog::replaceAll(output, "                ", "              \"");
-        DLog::replaceAll(output, "\n", "\"\n");
+        replaceAll(output, "\"", "'");
+        replaceAll(output, "                ", "              \"");
+        replaceAll(output, "\n", "\"\n");
     }
     if (!protoBuf.IsInitialized()) {
         std::vector<std::string> errors;

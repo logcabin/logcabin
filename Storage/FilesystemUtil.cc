@@ -23,8 +23,8 @@
 #include <sys/uio.h>
 #include <unistd.h>
 
-#include "include/Common.h"
 #include "Core/Debug.h"
+#include "Core/Util.h"
 #include "Storage/FilesystemUtil.h"
 
 namespace LogCabin {
@@ -132,7 +132,7 @@ write(int fildes,
        std::initializer_list<std::pair<const void*, uint32_t>> data)
 {
     size_t totalBytes = 0;
-    uint32_t iovcnt = DLog::downCast<uint32_t>(data.size());
+    uint32_t iovcnt = Core::Util::downCast<uint32_t>(data.size());
     struct iovec iov[iovcnt];
     uint32_t i = 0;
     for (auto it = data.begin(); it != data.end(); ++it) {
@@ -189,7 +189,7 @@ FileContents::FileContents(const std::string& path)
         PANIC("File %s too big",
               path.c_str());
     }
-    fileLen = DLog::downCast<uint32_t>(stat.st_size);
+    fileLen = Core::Util::downCast<uint32_t>(stat.st_size);
 
     map = mmap(NULL, fileLen, PROT_READ, MAP_SHARED, fd, 0);
     if (map == NULL) {

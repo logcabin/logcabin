@@ -16,10 +16,10 @@
 #include <deque>
 
 #include "build/Server/InternalLog.pb.h"
-#include "include/Common.h"
 #include "Core/Debug.h"
 #include "Core/Config.h"
 #include "Core/ProtoBuf.h"
+#include "Core/STLUtil.h"
 #include "RPC/ProtoBuf.h"
 #include "Server/LogManager.h"
 #include "Storage/Factory.h"
@@ -186,7 +186,7 @@ LogManager::getLogExclusive(LogId logId) const
 std::vector<std::string>
 LogManager::listLogs() const
 {
-    return DLog::sorted(DLog::getKeys(logNames));
+    return Core::STLUtil::sorted(Core::STLUtil::getKeys(logNames));
 }
 
 void

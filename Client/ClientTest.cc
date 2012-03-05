@@ -17,8 +17,8 @@
 #include <deque>
 #include <queue>
 
-#include "include/Common.h"
 #include "Core/Debug.h"
+#include "Core/StringUtil.h"
 #include "Client/Client.h"
 #include "Client/ClientImpl.h"
 #include "Client/LeaderRPCMock.h"
@@ -31,6 +31,7 @@ namespace LogCabin {
 namespace {
 
 using Core::ProtoBuf::fromString;
+using Core::StringUtil::format;
 
 class ClientClusterTest : public ::testing::Test {
   public:
@@ -176,7 +177,7 @@ TEST_F(ClientLogTest, append_expectedIdStale)
     Client::Entry entry("hello", 5);
     mockRPC->expect(OpCode::APPEND,
         fromString<ProtoBuf::ClientRPC::Append::Response>(
-            DLog::format("ok { entry_id: %lu }", Client::NO_ID)));
+            format("ok { entry_id: %lu }", Client::NO_ID)));
     EXPECT_EQ(Client::NO_ID,
               log->append(entry, 32));
     EXPECT_EQ("log_id: 1 "
@@ -226,7 +227,7 @@ TEST_F(ClientLogTest, invalidate_expectedIdStale)
 {
     mockRPC->expect(OpCode::APPEND,
         fromString<ProtoBuf::ClientRPC::Append::Response>(
-            DLog::format("ok { entry_id: %lu }", Client::NO_ID)));
+            format("ok { entry_id: %lu }", Client::NO_ID)));
     EXPECT_EQ(Client::NO_ID,
               log->invalidate({1}, 32));
     EXPECT_EQ("log_id: 1 "
@@ -322,7 +323,7 @@ TEST_F(ClientLogTest, getLastId_emptyLog)
 {
     mockRPC->expect(OpCode::GET_LAST_ID,
         fromString<ProtoBuf::ClientRPC::GetLastId::Response>(
-            DLog::format("ok { head_entry_id: %lu }", Client::NO_ID)));
+            format("ok { head_entry_id: %lu }", Client::NO_ID)));
     EXPECT_EQ(Client::NO_ID,
               log->getLastId());
     EXPECT_EQ("log_id: 1 ",

@@ -15,7 +15,7 @@
 
 #include <sstream>
 
-#include "include/Common.h"
+#include "Core/StringUtil.h"
 #include "Storage/LogEntry.h"
 
 namespace LogCabin {
@@ -74,7 +74,7 @@ LogEntry::toString() const
     if (!hasData) {
         s << "NODATA";
     } else {
-        if (DLog::isPrintable(data.getData(), data.getLength()))
+        if (Core::StringUtil::isPrintable(data.getData(), data.getLength()))
             s << "'" << static_cast<const char*>(data.getData()) << "'";
         else
             s << "BINARY";

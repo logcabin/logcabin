@@ -14,8 +14,9 @@
  */
 
 #include <algorithm>
+#include <cassert>
 
-#include "include/Common.h"
+#include "Core/STLUtil.h"
 #include "Storage/LogEntry.h"
 #include "Storage/MemoryModule.h"
 
@@ -78,7 +79,7 @@ MemoryModule::~MemoryModule()
 std::vector<LogId>
 MemoryModule::getLogs()
 {
-    std::vector<LogId> ret = DLog::getKeys(logs);
+    std::vector<LogId> ret = Core::STLUtil::getKeys(logs);
     // This may help catch bugs in which the caller depends on
     // the ordering of this list, which is unspecified.
     std::random_shuffle(ret.begin(), ret.end());

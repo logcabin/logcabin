@@ -26,13 +26,17 @@
 #include <cryptopp/tiger.h>
 #include <cryptopp/ripemd.h>
 
-#include "include/Common.h"
 #include "Core/Debug.h"
 #include "Core/Checksum.h"
+#include "Core/StringUtil.h"
+#include "Core/Util.h"
 
 namespace LogCabin {
 namespace Core {
 namespace Checksum {
+
+using Core::Util::downCast;
+using Core::StringUtil::format;
 
 namespace {
 
@@ -74,7 +78,7 @@ class Algorithm {
         ++result;
 
         // calculate binary digest
-        uint32_t binarySize = DLog::downCast<uint32_t>(hashFn->DigestSize());
+        uint32_t binarySize = downCast<uint32_t>(hashFn->DigestSize());
         uint8_t binary[binarySize];
 
         for (auto it = data.begin(); it != data.end(); ++it) {
@@ -106,7 +110,7 @@ class Algorithm {
 
         this->hashFn = &hashFn;
         this->name = name;
-        this->outputSize = DLog::downCast<uint32_t>(outputSize);
+        this->outputSize = downCast<uint32_t>(outputSize);
     }
 
   private:
@@ -285,7 +289,7 @@ std::string
 verify(const char* checksum,
        std::initializer_list<std::pair<const void*, uint32_t>> data)
 {
-    if (!DLog::isPrintable(checksum))
+    if (!Core::StringUtil::isPrintable(checksum))
         return "The given checksum value is corrupt and not printable.";
 
     Algorithm* algo;
@@ -293,16 +297,16 @@ verify(const char* checksum,
         char algorithmName[MAX_LENGTH];
         char* colon = strchr(const_cast<char*>(checksum), ':');
         if (colon == NULL)
-            return DLog::format("Missing colon in checksum: %s", checksum);
+            return format("Missing colon in checksum: %s", checksum);
 
         // nameLength does not include the null terminator
-        uint32_t nameLength = DLog::downCast<uint32_t>(colon - checksum);
+        uint32_t nameLength = downCast<uint32_t>(colon - checksum);
         memcpy(algorithmName, checksum, nameLength);
         algorithmName[nameLength] = '\0';
 
          algo = Algorithms::find(algorithmName);
          if (algo == NULL)
-             return DLog::format("No such checksum algorithm: %s",
+             return format("No such checksum algorithm: %s",
                                  algorithmName);
     }
 
@@ -310,7 +314,7 @@ verify(const char* checksum,
     char calculated[MAX_LENGTH];
     algo->writeChecksum(data, calculated);
     if (strcmp(calculated, checksum) != 0) {
-        return DLog::format("Checksum doesn't match: expected %s "
+        return format("Checksum doesn't match: expected %s "
                             "but calculated %s", checksum, calculated);
     }
 

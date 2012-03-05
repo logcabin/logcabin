@@ -22,16 +22,20 @@
 
 #include <algorithm>
 
-#include "include/Common.h"
 #include "Core/Debug.h"
 #include "Core/Checksum.h"
 #include "Core/Config.h"
+#include "Core/StringUtil.h"
+#include "Core/Util.h"
 #include "Storage/FilesystemModule.h"
 #include "Storage/FilesystemUtil.h"
 #include "Storage/LogEntry.h"
 
 namespace LogCabin {
 namespace Storage {
+
+using Core::StringUtil::format;
+using Core::Util::downCast;
 
 ////////// FilesystemModule //////////
 
@@ -92,7 +96,7 @@ FilesystemModule::deleteLog(LogId logId)
 std::string
 FilesystemModule::getLogPath(LogId logId) const
 {
-    return DLog::format("%s/%016lx", path.c_str(), logId);
+    return format("%s/%016lx", path.c_str(), logId);
 }
 
 ////////// FilesystemLog //////////
@@ -176,7 +180,7 @@ FilesystemLog::getEntryIds()
 std::string
 FilesystemLog::getEntryPath(EntryId entryId) const
 {
-    return DLog::format("%s/%016lx", path.c_str(), entryId);
+    return format("%s/%016lx", path.c_str(), entryId);
 }
 
 namespace {
@@ -386,7 +390,7 @@ FilesystemLog::write(const LogEntry& entry)
 
     // Calculate useful lengths.
     const uint32_t invalidationsBytes =
-            DLog::downCast<uint32_t>(entry.invalidations.size()) *
+            downCast<uint32_t>(entry.invalidations.size()) *
             sizeof32(EntryId);
     const uint32_t checksumCoverage = sizeof32(Header::Fixed) +
                                       sizeof32(Header::Version0) +
@@ -405,7 +409,7 @@ FilesystemLog::write(const LogEntry& entry)
     header.entryId = entry.entryId;
     header.createTime = entry.createTime;
     header.invalidationsLen =
-        DLog::downCast<uint32_t>(entry.invalidations.size());
+        downCast<uint32_t>(entry.invalidations.size());
     header.dataChecksumLen = dataChecksumLen;
     header.dataLen = entry.data.getLength();
     header.toBigEndian();

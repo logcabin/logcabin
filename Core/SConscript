@@ -7,6 +7,7 @@ src = [
     "ProtoBuf.cc",
     "Random.cc",
     "ThreadId.cc",
+    "StringUtil.cc",
     "#build/Core/ProtoBufTest.pb.o",
 ]
 

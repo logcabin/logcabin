@@ -17,10 +17,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <gtest/gtest.h>
+#include <memory>
 
-#include "include/Common.h"
 #include "Core/Debug.h"
 #include "Core/Config.h"
+#include "Core/STLUtil.h"
 #include "Storage/FilesystemModule.h"
 #include "Storage/FilesystemUtil.h"
 #include "Storage/LogEntry.h"
@@ -29,7 +30,7 @@ namespace LogCabin {
 namespace Storage {
 namespace {
 
-
+using Core::STLUtil::sorted;
 using std::string;
 using std::vector;
 using std::deque;
@@ -84,14 +85,14 @@ TEST_F(StorageFilesystemModuleTest, constructor) {
 
 TEST_F(StorageFilesystemModuleTest, getLogs) {
     createStorageModule();
-    EXPECT_EQ((vector<LogId>{}), DLog::sorted(sm->getLogs()));
+    EXPECT_EQ((vector<LogId>{}), sorted(sm->getLogs()));
     delete sm->openLog(38);
     delete sm->openLog(755);
     delete sm->openLog(129);
-    EXPECT_EQ((vector<LogId>{38, 129, 755}), DLog::sorted(sm->getLogs()));
+    EXPECT_EQ((vector<LogId>{38, 129, 755}), sorted(sm->getLogs()));
     close(open((tmpdir + "/NaN").c_str(), O_WRONLY|O_CREAT, 0644));
     createStorageModule();
-    EXPECT_EQ((vector<LogId>{38, 129, 755}), DLog::sorted(sm->getLogs()));
+    EXPECT_EQ((vector<LogId>{38, 129, 755}), sorted(sm->getLogs()));
 }
 
 TEST_F(StorageFilesystemModuleTest, openLog) {
@@ -99,9 +100,9 @@ TEST_F(StorageFilesystemModuleTest, openLog) {
     std::unique_ptr<Log> log(sm->openLog(12));
     EXPECT_EQ(12U, log->logId);
     log.reset();
-    EXPECT_EQ((vector<LogId>{12}), DLog::sorted(sm->getLogs()));
+    EXPECT_EQ((vector<LogId>{12}), sorted(sm->getLogs()));
     createStorageModule();
-    EXPECT_EQ((vector<LogId>{12}), DLog::sorted(sm->getLogs()));
+    EXPECT_EQ((vector<LogId>{12}), sorted(sm->getLogs()));
 }
 
 TEST_F(StorageFilesystemModuleTest, deleteLog) {
@@ -109,9 +110,9 @@ TEST_F(StorageFilesystemModuleTest, deleteLog) {
     delete sm->openLog(12);
     sm->deleteLog(10);
     sm->deleteLog(12);
-    EXPECT_EQ((vector<LogId>{}), DLog::sorted(sm->getLogs()));
+    EXPECT_EQ((vector<LogId>{}), sorted(sm->getLogs()));
     createStorageModule();
-    EXPECT_EQ((vector<LogId>{}), DLog::sorted(sm->getLogs()));
+    EXPECT_EQ((vector<LogId>{}), sorted(sm->getLogs()));
 }
 
 TEST_F(StorageFilesystemModuleTest, getLogPath) {
@@ -199,15 +200,15 @@ TEST_F(StorageFilesystemLogTest, append) {
 
 TEST_F(StorageFilesystemLogTest, getEntryIds) {
     EXPECT_EQ((vector<EntryId>{}),
-              DLog::sorted(log->getEntryIds()));
+              sorted(log->getEntryIds()));
     log->append(LogEntry(3, buf("hello")));
     log->append(LogEntry(6, buf("goodbye")));
     EXPECT_EQ((vector<LogId>{0, 1}),
-              DLog::sorted(log->getEntryIds()));
+              sorted(log->getEntryIds()));
     close(open((log->path + "/NaN").c_str(), O_WRONLY|O_CREAT, 0644));
     createLog();
     EXPECT_EQ((vector<LogId>{0, 1}),
-              DLog::sorted(log->getEntryIds()));
+              sorted(log->getEntryIds()));
 }
 
 TEST_F(StorageFilesystemLogTest, getEntryPath) {
