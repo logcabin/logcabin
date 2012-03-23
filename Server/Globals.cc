@@ -16,6 +16,7 @@
 #include <signal.h>
 
 #include "Core/Debug.h"
+#include "Core/StringUtil.h"
 #include "Protocol/Client.h"
 #include "RPC/Server.h"
 #include "RPC/ThreadDispatchService.h"
@@ -78,15 +79,33 @@ Globals::init()
     }
 
     if (!rpcServer) {
-        std::string listenAddress =
-            config.read<std::string>("listenAddress", "localhost");
         rpcServer.reset(new RPC::Server(eventLoop,
                                         Protocol::Client::MAX_MESSAGE_LENGTH,
                                         *dispatchService));
-        std::string error = rpcServer->bind(
-                                RPC::Address(listenAddress, 61023));
-        if (!error.empty())
-            PANIC("Could not bind to server address: %s", error.c_str());
+        std::string configServers = config.read<std::string>("servers", "");
+        std::vector<std::string> listenAddresses =
+            Core::StringUtil::split(configServers, ';');
+        if (listenAddresses.empty()) {
+            PANIC("No server addresses specified to listen on. "
+                  "You must set the 'servers' configuration option.");
+        }
+        std::string error;
+        for (auto it = listenAddresses.begin();
+             it != listenAddresses.end();
+             ++it) {
+            RPC::Address address(*it, 61023);
+            error = rpcServer->bind(address);
+            if (error.empty()) {
+                LOG(NOTICE, "Serving on %s", address.toString().c_str());
+                break;
+            }
+        }
+        if (!error.empty()) {
+            PANIC("Could not bind to any server address in: %s. "
+                  "Last error was: %s",
+                  configServers.c_str(),
+                  error.c_str());
+        }
     }
 }
 

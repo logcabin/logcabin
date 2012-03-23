@@ -25,9 +25,55 @@ TEST(ServerGlobalsTest, basics) {
     Globals globals;
     globals.config.set("storageModule", "memory");
     globals.config.set("uuid", "my-fake-uuid-123");
+    globals.config.set("servers", "localhost");
     globals.init();
     globals.eventLoop.exit();
     globals.run();
+}
+
+TEST(ServerGlobalsTest, initNoServers) {
+    Globals globals;
+    globals.config.set("storageModule", "memory");
+    globals.config.set("uuid", "my-fake-uuid-123");
+    EXPECT_DEATH(globals.init(),
+                 "No server addresses specified");
+}
+
+TEST(ServerGlobalsTest, initEmptyServers) {
+    Globals globals;
+    globals.config.set("storageModule", "memory");
+    globals.config.set("uuid", "my-fake-uuid-123");
+    globals.config.set("servers", ";");
+    EXPECT_DEATH(globals.init(),
+                 "invalid address");
+}
+
+TEST(ServerGlobalsTest, initAddressTaken) {
+    Globals globals;
+    globals.config.set("storageModule", "memory");
+    globals.config.set("uuid", "my-fake-uuid-123");
+    globals.config.set("servers", "localhost");
+    globals.init();
+    Globals globals2;
+    globals2.config.set("storageModule", "memory");
+    globals2.config.set("uuid", "my-fake-uuid-123");
+    globals2.config.set("servers", "localhost");
+    EXPECT_DEATH(globals2.init(),
+                 "in use");
+}
+
+TEST(ServerGlobalsTest, initBindToOneOnly) {
+    Globals globals;
+    globals.config.set("storageModule", "memory");
+    globals.config.set("uuid", "my-fake-uuid-123");
+    globals.config.set("servers",
+                       "google.com;localhost:61023;localhost:61024");
+    globals.init();
+    Globals globals2;
+    globals2.config.set("storageModule", "memory");
+    globals2.config.set("uuid", "my-fake-uuid-123");
+    globals2.config.set("servers", "localhost:61024");
+    globals2.init();
 }
 
 } // namespace LogCabin::Server::<anonymous>

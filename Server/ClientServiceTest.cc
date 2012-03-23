@@ -46,6 +46,7 @@ class ServerClientServiceTest : public ::testing::Test {
     {
         globals.config.set("storageModule", "memory");
         globals.config.set("uuid", "my-fake-uuid-123");
+        globals.config.set("servers", "localhost");
         globals.init();
     }
 
