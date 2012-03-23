@@ -44,13 +44,11 @@ class Service;
 class Server {
   public:
     /**
-     * Constructor.
-     * This will PANIC if it's not able to listen on the given address.
+     * Constructor. This object won't actually do anything until bind() is
+     * called.
      * \param eventLoop
      *      Event::Loop that will be used to find out when the underlying
      *      socket may be read from or written to without blocking.
-     * \param listenAddress
-     *      The TCP address on listen for new client connections.
      * \param maxMessageLength
      *      The maximum number of bytes to allow per request/response. This
      *      exists to limit the amount of buffer space a single RPC can use.
@@ -62,7 +60,6 @@ class Server {
      *      must return quickly.
      */
     Server(Event::Loop& eventLoop,
-           const Address& listenAddress,
            uint32_t maxMessageLength,
            Service& service);
 
@@ -73,6 +70,20 @@ class Server {
      */
     ~Server();
 
+    /**
+     * Listen on an address for new client connections. You can call this
+     * multiple times to listen on multiple addresses. (But if you call this
+     * twice with the same address, the second time will always throw an
+     * error.)
+     * This method is thread-safe.
+     * \param listenAddress
+     *      The TCP address on listen for new client connections.
+     * \return
+     *      An error message if this was not able to listen on the given
+     *      address; the empty string otherwise.
+     */
+    std::string bind(const Address& listenAddress);
+
   private:
 
     /**
@@ -81,8 +92,7 @@ class Server {
      */
     class ServerTCPListener : public TCPListener {
       public:
-        ServerTCPListener(Server* server,
-                          const Address& listenAddress);
+        explicit ServerTCPListener(Server* server);
         void handleNewConnection(int fd);
         /**
          * The Server which owns this object,

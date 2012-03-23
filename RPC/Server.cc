@@ -32,10 +32,8 @@ namespace RPC {
 
 ////////// Server::ServerTCPListener //////////
 
-Server::ServerTCPListener::ServerTCPListener(
-        Server* server,
-        const Address& listenAddress)
-    : TCPListener(server->eventLoop, listenAddress)
+Server::ServerTCPListener::ServerTCPListener(Server* server)
+    : TCPListener(server->eventLoop)
     , server(server)
 {
 }
@@ -104,14 +102,13 @@ Server::ServerMessageSocket::close()
 ////////// Server //////////
 
 Server::Server(Event::Loop& eventLoop,
-               const Address& listenAddress,
                uint32_t maxMessageLength,
                Service& service)
     : eventLoop(eventLoop)
     , maxMessageLength(maxMessageLength)
     , service(service)
     , sockets()
-    , listener(this, listenAddress)
+    , listener(this)
 {
 }
 
@@ -129,6 +126,12 @@ Server::~Server()
         ServerMessageSocket& socket = **it;
         socket.server = NULL;
     }
+}
+
+std::string
+Server::bind(const Address& listenAddress)
+{
+    return listener.bind(listenAddress);
 }
 
 } // namespace LogCabin::RPC

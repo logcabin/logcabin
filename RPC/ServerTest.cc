@@ -40,10 +40,11 @@ class RPCServerTest : public ::testing::Test {
         : loop()
         , address("127.0.0.1", 61023)
         , service()
-        , server(loop, address, 1024, service)
+        , server(loop, 1024, service)
         , fd1(-1)
         , fd2(-1)
     {
+        EXPECT_EQ("", server.bind(address));
         int fds[2];
         EXPECT_EQ(0, pipe(fds));
         fd1 = fds[0];

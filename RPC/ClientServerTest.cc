@@ -60,10 +60,12 @@ class RPCClientServerTest : public ::testing::Test {
         , address("127.0.0.1", 61023)
         , service()
         , threadDispatch(service, 1, 1)
-        , server(serverEventLoop, address, 1024, threadDispatch)
-        , clientSession(RPC::ClientSession::makeSession(
-                            clientEventLoop, address, 1024))
+        , server(serverEventLoop, 1024, threadDispatch)
+        , clientSession()
     {
+        EXPECT_EQ("", server.bind(address));
+        clientSession = RPC::ClientSession::makeSession(
+                            clientEventLoop, address, 1024);
     }
     ~RPCClientServerTest()
     {

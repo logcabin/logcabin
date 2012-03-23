@@ -16,6 +16,8 @@
 #ifndef LOGCABIN_RPC_TCPLISTENER_H
 #define LOGCABIN_RPC_TCPLISTENER_H
 
+#include <vector>
+
 #include "Event/Loop.h"
 #include "Address.h"
 
@@ -42,20 +44,30 @@ class TCPListener {
   public:
 
     /**
-     * Constructor.
-     * This will PANIC if it's not able to listen on the given address.
+     * Constructor. This object won't actually do anything until bind() is
+     * called.
      * \param eventLoop
      *      Event::Loop that will manage this TCPListener object.
-     * \param listenAddress
-     *      The address to listen on.
      */
-    explicit TCPListener(Event::Loop& eventLoop,
-                         const Address& listenAddress);
+    explicit TCPListener(Event::Loop& eventLoop);
 
     /**
      * Destructor.
      */
     virtual ~TCPListener();
+
+    /**
+     * Listen on a new address. You can call this multiple times to listen on
+     * multiple addresses. (But if you call this twice with the same address,
+     * the second time will always throw an error.)
+     * This method is thread-safe.
+     * \param listenAddress
+     *      The address to listen on.
+     * \return
+     *      An error message if this was not able to listen on the given
+     *      address; the empty string otherwise.
+     */
+    std::string bind(const Address& listenAddress);
 
     /**
      * This method is overridden by a subclass and invoked when a new
@@ -74,15 +86,10 @@ class TCPListener {
   private:
 
     /**
-     * The address on which to listen.
+     * The listeners from libevent.
+     * These are never NULL.
      */
-    Address listenAddress;
-
-    /**
-     * The listener from libevent.
-     * This is never NULL.
-     */
-    LibEvent::evconnlistener* listener;
+    std::vector<LibEvent::evconnlistener*> listeners;
 
     // TCPListener is not copyable.
     TCPListener(const TCPListener&) = delete;

@@ -45,9 +45,8 @@ connectThreadMain(Address address, int* connectError)
 }
 
 class Listener : public TCPListener {
-    Listener(Event::Loop& eventLoop,
-             const Address& listenAddress)
-        : TCPListener(eventLoop, listenAddress)
+    explicit Listener(Event::Loop& eventLoop)
+        : TCPListener(eventLoop)
         , count(0)
     {
     }
@@ -61,8 +60,11 @@ class Listener : public TCPListener {
 
 TEST(RPCTCPListener, basics) {
     Event::Loop loop;
+    Listener listener(loop);
+    EXPECT_EQ("", listener.bind(Address("127.0.0.1", 61022)));
     Address address("127.0.0.1", 61023);
-    Listener listener(loop, address);
+    EXPECT_EQ("", listener.bind(address));
+    EXPECT_EQ("", listener.bind(Address("127.0.0.1", 61024)));
     int connectError = -1;
     std::thread thread(connectThreadMain, address, &connectError);
     loop.runForever();
@@ -73,16 +75,21 @@ TEST(RPCTCPListener, basics) {
 
 TEST(RPCTCPListener, badAddress) {
     Event::Loop loop;
+    Listener listener(loop);
     Address address("", 0);
-    EXPECT_DEATH(Listener(loop, address),
-                 "ERROR: Can't listen on address");
+    std::string error = listener.bind(address);
+    EXPECT_TRUE(error.find("Can't listen on invalid address") != error.npos)
+        << error;
 }
 
 TEST(RPCTCPListener, portTaken) {
     Event::Loop loop;
+    Listener listener(loop);
     Address address("127.0.0.1", 61023);
-    Listener ok(loop, address);
-    EXPECT_DEATH(Listener(loop, address), "ERROR");
+    EXPECT_EQ("", listener.bind(address));
+    std::string error = listener.bind(address);
+    EXPECT_TRUE(error.find("in use") != error.npos)
+        << error;
 }
 
 } // namespace LogCabin::RPC::<anonymous>

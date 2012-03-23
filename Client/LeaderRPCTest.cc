@@ -159,8 +159,9 @@ class ClientLeaderRPCTest : public ::testing::Test {
     }
 
     void init() {
-        server.reset(new RPC::Server(serverEventLoop, address,
+        server.reset(new RPC::Server(serverEventLoop,
                                      1024 * 1024, service));
+        EXPECT_EQ("", server->bind(address));
         serverThread = std::thread(&Event::Loop::runForever, &serverEventLoop);
         leaderRPC.reset(new LeaderRPC(address));
     }

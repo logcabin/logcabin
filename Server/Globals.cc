@@ -81,9 +81,12 @@ Globals::init()
         std::string listenAddress =
             config.read<std::string>("listenAddress", "localhost");
         rpcServer.reset(new RPC::Server(eventLoop,
-                                        RPC::Address(listenAddress, 61023),
                                         Protocol::Client::MAX_MESSAGE_LENGTH,
                                         *dispatchService));
+        std::string error = rpcServer->bind(
+                                RPC::Address(listenAddress, 61023));
+        if (!error.empty())
+            PANIC("Could not bind to server address: %s", error.c_str());
     }
 }
 
