@@ -49,6 +49,13 @@ TEST(CoreStringUtilTest, isPrintableData) {
     EXPECT_FALSE(isPrintable("\n", 2));
 }
 
+TEST(CoreStringUtilTest, split) {
+    EXPECT_EQ((std::vector<std::string>{"abc", "def", "ghi"}),
+              split("abc;def;ghi", ';'));
+    EXPECT_EQ((std::vector<std::string>{"", "abc\n", "def", "", ""}),
+              split(";abc\n;def;;;", ';'));
+}
+
 } // namespace LogCabin::Core::StringUtil::<anonymous>
 } // namespace LogCabin::Core::StringUtil
 } // namespace LogCabin::Core

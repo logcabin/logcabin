@@ -17,6 +17,7 @@
 #include <cassert>
 #include <cstdarg>
 #include <cstring>
+#include <sstream>
 
 #include "Core/StringUtil.h"
 
@@ -96,6 +97,17 @@ replaceAll(std::string& haystack,
         haystack.replace(replacePos, needle.length(), replacement);
         startPos = replacePos + replacement.length();
     }
+}
+
+std::vector<std::string>
+split(const std::string& subject, char delimiter)
+{
+    std::vector<std::string> items;
+    std::istringstream stream(subject);
+    std::string item;
+    while (std::getline(stream, item, delimiter))
+        items.push_back(std::move(item));
+    return items;
 }
 
 } // namespace LogCabin::Core::StringUtil

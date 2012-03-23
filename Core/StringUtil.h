@@ -14,6 +14,7 @@
  */
 
 #include <string>
+#include <vector>
 
 #ifndef LOGCABIN_CORE_STRINGUTIL_H
 #define LOGCABIN_CORE_STRINGUTIL_H
@@ -63,6 +64,24 @@ void
 replaceAll(std::string& haystack,
            const std::string& needle,
            const std::string& replacement);
+
+/**
+ * Split a string into multiple components by a character.
+ * \param subject
+ *      The string to split.
+ * \param delimiter
+ *      The character to split the string by.
+ * \return
+ *      The components of 'subject', not including 'delimiter'.
+ *      - If two delimiters occur in a row in 'subject', a corresponding empty
+ *        string will appear in the returned vector.
+ *      - If a delimiter occurs at the start of 'subject', a corresponding
+ *        empty string will appear at the start of the returned vector.
+ *      - If a delimiter occurs at the end of 'subject', no corresponding empty
+ *        string will appear at the end of the returned vector.
+ */
+std::vector<std::string>
+split(const std::string& subject, char delimiter);
 
 } // namespace LogCabin::Core::StringUtil
 } // namespace LogCabin::Core
