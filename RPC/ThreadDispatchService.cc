@@ -62,7 +62,7 @@ ThreadDispatchService::~ThreadDispatchService()
 }
 
 void
-ThreadDispatchService::handleRPC(ServerRPC serverRPC)
+ThreadDispatchService::handleRPC(OpaqueServerRPC serverRPC)
 {
     std::unique_lock<std::mutex> lockGuard(mutex);
     assert(!exit);
@@ -76,7 +76,7 @@ void
 ThreadDispatchService::workerMain()
 {
     while (true) {
-        ServerRPC rpc;
+        OpaqueServerRPC rpc;
         { // find an RPC to process
             std::unique_lock<std::mutex> lockGuard(mutex);
             ++numFreeWorkers;

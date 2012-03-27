@@ -20,8 +20,8 @@
 
 #include "RPC/Buffer.h"
 
-#ifndef LOGCABIN_RPC_CLIENTRPC_H
-#define LOGCABIN_RPC_CLIENTRPC_H
+#ifndef LOGCABIN_RPC_OPAQUECLIENTRPC_H
+#define LOGCABIN_RPC_OPAQUECLIENTRPC_H
 
 namespace LogCabin {
 namespace RPC {
@@ -33,7 +33,7 @@ class ClientSession; // forward declaration
  * returns an instance when an RPC is initiated; this can be used to wait for
  * and retrieve the reply.
  */
-class ClientRPC {
+class OpaqueClientRPC {
   public:
     /**
      * This may be thrown by #extractReply.
@@ -47,22 +47,22 @@ class ClientRPC {
      * Default constructor. This doesn't create a valid RPC, but it is useful
      * as a placeholder.
      */
-    ClientRPC();
+    OpaqueClientRPC();
 
     /**
      * Move constructor.
      */
-    ClientRPC(ClientRPC&&);
+    OpaqueClientRPC(OpaqueClientRPC&&);
 
     /**
      * Destructor.
      */
-    ~ClientRPC();
+    ~OpaqueClientRPC();
 
     /**
      * Move assignment.
      */
-    ClientRPC& operator=(ClientRPC&&);
+    OpaqueClientRPC& operator=(OpaqueClientRPC&&);
 
     /**
      * Abort the RPC.
@@ -78,9 +78,9 @@ class ClientRPC {
      * successfully, this will return the reply, leaving the RPC with an empty
      * reply buffer.
      *
-     * This may be used from worker threads only, because ClientRPC objects
-     * rely on the event loop servicing their ClientSession in order to make
-     * progress.
+     * This may be used from worker threads only, because OpaqueClientRPC
+     * objects rely on the event loop servicing their ClientSession in order to
+     * make progress.
      *
      * \return
      *      The reply, leaving the RPC with an empty reply buffer.
@@ -117,7 +117,7 @@ class ClientRPC {
      *
      * \return
      *      If the reply is already available and there were no errors, returns
-     *      a pointer to the reply buffer inside this ClientRPC object.
+     *      a pointer to the reply buffer inside this OpaqueClientRPC object.
      *      Otherwise, returns NULL.
      */
     Buffer* peekReply();
@@ -125,9 +125,9 @@ class ClientRPC {
     /**
      * Block until the reply is ready or an error has occurred.
      *
-     * This may be used from worker threads only, because ClientRPC objects
-     * rely on the event loop servicing their ClientSession in order to make
-     * progress.
+     * This may be used from worker threads only, because OpaqueClientRPC
+     * objects rely on the event loop servicing their ClientSession in order to
+     * make progress.
      */
     void waitForReply();
 
@@ -173,13 +173,13 @@ class ClientRPC {
     // The ClientSession class fills in the members of this object.
     friend class ClientSession;
 
-    // ClientRPC is non-copyable.
-    ClientRPC(const ClientRPC&) = delete;
-    ClientRPC& operator=(const ClientRPC&) = delete;
+    // OpaqueClientRPC is non-copyable.
+    OpaqueClientRPC(const OpaqueClientRPC&) = delete;
+    OpaqueClientRPC& operator=(const OpaqueClientRPC&) = delete;
 
-}; // class ClientRPC
+}; // class OpaqueClientRPC
 
 } // namespace LogCabin::RPC
 } // namespace LogCabin
 
-#endif /* LOGCABIN_RPC_CLIENTRPC_H */
+#endif /* LOGCABIN_RPC_OPAQUECLIENTRPC_H */

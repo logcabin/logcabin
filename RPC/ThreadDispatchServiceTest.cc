@@ -33,7 +33,7 @@ class EchoService : public RPC::Service {
         , count(0)
     {
     }
-    void handleRPC(RPC::ServerRPC serverRPC) {
+    void handleRPC(RPC::OpaqueServerRPC serverRPC) {
         usleep(sleepMicros);
         serverRPC.response = std::move(serverRPC.request);
         serverRPC.sendReply();
@@ -86,7 +86,7 @@ TEST_F(RPCThreadDispatchServiceTest, handleRPC)
                                           0, 2);
     echoService.sleepMicros = 1000;
     for (uint32_t i = 0; i < 10; ++i)
-        dispatchService.handleRPC(ServerRPC());
+        dispatchService.handleRPC(OpaqueServerRPC());
     echoService.sleepMicros = 0;
     while (echoService.count < 10)
         usleep(1000);

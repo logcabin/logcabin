@@ -20,7 +20,7 @@
 #include <thread>
 #include <vector>
 
-#include "RPC/ServerRPC.h"
+#include "RPC/OpaqueServerRPC.h"
 #include "RPC/Service.h"
 
 #ifndef LOGCABIN_RPC_THREADDISPATCHSERVICE_H
@@ -61,7 +61,7 @@ class ThreadDispatchService : public Service {
      */
     ~ThreadDispatchService();
 
-    void handleRPC(ServerRPC serverRPC);
+    void handleRPC(OpaqueServerRPC serverRPC);
 
   private:
     /**
@@ -113,7 +113,7 @@ class ThreadDispatchService : public Service {
     /**
      * The queue of work that worker threads pull from.
      */
-    std::queue<ServerRPC> rpcQueue;
+    std::queue<OpaqueServerRPC> rpcQueue;
 
     // ThreadDispatchService is non-copyable.
     ThreadDispatchService(const ThreadDispatchService&) = delete;

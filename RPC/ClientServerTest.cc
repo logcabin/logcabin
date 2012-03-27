@@ -26,8 +26,9 @@
 
 #include "Core/Debug.h"
 #include "RPC/ClientSession.h"
+#include "RPC/OpaqueClientRPC.h"
+#include "RPC/OpaqueServerRPC.h"
 #include "RPC/Server.h"
-#include "RPC/ServerRPC.h"
 #include "RPC/Service.h"
 #include "RPC/ThreadDispatchService.h"
 
@@ -39,7 +40,7 @@ class EchoService : public RPC::Service {
         : delayMicros(0)
     {
     }
-    void handleRPC(RPC::ServerRPC serverRPC) {
+    void handleRPC(RPC::OpaqueServerRPC serverRPC) {
         serverRPC.response = std::move(serverRPC.request);
         if (delayMicros != 0) {
             LOG(DBG, "Delaying response for %u microseconds", delayMicros);
@@ -92,7 +93,7 @@ TEST_F(RPCClientServerTest, echo) {
         char buf[bufLen];
         for (uint32_t i = 0; i < bufLen; ++i)
             buf[i] = char(i);
-        RPC::ClientRPC rpc = clientSession->sendRequest(
+        RPC::OpaqueClientRPC rpc = clientSession->sendRequest(
                                         RPC::Buffer(buf, bufLen, NULL));
         RPC::Buffer reply = rpc.extractReply();
         EXPECT_EQ(bufLen, reply.getLength());
@@ -107,14 +108,14 @@ TEST_F(RPCClientServerTest, timeout) {
 
     // The server should not time out, since the serverEventLoopThread should
     // respond to pings.
-    RPC::ClientRPC rpc = clientSession->sendRequest(RPC::Buffer());
+    RPC::OpaqueClientRPC rpc = clientSession->sendRequest(RPC::Buffer());
     rpc.waitForReply();
     EXPECT_EQ("", rpc.getErrorMessage());
 
     // This time, if we don't let the server event loop run, the RPC should
     // time out.
     Event::Loop::Lock blockPings(serverEventLoop);
-    RPC::ClientRPC rpc2 = clientSession->sendRequest(RPC::Buffer());
+    RPC::OpaqueClientRPC rpc2 = clientSession->sendRequest(RPC::Buffer());
     rpc2.waitForReply();
     EXPECT_EQ("Server timed out", rpc2.getErrorMessage());
 

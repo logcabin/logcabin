@@ -13,12 +13,12 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include "RPC/ServerRPC.h"
+#include "RPC/OpaqueServerRPC.h"
 
 namespace LogCabin {
 namespace RPC {
 
-ServerRPC::ServerRPC()
+OpaqueServerRPC::OpaqueServerRPC()
     : request()
     , response()
     , messageSocket()
@@ -27,7 +27,7 @@ ServerRPC::ServerRPC()
 {
 }
 
-ServerRPC::ServerRPC(
+OpaqueServerRPC::OpaqueServerRPC(
         std::weak_ptr<Server::ServerMessageSocket> messageSocket,
         MessageSocket::MessageId messageId,
         Buffer request)
@@ -39,7 +39,7 @@ ServerRPC::ServerRPC(
 {
 }
 
-ServerRPC::ServerRPC(ServerRPC&& other)
+OpaqueServerRPC::OpaqueServerRPC(OpaqueServerRPC&& other)
     : request(std::move(other.request))
     , response(std::move(other.response))
     , messageSocket(std::move(other.messageSocket))
@@ -48,12 +48,12 @@ ServerRPC::ServerRPC(ServerRPC&& other)
 {
 }
 
-ServerRPC::~ServerRPC()
+OpaqueServerRPC::~OpaqueServerRPC()
 {
 }
 
-ServerRPC&
-ServerRPC::operator=(ServerRPC&& other)
+OpaqueServerRPC&
+OpaqueServerRPC::operator=(OpaqueServerRPC&& other)
 {
     request = std::move(other.request);
     response = std::move(other.response);
@@ -64,7 +64,7 @@ ServerRPC::operator=(ServerRPC&& other)
 }
 
 void
-ServerRPC::closeSession()
+OpaqueServerRPC::closeSession()
 {
     std::shared_ptr<Server::ServerMessageSocket> socket = messageSocket.lock();
     if (socket)
@@ -74,7 +74,7 @@ ServerRPC::closeSession()
 }
 
 void
-ServerRPC::sendReply()
+OpaqueServerRPC::sendReply()
 {
     std::shared_ptr<Server::ServerMessageSocket> socket = messageSocket.lock();
     if (socket) {

@@ -16,8 +16,8 @@
 #include <gtest/gtest.h>
 
 #include "Core/Debug.h"
+#include "RPC/OpaqueServerRPC.h"
 #include "RPC/Server.h"
-#include "RPC/ServerRPC.h"
 #include "RPC/Service.h"
 
 namespace LogCabin {
@@ -29,10 +29,10 @@ class MyService : public Service {
         : lastRPC()
     {
     }
-    void handleRPC(ServerRPC serverRPC) {
-        lastRPC.reset(new ServerRPC(std::move(serverRPC)));
+    void handleRPC(OpaqueServerRPC serverRPC) {
+        lastRPC.reset(new OpaqueServerRPC(std::move(serverRPC)));
     }
-    std::unique_ptr<ServerRPC> lastRPC;
+    std::unique_ptr<OpaqueServerRPC> lastRPC;
 };
 
 class RPCServerTest : public ::testing::Test {

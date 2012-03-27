@@ -22,7 +22,7 @@
 #include "Event/Timer.h"
 #include "RPC/Address.h"
 #include "RPC/Buffer.h"
-#include "RPC/ClientRPC.h"
+#include "RPC/OpaqueClientRPC.h"
 #include "RPC/MessageSocket.h"
 
 #ifndef LOGCABIN_RPC_CLIENTSESSION_H
@@ -38,9 +38,9 @@ class Loop;
 namespace RPC {
 
 /**
- * A ClientSession is used to initiate ClientRPCs. It encapsulates a connection
- * to a server. Sessions can be relatively expensive to create, so clients
- * should keep them around.
+ * A ClientSession is used to initiate OpaqueClientRPCs. It encapsulates a
+ * connection to a server. Sessions can be relatively expensive to create, so
+ * clients should keep them around.
  */
 class ClientSession {
   private:
@@ -89,7 +89,7 @@ class ClientSession {
      * \return
      *      This is be used to wait for and retrieve the reply to the RPC.
      */
-    ClientRPC sendRequest(Buffer request);
+    OpaqueClientRPC sendRequest(Buffer request);
 
     /**
      * If the socket has been disconnected, return a descriptive message.
@@ -129,9 +129,10 @@ class ClientSession {
     };
 
     /**
-     * This contains an expected response for a ClientRPC object. This is
-     * created when the ClientRPC is created; it is deleted when the ClientRPC
-     * object is either canceled or updated with a response/error.
+     * This contains an expected response for a OpaqueClientRPC object.
+     * This is created when the OpaqueClientRPC is created; it is deleted when
+     * the OpaqueClientRPC object is either canceled or updated with a
+     * response/error.
      */
     struct Response {
         /// Constructor.
@@ -155,8 +156,8 @@ class ClientSession {
         ClientSession& session;
     };
 
-    // The cancel(), update(), and wait() methods are used by ClientRPC.
-    friend class ClientRPC;
+    // The cancel(), update(), and wait() methods are used by OpaqueClientRPC.
+    friend class OpaqueClientRPC;
 
     /**
      * Called by the RPC when it is no longer interested in its response.
@@ -164,19 +165,19 @@ class ClientSession {
      * TODO(ongaro): It'd be nice to cancel sending the request if it hasn't
      * already gone out, but I guess that's going to be a pretty rare case.
      */
-    void cancel(ClientRPC& rpc);
+    void cancel(OpaqueClientRPC& rpc);
 
     /**
      * Called by the RPC when it wants to be learn of its response
      * (non-blocking). This is the non-blocking version of wait().
      */
-    void update(ClientRPC& rpc);
+    void update(OpaqueClientRPC& rpc);
 
     /**
      * Called by the RPC when it wants to wait for its response (blocking).
      * This is the blocking version of update().
      */
-    void wait(ClientRPC& rpc);
+    void wait(OpaqueClientRPC& rpc);
 
     /**
      * This is used to keep this object alive while there are outstanding RPCs.
@@ -215,16 +216,17 @@ class ClientSession {
     MessageSocket::MessageId nextMessageId;
 
     /**
-     * ClientRPC objects wait on this condition variable inside of wait(). It
-     * is notified when a new response arrives or the session is disconnected.
+     * OpaqueClientRPC objects wait on this condition variable inside of
+     * wait(). It is notified when a new response arrives or the session is
+     * disconnected.
      */
     std::condition_variable responseReceived;
 
     /**
      * A map from MessageId to Response objects that is used to store the
-     * response to RPCs and look it up for ClientRPC objects. The Response
-     * objects mapped to must be deleted manually when removed from this map
-     * (gcc 4.4 doesn't support mapping to non-copyable objects).
+     * response to RPCs and look it up for OpaqueClientRPC objects. The
+     * Response objects mapped to must be deleted manually when removed from
+     * this map (gcc 4.4 doesn't support mapping to non-copyable objects).
      */
     std::unordered_map<MessageSocket::MessageId, Response*> responses;
 

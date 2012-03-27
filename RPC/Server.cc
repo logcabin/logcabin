@@ -17,8 +17,8 @@
 #include <string.h>
 
 #include "Core/Debug.h"
+#include "RPC/OpaqueServerRPC.h"
 #include "RPC/Server.h"
-#include "RPC/ServerRPC.h"
 #include "RPC/Service.h"
 
 /**
@@ -75,7 +75,7 @@ Server::ServerMessageSocket::onReceiveMessage(MessageId messageId,
     }
     if (server != NULL) {
         LOG(DBG, "Handling RPC");
-        ServerRPC rpc(self, messageId, std::move(message));
+        OpaqueServerRPC rpc(self, messageId, std::move(message));
         server->service.handleRPC(std::move(rpc));
     }
 }

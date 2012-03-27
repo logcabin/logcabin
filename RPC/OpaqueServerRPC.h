@@ -19,8 +19,8 @@
 #include "RPC/MessageSocket.h"
 #include "RPC/Server.h"
 
-#ifndef LOGCABIN_RPC_SERVERRPC_H
-#define LOGCABIN_RPC_SERVERRPC_H
+#ifndef LOGCABIN_RPC_OPAQUESERVERRPC_H
+#define LOGCABIN_RPC_OPAQUESERVERRPC_H
 
 namespace LogCabin {
 namespace RPC {
@@ -33,7 +33,7 @@ namespace RPC {
  * This class may be used from any thread, but each object is meant to be
  * accessed by only one thread at a time.
  */
-class ServerRPC {
+class OpaqueServerRPC {
     /**
      * Constructor for ServerRPC. This is called by Server.
      * \param messageSocket
@@ -43,32 +43,32 @@ class ServerRPC {
      * \param request
      *      The RPC request received from the client.
      */
-    ServerRPC(std::weak_ptr<Server::ServerMessageSocket> messageSocket,
+    OpaqueServerRPC(std::weak_ptr<Server::ServerMessageSocket> messageSocket,
               MessageSocket::MessageId messageId,
               Buffer request);
 
   public:
     /**
      * Default constructor for empty RPC that can't be replied to.
-     * This is useful as a placeholder for a real ServerRPC.
+     * This is useful as a placeholder for a real OpaqueServerRPC.
      */
-    ServerRPC();
+    OpaqueServerRPC();
 
 
     /**
      * Move constructor.
      */
-    ServerRPC(ServerRPC&& other);
+    OpaqueServerRPC(OpaqueServerRPC&& other);
 
     /**
      * Destructor.
      */
-    ~ServerRPC();
+    ~OpaqueServerRPC();
 
     /**
      * Move assignment.
      */
-    ServerRPC& operator=(ServerRPC&& other);
+    OpaqueServerRPC& operator=(OpaqueServerRPC&& other);
 
     /**
      * Close the session on which this request originated.
@@ -117,13 +117,13 @@ class ServerRPC {
     // The Server class uses the private members of this object.
     friend class Server;
 
-    // ServerRPC is non-copyable.
-    ServerRPC(const ServerRPC&) = delete;
-    ServerRPC& operator=(const ServerRPC&) = delete;
+    // OpaqueServerRPC is non-copyable.
+    OpaqueServerRPC(const OpaqueServerRPC&) = delete;
+    OpaqueServerRPC& operator=(const OpaqueServerRPC&) = delete;
 
-}; // class ServerRPC
+}; // class OpaqueServerRPC
 
 } // namespace LogCabin::RPC
 } // namespace LogCabin
 
-#endif /* LOGCABIN_RPC_SERVERRPC_H */
+#endif /* LOGCABIN_RPC_OPAQUESERVERRPC_H */

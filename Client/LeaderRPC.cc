@@ -19,6 +19,7 @@
 #include "Protocol/Client.h"
 #include "RPC/Buffer.h"
 #include "RPC/ClientSession.h"
+#include "RPC/OpaqueClientRPC.h"
 #include "RPC/ProtoBuf.h"
 
 namespace LogCabin {
@@ -76,7 +77,7 @@ LeaderRPC::call(OpCode opCode,
         }
 
         // Send the request and wait for the RPC response
-        RPC::ClientRPC rpc =
+        RPC::OpaqueClientRPC rpc =
             cachedSession->sendRequest(std::move(requestBuffer));
         rpc.waitForReply();
 

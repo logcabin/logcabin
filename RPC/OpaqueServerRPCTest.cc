@@ -15,7 +15,7 @@
 
 #include <gtest/gtest.h>
 
-#include "RPC/ServerRPC.h"
+#include "RPC/OpaqueServerRPC.h"
 
 namespace LogCabin {
 namespace RPC {
@@ -24,10 +24,10 @@ namespace {
 // There's not much here to test except for sendReply, which is difficult to
 // test.
 
-TEST(RPCServerRPCTest, constructor_default)
+TEST(RPCOpaqueServerRPCTest, constructor_default)
 {
-    // make sure a default-constructed ServerRPC is harmless
-    ServerRPC rpc;
+    // make sure a default-constructed OpaqueServerRPC is harmless
+    OpaqueServerRPC rpc;
     rpc.sendReply();
     rpc.closeSession();
 }

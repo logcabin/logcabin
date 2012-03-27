@@ -13,13 +13,13 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include "RPC/ClientRPC.h"
 #include "RPC/ClientSession.h"
+#include "RPC/OpaqueClientRPC.h"
 
 namespace LogCabin {
 namespace RPC {
 
-ClientRPC::ClientRPC()
+OpaqueClientRPC::OpaqueClientRPC()
     : session()
     , responseToken(~0UL)
     , ready(false)
@@ -28,7 +28,7 @@ ClientRPC::ClientRPC()
 {
 }
 
-ClientRPC::ClientRPC(ClientRPC&& other)
+OpaqueClientRPC::OpaqueClientRPC(OpaqueClientRPC&& other)
     : session(std::move(other.session))
     , responseToken(std::move(other.responseToken))
     , ready(std::move(other.ready))
@@ -37,13 +37,13 @@ ClientRPC::ClientRPC(ClientRPC&& other)
 {
 }
 
-ClientRPC::~ClientRPC()
+OpaqueClientRPC::~OpaqueClientRPC()
 {
     cancel();
 }
 
-ClientRPC&
-ClientRPC::operator=(ClientRPC&& other)
+OpaqueClientRPC&
+OpaqueClientRPC::operator=(OpaqueClientRPC&& other)
 {
     session = std::move(other.session);
     responseToken = std::move(other.responseToken);
@@ -54,7 +54,7 @@ ClientRPC::operator=(ClientRPC&& other)
 }
 
 void
-ClientRPC::cancel()
+OpaqueClientRPC::cancel()
 {
     if (ready)
         return;
@@ -67,7 +67,7 @@ ClientRPC::cancel()
 }
 
 Buffer
-ClientRPC::extractReply()
+OpaqueClientRPC::extractReply()
 {
     waitForReply();
     if (!errorMessage.empty())
@@ -76,21 +76,21 @@ ClientRPC::extractReply()
 }
 
 std::string
-ClientRPC::getErrorMessage()
+OpaqueClientRPC::getErrorMessage()
 {
     update();
     return errorMessage;
 }
 
 bool
-ClientRPC::isReady()
+OpaqueClientRPC::isReady()
 {
     update();
     return ready;
 }
 
 Buffer*
-ClientRPC::peekReply()
+OpaqueClientRPC::peekReply()
 {
     update();
     if (ready && errorMessage.empty())
@@ -100,7 +100,7 @@ ClientRPC::peekReply()
 }
 
 void
-ClientRPC::waitForReply()
+OpaqueClientRPC::waitForReply()
 {
     if (ready)
         return;
@@ -115,7 +115,7 @@ ClientRPC::waitForReply()
 ///// private methods /////
 
 void
-ClientRPC::update()
+OpaqueClientRPC::update()
 {
     if (!ready && session)
         session->update(*this);

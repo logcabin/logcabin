@@ -20,9 +20,9 @@
 #include "Client/LeaderRPC.h"
 #include "Core/ProtoBuf.h"
 #include "Protocol/Client.h"
+#include "RPC/OpaqueServerRPC.h"
 #include "RPC/ProtoBuf.h"
 #include "RPC/Server.h"
-#include "RPC/ServerRPC.h"
 #include "RPC/Service.h"
 
 namespace LogCabin {
@@ -106,7 +106,7 @@ class MockService : public RPC::Service {
         EXPECT_EQ(0U, responseQueue.size());
         EXPECT_FALSE(closeNext);
     }
-    void handleRPC(RPC::ServerRPC serverRPC) {
+    void handleRPC(RPC::OpaqueServerRPC serverRPC) {
         if (closeNext) {
             closeNext = false;
             serverRPC.closeSession();

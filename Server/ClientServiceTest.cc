@@ -19,8 +19,8 @@
 #include "Protocol/Client.h"
 #include "Core/ProtoBuf.h"
 #include "RPC/Buffer.h"
+#include "RPC/OpaqueServerRPC.h"
 #include "RPC/ProtoBuf.h"
-#include "RPC/ServerRPC.h"
 #include "Server/ClientService.h"
 #include "Server/Globals.h"
 #include "Server/LogManager.h"
@@ -51,7 +51,7 @@ class ServerClientServiceTest : public ::testing::Test {
     }
 
     Status rpc(RPC::Buffer request) {
-        RPC::ServerRPC mockRPC;
+        RPC::OpaqueServerRPC mockRPC;
         mockRPC.request = std::move(request);
         mockRPC.responseTarget = &reply;
         globals.clientService->handleRPC(std::move(mockRPC));

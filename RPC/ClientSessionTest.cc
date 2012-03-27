@@ -162,7 +162,7 @@ TEST_F(RPCClientSessionTest, destructor) {
 TEST_F(RPCClientSessionTest, sendRequest) {
     EXPECT_EQ(1U, session->nextMessageId);
     session->activePing = true;
-    ClientRPC rpc = session->sendRequest(buf("hi"));
+    OpaqueClientRPC rpc = session->sendRequest(buf("hi"));
     EXPECT_EQ(1U, session->numActiveRPCs);
     EXPECT_FALSE(session->activePing);
     EXPECT_TRUE(session->timer.isScheduled());
@@ -183,7 +183,7 @@ TEST_F(RPCClientSessionTest, getErrorMessage) {
 }
 
 TEST_F(RPCClientSessionTest, cancel) {
-    ClientRPC rpc = session->sendRequest(buf("hi"));
+    OpaqueClientRPC rpc = session->sendRequest(buf("hi"));
     EXPECT_EQ(1U, session->numActiveRPCs);
     rpc.cancel();
     EXPECT_EQ(0U, session->numActiveRPCs);
@@ -195,7 +195,7 @@ TEST_F(RPCClientSessionTest, cancel) {
 }
 
 TEST_F(RPCClientSessionTest, updateNotReady) {
-    ClientRPC rpc = session->sendRequest(buf("hi"));
+    OpaqueClientRPC rpc = session->sendRequest(buf("hi"));
     rpc.update();
     EXPECT_FALSE(rpc.ready);
     EXPECT_EQ(0U, rpc.reply.getLength());
@@ -204,7 +204,7 @@ TEST_F(RPCClientSessionTest, updateNotReady) {
 }
 
 TEST_F(RPCClientSessionTest, updateReady) {
-    ClientRPC rpc = session->sendRequest(buf("hi"));
+    OpaqueClientRPC rpc = session->sendRequest(buf("hi"));
     auto it = session->responses.find(1);
     ASSERT_TRUE(it != session->responses.end());
     ClientSession::Response& response = *it->second;
@@ -219,7 +219,7 @@ TEST_F(RPCClientSessionTest, updateReady) {
 }
 
 TEST_F(RPCClientSessionTest, updateError) {
-    ClientRPC rpc = session->sendRequest(buf("hi"));
+    OpaqueClientRPC rpc = session->sendRequest(buf("hi"));
     session->errorMessage = "some error";
     rpc.update();
     EXPECT_TRUE(rpc.ready);
@@ -234,7 +234,7 @@ TEST_F(RPCClientSessionTest, waitNotReady) {
 }
 
 TEST_F(RPCClientSessionTest, waitReady) {
-    ClientRPC rpc = session->sendRequest(buf("hi"));
+    OpaqueClientRPC rpc = session->sendRequest(buf("hi"));
     auto it = session->responses.find(1);
     ASSERT_TRUE(it != session->responses.end());
     ClientSession::Response& response = *it->second;
@@ -249,7 +249,7 @@ TEST_F(RPCClientSessionTest, waitReady) {
 }
 
 TEST_F(RPCClientSessionTest, waitError) {
-    ClientRPC rpc = session->sendRequest(buf("hi"));
+    OpaqueClientRPC rpc = session->sendRequest(buf("hi"));
     session->errorMessage = "some error";
     rpc.waitForReply();
     EXPECT_TRUE(rpc.ready);

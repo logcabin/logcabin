@@ -216,7 +216,7 @@ ClientSession::~ClientSession()
         delete it->second;
 }
 
-ClientRPC
+OpaqueClientRPC
 ClientSession::sendRequest(Buffer request)
 {
     MessageSocket::MessageId messageId;
@@ -237,7 +237,7 @@ ClientSession::sendRequest(Buffer request)
     // simultaneously with sends.
     if (messageSocket)
         messageSocket->sendMessage(messageId, std::move(request));
-    ClientRPC rpc;
+    OpaqueClientRPC rpc;
     rpc.session = self.lock();
     rpc.responseToken = messageId;
     return rpc;
@@ -251,7 +251,7 @@ ClientSession::getErrorMessage() const
 }
 
 void
-ClientSession::cancel(ClientRPC& rpc)
+ClientSession::cancel(OpaqueClientRPC& rpc)
 {
     // The RPC may be holding the last reference to this session. This
     // temporary reference makes sure this object isn't destroyed until after
@@ -273,7 +273,7 @@ ClientSession::cancel(ClientRPC& rpc)
 }
 
 void
-ClientSession::update(ClientRPC& rpc)
+ClientSession::update(OpaqueClientRPC& rpc)
 {
     // The RPC may be holding the last reference to this session. This
     // temporary reference makes sure this object isn't destroyed until after
@@ -298,7 +298,7 @@ ClientSession::update(ClientRPC& rpc)
 }
 
 void
-ClientSession::wait(ClientRPC& rpc)
+ClientSession::wait(OpaqueClientRPC& rpc)
 {
     // The RPC may be holding the last reference to this session. This
     // temporary reference makes sure this object isn't destroyed until after

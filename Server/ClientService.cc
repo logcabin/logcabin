@@ -19,8 +19,8 @@
 #include "build/Protocol/LogCabin.pb.h"
 #include "Protocol/Client.h"
 #include "RPC/Buffer.h"
+#include "RPC/OpaqueServerRPC.h"
 #include "RPC/ProtoBuf.h"
-#include "RPC/ServerRPC.h"
 #include "Server/ClientService.h"
 #include "Server/Globals.h"
 #include "Server/LogManager.h"
@@ -39,7 +39,7 @@ using Protocol::Client::ResponseHeaderPrefix;
 using Protocol::Client::ResponseHeaderVersion1;
 using Protocol::Client::Status;
 using RPC::Buffer;
-using RPC::ServerRPC;
+using RPC::OpaqueServerRPC;
 
 /**
  * Reply to the RPC with a status of OK.
@@ -49,7 +49,7 @@ using RPC::ServerRPC;
  *      A protocol buffer to serialize into the response.
  */
 void
-reply(ServerRPC rpc, const google::protobuf::Message& payload)
+reply(OpaqueServerRPC rpc, const google::protobuf::Message& payload)
 {
     RPC::Buffer buffer;
     RPC::ProtoBuf::serialize(payload, buffer,
@@ -75,7 +75,7 @@ reply(ServerRPC rpc, const google::protobuf::Message& payload)
  *      where the leader is.
  */
 void
-fail(ServerRPC rpc,
+fail(OpaqueServerRPC rpc,
      Status status,
      const RPC::Buffer& extra = RPC::Buffer())
 {
@@ -106,7 +106,7 @@ ClientService::~ClientService()
 }
 
 void
-ClientService::handleRPC(ServerRPC rpc)
+ClientService::handleRPC(OpaqueServerRPC rpc)
 {
     // Carefully read the headers.
     if (rpc.request.getLength() < sizeof(RequestHeaderPrefix)) {
@@ -171,7 +171,7 @@ ClientService::handleRPC(ServerRPC rpc)
 ////////// RPC handlers //////////
 
 void
-ClientService::getSupportedRPCVersions(ServerRPC rpc, uint32_t skipBytes)
+ClientService::getSupportedRPCVersions(OpaqueServerRPC rpc, uint32_t skipBytes)
 {
     PRELUDE(GetSupportedRPCVersions);
     response.set_min_version(1);
@@ -180,7 +180,7 @@ ClientService::getSupportedRPCVersions(ServerRPC rpc, uint32_t skipBytes)
 }
 
 void
-ClientService::openLog(ServerRPC rpc, uint32_t skipBytes)
+ClientService::openLog(OpaqueServerRPC rpc, uint32_t skipBytes)
 {
     PRELUDE(OpenLog);
     Core::RWPtr<LogManager> logManager =
@@ -191,7 +191,7 @@ ClientService::openLog(ServerRPC rpc, uint32_t skipBytes)
 }
 
 void
-ClientService::deleteLog(ServerRPC rpc, uint32_t skipBytes)
+ClientService::deleteLog(OpaqueServerRPC rpc, uint32_t skipBytes)
 {
     PRELUDE(DeleteLog);
     Core::RWPtr<LogManager> logManager =
@@ -201,7 +201,7 @@ ClientService::deleteLog(ServerRPC rpc, uint32_t skipBytes)
 }
 
 void
-ClientService::listLogs(ServerRPC rpc, uint32_t skipBytes)
+ClientService::listLogs(OpaqueServerRPC rpc, uint32_t skipBytes)
 {
     PRELUDE(ListLogs);
     Core::RWPtr<const LogManager> logManager =
@@ -213,7 +213,7 @@ ClientService::listLogs(ServerRPC rpc, uint32_t skipBytes)
 }
 
 void
-ClientService::append(ServerRPC rpc, uint32_t skipBytes)
+ClientService::append(OpaqueServerRPC rpc, uint32_t skipBytes)
 {
     PRELUDE(Append);
 
@@ -260,7 +260,7 @@ ClientService::append(ServerRPC rpc, uint32_t skipBytes)
 }
 
 void
-ClientService::read(ServerRPC rpc, uint32_t skipBytes)
+ClientService::read(OpaqueServerRPC rpc, uint32_t skipBytes)
 {
     PRELUDE(Read);
     Core::RWPtr<const LogManager> logManager =
@@ -292,7 +292,7 @@ ClientService::read(ServerRPC rpc, uint32_t skipBytes)
 }
 
 void
-ClientService::getLastId(ServerRPC rpc, uint32_t skipBytes)
+ClientService::getLastId(OpaqueServerRPC rpc, uint32_t skipBytes)
 {
     PRELUDE(GetLastId);
     Core::RWPtr<const LogManager> logManager =

@@ -3,11 +3,11 @@ Import('env')
 src = [
     "Address.cc",
     "Buffer.cc",
-    "ClientRPC.cc",
     "ClientSession.cc",
     "MessageSocket.cc",
+    "OpaqueClientRPC.cc",
+    "OpaqueServerRPC.cc",
     "ProtoBuf.cc",
-    "ServerRPC.cc",
     "Server.cc",
     "TCPListener.cc",
     "ThreadDispatchService.cc",
