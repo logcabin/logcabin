@@ -18,7 +18,7 @@
 #include "Core/Debug.h"
 #include "Core/StringUtil.h"
 #include "Protocol/Client.h"
-#include "RPC/Server.h"
+#include "RPC/OpaqueServer.h"
 #include "RPC/ThreadDispatchService.h"
 #include "Server/ClientService.h"
 #include "Server/Globals.h"
@@ -30,15 +30,15 @@ namespace Server {
 namespace {
 
 /**
- * This class serves as a temporary adapter during a code transition.
- * It is a subclass of Server that hands the RPCs to handle off to a service.
+ * This class serves as a temporary adapter during a code transition. It is a
+ * subclass of OpaqueServer that hands the RPCs to handle off to a service.
  */
-class ServiceDispatchServer : public RPC::Server {
+class ServiceDispatchServer : public RPC::OpaqueServer {
   public:
     ServiceDispatchServer(Event::Loop& eventLoop,
                           uint32_t maxMessageLength,
                           RPC::Service& service)
-        : Server(eventLoop, maxMessageLength)
+        : OpaqueServer(eventLoop, maxMessageLength)
         , service(service)
     {
     }

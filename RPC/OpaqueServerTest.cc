@@ -16,17 +16,16 @@
 #include <gtest/gtest.h>
 
 #include "Core/Debug.h"
+#include "RPC/OpaqueServer.h"
 #include "RPC/OpaqueServerRPC.h"
-#include "RPC/Server.h"
-#include "RPC/Service.h"
 
 namespace LogCabin {
 namespace RPC {
 namespace {
 
-class MyServer : public Server {
+class MyServer : public OpaqueServer {
     MyServer(Event::Loop& eventLoop, uint32_t maxMessageLength)
-        : Server(eventLoop, maxMessageLength)
+        : OpaqueServer(eventLoop, maxMessageLength)
         , lastRPC()
     {
     }
@@ -67,7 +66,7 @@ TEST_F(RPCServerTest, TCPListener_handleNewConnection) {
     server.listener.handleNewConnection(fd1);
     fd1 = -1;
     ASSERT_EQ(1U, server.sockets.size());
-    Server::ServerMessageSocket& socket = *server.sockets.at(0);
+    OpaqueServer::ServerMessageSocket& socket = *server.sockets.at(0);
     EXPECT_EQ(&server, socket.server);
     EXPECT_EQ(0U, socket.socketsIndex);
     EXPECT_FALSE(socket.self.expired());
@@ -80,7 +79,7 @@ TEST_F(RPCServerTest, TCPListener_handleNewConnection) {
 
 TEST_F(RPCServerTest, MessageSocket_onReceiveMessage) {
     server.listener.handleNewConnection(fd1);
-    Server::ServerMessageSocket& socket = *server.sockets.at(0);
+    OpaqueServer::ServerMessageSocket& socket = *server.sockets.at(0);
     socket.onReceiveMessage(1, Buffer(NULL, 3, NULL));
     ASSERT_TRUE(server.lastRPC);
     EXPECT_EQ(3U, server.lastRPC->request.getLength());
@@ -91,7 +90,7 @@ TEST_F(RPCServerTest, MessageSocket_onReceiveMessage) {
 
 TEST_F(RPCServerTest, MessageSocket_onReceiveMessage_ping) {
     server.listener.handleNewConnection(fd1);
-    Server::ServerMessageSocket& socket = *server.sockets.at(0);
+    OpaqueServer::ServerMessageSocket& socket = *server.sockets.at(0);
     socket.onReceiveMessage(0, Buffer());
     ASSERT_FALSE(server.lastRPC);
     EXPECT_EQ(1U, socket.outboundQueue.size());

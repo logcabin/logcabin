@@ -27,8 +27,8 @@ namespace LogCabin {
 
 // forward declarations
 namespace RPC {
+class OpaqueServer;
 class ThreadDispatchService;
-class Server;
 }
 
 namespace Server {
@@ -112,7 +112,7 @@ class Globals {
      * Listens for inbound RPCs from applications and passes them off to
      * #dispatchService.
      */
-    std::unique_ptr<RPC::Server> rpcServer;
+    std::unique_ptr<RPC::OpaqueServer> rpcServer;
 
     // Globals is non-copyable.
     Globals(const Globals&) = delete;

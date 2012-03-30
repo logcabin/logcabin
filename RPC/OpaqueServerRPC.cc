@@ -28,7 +28,7 @@ OpaqueServerRPC::OpaqueServerRPC()
 }
 
 OpaqueServerRPC::OpaqueServerRPC(
-        std::weak_ptr<Server::ServerMessageSocket> messageSocket,
+        std::weak_ptr<OpaqueServer::ServerMessageSocket> messageSocket,
         MessageSocket::MessageId messageId,
         Buffer request)
     : request(std::move(request))
@@ -66,7 +66,8 @@ OpaqueServerRPC::operator=(OpaqueServerRPC&& other)
 void
 OpaqueServerRPC::closeSession()
 {
-    std::shared_ptr<Server::ServerMessageSocket> socket = messageSocket.lock();
+    std::shared_ptr<OpaqueServer::ServerMessageSocket> socket =
+        messageSocket.lock();
     if (socket)
         socket->close();
     messageSocket.reset();
@@ -76,7 +77,8 @@ OpaqueServerRPC::closeSession()
 void
 OpaqueServerRPC::sendReply()
 {
-    std::shared_ptr<Server::ServerMessageSocket> socket = messageSocket.lock();
+    std::shared_ptr<OpaqueServer::ServerMessageSocket> socket =
+        messageSocket.lock();
     if (socket) {
         socket->sendMessage(messageId, std::move(response));
     } else {

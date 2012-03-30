@@ -17,7 +17,7 @@
 
 #include "RPC/Buffer.h"
 #include "RPC/MessageSocket.h"
-#include "RPC/Server.h"
+#include "RPC/OpaqueServer.h"
 
 #ifndef LOGCABIN_RPC_OPAQUESERVERRPC_H
 #define LOGCABIN_RPC_OPAQUESERVERRPC_H
@@ -27,15 +27,15 @@ namespace RPC {
 
 /**
  * This class represents the server side of a remote procedure call.
- * A Server returns an instance when an RPC is initiated. This is used to send
- * the reply.
+ * An OpaqueServer returns an instance when an RPC is initiated. This is used
+ * to send the reply.
  *
  * This class may be used from any thread, but each object is meant to be
  * accessed by only one thread at a time.
  */
 class OpaqueServerRPC {
     /**
-     * Constructor for ServerRPC. This is called by Server.
+     * Constructor for OpaqueServerRPC. This is called by OpaqueServer.
      * \param messageSocket
      *      The socket on which to send the reply.
      * \param messageId
@@ -43,9 +43,10 @@ class OpaqueServerRPC {
      * \param request
      *      The RPC request received from the client.
      */
-    OpaqueServerRPC(std::weak_ptr<Server::ServerMessageSocket> messageSocket,
-              MessageSocket::MessageId messageId,
-              Buffer request);
+    OpaqueServerRPC(
+            std::weak_ptr<OpaqueServer::ServerMessageSocket> messageSocket,
+            MessageSocket::MessageId messageId,
+            Buffer request);
 
   public:
     /**
@@ -98,7 +99,7 @@ class OpaqueServerRPC {
     /**
      * The socket on which to send the reply.
      */
-    std::weak_ptr<Server::ServerMessageSocket> messageSocket;
+    std::weak_ptr<OpaqueServer::ServerMessageSocket> messageSocket;
 
     /**
      * The message ID received with the request. This should be sent back to
@@ -114,8 +115,8 @@ class OpaqueServerRPC {
      */
     Buffer* responseTarget;
 
-    // The Server class uses the private members of this object.
-    friend class Server;
+    // The OpaqueServer class uses the private members of this object.
+    friend class OpaqueServer;
 
     // OpaqueServerRPC is non-copyable.
     OpaqueServerRPC(const OpaqueServerRPC&) = delete;

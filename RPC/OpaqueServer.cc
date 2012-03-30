@@ -17,9 +17,8 @@
 #include <string.h>
 
 #include "Core/Debug.h"
+#include "RPC/OpaqueServer.h"
 #include "RPC/OpaqueServerRPC.h"
-#include "RPC/Server.h"
-#include "RPC/Service.h"
 
 /**
  * A message ID reserved for ping messages used to check the server's liveness.
@@ -30,16 +29,18 @@ enum { PING_MESSAGE_ID = 0 };
 namespace LogCabin {
 namespace RPC {
 
-////////// Server::ServerTCPListener //////////
+////////// OpaqueServer::ServerTCPListener //////////
 
-Server::ServerTCPListener::ServerTCPListener(Server* server)
+OpaqueServer::ServerTCPListener::ServerTCPListener(
+        OpaqueServer* server)
     : TCPListener(server->eventLoop)
     , server(server)
 {
 }
 
 void
-Server::ServerTCPListener::handleNewConnection(int fd)
+OpaqueServer::ServerTCPListener::handleNewConnection(
+        int fd)
 {
     if (server == NULL) {
         if (close(fd) != 0)
@@ -52,10 +53,12 @@ Server::ServerTCPListener::handleNewConnection(int fd)
     }
 }
 
-////////// Server::ServerMessageSocket //////////
+////////// OpaqueServer::ServerMessageSocket //////////
 
-Server::ServerMessageSocket::ServerMessageSocket(Server* server, int fd,
-                                                 size_t socketsIndex)
+OpaqueServer::ServerMessageSocket::ServerMessageSocket(
+        OpaqueServer* server,
+        int fd,
+        size_t socketsIndex)
     : MessageSocket(server->eventLoop, fd, server->maxMessageLength)
     , server(server)
     , socketsIndex(socketsIndex)
@@ -64,8 +67,9 @@ Server::ServerMessageSocket::ServerMessageSocket(Server* server, int fd,
 }
 
 void
-Server::ServerMessageSocket::onReceiveMessage(MessageId messageId,
-                                              Buffer message)
+OpaqueServer::ServerMessageSocket::onReceiveMessage(
+        MessageId messageId,
+        Buffer message)
 {
     // Reply to ping requests here.
     if (messageId == PING_MESSAGE_ID) {
@@ -81,14 +85,14 @@ Server::ServerMessageSocket::onReceiveMessage(MessageId messageId,
 }
 
 void
-Server::ServerMessageSocket::onDisconnect()
+OpaqueServer::ServerMessageSocket::onDisconnect()
 {
     LOG(DBG, "Disconnected from client");
     close();
 }
 
 void
-Server::ServerMessageSocket::close()
+OpaqueServer::ServerMessageSocket::close()
 {
     if (server != NULL) {
         Event::Loop::Lock lock(server->eventLoop);
@@ -99,9 +103,10 @@ Server::ServerMessageSocket::close()
     }
 }
 
-////////// Server //////////
+////////// OpaqueServer //////////
 
-Server::Server(Event::Loop& eventLoop, uint32_t maxMessageLength)
+OpaqueServer::OpaqueServer(Event::Loop& eventLoop,
+                           uint32_t maxMessageLength)
     : eventLoop(eventLoop)
     , maxMessageLength(maxMessageLength)
     , sockets()
@@ -109,7 +114,7 @@ Server::Server(Event::Loop& eventLoop, uint32_t maxMessageLength)
 {
 }
 
-Server::~Server()
+OpaqueServer::~OpaqueServer()
 {
     // Block the event loop.
     Event::Loop::Lock lockGuard(eventLoop);
@@ -126,7 +131,7 @@ Server::~Server()
 }
 
 std::string
-Server::bind(const Address& listenAddress)
+OpaqueServer::bind(const Address& listenAddress)
 {
     return listener.bind(listenAddress);
 }

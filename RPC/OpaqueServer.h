@@ -18,8 +18,8 @@
 #include "RPC/MessageSocket.h"
 #include "RPC/TCPListener.h"
 
-#ifndef LOGCABIN_RPC_SERVER_H
-#define LOGCABIN_RPC_SERVER_H
+#ifndef LOGCABIN_RPC_OPAQUESERVER_H
+#define LOGCABIN_RPC_OPAQUESERVER_H
 
 namespace LogCabin {
 
@@ -34,14 +34,13 @@ namespace RPC {
 class Address;
 class Buffer;
 class OpaqueServerRPC;
-class Service;
 
 /**
- * A Server listens for incoming RPCs over TCP connections. Servers can be
- * created from any thread, but they will always run on the thread running the
- * Event::Loop.
+ * An OpaqueServer listens for incoming RPCs over TCP connections.
+ * OpaqueServers can be created from any thread, but they will always run on
+ * the thread running the Event::Loop.
  */
-class Server {
+class OpaqueServer {
   public:
     /**
      * Constructor. This object won't actually do anything until bind() is
@@ -55,14 +54,14 @@ class Server {
      *      Attempting to send longer responses will PANIC; attempting to
      *      receive longer requests will disconnect the underlying socket.
      */
-    Server(Event::Loop& eventLoop, uint32_t maxMessageLength);
+    OpaqueServer(Event::Loop& eventLoop, uint32_t maxMessageLength);
 
     /**
-     * Destructor. OpaqueServerRPC objects originating from this Server may be
-     * kept around after this destructor returns; however, they won't actually
-     * send replies anymore.
+     * Destructor. OpaqueServerRPC objects originating from this OpaqueServer
+     * may be kept around after this destructor returns; however, they won't
+     * actually send replies anymore.
      */
-    virtual ~Server();
+    virtual ~OpaqueServer();
 
     /**
      * Listen on an address for new client connections. You can call this
@@ -94,13 +93,13 @@ class Server {
      */
     class ServerTCPListener : public TCPListener {
       public:
-        explicit ServerTCPListener(Server* server);
+        explicit ServerTCPListener(OpaqueServer* server);
         void handleNewConnection(int fd);
         /**
-         * The Server which owns this object,
+         * The OpaqueServer which owns this object,
          * or NULL if the server is going away.
          */
-        Server* server;
+        OpaqueServer* server;
 
         // ServerTCPListener is not copyable.
         ServerTCPListener(const ServerTCPListener&) = delete;
@@ -108,21 +107,21 @@ class Server {
     };
 
     /**
-     * This is a MessageSocket with callbacks set up for Server.
+     * This is a MessageSocket with callbacks set up for OpaqueServer.
      */
     class ServerMessageSocket : public MessageSocket {
       public:
         /**
          * Constructor.
          * \param server
-         *      Server owning this socket.
+         *      OpaqueServer owning this socket.
          * \param fd
          *      A connected TCP socket.
          * \param socketsIndex
-         *      The index into Server::sockets at which this object can be
-         *      found.
+         *      The index into OpaqueServer::sockets at which this object can
+         *      be found.
          */
-        ServerMessageSocket(Server* server, int fd, size_t socketsIndex);
+        ServerMessageSocket(OpaqueServer* server, int fd, size_t socketsIndex);
         void onReceiveMessage(MessageId messageId, Buffer message);
         void onDisconnect();
         /**
@@ -132,12 +131,13 @@ class Server {
          */
         void close();
         /**
-         * The Server which keeps a strong reference to this object, or NULL if
-         * the server has gone away.
+         * The OpaqueServer which keeps a strong reference to this object, or
+         * NULL if the server has gone away.
          */
-        Server* server;
+        OpaqueServer* server;
         /**
-         * The index into Server::sockets at which this object can be found.
+         * The index into OpaqueServer::sockets at which this object can be
+         * found.
          */
         size_t socketsIndex;
         /**
@@ -167,10 +167,10 @@ class Server {
 
     /**
      * Every open ServerMessageSocket is referenced here so that it can be
-     * cleaned up when this Server is destroyed. The lifetime of each socket
-     * may slightly exceed the lifetime of the Server if it is being actively
-     * used to send out a OpaqueServerRPC response when the Server is
-     * destroyed.
+     * cleaned up when this OpaqueServer is destroyed. The lifetime of each
+     * socket may slightly exceed the lifetime of the OpaqueServer if it is
+     * being actively used to send out a OpaqueServerRPC response when the
+     * OpaqueServer is destroyed.
      * This may only be accessed from the Event::Loop or while holding an
      * Event::Loop::Lock.
      */
@@ -189,10 +189,10 @@ class Server {
      */
     friend class OpaqueServerRPC;
 
-    // Server is non-copyable.
-    Server(const Server&) = delete;
-    Server& operator=(const Server&) = delete;
-}; // class Server
+    // OpaqueServer is non-copyable.
+    OpaqueServer(const OpaqueServer&) = delete;
+    OpaqueServer& operator=(const OpaqueServer&) = delete;
+}; // class OpaqueServer
 
 } // namespace LogCabin::RPC
 } // namespace LogCabin

@@ -20,10 +20,9 @@
 #include "Client/LeaderRPC.h"
 #include "Core/ProtoBuf.h"
 #include "Protocol/Client.h"
+#include "RPC/OpaqueServer.h"
 #include "RPC/OpaqueServerRPC.h"
 #include "RPC/ProtoBuf.h"
-#include "RPC/Server.h"
-#include "RPC/Service.h"
 
 namespace LogCabin {
 namespace Client {
@@ -95,9 +94,9 @@ failedResponse(Status status,
     return buffer;
 }
 
-class MockServer : public RPC::Server {
+class MockServer : public RPC::OpaqueServer {
     MockServer(Event::Loop& eventLoop, uint32_t maxMessageLength)
-        : Server(eventLoop, maxMessageLength)
+        : OpaqueServer(eventLoop, maxMessageLength)
         , responseQueue()
         , closeNext(false)
     {

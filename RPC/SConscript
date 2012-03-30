@@ -6,9 +6,9 @@ src = [
     "ClientSession.cc",
     "MessageSocket.cc",
     "OpaqueClientRPC.cc",
+    "OpaqueServer.cc",
     "OpaqueServerRPC.cc",
     "ProtoBuf.cc",
-    "Server.cc",
     "TCPListener.cc",
     "ThreadDispatchService.cc",
 ]

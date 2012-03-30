@@ -28,8 +28,8 @@
 #include "Event/Timer.h"
 #include "RPC/ClientSession.h"
 #include "RPC/OpaqueClientRPC.h"
+#include "RPC/OpaqueServer.h"
 #include "RPC/OpaqueServerRPC.h"
-#include "RPC/Server.h"
 #include "RPC/Service.h"
 #include "RPC/ThreadDispatchService.h"
 
@@ -53,9 +53,9 @@ class ReplyTimer : public Event::Timer {
     RPC::OpaqueServerRPC serverRPC;
 };
 
-class EchoServer : public RPC::Server {
+class EchoServer : public RPC::OpaqueServer {
     EchoServer(Event::Loop& eventLoop, uint32_t maxMessageLength)
-        : Server(eventLoop, maxMessageLength)
+        : OpaqueServer(eventLoop, maxMessageLength)
         , delayMicros(0)
     {
     }
