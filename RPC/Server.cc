@@ -76,7 +76,7 @@ Server::ServerMessageSocket::onReceiveMessage(MessageId messageId,
     if (server != NULL) {
         LOG(DBG, "Handling RPC");
         OpaqueServerRPC rpc(self, messageId, std::move(message));
-        server->service.handleRPC(std::move(rpc));
+        server->handleRPC(std::move(rpc));
     }
 }
 
@@ -101,12 +101,9 @@ Server::ServerMessageSocket::close()
 
 ////////// Server //////////
 
-Server::Server(Event::Loop& eventLoop,
-               uint32_t maxMessageLength,
-               Service& service)
+Server::Server(Event::Loop& eventLoop, uint32_t maxMessageLength)
     : eventLoop(eventLoop)
     , maxMessageLength(maxMessageLength)
-    , service(service)
     , sockets()
     , listener(this)
 {

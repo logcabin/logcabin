@@ -95,13 +95,14 @@ failedResponse(Status status,
     return buffer;
 }
 
-class MockService : public RPC::Service {
-    MockService()
-        : responseQueue()
+class MockServer : public RPC::Server {
+    MockServer(Event::Loop& eventLoop, uint32_t maxMessageLength)
+        : Server(eventLoop, maxMessageLength)
+        , responseQueue()
         , closeNext(false)
     {
     }
-    ~MockService()
+    ~MockServer()
     {
         EXPECT_EQ(0U, responseQueue.size());
         EXPECT_FALSE(closeNext);
@@ -140,7 +141,6 @@ class ClientLeaderRPCTest : public ::testing::Test {
     ClientLeaderRPCTest()
         : serverEventLoop()
         , address("127.0.0.1", 61023)
-        , service()
         , server()
         , serverThread()
         , leaderRPC()
@@ -159,8 +159,7 @@ class ClientLeaderRPCTest : public ::testing::Test {
     }
 
     void init() {
-        server.reset(new RPC::Server(serverEventLoop,
-                                     1024 * 1024, service));
+        server.reset(new MockServer(serverEventLoop, 1024 * 1024));
         EXPECT_EQ("", server->bind(address));
         serverThread = std::thread(&Event::Loop::runForever, &serverEventLoop);
         leaderRPC.reset(new LeaderRPC(address));
@@ -168,8 +167,7 @@ class ClientLeaderRPCTest : public ::testing::Test {
 
     Event::Loop serverEventLoop;
     RPC::Address address;
-    MockService service;
-    std::unique_ptr<RPC::Server> server;
+    std::unique_ptr<MockServer> server;
     std::thread serverThread;
     std::unique_ptr<LeaderRPC> leaderRPC;
     ProtoBuf::ClientRPC::OpenLog::Request request;
@@ -181,7 +179,7 @@ class ClientLeaderRPCTest : public ::testing::Test {
 
 TEST_F(ClientLeaderRPCTest, callBasics) {
     init();
-    service.expect(expectedRequest(1, OpCode::OPEN_LOG, request),
+    server->expect(expectedRequest(1, OpCode::OPEN_LOG, request),
                    successfulResponse(expResponse));
     leaderRPC->call(OpCode::OPEN_LOG,
                    request, response);
@@ -190,8 +188,8 @@ TEST_F(ClientLeaderRPCTest, callBasics) {
 
 TEST_F(ClientLeaderRPCTest, callServerNotListening) {
     init();
-    service.closeNext = true;
-    service.expect(expectedRequest(1, OpCode::OPEN_LOG, request),
+    server->closeNext = true;
+    server->expect(expectedRequest(1, OpCode::OPEN_LOG, request),
                    successfulResponse(expResponse));
     leaderRPC->call(OpCode::OPEN_LOG,
                    request, response);
@@ -201,7 +199,7 @@ TEST_F(ClientLeaderRPCTest, callServerNotListening) {
 TEST_F(ClientLeaderRPCTest, callResponseTooShortForPrefix) {
     EXPECT_DEATH(
             init();
-            service.expect(expectedRequest(1, OpCode::OPEN_LOG, request),
+            server->expect(expectedRequest(1, OpCode::OPEN_LOG, request),
                            RPC::Buffer());
             leaderRPC->call(OpCode::OPEN_LOG, request, response),
         "too short");
@@ -210,7 +208,7 @@ TEST_F(ClientLeaderRPCTest, callResponseTooShortForPrefix) {
 TEST_F(ClientLeaderRPCTest, callInvalidVersion) {
     EXPECT_DEATH(
             init();
-            service.expect(expectedRequest(1, OpCode::OPEN_LOG, request),
+            server->expect(expectedRequest(1, OpCode::OPEN_LOG, request),
                            failedResponse(Status::INVALID_VERSION));
             leaderRPC->call(OpCode::OPEN_LOG, request, response),
         "client is too old");
@@ -225,7 +223,7 @@ TEST_F(ClientLeaderRPCTest, callResponseTooShortForHeader) {
 TEST_F(ClientLeaderRPCTest, callOKButUnparsableResponse) {
     EXPECT_DEATH(
             init();
-            service.expect(expectedRequest(1, OpCode::OPEN_LOG, request),
+            server->expect(expectedRequest(1, OpCode::OPEN_LOG, request),
                            failedResponse(Status::OK));
             leaderRPC->call(OpCode::OPEN_LOG, request, response),
         "Could not parse server response");
@@ -234,7 +232,7 @@ TEST_F(ClientLeaderRPCTest, callOKButUnparsableResponse) {
 TEST_F(ClientLeaderRPCTest, callInvalidRequest) {
     EXPECT_DEATH(
             init();
-            service.expect(expectedRequest(1, OpCode::OPEN_LOG, request),
+            server->expect(expectedRequest(1, OpCode::OPEN_LOG, request),
                            failedResponse(Status::INVALID_REQUEST));
             leaderRPC->call(OpCode::OPEN_LOG, request, response),
         "request.*invalid");
@@ -244,12 +242,12 @@ TEST_F(ClientLeaderRPCTest, callNotLeaderHint) {
     init();
 
     // no hint
-    service.expect(expectedRequest(1, OpCode::OPEN_LOG, request),
+    server->expect(expectedRequest(1, OpCode::OPEN_LOG, request),
                    failedResponse(Status::NOT_LEADER));
 
     // sucky hint
     std::string badHint = "127.0.0.1:0";
-    service.expect(
+    server->expect(
         expectedRequest(1, OpCode::OPEN_LOG, request),
         failedResponse(Status::NOT_LEADER,
                        RPC::Buffer(const_cast<char*>(badHint.c_str()),
@@ -257,7 +255,7 @@ TEST_F(ClientLeaderRPCTest, callNotLeaderHint) {
                                    NULL)));
 
     // ok, fine, let it through
-    service.expect(expectedRequest(1, OpCode::OPEN_LOG, request),
+    server->expect(expectedRequest(1, OpCode::OPEN_LOG, request),
                    successfulResponse(expResponse));
 
     leaderRPC->call(OpCode::OPEN_LOG,
@@ -271,7 +269,7 @@ TEST_F(ClientLeaderRPCTest, callBadStatus) {
     *reinterpret_cast<uint8_t*>(&badStatus) = 255;
     EXPECT_DEATH(
             init();
-            service.expect(expectedRequest(1, OpCode::OPEN_LOG, request),
+            server->expect(expectedRequest(1, OpCode::OPEN_LOG, request),
                            failedResponse(badStatus));
             leaderRPC->call(OpCode::OPEN_LOG, request, response),
         "Unknown status");

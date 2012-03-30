@@ -24,9 +24,10 @@ namespace LogCabin {
 namespace RPC {
 namespace {
 
-class MyService : public Service {
-    MyService()
-        : lastRPC()
+class MyServer : public Server {
+    MyServer(Event::Loop& eventLoop, uint32_t maxMessageLength)
+        : Server(eventLoop, maxMessageLength)
+        , lastRPC()
     {
     }
     void handleRPC(OpaqueServerRPC serverRPC) {
@@ -39,8 +40,7 @@ class RPCServerTest : public ::testing::Test {
     RPCServerTest()
         : loop()
         , address("127.0.0.1", 61023)
-        , service()
-        , server(loop, 1024, service)
+        , server(loop, 1024)
         , fd1(-1)
         , fd2(-1)
     {
@@ -58,8 +58,7 @@ class RPCServerTest : public ::testing::Test {
     }
     Event::Loop loop;
     Address address;
-    MyService service;
-    Server server;
+    MyServer server;
     int fd1;
     int fd2;
 };
@@ -83,18 +82,18 @@ TEST_F(RPCServerTest, MessageSocket_onReceiveMessage) {
     server.listener.handleNewConnection(fd1);
     Server::ServerMessageSocket& socket = *server.sockets.at(0);
     socket.onReceiveMessage(1, Buffer(NULL, 3, NULL));
-    ASSERT_TRUE(service.lastRPC);
-    EXPECT_EQ(3U, service.lastRPC->request.getLength());
-    EXPECT_EQ(0U, service.lastRPC->response.getLength());
-    EXPECT_EQ(&socket, service.lastRPC->messageSocket.lock().get());
-    EXPECT_EQ(1U, service.lastRPC->messageId);
+    ASSERT_TRUE(server.lastRPC);
+    EXPECT_EQ(3U, server.lastRPC->request.getLength());
+    EXPECT_EQ(0U, server.lastRPC->response.getLength());
+    EXPECT_EQ(&socket, server.lastRPC->messageSocket.lock().get());
+    EXPECT_EQ(1U, server.lastRPC->messageId);
 }
 
 TEST_F(RPCServerTest, MessageSocket_onReceiveMessage_ping) {
     server.listener.handleNewConnection(fd1);
     Server::ServerMessageSocket& socket = *server.sockets.at(0);
     socket.onReceiveMessage(0, Buffer());
-    ASSERT_FALSE(service.lastRPC);
+    ASSERT_FALSE(server.lastRPC);
     EXPECT_EQ(1U, socket.outboundQueue.size());
 }
 

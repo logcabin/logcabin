@@ -25,6 +25,7 @@
 #include <thread>
 
 #include "Core/Debug.h"
+#include "Event/Timer.h"
 #include "RPC/ClientSession.h"
 #include "RPC/OpaqueClientRPC.h"
 #include "RPC/OpaqueServerRPC.h"
@@ -35,19 +36,33 @@
 namespace LogCabin {
 namespace {
 
-class EchoService : public RPC::Service {
-    EchoService()
-        : delayMicros(0)
+class ReplyTimer : public Event::Timer {
+    ReplyTimer(Event::Loop& eventLoop,
+               RPC::OpaqueServerRPC serverRPC,
+               uint32_t delayMicros)
+        : Timer(eventLoop)
+        , serverRPC(std::move(serverRPC))
+    {
+        schedule(delayMicros * 1000);
+    }
+    void handleTimerEvent() {
+        LOG(DBG, "Ok responding");
+        serverRPC.sendReply();
+        delete this;
+    }
+    RPC::OpaqueServerRPC serverRPC;
+};
+
+class EchoServer : public RPC::Server {
+    EchoServer(Event::Loop& eventLoop, uint32_t maxMessageLength)
+        : Server(eventLoop, maxMessageLength)
+        , delayMicros(0)
     {
     }
     void handleRPC(RPC::OpaqueServerRPC serverRPC) {
         serverRPC.response = std::move(serverRPC.request);
-        if (delayMicros != 0) {
-            LOG(DBG, "Delaying response for %u microseconds", delayMicros);
-            usleep(delayMicros);
-            LOG(DBG, "Ok responding");
-        }
-        serverRPC.sendReply();
+        LOG(DBG, "Delaying response for %u microseconds", delayMicros);
+        new ReplyTimer(eventLoop, std::move(serverRPC), delayMicros);
     }
     uint32_t delayMicros;
 };
@@ -59,9 +74,7 @@ class RPCClientServerTest : public ::testing::Test {
         , clientEventLoopThread(&Event::Loop::runForever, &clientEventLoop)
         , serverEventLoopThread(&Event::Loop::runForever, &serverEventLoop)
         , address("127.0.0.1", 61023)
-        , service()
-        , threadDispatch(service, 1, 1)
-        , server(serverEventLoop, 1024, threadDispatch)
+        , server(serverEventLoop, 1024)
         , clientSession()
     {
         EXPECT_EQ("", server.bind(address));
@@ -81,9 +94,7 @@ class RPCClientServerTest : public ::testing::Test {
     std::thread clientEventLoopThread;
     std::thread serverEventLoopThread;
     RPC::Address address;
-    EchoService service;
-    RPC::ThreadDispatchService threadDispatch;
-    RPC::Server server;
+    EchoServer server;
     std::shared_ptr<RPC::ClientSession> clientSession;
 };
 
@@ -104,7 +115,7 @@ TEST_F(RPCClientServerTest, echo) {
 // Test the RPC timeout (ping) mechanism.
 // This test assumes TIMEOUT_MS is set to 100ms in ClientSession.
 TEST_F(RPCClientServerTest, timeout) {
-    service.delayMicros = 110 * 1000;
+    server.delayMicros = 110 * 1000;
 
     // The server should not time out, since the serverEventLoopThread should
     // respond to pings.

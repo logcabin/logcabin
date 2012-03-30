@@ -27,6 +27,29 @@
 namespace LogCabin {
 namespace Server {
 
+namespace {
+
+/**
+ * This class serves as a temporary adapter during a code transition.
+ * It is a subclass of Server that hands the RPCs to handle off to a service.
+ */
+class ServiceDispatchServer : public RPC::Server {
+  public:
+    ServiceDispatchServer(Event::Loop& eventLoop,
+                          uint32_t maxMessageLength,
+                          RPC::Service& service)
+        : Server(eventLoop, maxMessageLength)
+        , service(service)
+    {
+    }
+    void handleRPC(RPC::OpaqueServerRPC serverRPC) {
+        service.handleRPC(std::move(serverRPC));
+    }
+    RPC::Service& service;
+};
+
+}
+
 ////////// Globals::SigIntHandler //////////
 
 Globals::SigIntHandler::SigIntHandler(Event::Loop& eventLoop)
@@ -79,7 +102,7 @@ Globals::init()
     }
 
     if (!rpcServer) {
-        rpcServer.reset(new RPC::Server(eventLoop,
+        rpcServer.reset(new ServiceDispatchServer(eventLoop,
                                         Protocol::Client::MAX_MESSAGE_LENGTH,
                                         *dispatchService));
         std::string configServers = config.read<std::string>("servers", "");
