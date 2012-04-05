@@ -111,11 +111,13 @@ ClientSession::ClientMessageSocket::onReceiveMessage(MessageId messageId,
 void
 ClientSession::ClientMessageSocket::onDisconnect()
 {
-    LOG(DBG, "Disconnected from server");
+    LOG(DBG, "Disconnected from server %s",
+        session.address.toString().c_str());
     std::unique_lock<std::mutex> mutexGuard(session.mutex);
     if (session.errorMessage.empty()) {
         // Fail all current and future RPCs.
-        session.errorMessage = "Disconnected from server";
+        session.errorMessage = ("Disconnected from server " +
+                                session.address.toString());
         // Notify any waiting RPCs.
         session.responseReceived.notify_all();
     }
@@ -156,9 +158,12 @@ ClientSession::Timer::handleTimerEvent()
         session.messageSocket->sendMessage(PING_MESSAGE_ID, Buffer());
         schedule(TIMEOUT_MS * 1000 * 1000);
     } else {
-        LOG(DBG, "ClientSession timed out.");
+        LOG(DBG, "ClientSession to %s timed out.",
+            session.address.toString().c_str());
         // Fail all current and future RPCs.
-        session.errorMessage = "Server timed out";
+        session.errorMessage = ("Server " +
+                                session.address.toString() +
+                                " timed out");
         // Notify any waiting RPCs.
         session.responseReceived.notify_all();
     }
@@ -171,6 +176,7 @@ ClientSession::ClientSession(Event::Loop& eventLoop,
                              uint32_t maxMessageLength)
     : self() // makeSession will fill this in shortly
     , eventLoop(eventLoop)
+    , address(address)
     , messageSocket()
     , timer(*this)
     , mutex()
@@ -248,6 +254,18 @@ ClientSession::getErrorMessage() const
 {
     std::unique_lock<std::mutex> mutexGuard(mutex);
     return errorMessage;
+}
+
+std::string
+ClientSession::toString() const
+{
+    std::string error = getErrorMessage();
+    if (error.empty()) {
+        return "Active session to " + address.toString();
+    } else {
+        // error will already include the server's address.
+        return "Closed session: " + error;
+    }
 }
 
 void

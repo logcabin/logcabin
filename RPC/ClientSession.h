@@ -104,6 +104,12 @@ class ClientSession {
      */
     std::string getErrorMessage() const;
 
+    /**
+     * Return a string describing this session. It will include the address of
+     * the server and, if the session has an error, the error message.
+     */
+    std::string toString() const;
+
   private:
 
     /**
@@ -188,6 +194,11 @@ class ClientSession {
      * The event loop that is used for non-blocking I/O.
      */
     Event::Loop& eventLoop;
+
+    /**
+     * The RPC server address provided to the constructor.
+     */
+    const Address address;
 
     /**
      * The MessageSocket used to send RPC requests and receive RPC responses.

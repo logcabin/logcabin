@@ -112,7 +112,8 @@ TEST_F(RPCClientSessionTest, onReceiveMessage_ping) {
 
 TEST_F(RPCClientSessionTest, onDisconnect) {
     session->messageSocket->onDisconnect();
-    EXPECT_EQ("Disconnected from server", session->errorMessage);
+    EXPECT_EQ("Disconnected from server 127.0.0.1:0 (resolved to 127.0.0.1:0)",
+              session->errorMessage);
 }
 
 TEST_F(RPCClientSessionTest, handleTimerEvent) {
@@ -137,7 +138,8 @@ TEST_F(RPCClientSessionTest, handleTimerEvent) {
     // need to time out session
     session->numActiveRPCs = 1;
     session->timer.handleTimerEvent();
-    EXPECT_EQ("Server timed out", session->errorMessage);
+    EXPECT_EQ("Server 127.0.0.1:0 (resolved to 127.0.0.1:0) timed out",
+              session->errorMessage);
     session->numActiveRPCs = 0;
 }
 
@@ -145,9 +147,14 @@ TEST_F(RPCClientSessionTest, constructor) {
     auto session2 = ClientSession::makeSession(eventLoop,
                                                Address("127.0.0.1", 0),
                                                1024);
+    EXPECT_EQ("127.0.0.1:0 (resolved to 127.0.0.1:0)",
+              session2->address.toString());
     EXPECT_EQ("Failed to connect socket to 127.0.0.1:0 "
               "(resolved to 127.0.0.1:0)",
               session2->errorMessage);
+    EXPECT_EQ("Closed session: Failed to connect socket to 127.0.0.1:0 "
+              "(resolved to 127.0.0.1:0)",
+              session2->toString());
     EXPECT_FALSE(session2->messageSocket);
 }
 
@@ -180,6 +187,11 @@ TEST_F(RPCClientSessionTest, getErrorMessage) {
     EXPECT_EQ("", session->getErrorMessage());
     session->errorMessage = "x";
     EXPECT_EQ("x", session->getErrorMessage());
+}
+
+TEST_F(RPCClientSessionTest, toString) {
+    EXPECT_EQ("Active session to 127.0.0.1:0 (resolved to 127.0.0.1:0)",
+              session->toString());
 }
 
 TEST_F(RPCClientSessionTest, cancel) {
