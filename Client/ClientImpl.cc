@@ -35,7 +35,7 @@ const uint32_t MIN_RPC_PROTOCOL_VERSION = 1;
 const uint32_t MAX_RPC_PROTOCOL_VERSION = 1;
 }
 
-using ProtoBuf::ClientRPC::OpCode;
+using Protocol::Client::OpCode;
 
 ClientImpl::ClientImpl()
     : leaderRPC()             // set in init()
@@ -59,8 +59,8 @@ ClientImpl::init(std::weak_ptr<ClientImpl> self,
 uint32_t
 ClientImpl::negotiateRPCVersion()
 {
-    ProtoBuf::ClientRPC::GetSupportedRPCVersions::Request request;
-    ProtoBuf::ClientRPC::GetSupportedRPCVersions::Response response;
+    Protocol::Client::GetSupportedRPCVersions::Request request;
+    Protocol::Client::GetSupportedRPCVersions::Response response;
     leaderRPC->call(OpCode::GET_SUPPORTED_RPC_VERSIONS,
                     request, response);
     uint32_t serverMin = response.min_version();
@@ -83,9 +83,9 @@ ClientImpl::negotiateRPCVersion()
 Log
 ClientImpl::openLog(const std::string& logName)
 {
-    ProtoBuf::ClientRPC::OpenLog::Request request;
+    Protocol::Client::OpenLog::Request request;
     request.set_log_name(logName);
-    ProtoBuf::ClientRPC::OpenLog::Response response;
+    Protocol::Client::OpenLog::Response response;
     leaderRPC->call(OpCode::OPEN_LOG, request, response);
     return Log(self.lock(), logName, response.log_id());
 }
@@ -93,17 +93,17 @@ ClientImpl::openLog(const std::string& logName)
 void
 ClientImpl::deleteLog(const std::string& logName)
 {
-    ProtoBuf::ClientRPC::DeleteLog::Request request;
+    Protocol::Client::DeleteLog::Request request;
     request.set_log_name(logName);
-    ProtoBuf::ClientRPC::DeleteLog::Response response;
+    Protocol::Client::DeleteLog::Response response;
     leaderRPC->call(OpCode::DELETE_LOG, request, response);
 }
 
 std::vector<std::string>
 ClientImpl::listLogs()
 {
-    ProtoBuf::ClientRPC::ListLogs::Request request;
-    ProtoBuf::ClientRPC::ListLogs::Response response;
+    Protocol::Client::ListLogs::Request request;
+    Protocol::Client::ListLogs::Response response;
     leaderRPC->call(OpCode::LIST_LOGS, request, response);
     std::vector<std::string> logNames(response.log_names().begin(),
                                       response.log_names().end());
@@ -114,7 +114,7 @@ ClientImpl::listLogs()
 EntryId
 ClientImpl::append(uint64_t logId, const Entry& entry, EntryId expectedId)
 {
-    ProtoBuf::ClientRPC::Append::Request request;
+    Protocol::Client::Append::Request request;
     request.set_log_id(logId);
     if (expectedId != NO_ID)
         request.set_expected_entry_id(expectedId);
@@ -125,7 +125,7 @@ ClientImpl::append(uint64_t logId, const Entry& entry, EntryId expectedId)
     }
     if (entry.getData() != NULL)
         request.set_data(entry.getData(), entry.getLength());
-    ProtoBuf::ClientRPC::Append::Response response;
+    Protocol::Client::Append::Response response;
     leaderRPC->call(OpCode::APPEND, request, response);
     if (response.has_ok())
         return response.ok().entry_id();
@@ -138,10 +138,10 @@ ClientImpl::append(uint64_t logId, const Entry& entry, EntryId expectedId)
 std::vector<Entry>
 ClientImpl::read(uint64_t logId, EntryId from)
 {
-    ProtoBuf::ClientRPC::Read::Request request;
+    Protocol::Client::Read::Request request;
     request.set_log_id(logId);
     request.set_from_entry_id(from);
-    ProtoBuf::ClientRPC::Read::Response response;
+    Protocol::Client::Read::Response response;
     leaderRPC->call(OpCode::READ, request, response);
     if (response.has_ok()) {
         const auto& returnedEntries = response.ok().entry();
@@ -175,9 +175,9 @@ ClientImpl::read(uint64_t logId, EntryId from)
 EntryId
 ClientImpl::getLastId(uint64_t logId)
 {
-    ProtoBuf::ClientRPC::GetLastId::Request request;
+    Protocol::Client::GetLastId::Request request;
     request.set_log_id(logId);
-    ProtoBuf::ClientRPC::GetLastId::Response response;
+    Protocol::Client::GetLastId::Response response;
     leaderRPC->call(OpCode::GET_LAST_ID, request, response);
     if (response.has_ok())
         return response.ok().head_entry_id();

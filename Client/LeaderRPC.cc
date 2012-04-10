@@ -63,7 +63,7 @@ LeaderRPC::call(OpCode opCode,
                            1,
                            opCode,
                            request);
-        ProtoBuf::ClientRPC::Error serviceSpecificError;
+        Protocol::Client::Error serviceSpecificError;
         Status status = rpc.waitForReply(&response, &serviceSpecificError);
 
         // Decode the response
@@ -85,10 +85,10 @@ LeaderRPC::call(OpCode opCode,
 void
 LeaderRPC::handleServiceSpecificError(
         std::shared_ptr<RPC::ClientSession> cachedSession,
-        const ProtoBuf::ClientRPC::Error& error)
+        const Protocol::Client::Error& error)
 {
     switch (error.error_code()) {
-        case ProtoBuf::ClientRPC::Error::NOT_LEADER:
+        case Protocol::Client::Error::NOT_LEADER:
             // The server we tried is not the current cluster leader.
             if (error.has_leader_hint()) {
                 // Server returned hint as to who the leader might be.

@@ -23,7 +23,7 @@
 #include "Client/ClientImpl.h"
 #include "Client/LeaderRPCMock.h"
 #include "Core/ProtoBuf.h"
-#include "build/Protocol/LogCabin.pb.h"
+#include "build/Protocol/Client.pb.h"
 
 namespace LogCabin {
 namespace {
@@ -40,7 +40,7 @@ class ClientClusterTest : public ::testing::Test {
     {
         mockRPC = new Client::LeaderRPCMock();
         mockRPC->expect(OpCode::GET_SUPPORTED_RPC_VERSIONS,
-            fromString<ProtoBuf::ClientRPC::GetSupportedRPCVersions::Response>(
+            fromString<Protocol::Client::GetSupportedRPCVersions::Response>(
                         "min_version: 1, max_version: 1"));
         cluster->clientImpl->init(
                     cluster->clientImpl,
@@ -60,7 +60,7 @@ TEST_F(ClientClusterTest, constructor) {
 
 TEST_F(ClientClusterTest, openLog) {
     mockRPC->expect(OpCode::OPEN_LOG,
-        fromString<ProtoBuf::ClientRPC::OpenLog::Response>(
+        fromString<Protocol::Client::OpenLog::Response>(
             "log_id: 1"));
     Client::Log log = cluster->openLog("testLog");
     EXPECT_EQ("log_name: 'testLog'",
@@ -71,7 +71,7 @@ TEST_F(ClientClusterTest, openLog) {
 
 TEST_F(ClientClusterTest, deleteLog) {
     mockRPC->expect(OpCode::DELETE_LOG,
-        fromString<ProtoBuf::ClientRPC::DeleteLog::Response>(""));
+        fromString<Protocol::Client::DeleteLog::Response>(""));
     cluster->deleteLog("testLog");
     EXPECT_EQ("log_name: 'testLog'",
               *mockRPC->popRequest());
@@ -79,7 +79,7 @@ TEST_F(ClientClusterTest, deleteLog) {
 
 TEST_F(ClientClusterTest, listLogs_none) {
     mockRPC->expect(OpCode::LIST_LOGS,
-        fromString<ProtoBuf::ClientRPC::ListLogs::Response>(
+        fromString<Protocol::Client::ListLogs::Response>(
             ""));
     EXPECT_EQ((std::vector<std::string> {}),
               cluster->listLogs());
@@ -88,7 +88,7 @@ TEST_F(ClientClusterTest, listLogs_none) {
 
 TEST_F(ClientClusterTest, listLogs_normal) {
     mockRPC->expect(OpCode::LIST_LOGS,
-        fromString<ProtoBuf::ClientRPC::ListLogs::Response>(
+        fromString<Protocol::Client::ListLogs::Response>(
             "log_names: ['testLog2', 'testLog3', 'testLog1']"));
     EXPECT_EQ((std::vector<std::string> {
                "testLog1",
@@ -105,7 +105,7 @@ class ClientLogTest : public ClientClusterTest {
         : log()
     {
         mockRPC->expect(OpCode::OPEN_LOG,
-            fromString<ProtoBuf::ClientRPC::OpenLog::Response>(
+            fromString<Protocol::Client::OpenLog::Response>(
                 "log_id: 1"));
         log.reset(new Client::Log(cluster->openLog("testLog")));
         mockRPC->popRequest();
@@ -117,11 +117,11 @@ TEST_F(ClientLogTest, append_empty)
 {
     Client::Entry entry("empty", 0);
     mockRPC->expect(OpCode::APPEND,
-        fromString<ProtoBuf::ClientRPC::Append::Response>(
+        fromString<Protocol::Client::Append::Response>(
             "ok { entry_id: 32 }"));
     EXPECT_EQ(32U,
               log->append(entry));
-    ProtoBuf::ClientRPC::Append::Request request;
+    Protocol::Client::Append::Request request;
     request.CopyFrom(*mockRPC->popRequest());
     EXPECT_EQ("log_id: 1 "
               "data: '' ",
@@ -134,7 +134,7 @@ TEST_F(ClientLogTest, append_justData)
 {
     Client::Entry entry("hello", 5);
     mockRPC->expect(OpCode::APPEND,
-        fromString<ProtoBuf::ClientRPC::Append::Response>(
+        fromString<Protocol::Client::Append::Response>(
             "ok { entry_id: 32 }"));
     EXPECT_EQ(32U,
               log->append(entry));
@@ -147,7 +147,7 @@ TEST_F(ClientLogTest, append_withInvalidates)
 {
     Client::Entry entry("hello", 5, { 10, 12, 14 });
     mockRPC->expect(OpCode::APPEND,
-        fromString<ProtoBuf::ClientRPC::Append::Response>(
+        fromString<Protocol::Client::Append::Response>(
             "ok { entry_id: 32 }"));
     EXPECT_EQ(32U, log->append(entry));
     EXPECT_EQ("log_id: 1 "
@@ -160,7 +160,7 @@ TEST_F(ClientLogTest, append_expectedIdOk)
 {
     Client::Entry entry("hello", 5);
     mockRPC->expect(OpCode::APPEND,
-        fromString<ProtoBuf::ClientRPC::Append::Response>(
+        fromString<Protocol::Client::Append::Response>(
             "ok { entry_id: 32 }"));
     EXPECT_EQ(32U,
               log->append(entry, 32));
@@ -174,7 +174,7 @@ TEST_F(ClientLogTest, append_expectedIdStale)
 {
     Client::Entry entry("hello", 5);
     mockRPC->expect(OpCode::APPEND,
-        fromString<ProtoBuf::ClientRPC::Append::Response>(
+        fromString<Protocol::Client::Append::Response>(
             format("ok { entry_id: %lu }", Client::NO_ID)));
     EXPECT_EQ(Client::NO_ID,
               log->append(entry, 32));
@@ -188,7 +188,7 @@ TEST_F(ClientLogTest, append_logDisappeared)
 {
     Client::Entry entry("hello", 5);
     mockRPC->expect(OpCode::APPEND,
-        fromString<ProtoBuf::ClientRPC::Append::Response>(
+        fromString<Protocol::Client::Append::Response>(
             "log_disappeared {}"));
     EXPECT_THROW(log->append(entry),
                  Client::LogDisappearedException);
@@ -200,7 +200,7 @@ TEST_F(ClientLogTest, append_logDisappeared)
 TEST_F(ClientLogTest, invalidate_empty)
 {
     mockRPC->expect(OpCode::APPEND,
-        fromString<ProtoBuf::ClientRPC::Append::Response>(
+        fromString<Protocol::Client::Append::Response>(
             "ok { entry_id: 32 }"));
     EXPECT_EQ(32U,
               log->invalidate({}));
@@ -211,7 +211,7 @@ TEST_F(ClientLogTest, invalidate_empty)
 TEST_F(ClientLogTest, invalidate_expectedIdOK)
 {
     mockRPC->expect(OpCode::APPEND,
-        fromString<ProtoBuf::ClientRPC::Append::Response>(
+        fromString<Protocol::Client::Append::Response>(
             "ok { entry_id: 32 }"));
     EXPECT_EQ(32U,
               log->invalidate({1}, 32));
@@ -224,7 +224,7 @@ TEST_F(ClientLogTest, invalidate_expectedIdOK)
 TEST_F(ClientLogTest, invalidate_expectedIdStale)
 {
     mockRPC->expect(OpCode::APPEND,
-        fromString<ProtoBuf::ClientRPC::Append::Response>(
+        fromString<Protocol::Client::Append::Response>(
             format("ok { entry_id: %lu }", Client::NO_ID)));
     EXPECT_EQ(Client::NO_ID,
               log->invalidate({1}, 32));
@@ -237,7 +237,7 @@ TEST_F(ClientLogTest, invalidate_expectedIdStale)
 TEST_F(ClientLogTest, invalidate_logDisappeared)
 {
     mockRPC->expect(OpCode::APPEND,
-        fromString<ProtoBuf::ClientRPC::Append::Response>(
+        fromString<Protocol::Client::Append::Response>(
             "log_disappeared {}"));
     EXPECT_THROW(log->invalidate({1}),
                  Client::LogDisappearedException);
@@ -257,7 +257,7 @@ std::string entryDataString(const Client::Entry& entry)
 TEST_F(ClientLogTest, read_normal)
 {
     mockRPC->expect(OpCode::READ,
-        fromString<ProtoBuf::ClientRPC::Read::Response>(
+        fromString<Protocol::Client::Read::Response>(
             "ok { "
             "   entry: { entry_id: 20 } "
             "   entry: { entry_id: 22, invalidates: [12, 14] } "
@@ -297,7 +297,7 @@ TEST_F(ClientLogTest, read_normal)
 TEST_F(ClientLogTest, read_pastHead)
 {
     mockRPC->expect(OpCode::READ,
-        fromString<ProtoBuf::ClientRPC::Read::Response>(
+        fromString<Protocol::Client::Read::Response>(
             "ok {}"));
     EXPECT_EQ(0U, log->read(20).size());
     EXPECT_EQ("log_id: 1 "
@@ -308,7 +308,7 @@ TEST_F(ClientLogTest, read_pastHead)
 TEST_F(ClientLogTest, read_logDisappeared)
 {
     mockRPC->expect(OpCode::READ,
-        fromString<ProtoBuf::ClientRPC::Read::Response>(
+        fromString<Protocol::Client::Read::Response>(
             "log_disappeared {}"));
     EXPECT_THROW(log->read(20),
                  Client::LogDisappearedException);
@@ -320,7 +320,7 @@ TEST_F(ClientLogTest, read_logDisappeared)
 TEST_F(ClientLogTest, getLastId_emptyLog)
 {
     mockRPC->expect(OpCode::GET_LAST_ID,
-        fromString<ProtoBuf::ClientRPC::GetLastId::Response>(
+        fromString<Protocol::Client::GetLastId::Response>(
             format("ok { head_entry_id: %lu }", Client::NO_ID)));
     EXPECT_EQ(Client::NO_ID,
               log->getLastId());
@@ -331,7 +331,7 @@ TEST_F(ClientLogTest, getLastId_emptyLog)
 TEST_F(ClientLogTest, getLastId_normal)
 {
     mockRPC->expect(OpCode::GET_LAST_ID,
-        fromString<ProtoBuf::ClientRPC::GetLastId::Response>(
+        fromString<Protocol::Client::GetLastId::Response>(
             "ok { head_entry_id: 20 }"));
     EXPECT_EQ(20U,
               log->getLastId());
@@ -342,7 +342,7 @@ TEST_F(ClientLogTest, getLastId_normal)
 TEST_F(ClientLogTest, getLastId_logDisappeared)
 {
     mockRPC->expect(OpCode::GET_LAST_ID,
-        fromString<ProtoBuf::ClientRPC::GetLastId::Response>(
+        fromString<Protocol::Client::GetLastId::Response>(
             "log_disappeared {}"));
     EXPECT_THROW(log->getLastId(),
                  Client::LogDisappearedException);

@@ -18,7 +18,7 @@
 #include <mutex>
 #include <thread>
 
-#include "build/Protocol/LogCabin.pb.h"
+#include "build/Protocol/Client.pb.h"
 #include "Event/Loop.h"
 #include "RPC/Address.h"
 
@@ -47,7 +47,7 @@ class LeaderRPCBase {
     /**
      * RPC operation code.
      */
-    typedef ProtoBuf::ClientRPC::OpCode OpCode;
+    typedef Protocol::Client::OpCode OpCode;
 
     /// Constructor.
     LeaderRPCBase() {}
@@ -105,7 +105,7 @@ class LeaderRPC : public LeaderRPCBase {
      */
     void handleServiceSpecificError(
         std::shared_ptr<RPC::ClientSession> cachedSession,
-        const ProtoBuf::ClientRPC::Error& error);
+        const Protocol::Client::Error& error);
 
     /**
      * Connect to a new host in hopes that it is the cluster leader.

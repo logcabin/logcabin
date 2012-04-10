@@ -16,7 +16,7 @@
 #include <gtest/gtest.h>
 #include <thread>
 
-#include "build/Protocol/LogCabin.pb.h"
+#include "build/Protocol/Client.pb.h"
 #include "Core/ProtoBuf.h"
 #include "Protocol/Common.h"
 #include "RPC/Buffer.h"
@@ -31,7 +31,7 @@ namespace LogCabin {
 namespace Server {
 namespace {
 
-using ProtoBuf::ClientRPC::OpCode;
+using Protocol::Client::OpCode;
 typedef RPC::ClientRPC::Status Status;
 
 class ServerClientServiceTest : public ::testing::Test {
@@ -84,8 +84,8 @@ class ServerClientServiceTest : public ::testing::Test {
 };
 
 TEST_F(ServerClientServiceTest, handleRPCBadOpcode) {
-    ProtoBuf::ClientRPC::GetSupportedRPCVersions::Request request;
-    ProtoBuf::ClientRPC::GetSupportedRPCVersions::Response response;
+    Protocol::Client::GetSupportedRPCVersions::Request request;
+    Protocol::Client::GetSupportedRPCVersions::Response response;
     int bad = 255;
     OpCode unassigned = static_cast<OpCode>(bad);
     EXPECT_DEATH({init();
@@ -97,8 +97,8 @@ TEST_F(ServerClientServiceTest, handleRPCBadOpcode) {
 
 TEST_F(ServerClientServiceTest, getSupportedRPCVersions) {
     init();
-    ProtoBuf::ClientRPC::GetSupportedRPCVersions::Request request;
-    ProtoBuf::ClientRPC::GetSupportedRPCVersions::Response response;
+    Protocol::Client::GetSupportedRPCVersions::Request request;
+    Protocol::Client::GetSupportedRPCVersions::Response response;
     call(OpCode::GET_SUPPORTED_RPC_VERSIONS, request, response);
     EXPECT_EQ("min_version: 1"
               "max_version: 1", response);
@@ -106,9 +106,9 @@ TEST_F(ServerClientServiceTest, getSupportedRPCVersions) {
 
 TEST_F(ServerClientServiceTest, openLog) {
     init();
-    ProtoBuf::ClientRPC::OpenLog::Request request;
+    Protocol::Client::OpenLog::Request request;
     request.set_log_name("foo");
-    ProtoBuf::ClientRPC::OpenLog::Response response;
+    Protocol::Client::OpenLog::Response response;
     call(OpCode::OPEN_LOG, request, response);
     EXPECT_EQ("log_id: 1", response);
     call(OpCode::OPEN_LOG, request, response);
@@ -120,10 +120,10 @@ TEST_F(ServerClientServiceTest, openLog) {
 
 TEST_F(ServerClientServiceTest, deleteLog) {
     init();
-    ProtoBuf::ClientRPC::DeleteLog::Request request;
+    Protocol::Client::DeleteLog::Request request;
     globals->logManager.getExclusiveAccess()->createLog("foo");
     request.set_log_name("foo");
-    ProtoBuf::ClientRPC::DeleteLog::Response response;
+    Protocol::Client::DeleteLog::Response response;
     call(OpCode::DELETE_LOG, request, response);
     call(OpCode::DELETE_LOG, request, response);
     EXPECT_EQ((std::vector<std::string> {}),
@@ -132,8 +132,8 @@ TEST_F(ServerClientServiceTest, deleteLog) {
 
 TEST_F(ServerClientServiceTest, listLogs) {
     init();
-    ProtoBuf::ClientRPC::ListLogs::Request request;
-    ProtoBuf::ClientRPC::ListLogs::Response response;
+    Protocol::Client::ListLogs::Request request;
+    Protocol::Client::ListLogs::Response response;
     call(OpCode::LIST_LOGS, request, response);
     EXPECT_EQ("",
               response);
@@ -147,8 +147,8 @@ TEST_F(ServerClientServiceTest, listLogs) {
 TEST_F(ServerClientServiceTest, append) {
     init();
     globals->logManager.getExclusiveAccess()->createLog("foo");
-    ProtoBuf::ClientRPC::Append::Request request;
-    ProtoBuf::ClientRPC::Append::Response response;
+    Protocol::Client::Append::Request request;
+    Protocol::Client::Append::Response response;
     request.set_log_id(1);
     request.add_invalidates(10);
     request.add_invalidates(11);
@@ -188,8 +188,8 @@ TEST_F(ServerClientServiceTest, append) {
 
 TEST_F(ServerClientServiceTest, read) {
     init();
-    ProtoBuf::ClientRPC::Read::Request request;
-    ProtoBuf::ClientRPC::Read::Response response;
+    Protocol::Client::Read::Request request;
+    Protocol::Client::Read::Response response;
     request.set_log_id(1);
     request.set_from_entry_id(1);
 
@@ -233,9 +233,9 @@ TEST_F(ServerClientServiceTest, read) {
 
 TEST_F(ServerClientServiceTest, getLastId) {
     init();
-    ProtoBuf::ClientRPC::GetLastId::Request request;
+    Protocol::Client::GetLastId::Request request;
     request.set_log_id(1);
-    ProtoBuf::ClientRPC::GetLastId::Response response;
+    Protocol::Client::GetLastId::Response response;
     call(OpCode::GET_LAST_ID, request, response);
     EXPECT_EQ("log_disappeared: {}",
               response);

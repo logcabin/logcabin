@@ -15,7 +15,7 @@
 
 #include <string.h>
 
-#include "build/Protocol/LogCabin.pb.h"
+#include "build/Protocol/Client.pb.h"
 #include "RPC/Buffer.h"
 #include "RPC/ProtoBuf.h"
 #include "RPC/ServerRPC.h"
@@ -40,7 +40,7 @@ ClientService::~ClientService()
 void
 ClientService::handleRPC(RPC::ServerRPC rpc)
 {
-    using ProtoBuf::ClientRPC::OpCode;
+    using Protocol::Client::OpCode;
 
     // TODO(ongaro): If this is not the current cluster leader, need to
     // redirect the client.
@@ -79,8 +79,8 @@ ClientService::handleRPC(RPC::ServerRPC rpc)
  * 'response' will be an empty protocol buffer for you to fill in the response.
  */
 #define PRELUDE(rpcClass) \
-    ProtoBuf::ClientRPC::rpcClass::Request request; \
-    ProtoBuf::ClientRPC::rpcClass::Response response; \
+    Protocol::Client::rpcClass::Request request; \
+    Protocol::Client::rpcClass::Response response; \
     if (!rpc.getRequest(request)) \
         return;
 

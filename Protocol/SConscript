@@ -1,7 +1,7 @@
 Import('env')
 
 src = [
-    "#build/Protocol/LogCabin.pb.o",
+    "#build/Protocol/Client.pb.o",
 ]
 
 env.StaticLibrary("LogCabinProtocol",
@@ -9,12 +9,12 @@ env.StaticLibrary("LogCabinProtocol",
                   CPPPATH = [ "#" ])
 
 env.Protoc([],
-           "LogCabin.proto",
+           "Client.proto",
            PROTOCPROTOPATH = ['.'],
            PROTOCPYTHONOUTDIR = None,
            PROTOCOUTDIR = '.')
 
-env.StaticObject("#build/Protocol/LogCabin.pb.o",
-                 "#build/Protocol/LogCabin.pb.cc",
+env.StaticObject("#build/Protocol/Client.pb.o",
+                 "#build/Protocol/Client.pb.cc",
                  CPPPATH = "#",
                  CXXFLAGS = "-std=c++0x")

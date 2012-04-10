@@ -27,7 +27,7 @@ namespace LogCabin {
 namespace Client {
 namespace {
 
-using ProtoBuf::ClientRPC::OpCode;
+using Protocol::Client::OpCode;
 
 class ClientLeaderRPCTest : public ::testing::Test {
   public:
@@ -65,9 +65,9 @@ class ClientLeaderRPCTest : public ::testing::Test {
     std::unique_ptr<RPC::Server> server;
     std::thread serverThread;
     std::unique_ptr<LeaderRPC> leaderRPC;
-    ProtoBuf::ClientRPC::OpenLog::Request request;
-    ProtoBuf::ClientRPC::OpenLog::Response response;
-    ProtoBuf::ClientRPC::OpenLog::Response expResponse;
+    Protocol::Client::OpenLog::Request request;
+    Protocol::Client::OpenLog::Response response;
+    Protocol::Client::OpenLog::Response expResponse;
 };
 
 // constructor and destructor tested adequately in tests for call()
@@ -89,8 +89,8 @@ TEST_F(ClientLeaderRPCTest, callRPCFailed) {
 }
 
 TEST_F(ClientLeaderRPCTest, handleServiceSpecificErrorNotLeader) {
-    ProtoBuf::ClientRPC::Error error;
-    error.set_error_code(ProtoBuf::ClientRPC::Error::NOT_LEADER);
+    Protocol::Client::Error error;
+    error.set_error_code(Protocol::Client::Error::NOT_LEADER);
 
     // no hint
     service->serviceSpecificError(OpCode::OPEN_LOG, request, error);
