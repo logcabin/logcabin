@@ -82,7 +82,7 @@ TEST_F(RPCOpaqueServerTest, MessageSocket_onReceiveMessage) {
     server.listener.handleNewConnection(fd1);
     OpaqueServer::ServerMessageSocket& socket = *server.sockets.at(0);
     socket.onReceiveMessage(1, Buffer(NULL, 3, NULL));
-    ASSERT_TRUE(server.lastRPC);
+    ASSERT_TRUE(server.lastRPC.get());
     EXPECT_EQ(3U, server.lastRPC->request.getLength());
     EXPECT_EQ(0U, server.lastRPC->response.getLength());
     EXPECT_EQ(&socket, server.lastRPC->messageSocket.lock().get());

@@ -118,8 +118,10 @@ TEST_F(ServerLogManagerTest, constructor_replayLog) {
     // begin test: the manager should delete the baz log and create the bar log
     createManager();
     EXPECT_EQ(2U, getInternalLog()->getLastId());
-    EXPECT_EQ((vector<LogId> { 1, 2 }), getKeys(mgr->logs));
-    EXPECT_EQ((vector<string> {"foo", "bar"}), getKeys(mgr->logNames));
+    EXPECT_EQ((vector<LogId> { 1, 2 }),
+              sorted(getKeys(mgr->logs)));
+    EXPECT_EQ((vector<string> {"bar", "foo"}),
+              sorted(getKeys(mgr->logNames)));
     EXPECT_EQ("my-fake-uuid-123", mgr->uuid);
     destroyManager();
     EXPECT_EQ((vector<LogId> { 0, 1, 2 }),

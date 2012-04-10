@@ -14,6 +14,7 @@
  */
 
 #include <assert.h>
+#include <unistd.h>
 
 #include "Core/Debug.h"
 #include "RPC/ClientSession.h"

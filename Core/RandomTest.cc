@@ -25,28 +25,28 @@ namespace {
 TEST(CoreRandomTest, bitCoverage8) {
     uint8_t r = 0;
     for (uint32_t i = 0; i < 20; ++i)
-       r |= random8();
+       r = uint8_t(r | random8());
     EXPECT_EQ(0xFF, r);
 }
 
 TEST(CoreRandomTest, bitCoverage16) {
     uint16_t r = 0;
     for (uint32_t i = 0; i < 20; ++i)
-       r |= random16();
+       r = uint16_t(r | random16());
     EXPECT_EQ(0xFFFF, r);
 }
 
 TEST(CoreRandomTest, bitCoverage32) {
     uint32_t r = 0;
     for (uint32_t i = 0; i < 20; ++i)
-       r |= random32();
+       r = uint32_t(r | random32());
     EXPECT_EQ(~0U, r);
 }
 
 TEST(CoreRandomTest, bitCoverage64) {
     uint64_t r = 0;
     for (uint32_t i = 0; i < 20; ++i)
-       r |= random64();
+       r = uint64_t(r | random64());
     EXPECT_EQ(~0UL, r);
 }
 

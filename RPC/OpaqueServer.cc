@@ -15,6 +15,7 @@
 
 #include <errno.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "Core/Debug.h"
 #include "RPC/OpaqueServer.h"

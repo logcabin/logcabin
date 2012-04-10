@@ -63,15 +63,13 @@ TEST_F(CoreRWPtrTest, compile) {
         RWPtr<const uint64_t> read = mgr.getSharedAccess();
         RWPtr<const uint64_t> read2 = std::move(read);
         RWPtr<const uint64_t> read3;
-        const uint64_t* r = read3.get();
-        r = NULL;
+        read3.get();
         read3 = std::move(read2);
         RWPtr<uint64_t> write = mgr.getExclusiveAccess();
         RWPtr<uint64_t> write2 = std::move(write);
         RWPtr<uint64_t> write3;
         write3 = std::move(write2);
-        uint64_t* w = write3.get();
-        w = NULL;
+        write3.get();
     }
 }
 
