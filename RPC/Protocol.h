@@ -15,32 +15,26 @@
 
 /**
  * \file
- * This file documents low-level headers used in the protocol between LogCabin
- * clients and servers.
+ * This file contains the headers used in all high-level RPCs.
  */
 
 #include <cinttypes>
+#include <ostream>
 
-#ifndef LOGCABIN_PROTOCOL_CLIENT_H
-#define LOGCABIN_PROTOCOL_CLIENT_H
+#ifndef LOGCABIN_RPC_PROTOCOL_H
+#define LOGCABIN_RPC_PROTOCOL_H
 
 namespace LogCabin {
+namespace RPC {
 namespace Protocol {
-namespace Client {
 
 /**
- * The maximum number of bytes per RPC request or response, including these
- * headers. This is set to slightly over 1 MB because the maximum size of log
- * entries is 1 MB.
- */
-const uint32_t MAX_MESSAGE_LENGTH = 1024 + 1024 * 1024;
-
-/**
- * This is the first part of the request header that clients send, common to
- * all versions of the protocol. Servers can always expect to receive this and
- * clients must always send this.
+ * This is the first part of the request header that RPC clients send, common
+ * to all versions of the protocol. RPC servers can always expect to receive
+ * this and RPC clients must always send this.
  * This needs to be separate struct because when a server receives a request,
- * it does not know the type of the request, as that depends on its version.
+ * it does not know the type of the request header, as that depends on its
+ * version.
  */
 struct RequestHeaderPrefix {
     /**
@@ -59,7 +53,8 @@ struct RequestHeaderPrefix {
      * now.
      */
     uint8_t version;
-};
+
+} __attribute__((packed));
 
 /**
  * In version 1 of the protocol, this is the header format for requests from
@@ -82,17 +77,29 @@ struct RequestHeaderVersion1 {
     void toBigEndian();
 
     /**
-     * This is common to all versions of the protocol. Servers can always
-     * expect to receive this and clients must always send this.
+     * This is common to all versions of the protocol. RPC servers can always
+     * expect to receive this and RPC clients must always send this.
      */
     RequestHeaderPrefix prefix;
 
     /**
-     * This identifies which RPC is being executed.
+     * This identifies which Service the RPC is destined for.
+     * See Protocol::Common::ServiceId.
      */
-    uint8_t opCode;
+    uint16_t service;
 
-    // A protocol buffer follows with the request.
+    /**
+     * This field tells the service what service-specific errors the client
+     * understands. Clients should remain backwards-compatible, so that newer
+     * clients can understand older errors. Services should take care not to
+     * send a client a service-specific error that it doesn't understand.
+     */
+    uint8_t serviceSpecificErrorVersion;
+
+    /**
+     * This identifies which RPC is being executed, scoped to the service.
+     */
+    uint16_t opCode;
 
 } __attribute__((packed));
 
@@ -100,17 +107,31 @@ struct RequestHeaderVersion1 {
  * The status codes returned in server responses.
  */
 enum class Status : uint8_t {
+
     /**
-     * The server processed the request and returned a valid protocol buffer
+     * The service processed the request and returned a valid protocol buffer
      * with the results.
      */
-    OK              = 0,
+    OK = 0,
+
+    /**
+     * An error specific to the particular service. The format of the remainder
+     * of the message is specific to the particular service.
+     */
+    SERVICE_SPECIFIC_ERROR = 1,
+
     /**
      * The server did not like the version number provided in the request
      * header. If the client gets this, it should fall back to an older version
      * number or crash.
      */
-    INVALID_VERSION = 1,
+    INVALID_VERSION = 2,
+
+    /**
+     * The server does not have the requested service.
+     */
+    INVALID_SERVICE = 3,
+
     /**
      * The server did not like the RPC request. Either it specified an opCode
      * the server didn't understand or a request protocol buffer the server
@@ -118,20 +139,18 @@ enum class Status : uint8_t {
      * negotiating with the server about which version of the RPC protocol to
      * use.
      */
-    INVALID_REQUEST = 2,
-    /**
-     * The server is not the current cluster leader. The client should look
-     * elsewhere for the cluster leader. The server MAY provide a hint as to
-     * who the leader is, in the format of a null-terminated string directly
-     * following the response header.
-     */
-    NOT_LEADER      = 3,
+    INVALID_REQUEST = 4,
+
 };
+
+/// Output a Status to a stream. Improves gtest error messages.
+::std::ostream&
+operator<<(::std::ostream& stream, Status status);
 
 /**
  * This is the first part of the response header that servers send, common to
- * all versions of the protocol. Clients can always expect to receive this and
- * servers must always send this.
+ * all versions of the protocol. RPC clients can always expect to receive this
+ * and RPC servers must always send this.
  * This needs to be separate struct because when a client receives a response,
  * it might have a status of INVALID_VERSION, in which case the client may not
  * assume anything about the remaining bytes in the message.
@@ -155,11 +174,10 @@ struct ResponseHeaderPrefix {
 
     // If status != INVALID_VERSION, the response should be cast
     // to the appropriate ResponseHeaderVersion# struct.
-};
+} __attribute__((packed));
 
 /**
- * In version 1 of the protocol, this is the header format for responses from
- * servers to clients.
+ * In version 1 of the protocol, this is the header format for RPC responses.
  */
 struct ResponseHeaderVersion1 {
     /**
@@ -180,20 +198,15 @@ struct ResponseHeaderVersion1 {
     void toBigEndian();
 
     /**
-     * This is common to all versions of the protocol. Clients can always
-     * expect to receive this and servers must always send this.
+     * This is common to all versions of the protocol. RPC clients can always
+     * expect to receive this and RPC servers must always send this.
      */
     ResponseHeaderPrefix prefix;
 
-    // If prefix.status == OK, a protocol buffer follows with the response.
-    // If prefix.status == NOT_LEADER, a null-terminated character string may
-    //                                 follow describing where to find the
-    //                                 leader.
-
 } __attribute__((packed));
 
-} // namespace LogCabin::Protocol::Client
-} // namespace LogCabin::Protocol
+} // namespace LogCabin::RPC::Protocol
+} // namespace LogCabin::RPC
 } // namespace LogCabin
 
-#endif // LOGCABIN_PROTOCOL_CLIENT_H
+#endif // LOGCABIN_RPC_PROTOCOL_H

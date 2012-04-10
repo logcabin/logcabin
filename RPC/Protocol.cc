@@ -14,11 +14,12 @@
  */
 
 #include <endian.h>
-#include "Protocol/Client.h"
+
+#include "RPC/Protocol.h"
 
 namespace LogCabin {
+namespace RPC {
 namespace Protocol {
-namespace Client {
 
 void
 RequestHeaderPrefix::fromBigEndian()
@@ -35,13 +36,43 @@ RequestHeaderPrefix::toBigEndian()
 void
 RequestHeaderVersion1::fromBigEndian()
 {
-    // opCode is only 1 byte, nothing to flip
+    service = be16toh(service);
+    // serviceSpecificErrorVersion is only 1 byte, nothing to flip
+    opCode = be16toh(opCode);
 }
 
 void
 RequestHeaderVersion1::toBigEndian()
 {
-    // opCode is only 1 byte, nothing to flip
+    service = htobe16(service);
+    // serviceSpecificErrorVersion is only 1 byte, nothing to flip
+    opCode = htobe16(opCode);
+}
+
+::std::ostream&
+operator<<(::std::ostream& stream, Status status)
+{
+    switch (status) {
+        case Status::OK:
+            stream << "OK";
+            break;
+        case Status::SERVICE_SPECIFIC_ERROR:
+            stream << "SERVICE_SPECIFIC_ERROR";
+            break;
+        case Status::INVALID_VERSION:
+            stream << "INVALID_VERSION";
+            break;
+        case Status::INVALID_SERVICE:
+            stream << "INVALID_SERVICE";
+            break;
+        case Status::INVALID_REQUEST:
+            stream << "INVALID_REQUEST";
+            break;
+        default:
+            stream << "(bad Status value " << uint8_t(status) << " )";
+            break;
+    }
+    return stream;
 }
 
 void
@@ -68,6 +99,6 @@ ResponseHeaderVersion1::toBigEndian()
     // no fields, nothing to flip
 }
 
-} // namespace LogCabin::Protocol::Client
-} // namespace LogCabin::Protocol
+} // namespace LogCabin::RPC::Protocol
+} // namespace LogCabin::RPC
 } // namespace LogCabin

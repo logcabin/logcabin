@@ -20,7 +20,7 @@ namespace LogCabin {
 namespace RPC {
 
 // forward declaration
-class OpaqueServerRPC;
+class ServerRPC;
 
 /**
  * Base class for RPC services.
@@ -39,11 +39,12 @@ class Service {
     virtual ~Service() {}
 
     /**
-     * This method is overridden by a subclass and invoked when a new RPC
-     * arrives. It should call OpaqueServerRPC::sendReply() if and when it
-     * wants to respond to the RPC request.
+     * This method is overridden by a subclass and invoked by the Server class
+     * when a new RPC arrives. It should call ServerRPC::reply() or another
+     * method on the RPC to handle the request. The Server class calls this on
+     * a thread pool.
      */
-    virtual void handleRPC(OpaqueServerRPC serverRPC) = 0;
+    virtual void handleRPC(ServerRPC serverRPC) = 0;
 
     // Service is non-copyable.
     Service(const Service&) = delete;

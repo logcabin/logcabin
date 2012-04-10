@@ -1,7 +1,6 @@
 Import('env')
 
 src = [
-    "Client.cc",
     "#build/Protocol/LogCabin.pb.o",
 ]
 

@@ -21,7 +21,7 @@ namespace LogCabin {
 namespace RPC {
 
 ThreadDispatchService::ThreadDispatchService(
-        Service& threadSafeService,
+        std::shared_ptr<Service> threadSafeService,
         uint32_t minThreads,
         uint32_t maxThreads)
     : threadSafeService(threadSafeService)
@@ -62,7 +62,7 @@ ThreadDispatchService::~ThreadDispatchService()
 }
 
 void
-ThreadDispatchService::handleRPC(OpaqueServerRPC serverRPC)
+ThreadDispatchService::handleRPC(ServerRPC serverRPC)
 {
     std::unique_lock<std::mutex> lockGuard(mutex);
     assert(!exit);
@@ -76,7 +76,7 @@ void
 ThreadDispatchService::workerMain()
 {
     while (true) {
-        OpaqueServerRPC rpc;
+        ServerRPC rpc;
         { // find an RPC to process
             std::unique_lock<std::mutex> lockGuard(mutex);
             ++numFreeWorkers;
@@ -89,7 +89,7 @@ ThreadDispatchService::workerMain()
             rpcQueue.pop();
         }
         // execute RPC handler
-        threadSafeService.handleRPC(std::move(rpc));
+        threadSafeService->handleRPC(std::move(rpc));
     }
 }
 

@@ -17,38 +17,14 @@
 
 #include "Core/Debug.h"
 #include "Core/StringUtil.h"
-#include "Protocol/Client.h"
-#include "RPC/OpaqueServer.h"
-#include "RPC/ThreadDispatchService.h"
+#include "Protocol/Common.h"
+#include "RPC/Server.h"
 #include "Server/ClientService.h"
 #include "Server/Globals.h"
 #include "Server/LogManager.h"
 
 namespace LogCabin {
 namespace Server {
-
-namespace {
-
-/**
- * This class serves as a temporary adapter during a code transition. It is a
- * subclass of OpaqueServer that hands the RPCs to handle off to a service.
- */
-class ServiceDispatchServer : public RPC::OpaqueServer {
-  public:
-    ServiceDispatchServer(Event::Loop& eventLoop,
-                          uint32_t maxMessageLength,
-                          RPC::Service& service)
-        : OpaqueServer(eventLoop, maxMessageLength)
-        , service(service)
-    {
-    }
-    void handleRPC(RPC::OpaqueServerRPC serverRPC) {
-        service.handleRPC(std::move(serverRPC));
-    }
-    RPC::Service& service;
-};
-
-}
 
 ////////// Globals::SigIntHandler //////////
 
@@ -72,7 +48,6 @@ Globals::Globals()
     , sigIntHandler(eventLoop)
     , logManager()
     , clientService()
-    , dispatchService()
     , rpcServer()
 {
 }
@@ -95,16 +70,15 @@ Globals::init()
         clientService.reset(new Server::ClientService(*this));
     }
 
-    if (!dispatchService) {
-        uint32_t maxThreads = config.read<uint16_t>("maxThreads", 16);
-        dispatchService.reset(
-            new RPC::ThreadDispatchService(*clientService, 0, maxThreads));
-    }
-
     if (!rpcServer) {
-        rpcServer.reset(new ServiceDispatchServer(eventLoop,
-                                        Protocol::Client::MAX_MESSAGE_LENGTH,
-                                        *dispatchService));
+        rpcServer.reset(new RPC::Server(eventLoop,
+                                        Protocol::Common::MAX_MESSAGE_LENGTH));
+
+        uint32_t maxThreads = config.read<uint16_t>("maxThreads", 16);
+        rpcServer->registerService(Protocol::Common::ServiceId::CLIENT_SERVICE,
+                                   clientService,
+                                   maxThreads);
+
         std::string configServers = config.read<std::string>("servers", "");
         std::vector<std::string> listenAddresses =
             Core::StringUtil::split(configServers, ';');
@@ -116,7 +90,7 @@ Globals::init()
         for (auto it = listenAddresses.begin();
              it != listenAddresses.end();
              ++it) {
-            RPC::Address address(*it, 61023);
+            RPC::Address address(*it, Protocol::Common::DEFAULT_PORT);
             error = rpcServer->bind(address);
             if (error.empty()) {
                 LOG(NOTICE, "Serving on %s", address.toString().c_str());

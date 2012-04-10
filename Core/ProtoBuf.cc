@@ -125,6 +125,14 @@ dumpString(const google::protobuf::Message& protoBuf,
     return output;
 }
 
+std::unique_ptr<google::protobuf::Message>
+copy(const google::protobuf::Message& protoBuf)
+{
+    std::unique_ptr<google::protobuf::Message> ret(protoBuf.New());
+    ret->CopyFrom(protoBuf);
+    return ret;
+}
+
 } // namespace LogCabin::Core::ProtoBuf
 } // namespace LogCabin::Core
 } // namespace LogCabin

@@ -13,8 +13,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <cinttypes>
-
 #include "RPC/Service.h"
 
 #ifndef LOGCABIN_SERVER_CLIENTSERVICE_H
@@ -38,19 +36,19 @@ class ClientService : public RPC::Service {
     /// Destructor.
     ~ClientService();
 
-    void handleRPC(RPC::OpaqueServerRPC rpc);
+    void handleRPC(RPC::ServerRPC rpc);
 
   private:
 
     ////////// RPC handlers //////////
 
-    void getSupportedRPCVersions(RPC::OpaqueServerRPC rpc, uint32_t skipBytes);
-    void openLog(RPC::OpaqueServerRPC rpc, uint32_t skipBytes);
-    void deleteLog(RPC::OpaqueServerRPC rpc, uint32_t skipBytes);
-    void listLogs(RPC::OpaqueServerRPC rpc, uint32_t skipBytes);
-    void append(RPC::OpaqueServerRPC rpc, uint32_t skipBytes);
-    void read(RPC::OpaqueServerRPC rpc, uint32_t skipBytes);
-    void getLastId(RPC::OpaqueServerRPC rpc, uint32_t skipBytes);
+    void getSupportedRPCVersions(RPC::ServerRPC rpc);
+    void openLog(RPC::ServerRPC rpc);
+    void deleteLog(RPC::ServerRPC rpc);
+    void listLogs(RPC::ServerRPC rpc);
+    void append(RPC::ServerRPC rpc);
+    void read(RPC::ServerRPC rpc);
+    void getLastId(RPC::ServerRPC rpc);
 
 
     /**

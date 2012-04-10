@@ -102,7 +102,7 @@ class OpaqueClientRPC {
      *      If an error has occurred, a message describing that error.
      *      Otherwise, an empty string.
      */
-    std::string getErrorMessage();
+    std::string getErrorMessage() const;
 
     /**
      * Indicate whether a response or error has been received for

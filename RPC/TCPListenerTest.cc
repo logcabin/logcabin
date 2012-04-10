@@ -17,6 +17,7 @@
 #include <thread>
 
 #include "Core/Debug.h"
+#include "Protocol/Common.h"
 #include "RPC/TCPListener.h"
 
 namespace LogCabin {
@@ -62,7 +63,7 @@ TEST(RPCTCPListener, basics) {
     Event::Loop loop;
     Listener listener(loop);
     EXPECT_EQ("", listener.bind(Address("127.0.0.1", 61022)));
-    Address address("127.0.0.1", 61023);
+    Address address("127.0.0.1", Protocol::Common::DEFAULT_PORT);
     EXPECT_EQ("", listener.bind(address));
     EXPECT_EQ("", listener.bind(Address("127.0.0.1", 61024)));
     int connectError = -1;
@@ -85,7 +86,7 @@ TEST(RPCTCPListener, badAddress) {
 TEST(RPCTCPListener, portTaken) {
     Event::Loop loop;
     Listener listener(loop);
-    Address address("127.0.0.1", 61023);
+    Address address("127.0.0.1", Protocol::Common::DEFAULT_PORT);
     EXPECT_EQ("", listener.bind(address));
     std::string error = listener.bind(address);
     EXPECT_TRUE(error.find("in use") != error.npos)

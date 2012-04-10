@@ -99,6 +99,14 @@ class LeaderRPC : public LeaderRPCBase {
               const google::protobuf::Message& request,
               google::protobuf::Message& response);
   private:
+
+    /**
+     * A helper for call() that decodes errors thrown by the service.
+     */
+    void handleServiceSpecificError(
+        std::shared_ptr<RPC::ClientSession> cachedSession,
+        const ProtoBuf::ClientRPC::Error& error);
+
     /**
      * Connect to a new host in hopes that it is the cluster leader.
      * \param address
@@ -135,7 +143,7 @@ class LeaderRPC : public LeaderRPCBase {
      *      problem.
      */
     void
-    connectHost(const char* host,
+    connectHost(const std::string& host,
                 std::shared_ptr<RPC::ClientSession> cachedSession);
 
     /**

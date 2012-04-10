@@ -76,6 +76,12 @@ TEST(CoreProtoBufTest, dumpString) {
               dumpString(m, true));
 }
 
+TEST(CoreProtoBufTest, copy) {
+    TestMessage m;
+    m = fromString<TestMessage>("field_a: 3, field_b: 5");
+    EXPECT_EQ(*copy(m), m);
+}
+
 } // namespace LogCabin::Core::ProtoBuf
 } // namespace LogCabin::Core
 } // namespace LogCabin

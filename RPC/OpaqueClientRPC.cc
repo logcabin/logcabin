@@ -76,9 +76,9 @@ OpaqueClientRPC::extractReply()
 }
 
 std::string
-OpaqueClientRPC::getErrorMessage()
+OpaqueClientRPC::getErrorMessage() const
 {
-    update();
+    const_cast<OpaqueClientRPC*>(this)->update();
     return errorMessage;
 }
 

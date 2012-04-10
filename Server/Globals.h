@@ -27,8 +27,7 @@ namespace LogCabin {
 
 // forward declarations
 namespace RPC {
-class OpaqueServer;
-class ThreadDispatchService;
+class Server;
 }
 
 namespace Server {
@@ -93,26 +92,22 @@ class Globals {
 
   public:
     /**
-     * Used by #clientService for managing and accessing logs.
+     * Used by the client service for managing and accessing logs.
      */
     Core::RWManager<LogManager> logManager;
 
   private:
+
     /**
      * The application-facing facing RPC service.
      */
-    std::unique_ptr<Server::ClientService> clientService;
+    std::shared_ptr<Server::ClientService> clientService;
 
     /**
-     * Dispatches RPCs to #clientService on multiple worker threads.
+     * Listens for inbound RPCs and passes them off to the services
+     * (just to #clientService for now).
      */
-    std::unique_ptr<RPC::ThreadDispatchService> dispatchService;
-
-    /**
-     * Listens for inbound RPCs from applications and passes them off to
-     * #dispatchService.
-     */
-    std::unique_ptr<RPC::OpaqueServer> rpcServer;
+    std::unique_ptr<RPC::Server> rpcServer;
 
     // Globals is non-copyable.
     Globals(const Globals&) = delete;

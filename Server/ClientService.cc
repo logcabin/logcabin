@@ -14,13 +14,11 @@
  */
 
 #include <string.h>
-#include <utility>
 
 #include "build/Protocol/LogCabin.pb.h"
-#include "Protocol/Client.h"
 #include "RPC/Buffer.h"
-#include "RPC/OpaqueServerRPC.h"
 #include "RPC/ProtoBuf.h"
+#include "RPC/ServerRPC.h"
 #include "Server/ClientService.h"
 #include "Server/Globals.h"
 #include "Server/LogManager.h"
@@ -29,72 +27,6 @@
 
 namespace LogCabin {
 namespace Server {
-
-namespace {
-
-using ProtoBuf::ClientRPC::OpCode;
-using Protocol::Client::RequestHeaderPrefix;
-using Protocol::Client::RequestHeaderVersion1;
-using Protocol::Client::ResponseHeaderPrefix;
-using Protocol::Client::ResponseHeaderVersion1;
-using Protocol::Client::Status;
-using RPC::Buffer;
-using RPC::OpaqueServerRPC;
-
-/**
- * Reply to the RPC with a status of OK.
- * \param rpc
- *      RPC to reply to.
- * \param payload
- *      A protocol buffer to serialize into the response.
- */
-void
-reply(OpaqueServerRPC rpc, const google::protobuf::Message& payload)
-{
-    RPC::Buffer buffer;
-    RPC::ProtoBuf::serialize(payload, buffer,
-                             sizeof(ResponseHeaderVersion1));
-    auto& responseHeader =
-        *static_cast<ResponseHeaderVersion1*>(buffer.getData());
-    responseHeader.prefix.status = Status::OK;
-    responseHeader.prefix.toBigEndian();
-    responseHeader.toBigEndian();
-    rpc.response = std::move(buffer);
-    rpc.sendReply();
-}
-
-/**
- * Reply to the RPC with a non-OK status.
- * \param rpc
- *      RPC to reply to.
- * \param status
- *      Status code to return.
- * \param extra
- *      Raw bytes to place after the status code. This is intended for
- *      use in Status::NOT_LEADER, which can return a string telling the client
- *      where the leader is.
- */
-void
-fail(OpaqueServerRPC rpc,
-     Status status,
-     const RPC::Buffer& extra = RPC::Buffer())
-{
-    uint32_t length = uint32_t(sizeof(ResponseHeaderVersion1) +
-                               extra.getLength());
-    RPC::Buffer buffer(new char[length],
-                       length,
-                       RPC::Buffer::deleteArrayFn<char>);
-    auto& responseHeader =
-        *static_cast<ResponseHeaderVersion1*>(buffer.getData());
-    responseHeader.prefix.status = status;
-    responseHeader.prefix.toBigEndian();
-    responseHeader.toBigEndian();
-    memcpy(&responseHeader + 1, extra.getData(), extra.getLength());
-    rpc.response = std::move(buffer);
-    rpc.sendReply();
-}
-
-} // anonymous namespace
 
 ClientService::ClientService(Globals& globals)
     : globals(globals)
@@ -106,54 +38,38 @@ ClientService::~ClientService()
 }
 
 void
-ClientService::handleRPC(OpaqueServerRPC rpc)
+ClientService::handleRPC(RPC::ServerRPC rpc)
 {
-    // Carefully read the headers.
-    if (rpc.request.getLength() < sizeof(RequestHeaderPrefix)) {
-        fail(std::move(rpc), Status::INVALID_VERSION);
-        return;
-    }
-    auto& requestHeaderPrefix = *static_cast<RequestHeaderPrefix*>(
-                                        rpc.request.getData());
-    requestHeaderPrefix.fromBigEndian();
-    if (requestHeaderPrefix.version != 1 ||
-        rpc.request.getLength() < sizeof(RequestHeaderVersion1)) {
-        fail(std::move(rpc), Status::INVALID_VERSION);
-        return;
-    }
-    auto& requestHeader = *static_cast<RequestHeaderVersion1*>(
-                                          rpc.request.getData());
-    requestHeader.fromBigEndian();
+    using ProtoBuf::ClientRPC::OpCode;
 
     // TODO(ongaro): If this is not the current cluster leader, need to
     // redirect the client.
 
     // Call the appropriate RPC handler based on the request's opCode.
-    uint32_t skipBytes = uint32_t(sizeof(requestHeader));
-    switch (requestHeader.opCode) {
+    switch (rpc.getOpCode()) {
         case OpCode::GET_SUPPORTED_RPC_VERSIONS:
-            getSupportedRPCVersions(std::move(rpc), skipBytes);
+            getSupportedRPCVersions(std::move(rpc));
             break;
         case OpCode::OPEN_LOG:
-            openLog(std::move(rpc), skipBytes);
+            openLog(std::move(rpc));
             break;
         case OpCode::DELETE_LOG:
-            deleteLog(std::move(rpc), skipBytes);
+            deleteLog(std::move(rpc));
             break;
         case OpCode::LIST_LOGS:
-            listLogs(std::move(rpc), skipBytes);
+            listLogs(std::move(rpc));
             break;
         case OpCode::APPEND:
-            append(std::move(rpc), skipBytes);
+            append(std::move(rpc));
             break;
         case OpCode::READ:
-            read(std::move(rpc), skipBytes);
+            read(std::move(rpc));
             break;
         case OpCode::GET_LAST_ID:
-            getLastId(std::move(rpc), skipBytes);
+            getLastId(std::move(rpc));
             break;
         default:
-            fail(std::move(rpc), Status::INVALID_REQUEST);
+            rpc.rejectInvalidRequest();
     }
 }
 
@@ -164,44 +80,44 @@ ClientService::handleRPC(OpaqueServerRPC rpc)
  */
 #define PRELUDE(rpcClass) \
     ProtoBuf::ClientRPC::rpcClass::Request request; \
-    if (!RPC::ProtoBuf::parse(rpc.request, request, skipBytes)) \
-        fail(std::move(rpc), Status::INVALID_REQUEST); \
-    ProtoBuf::ClientRPC::rpcClass::Response response;
+    ProtoBuf::ClientRPC::rpcClass::Response response; \
+    if (!rpc.getRequest(request)) \
+        return;
 
 ////////// RPC handlers //////////
 
 void
-ClientService::getSupportedRPCVersions(OpaqueServerRPC rpc, uint32_t skipBytes)
+ClientService::getSupportedRPCVersions(RPC::ServerRPC rpc)
 {
     PRELUDE(GetSupportedRPCVersions);
     response.set_min_version(1);
     response.set_max_version(1);
-    reply(std::move(rpc), response);
+    rpc.reply(response);
 }
 
 void
-ClientService::openLog(OpaqueServerRPC rpc, uint32_t skipBytes)
+ClientService::openLog(RPC::ServerRPC rpc)
 {
     PRELUDE(OpenLog);
     Core::RWPtr<LogManager> logManager =
         globals.logManager.getExclusiveAccess();
     Storage::LogId logId = logManager->createLog(request.log_name());
     response.set_log_id(logId);
-    reply(std::move(rpc), response);
+    rpc.reply(response);
 }
 
 void
-ClientService::deleteLog(OpaqueServerRPC rpc, uint32_t skipBytes)
+ClientService::deleteLog(RPC::ServerRPC rpc)
 {
     PRELUDE(DeleteLog);
     Core::RWPtr<LogManager> logManager =
         globals.logManager.getExclusiveAccess();
     logManager->deleteLog(request.log_name());
-    reply(std::move(rpc), response);
+    rpc.reply(response);
 }
 
 void
-ClientService::listLogs(OpaqueServerRPC rpc, uint32_t skipBytes)
+ClientService::listLogs(RPC::ServerRPC rpc)
 {
     PRELUDE(ListLogs);
     Core::RWPtr<const LogManager> logManager =
@@ -209,11 +125,11 @@ ClientService::listLogs(OpaqueServerRPC rpc, uint32_t skipBytes)
     std::vector<std::string> logNames = logManager->listLogs();
     for (auto it = logNames.begin(); it != logNames.end(); ++it)
         response.add_log_names(*it);
-    reply(std::move(rpc), response);
+    rpc.reply(response);
 }
 
 void
-ClientService::append(OpaqueServerRPC rpc, uint32_t skipBytes)
+ClientService::append(RPC::ServerRPC rpc)
 {
     PRELUDE(Append);
 
@@ -256,11 +172,11 @@ ClientService::append(OpaqueServerRPC rpc, uint32_t skipBytes)
     } else {
         response.mutable_log_disappeared();
     }
-    reply(std::move(rpc), response);
+    rpc.reply(response);
 }
 
 void
-ClientService::read(OpaqueServerRPC rpc, uint32_t skipBytes)
+ClientService::read(RPC::ServerRPC rpc)
 {
     PRELUDE(Read);
     Core::RWPtr<const LogManager> logManager =
@@ -288,11 +204,11 @@ ClientService::read(OpaqueServerRPC rpc, uint32_t skipBytes)
     } else {
         response.mutable_log_disappeared();
     }
-    reply(std::move(rpc), response);
+    rpc.reply(response);
 }
 
 void
-ClientService::getLastId(OpaqueServerRPC rpc, uint32_t skipBytes)
+ClientService::getLastId(RPC::ServerRPC rpc)
 {
     PRELUDE(GetLastId);
     Core::RWPtr<const LogManager> logManager =
@@ -305,7 +221,7 @@ ClientService::getLastId(OpaqueServerRPC rpc, uint32_t skipBytes)
     } else {
         response.mutable_log_disappeared();
     }
-    reply(std::move(rpc), response);
+    rpc.reply(response);
 }
 
 } // namespace LogCabin::Server

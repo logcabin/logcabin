@@ -13,23 +13,14 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include "Core/Debug.h"
 #include "Client/LeaderRPC.h"
-#include "Core/ProtoBuf.h"
-#include "Protocol/Client.h"
-#include "RPC/Buffer.h"
+#include "Core/Debug.h"
+#include "Protocol/Common.h"
 #include "RPC/ClientSession.h"
-#include "RPC/OpaqueClientRPC.h"
-#include "RPC/ProtoBuf.h"
+#include "RPC/ClientRPC.h"
 
 namespace LogCabin {
 namespace Client {
-
-using Protocol::Client::RequestHeaderPrefix;
-using Protocol::Client::RequestHeaderVersion1;
-using Protocol::Client::ResponseHeaderPrefix;
-using Protocol::Client::ResponseHeaderVersion1;
-using Protocol::Client::Status;
 
 LeaderRPC::LeaderRPC(const RPC::Address& hosts)
     : hosts(hosts)
@@ -54,21 +45,11 @@ LeaderRPC::call(OpCode opCode,
                 const google::protobuf::Message& request,
                 google::protobuf::Message& response)
 {
+    typedef RPC::ClientRPC::Status Status;
+
     // TODO(ongaro): Rate limit the retries so as not to overwhelm servers
     // while they're choosing a new leader, etc.
     while (true) {
-
-        // Serialize the request into a RPC::Buffer
-        RPC::Buffer requestBuffer;
-        RPC::ProtoBuf::serialize(request, requestBuffer,
-                                 sizeof(RequestHeaderVersion1));
-        auto& requestHeader =
-            *static_cast<RequestHeaderVersion1*>(requestBuffer.getData());
-        requestHeader.prefix.version = 1;
-        requestHeader.prefix.toBigEndian();
-        requestHeader.opCode = opCode;
-        requestHeader.toBigEndian();
-
         // Save a reference to the leaderSession
         std::shared_ptr<RPC::ClientSession> cachedSession;
         {
@@ -76,91 +57,58 @@ LeaderRPC::call(OpCode opCode,
             cachedSession = leaderSession;
         }
 
-        // Send the request and wait for the RPC response
-        RPC::OpaqueClientRPC rpc =
-            cachedSession->sendRequest(std::move(requestBuffer));
-        rpc.waitForReply();
+        // Execute the RPC
+        RPC::ClientRPC rpc(cachedSession,
+                           Protocol::Common::ServiceId::CLIENT_SERVICE,
+                           1,
+                           opCode,
+                           request);
+        ProtoBuf::ClientRPC::Error serviceSpecificError;
+        Status status = rpc.waitForReply(&response, &serviceSpecificError);
 
-        // If the session is broken, get a new one and try again.
-        std::string rpcError = rpc.getErrorMessage();
-        if (!rpcError.empty()) {
-            LOG(WARNING, "RPC failed: %s. Searching for leader.",
-                rpcError.c_str());
-            // This should indicate the session has failed. Get a new one.
-            connectRandom(cachedSession);
-            continue;
-        }
-
-        // Extract the response's status field.
-        RPC::Buffer responseBuffer = rpc.extractReply();
-        if (responseBuffer.getLength() < sizeof(ResponseHeaderPrefix)) {
-            PANIC("The response from the server was too short to be valid. "
-                  "This probably indicates network or memory corruption.");
-        }
-        auto& responseHeaderPrefix =
-            *static_cast<ResponseHeaderPrefix*>(responseBuffer.getData());
-        responseHeaderPrefix.fromBigEndian();
-        if (responseHeaderPrefix.status == Status::INVALID_VERSION) {
-            // The server doesn't understand this version of the header
-            // protocol. Since this library only runs version 1 of the
-            // protocol, this shouldn't happen if servers continue supporting
-            // version 1.
-            PANIC("This client is too old to talk to your LogCabin cluster. "
-                  "You'll need to update your LogCabin client library.");
-        }
-
-        if (responseBuffer.getLength() < sizeof(ResponseHeaderVersion1)) {
-            PANIC("The response from the server was too short to be valid. "
-                  "This probably indicates network or memory corruption.");
-        }
-        auto& responseHeader =
-            *static_cast<ResponseHeaderVersion1*>(responseBuffer.getData());
-        responseHeader.fromBigEndian();
-
-        switch (responseHeader.prefix.status) {
-
-            // The RPC succeeded. Parse the response into a protocol buffer.
+        // Decode the response
+        switch (status) {
             case Status::OK:
-                if (!RPC::ProtoBuf::parse(responseBuffer, response,
-                                          sizeof(responseHeader))) {
-                    PANIC("Could not parse server response");
-                }
                 return;
-
-
-            // The server disliked our request. This shouldn't happen because
-            // the higher layers of software were supposed to negotiate an RPC
-            // protocol version.
-            case Status::INVALID_REQUEST:
-                PANIC("The server found this request to be invalid.\n%s",
-                      Core::ProtoBuf::dumpString(request).c_str());
-
-            // The server we tried is not the current cluster leader.
-            case Status::NOT_LEADER: {
-                if (responseBuffer.getLength() > sizeof(responseHeader)) {
-                    // Server returned hint as to who the leader might be.
-                    const char* hint =
-                        (static_cast<const char*>(responseBuffer.getData()) +
-                         sizeof(responseHeader));
-                    LOG(DBG, "Trying suggested %s as new leader", hint);
-                    connectHost(hint, cachedSession);
-                } else {
-                    // Well, this server isn't the leader. Try someone else.
-                    LOG(DBG, "Trying random host as new leader");
-                    connectRandom(cachedSession);
-                }
+            case Status::SERVICE_SPECIFIC_ERROR:
+                handleServiceSpecificError(cachedSession,
+                                           serviceSpecificError);
                 break;
-            }
-
-            default:
-                // The server shouldn't reply back with status codes we don't
-                // understand. That's why we gave it a version number in the
-                // request header.
-                PANIC("Unknown status %u returned from server after sending "
-                      "it protocol version 1 in the request header. This "
-                      "probably indicates a bug in the server.",
-                      responseHeader.prefix.status);
+            case Status::RPC_FAILED:
+                // If the session is broken, get a new one and try again.
+                connectRandom(cachedSession);
+                break;
         }
+    }
+}
+
+void
+LeaderRPC::handleServiceSpecificError(
+        std::shared_ptr<RPC::ClientSession> cachedSession,
+        const ProtoBuf::ClientRPC::Error& error)
+{
+    switch (error.error_code()) {
+        case ProtoBuf::ClientRPC::Error::NOT_LEADER:
+            // The server we tried is not the current cluster leader.
+            if (error.has_leader_hint()) {
+                // Server returned hint as to who the leader might be.
+                LOG(DBG, "Trying suggested %s as new leader",
+                         error.leader_hint().c_str());
+                connectHost(error.leader_hint(), cachedSession);
+            } else {
+                // Well, this server isn't the leader. Try someone else.
+                LOG(DBG, "Trying random host as new leader");
+                connectRandom(cachedSession);
+            }
+            break;
+        default:
+            // Hmm, we don't know what this server is trying to tell us, but
+            // something is wrong. The server shouldn't reply back with error
+            // codes we don't understand. That's why we gave it a
+            // serverSpecificErrorVersion number in the request header.
+            PANIC("Unknown error code %u returned in service-specific error. "
+                  "This probably indicates a bug in the server.",
+                  error.error_code());
     }
 }
 
@@ -171,7 +119,7 @@ LeaderRPC::connect(const RPC::Address& address,
     leaderSession = RPC::ClientSession::makeSession(
                         eventLoop,
                         address,
-                        Protocol::Client::MAX_MESSAGE_LENGTH);
+                        Protocol::Common::MAX_MESSAGE_LENGTH);
 }
 
 void
@@ -180,19 +128,21 @@ LeaderRPC::connectRandom(std::shared_ptr<RPC::ClientSession> cachedSession)
     std::unique_lock<std::mutex> lockGuard(mutex);
     if (cachedSession == leaderSession) {
         // Hope the next random host is the leader.
-        // If that turns out to be false, someone will soon find out.
+        // If that turns out to be false, we will soon find out.
         hosts.refresh();
         connect(hosts, lockGuard);
     }
 }
 
 void
-LeaderRPC::connectHost(const char* host,
+LeaderRPC::connectHost(const std::string& host,
                        std::shared_ptr<RPC::ClientSession> cachedSession)
 {
     std::unique_lock<std::mutex> lockGuard(mutex);
-    if (cachedSession == leaderSession)
-        connect(RPC::Address(host, 0), lockGuard);
+    if (cachedSession == leaderSession) {
+        connect(RPC::Address(host, Protocol::Common::DEFAULT_PORT),
+                lockGuard);
+    }
 }
 
 } // namespace LogCabin::Client

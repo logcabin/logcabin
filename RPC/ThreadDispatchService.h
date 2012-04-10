@@ -20,7 +20,7 @@
 #include <thread>
 #include <vector>
 
-#include "RPC/OpaqueServerRPC.h"
+#include "RPC/ServerRPC.h"
 #include "RPC/Service.h"
 
 #ifndef LOGCABIN_RPC_THREADDISPATCHSERVICE_H
@@ -52,7 +52,7 @@ class ThreadDispatchService : public Service {
      *      this limit. This should be set to at least 'minThreads' and more
      *      than 0.
      */
-    ThreadDispatchService(Service& threadSafeService,
+    ThreadDispatchService(std::shared_ptr<Service> threadSafeService,
                           uint32_t minThreads, uint32_t maxThreads);
 
     /**
@@ -61,7 +61,7 @@ class ThreadDispatchService : public Service {
      */
     ~ThreadDispatchService();
 
-    void handleRPC(OpaqueServerRPC serverRPC);
+    void handleRPC(ServerRPC serverRPC);
 
   private:
     /**
@@ -73,7 +73,7 @@ class ThreadDispatchService : public Service {
      * The service that will handle RPCs inside of worker thread spawned by
      * this class.
      */
-    Service& threadSafeService;
+    std::shared_ptr<Service> threadSafeService;
 
     /**
      * The maximum number of threads this class is allowed to use for its
@@ -113,7 +113,7 @@ class ThreadDispatchService : public Service {
     /**
      * The queue of work that worker threads pull from.
      */
-    std::queue<OpaqueServerRPC> rpcQueue;
+    std::queue<ServerRPC> rpcQueue;
 
     // ThreadDispatchService is non-copyable.
     ThreadDispatchService(const ThreadDispatchService&) = delete;

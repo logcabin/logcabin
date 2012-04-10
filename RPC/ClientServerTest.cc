@@ -26,6 +26,7 @@
 
 #include "Core/Debug.h"
 #include "Event/Timer.h"
+#include "Protocol/Common.h"
 #include "RPC/ClientSession.h"
 #include "RPC/OpaqueClientRPC.h"
 #include "RPC/OpaqueServer.h"
@@ -73,7 +74,7 @@ class RPCClientServerTest : public ::testing::Test {
         , serverEventLoop()
         , clientEventLoopThread(&Event::Loop::runForever, &clientEventLoop)
         , serverEventLoopThread(&Event::Loop::runForever, &serverEventLoop)
-        , address("127.0.0.1", 61023)
+        , address("127.0.0.1", Protocol::Common::DEFAULT_PORT)
         , server(serverEventLoop, 1024)
         , clientSession()
     {
@@ -128,7 +129,8 @@ TEST_F(RPCClientServerTest, timeout) {
     Event::Loop::Lock blockPings(serverEventLoop);
     RPC::OpaqueClientRPC rpc2 = clientSession->sendRequest(RPC::Buffer());
     rpc2.waitForReply();
-    EXPECT_EQ("Server timed out", rpc2.getErrorMessage());
+    EXPECT_EQ("Server 127.0.0.1:61023 (resolved to 127.0.0.1:61023) timed out",
+              rpc2.getErrorMessage());
 
 }
 

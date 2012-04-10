@@ -34,6 +34,27 @@ enum OpCode {
 };
 
 /**
+ * The type of "service-specific error" replies that this service returns.
+ */
+message Error {
+    enum Code {
+        /**
+         * The server is not the current cluster leader. The client should look
+         * elsewhere for the cluster leader. The server MAY provide a hint as
+         * to who the leader is (see leader_hint field).
+         */
+        NOT_LEADER = 1;
+    };
+    required Code error_code = 1;
+    /**
+     * If error_code is NOT_LEADER and this field is set, the client should try
+     * the server found at this address, which is likely to be the current
+     * leader.
+     */
+    optional string leader_hint = 2;
+}
+
+/**
  * GetSupportedRPCVersions RPC: Find out the range of RPC protocol versions the
  * cluster supports. This should be the first RPC sent by the client.
  */

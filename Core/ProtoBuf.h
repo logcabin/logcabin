@@ -15,6 +15,7 @@
 
 #include <google/protobuf/message.h>
 #include <google/protobuf/text_format.h>
+#include <memory>
 #include <string>
 
 /**
@@ -103,6 +104,12 @@ fromString(const std::string& str)
 std::string
 dumpString(const google::protobuf::Message& protoBuf,
            bool forCopyingIntoTest = true);
+
+/**
+ * Copy the contents of a protocol buffer into a new one.
+ */
+std::unique_ptr<google::protobuf::Message>
+copy(const google::protobuf::Message& protoBuf);
 
 } // namespace LogCabin::Core::ProtoBuf
 } // namespace LogCabin::Core

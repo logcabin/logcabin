@@ -16,6 +16,7 @@
 #include <gtest/gtest.h>
 
 #include "Core/Debug.h"
+#include "Protocol/Common.h"
 #include "RPC/OpaqueServer.h"
 #include "RPC/OpaqueServerRPC.h"
 
@@ -35,10 +36,10 @@ class MyServer : public OpaqueServer {
     std::unique_ptr<OpaqueServerRPC> lastRPC;
 };
 
-class RPCServerTest : public ::testing::Test {
-    RPCServerTest()
+class RPCOpaqueServerTest : public ::testing::Test {
+    RPCOpaqueServerTest()
         : loop()
-        , address("127.0.0.1", 61023)
+        , address("127.0.0.1", Protocol::Common::DEFAULT_PORT)
         , server(loop, 1024)
         , fd1(-1)
         , fd2(-1)
@@ -49,7 +50,7 @@ class RPCServerTest : public ::testing::Test {
         fd1 = fds[0];
         fd2 = fds[1];
     }
-    ~RPCServerTest() {
+    ~RPCOpaqueServerTest() {
         if (fd1 != -1)
             EXPECT_EQ(0, close(fd1));
         if (fd2 != -1)
@@ -62,7 +63,7 @@ class RPCServerTest : public ::testing::Test {
     int fd2;
 };
 
-TEST_F(RPCServerTest, TCPListener_handleNewConnection) {
+TEST_F(RPCOpaqueServerTest, TCPListener_handleNewConnection) {
     server.listener.handleNewConnection(fd1);
     fd1 = -1;
     ASSERT_EQ(1U, server.sockets.size());
@@ -77,7 +78,7 @@ TEST_F(RPCServerTest, TCPListener_handleNewConnection) {
     EXPECT_EQ(1U, server.sockets.size());
 }
 
-TEST_F(RPCServerTest, MessageSocket_onReceiveMessage) {
+TEST_F(RPCOpaqueServerTest, MessageSocket_onReceiveMessage) {
     server.listener.handleNewConnection(fd1);
     OpaqueServer::ServerMessageSocket& socket = *server.sockets.at(0);
     socket.onReceiveMessage(1, Buffer(NULL, 3, NULL));
@@ -88,7 +89,7 @@ TEST_F(RPCServerTest, MessageSocket_onReceiveMessage) {
     EXPECT_EQ(1U, server.lastRPC->messageId);
 }
 
-TEST_F(RPCServerTest, MessageSocket_onReceiveMessage_ping) {
+TEST_F(RPCOpaqueServerTest, MessageSocket_onReceiveMessage_ping) {
     server.listener.handleNewConnection(fd1);
     OpaqueServer::ServerMessageSocket& socket = *server.sockets.at(0);
     socket.onReceiveMessage(0, Buffer());
@@ -96,7 +97,7 @@ TEST_F(RPCServerTest, MessageSocket_onReceiveMessage_ping) {
     EXPECT_EQ(1U, socket.outboundQueue.size());
 }
 
-TEST_F(RPCServerTest, MessageSocket_onDisconnect) {
+TEST_F(RPCOpaqueServerTest, MessageSocket_onDisconnect) {
     server.listener.handleNewConnection(fd1);
     fd1 = -1;
     server.listener.handleNewConnection(fd2);
@@ -107,15 +108,15 @@ TEST_F(RPCServerTest, MessageSocket_onDisconnect) {
     EXPECT_EQ(0U, server.sockets.at(0)->socketsIndex);
 }
 
-TEST_F(RPCServerTest, MessageSocket_close) {
+TEST_F(RPCOpaqueServerTest, MessageSocket_close) {
     // tested by onDisconnect
 }
 
-TEST_F(RPCServerTest, constructor) {
+TEST_F(RPCOpaqueServerTest, constructor) {
     // tested sufficiently in other tests
 }
 
-TEST_F(RPCServerTest, destructor) {
+TEST_F(RPCOpaqueServerTest, destructor) {
     // difficult to test
 }
 

@@ -33,10 +33,8 @@ class EchoService : public RPC::Service {
         , count(0)
     {
     }
-    void handleRPC(RPC::OpaqueServerRPC serverRPC) {
+    void handleRPC(RPC::ServerRPC serverRPC) {
         usleep(sleepMicros);
-        serverRPC.response = std::move(serverRPC.request);
-        serverRPC.sendReply();
         ++count;
     }
     std::atomic<uint32_t> sleepMicros;
@@ -46,10 +44,10 @@ class EchoService : public RPC::Service {
 
 class RPCThreadDispatchServiceTest : public ::testing::Test {
     RPCThreadDispatchServiceTest()
-        : echoService()
+        : echoService(std::make_shared<EchoService>())
     {
     }
-    EchoService echoService;
+    std::shared_ptr<EchoService> echoService;
 };
 
 TEST_F(RPCThreadDispatchServiceTest, constructor)
@@ -84,13 +82,13 @@ TEST_F(RPCThreadDispatchServiceTest, handleRPC)
     // should spawn threads up until 2
     ThreadDispatchService dispatchService(echoService,
                                           0, 2);
-    echoService.sleepMicros = 1000;
+    echoService->sleepMicros = 1000;
     for (uint32_t i = 0; i < 10; ++i)
-        dispatchService.handleRPC(OpaqueServerRPC());
-    echoService.sleepMicros = 0;
-    while (echoService.count < 10)
+        dispatchService.handleRPC(ServerRPC());
+    echoService->sleepMicros = 0;
+    while (echoService->count < 10)
         usleep(1000);
-    EXPECT_EQ(10U, echoService.count);
+    EXPECT_EQ(10U, echoService->count);
     EXPECT_EQ(2U, dispatchService.threads.size());
 }
 

@@ -197,4 +197,4 @@ class OpaqueServer {
 } // namespace LogCabin::RPC
 } // namespace LogCabin
 
-#endif /* LOGCABIN_RPC_SERVER_H */
+#endif /* LOGCABIN_RPC_OPAQUESERVER_H */
