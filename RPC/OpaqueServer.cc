@@ -45,7 +45,7 @@ OpaqueServer::ServerTCPListener::handleNewConnection(
 {
     if (server == NULL) {
         if (close(fd) != 0)
-            LOG(WARNING, "close(%d) failed: %s", fd, strerror(errno));
+            WARNING("close(%d) failed: %s", fd, strerror(errno));
     } else {
         std::shared_ptr<ServerMessageSocket> messageSocket(
                 new ServerMessageSocket(server, fd, server->sockets.size()));
@@ -74,12 +74,12 @@ OpaqueServer::ServerMessageSocket::onReceiveMessage(
 {
     // Reply to ping requests here.
     if (messageId == PING_MESSAGE_ID) {
-        LOG(DBG, "Responding to ping");
+        VERBOSE("Responding to ping");
         sendMessage(PING_MESSAGE_ID, Buffer());
         return;
     }
     if (server != NULL) {
-        LOG(DBG, "Handling RPC");
+        VERBOSE("Handling RPC");
         OpaqueServerRPC rpc(self, messageId, std::move(message));
         server->handleRPC(std::move(rpc));
     }
@@ -88,7 +88,7 @@ OpaqueServer::ServerMessageSocket::onReceiveMessage(
 void
 OpaqueServer::ServerMessageSocket::onDisconnect()
 {
-    LOG(DBG, "Disconnected from client");
+    VERBOSE("Disconnected from client");
     close();
 }
 

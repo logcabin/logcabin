@@ -44,16 +44,18 @@ parse(const RPC::Buffer& from,
       google::protobuf::Message& to,
       uint32_t skipBytes)
 {
+    google::protobuf::LogSilencer logSilencer;
     if (!to.ParseFromArray(
                         static_cast<const char*>(from.getData()) + skipBytes,
                         from.getLength() - skipBytes)) {
-        LOG(WARNING, "Missing fields in protocol buffer: %s",
-            to.InitializationErrorString().c_str());
+        WARNING("Missing fields in protocol buffer of type %s: %s",
+                to.GetTypeName().c_str(),
+                to.InitializationErrorString().c_str());
         return false;
     }
-    LOG(DBG, "%s:\n%s",
-        to.GetTypeName().c_str(),
-        truncateEnd(Core::ProtoBuf::dumpString(to)).c_str());
+    VERBOSE("%s:\n%s",
+            to.GetTypeName().c_str(),
+            truncateEnd(Core::ProtoBuf::dumpString(to)).c_str());
     return true;
 }
 

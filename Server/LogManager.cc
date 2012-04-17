@@ -52,7 +52,7 @@ LogManager::LogManager(
     , logs()
     , logNames()
 {
-    LOG(NOTICE, "Initializing log manager with UUID %s", uuid.c_str());
+    NOTICE("Initializing log manager with UUID %s", uuid.c_str());
     if (uuid.length() < 10) {
         PANIC("This is a poor choice of a UUID (%s). Refusing to proceed.",
               uuid.c_str());
@@ -98,8 +98,8 @@ LogManager::~LogManager()
 void
 LogManager::initializeStorage()
 {
-    LOG(NOTICE, "Initializing your internal log with UUID %s.",
-                uuid.c_str());
+    NOTICE("Initializing your internal log with UUID %s.",
+           uuid.c_str());
     ProtoBuf::InternalLog::LogEntry contents;
     contents.set_type(contents.METADATA_TYPE);
     ProtoBuf::InternalLog::Metadata& metadata = *contents.mutable_metadata();
@@ -117,7 +117,7 @@ LogManager::initializeStorage()
 Storage::LogId
 LogManager::createLog(const std::string& logName)
 {
-    LOG(DBG, "createLog(%s)", logName.c_str());
+    VERBOSE("createLog(%s)", logName.c_str());
 
     // Check if the log already exists.
     auto it = logNames.find(logName);
@@ -146,7 +146,7 @@ LogManager::createLog(const std::string& logName)
 void
 LogManager::deleteLog(const std::string& logName)
 {
-    LOG(DBG, "deleteLog(%s)", logName.c_str());
+    VERBOSE("deleteLog(%s)", logName.c_str());
 
     // If the log is not in logNames, it has already been deleted.
     auto it = logNames.find(logName);
@@ -259,7 +259,7 @@ LogManager::replayLogInvalidation(Storage::EntryId entryId)
 {
     // This is probably invalidating a DeclareLog entry -- deleting a log.
     LogId logId = entryId;
-    LOG(DBG, "Deleting log %lu", logId);
+    VERBOSE("Deleting log %lu", logId);
 
     auto it = logs.find(logId);
     if (it == logs.end()) {
@@ -269,7 +269,7 @@ LogManager::replayLogInvalidation(Storage::EntryId entryId)
 
     std::shared_ptr<LogInfo> logInfo = it->second;
     logInfo->log.reset();
-    LOG(DBG, "Log destroyed");
+    VERBOSE("Log destroyed");
     logNames.erase(logInfo->logName);
     logs.erase(logInfo->logId);
 
@@ -289,7 +289,7 @@ LogManager::replayMetadataEntry(const Storage::LogEntry& entry,
               "from the config file (%s)",
               metadata.uuid().c_str(), this->uuid.c_str());
     }
-    LOG(DBG, "Confirmed UUID in the metadata entry of the internal log");
+    VERBOSE("Confirmed UUID in the metadata entry of the internal log");
 }
 
 
@@ -299,10 +299,10 @@ LogManager::replayDeclareLogEntry(const Storage::LogEntry& entry,
 {
     LogId logId = entry.entryId;
     const std::string& logName = declareLog.log_name();
-    LOG(NOTICE, "Creating log %s with ID %lu", logName.c_str(), logId);
+    NOTICE("Creating log %s with ID %lu", logName.c_str(), logId);
 
     if (logNames.find(logName) != logNames.end()) {
-        LOG(NOTICE, "Log already exists");
+        NOTICE("Log already exists");
         return;
     }
 

@@ -16,6 +16,7 @@
 #include <gtest/gtest.h>
 
 #include "build/Core/ProtoBufTest.pb.h"
+#include "Core/Debug.h"
 #include "Core/ProtoBuf.h"
 #include "RPC/Buffer.h"
 #include "RPC/OpaqueServerRPC.h"
@@ -140,6 +141,7 @@ TEST_F(RPCServerRPCTest, getRequest_invalid) {
     makeRequest(1, 2, 3, 4, NULL);
     call();
     LogCabin::ProtoBuf::TestMessage actual;
+    LogCabin::Core::Debug::setLogPolicy({{"", "ERROR"}});
     EXPECT_FALSE(serverRPC.getRequest(actual));
     EXPECT_EQ(Status::INVALID_REQUEST, getStatus());
     EXPECT_FALSE(serverRPC.needsReply());

@@ -142,8 +142,8 @@ Address::toString() const
 void
 Address::refresh()
 {
-    LOG(DBG, "Running getaddrinfo for host %s with port %s",
-        host.c_str(), port.c_str());
+    VERBOSE("Running getaddrinfo for host %s with port %s",
+            host.c_str(), port.c_str());
 
     addrinfo hints;
     memset(&hints, 0, sizeof(hints));
@@ -183,13 +183,13 @@ Address::refresh()
 
         // This is unexpected.
         default:
-            WARN("Unknown error from getaddrinfo(\"%s\", \"%s\"): %s",
-                 host.c_str(), port.c_str(), gai_strerror(r));
+            WARNING("Unknown error from getaddrinfo(\"%s\", \"%s\"): %s",
+                    host.c_str(), port.c_str(), gai_strerror(r));
     }
     if (result != NULL)
         freeaddrinfo(result);
 
-    LOG(DBG, "Result: %s", toString().c_str());
+    VERBOSE("Result: %s", toString().c_str());
 }
 
 

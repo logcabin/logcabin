@@ -49,7 +49,7 @@ FilesystemModule::FilesystemModule(const Core::Config& config)
         Core::Checksum::calculate(checksumAlgorithm.c_str(), "", 0, buf);
     }
 
-    LOG(NOTICE, "Using filesystem storage module at %s", path.c_str());
+    NOTICE("Using filesystem storage module at %s", path.c_str());
     if (mkdir(path.c_str(), 0755) == 0) {
         FilesystemUtil::syncDir(path + "/..");
     } else {
@@ -72,7 +72,7 @@ FilesystemModule::getLogs()
         int matched = sscanf(filename.c_str(), "%016lx%n", // NOLINT
                              &logId, &bytesConsumed);
         if (matched != 1 || bytesConsumed != filename.length()) {
-            WARN("%s doesn't look like a valid log ID (from %s)",
+            WARNING("%s doesn't look like a valid log ID (from %s)",
                  filename.c_str(),
                  (path + "/" + filename).c_str());
             continue;
@@ -150,7 +150,7 @@ FilesystemLog::append(LogEntry entry)
         ++headId;
     entry.logId = logId;
     entry.entryId = headId;
-    LOG(DBG, "writing (%lu, %lu)", entry.logId, entry.entryId);
+    VERBOSE("writing (%lu, %lu)", entry.logId, entry.entryId);
     write(entry);
     entries.push_back(std::move(entry));
     return headId;
@@ -168,7 +168,7 @@ FilesystemLog::getEntryIds()
         int matched = sscanf(filename.c_str(), "%016lx%n", // NOLINT
                              &entryId, &bytesConsumed);
         if (matched != 1 || bytesConsumed != filename.length()) {
-            WARN("%s doesn't look like a valid entry ID (from %s)",
+            WARNING("%s doesn't look like a valid entry ID (from %s)",
                  filename.c_str(),
                  (path + "/" + filename).c_str());
             continue;

@@ -116,6 +116,7 @@ TEST_F(RPCMessageSocketTest, readableMessageTooLong) {
     header.toBigEndian();
     EXPECT_EQ(ssize_t(sizeof(header)),
               send(remote, &header, sizeof(header), 0));
+    LogCabin::Core::Debug::setLogPolicy({{"", "ERROR"}});
     msgSocket->readable();
     ASSERT_TRUE(msgSocket->disconnected);
 }

@@ -163,9 +163,9 @@ MessageSocket::readable()
             // Transition to receiving data
             inbound.header.fromBigEndian();
             if (inbound.header.payloadLength > maxMessageLength) {
-                LOG(WARNING, "Dropping message that is too long to receive "
-                             "(message is %u bytes, limit is %u bytes)",
-                             inbound.header.payloadLength, maxMessageLength);
+                WARNING("Dropping message that is too long to receive "
+                        "(message is %u bytes, limit is %u bytes)",
+                        inbound.header.payloadLength, maxMessageLength);
                 socket.close();
                 onDisconnect();
                 return; // disconnected, must return immediately

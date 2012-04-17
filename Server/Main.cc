@@ -90,7 +90,7 @@ main(int argc, char** argv)
 {
     // Parse command line args.
     OptionParser options(argc, argv);
-    LOG(NOTICE, "Using config file %s", options.configFilename.c_str());
+    NOTICE("Using config file %s", options.configFilename.c_str());
 
     // Initialize and run Globals.
     LogCabin::Server::Globals globals;

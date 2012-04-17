@@ -57,8 +57,8 @@ ls(const std::string& path)
     }
 
     if (closedir(dir) != 0) {
-        WARN("closedir(%s) failed: %s",
-             path.c_str(), strerror(errno));
+        WARNING("closedir(%s) failed: %s",
+                path.c_str(), strerror(errno));
     }
 
     return contents;
@@ -96,8 +96,8 @@ syncDir(const std::string& path)
               path.c_str(), strerror(errno));
     }
     if (close(fd) != 0) {
-        WARN("Failed to close file %s: %s",
-             path.c_str(), strerror(errno));
+        WARNING("Failed to close file %s: %s",
+                path.c_str(), strerror(errno));
     }
 }
 
@@ -201,12 +201,12 @@ FileContents::FileContents(const std::string& path)
 FileContents::~FileContents()
 {
     if (munmap(const_cast<void*>(map), fileLen) != 0) {
-        WARN("Failed to munmap file %s: %s",
-             path.c_str(), strerror(errno));
+        WARNING("Failed to munmap file %s: %s",
+                path.c_str(), strerror(errno));
     }
     if (close(fd) != 0) {
-        WARN("Failed to close file %s: %s",
-             path.c_str(), strerror(errno));
+        WARNING("Failed to close file %s: %s",
+                path.c_str(), strerror(errno));
     }
 }
 

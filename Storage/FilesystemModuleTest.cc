@@ -91,6 +91,7 @@ TEST_F(StorageFilesystemModuleTest, getLogs) {
     delete sm->openLog(129);
     EXPECT_EQ((vector<LogId>{38, 129, 755}), sorted(sm->getLogs()));
     close(open((tmpdir + "/NaN").c_str(), O_WRONLY|O_CREAT, 0644));
+    Core::Debug::setLogPolicy({{"", "ERROR"}});
     createStorageModule();
     EXPECT_EQ((vector<LogId>{38, 129, 755}), sorted(sm->getLogs()));
 }
@@ -206,6 +207,7 @@ TEST_F(StorageFilesystemLogTest, getEntryIds) {
     EXPECT_EQ((vector<LogId>{0, 1}),
               sorted(log->getEntryIds()));
     close(open((log->path + "/NaN").c_str(), O_WRONLY|O_CREAT, 0644));
+    Core::Debug::setLogPolicy({{"", "ERROR"}});
     createLog();
     EXPECT_EQ((vector<LogId>{0, 1}),
               sorted(log->getEntryIds()));

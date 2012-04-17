@@ -36,7 +36,7 @@ Globals::SigIntHandler::SigIntHandler(Event::Loop& eventLoop)
 void
 Globals::SigIntHandler::handleSignalEvent()
 {
-    LOG(DBG, "Received SIGINT; shutting down.");
+    VERBOSE("Received SIGINT; shutting down.");
     eventLoop.exit();
 }
 
@@ -93,7 +93,7 @@ Globals::init()
             RPC::Address address(*it, Protocol::Common::DEFAULT_PORT);
             error = rpcServer->bind(address);
             if (error.empty()) {
-                LOG(NOTICE, "Serving on %s", address.toString().c_str());
+                NOTICE("Serving on %s", address.toString().c_str());
                 break;
             }
         }

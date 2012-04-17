@@ -30,7 +30,7 @@ createStorageModule(const Core::Config& config)
 {
     std::unique_ptr<Module> module;
     std::string moduleName = config.read<std::string>("storageModule");
-    LOG(NOTICE, "Using '%s' storage module", moduleName.c_str());
+    NOTICE("Using '%s' storage module", moduleName.c_str());
     if (moduleName == "memory") {
         module.reset(new MemoryModule());
     } else if (moduleName == "filesystem") {

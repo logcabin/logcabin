@@ -47,7 +47,7 @@ class ReplyTimer : public Event::Timer {
         schedule(delayMicros * 1000);
     }
     void handleTimerEvent() {
-        LOG(DBG, "Ok responding");
+        VERBOSE("Ok responding");
         serverRPC.sendReply();
         delete this;
     }
@@ -62,7 +62,7 @@ class EchoServer : public RPC::OpaqueServer {
     }
     void handleRPC(RPC::OpaqueServerRPC serverRPC) {
         serverRPC.response = std::move(serverRPC.request);
-        LOG(DBG, "Delaying response for %u microseconds", delayMicros);
+        VERBOSE("Delaying response for %u microseconds", delayMicros);
         new ReplyTimer(eventLoop, std::move(serverRPC), delayMicros);
     }
     uint32_t delayMicros;

@@ -15,6 +15,7 @@
 
 #include <gtest/gtest.h>
 
+#include "Core/Debug.h"
 #include "RPC/ProtoBuf.h"
 #include "build/Core/ProtoBufTest.pb.h"
 
@@ -24,10 +25,12 @@ namespace {
 
 using LogCabin::ProtoBuf::TestMessage;
 
-TEST(ProtoBufTest, parse) {
+TEST(RPCProtoBufTest, parse) {
     RPC::Buffer rpc;
     TestMessage m;
+    LogCabin::Core::Debug::setLogPolicy({{"", "ERROR"}});
     EXPECT_FALSE(ProtoBuf::parse(rpc, m));
+    LogCabin::Core::Debug::setLogPolicy({});
     m.set_field_a(3);
     m.set_field_b(5);
     ProtoBuf::serialize(m, rpc, 8);
@@ -37,7 +40,7 @@ TEST(ProtoBufTest, parse) {
     EXPECT_EQ("field_a: 3 field_b: 5", m.ShortDebugString());
 }
 
-TEST(ProtoBufTest, serialize) {
+TEST(RPCProtoBufTest, serialize) {
     RPC::Buffer rpc;
     TestMessage m;
     EXPECT_DEATH(ProtoBuf::serialize(m, rpc, 3),

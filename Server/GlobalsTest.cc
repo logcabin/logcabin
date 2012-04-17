@@ -15,6 +15,9 @@
 
 #include <gtest/gtest.h>
 
+#include "Protocol/Common.h"
+#include "RPC/Address.h"
+#include "RPC/Server.h"
 #include "Server/Globals.h"
 
 namespace LogCabin {
@@ -49,31 +52,28 @@ TEST(ServerGlobalsTest, initEmptyServers) {
 }
 
 TEST(ServerGlobalsTest, initAddressTaken) {
+    Event::Loop eventLoop;
+    RPC::Server server(eventLoop, 1);
+    EXPECT_EQ("", server.bind(RPC::Address("localhost",
+                                           Protocol::Common::DEFAULT_PORT)));
+
     Globals globals;
     globals.config.set("storageModule", "memory");
     globals.config.set("uuid", "my-fake-uuid-123");
     globals.config.set("servers", "localhost");
-    globals.init();
-    Globals globals2;
-    globals2.config.set("storageModule", "memory");
-    globals2.config.set("uuid", "my-fake-uuid-123");
-    globals2.config.set("servers", "localhost");
-    EXPECT_DEATH(globals2.init(),
+    EXPECT_DEATH(globals.init(),
                  "in use");
 }
 
 TEST(ServerGlobalsTest, initBindToOneOnly) {
+    Event::Loop eventLoop;
+    RPC::Server server(eventLoop, 1);
+    EXPECT_EQ("", server.bind(RPC::Address("localhost", 61023)));
     Globals globals;
     globals.config.set("storageModule", "memory");
     globals.config.set("uuid", "my-fake-uuid-123");
-    globals.config.set("servers",
-                       "google.com;localhost:61023;localhost:61024");
+    globals.config.set("servers", "localhost:61023;localhost:61024");
     globals.init();
-    Globals globals2;
-    globals2.config.set("storageModule", "memory");
-    globals2.config.set("uuid", "my-fake-uuid-123");
-    globals2.config.set("servers", "localhost:61024");
-    globals2.init();
 }
 
 } // namespace LogCabin::Server::<anonymous>

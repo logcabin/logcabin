@@ -15,9 +15,22 @@
 
 #include <gtest/gtest.h>
 
+#include "Core/Debug.h"
+
 int
 main(int argc, char *argv[])
 {
     ::testing::InitGoogleTest(&argc, argv);
+    ::testing::UnitTest* unitTest = ::testing::UnitTest::GetInstance();
+    class GTestSetupListener : public ::testing::EmptyTestEventListener {
+      public:
+        // this fires before each test fixture's constructor
+        void OnTestStart(const ::testing::TestInfo& testInfo) {
+            LogCabin::Core::Debug::setLogPolicy({
+                {"", "WARNING"}
+            });
+        }
+    };
+    unitTest->listeners().Append(new GTestSetupListener());
     return RUN_ALL_TESTS();
 }

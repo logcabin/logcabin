@@ -92,6 +92,7 @@ TEST_F(RPCClientSessionTest, onReceiveMessage) {
     EXPECT_FALSE(session->timer.isScheduled());
 
     // Already ready
+    LogCabin::Core::Debug::setLogPolicy({{"", "ERROR"}});
     session->messageSocket->onReceiveMessage(1, buf("c"));
     EXPECT_EQ("b", str(session->responses[1]->reply));
     EXPECT_EQ(0U, session->numActiveRPCs);

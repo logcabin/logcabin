@@ -66,31 +66,31 @@ ClientSession::ClientMessageSocket::onReceiveMessage(MessageId messageId,
             session.activePing = false;
             session.timer.schedule(TIMEOUT_MS * 1000 * 1000);
         } else {
-            LOG(DBG, "Received an unexpected ping response. This can happen "
-                     "for a number of reasons and is no cause for alarm. For "
-                     "example, this happens if a ping request was sent out, "
-                     "then all RPCs completed before the ping response "
-                     "arrived.");
+            VERBOSE("Received an unexpected ping response. This can happen "
+                    "for a number of reasons and is no cause for alarm. For "
+                    "example, this happens if a ping request was sent out, "
+                    "then all RPCs completed before the ping response "
+                    "arrived.");
         }
         return;
     }
 
     auto it = session.responses.find(messageId);
     if (it == session.responses.end()) {
-        LOG(DBG, "Received an unexpected response with message ID %lu. "
-                 "This can happen for a number of reasons and is no cause "
-                 "for alarm. For example, this happens if the RPC was "
-                 "cancelled before its response arrived.",
-                 messageId);
+        VERBOSE("Received an unexpected response with message ID %lu. "
+                "This can happen for a number of reasons and is no cause "
+                "for alarm. For example, this happens if the RPC was "
+                "cancelled before its response arrived.",
+                messageId);
         return;
     }
     Response& response = *it->second;
     if (response.ready) {
-        LOG(WARNING, "Received a second response from the server for "
-            "message ID %lu. This indicates that either the client or "
-            "server is assigning message IDs incorrectly, or "
-            "the server is misbehaving. Dropped this response.",
-            messageId);
+        WARNING("Received a second response from the server for "
+                "message ID %lu. This indicates that either the client or "
+                "server is assigning message IDs incorrectly, or "
+                "the server is misbehaving. Dropped this response.",
+                messageId);
         return;
     }
 
@@ -112,8 +112,8 @@ ClientSession::ClientMessageSocket::onReceiveMessage(MessageId messageId,
 void
 ClientSession::ClientMessageSocket::onDisconnect()
 {
-    LOG(DBG, "Disconnected from server %s",
-        session.address.toString().c_str());
+    VERBOSE("Disconnected from server %s",
+            session.address.toString().c_str());
     std::unique_lock<std::mutex> mutexGuard(session.mutex);
     if (session.errorMessage.empty()) {
         // Fail all current and future RPCs.
@@ -154,13 +154,13 @@ ClientSession::Timer::handleTimerEvent()
 
     // Send a ping or expire the session.
     if (!session.activePing) {
-        LOG(DBG, "ClientSession is suspicious. Sending ping.");
+        VERBOSE("ClientSession is suspicious. Sending ping.");
         session.activePing = true;
         session.messageSocket->sendMessage(PING_MESSAGE_ID, Buffer());
         schedule(TIMEOUT_MS * 1000 * 1000);
     } else {
-        LOG(DBG, "ClientSession to %s timed out.",
-            session.address.toString().c_str());
+        VERBOSE("ClientSession to %s timed out.",
+                session.address.toString().c_str());
         // Fail all current and future RPCs.
         session.errorMessage = ("Server " +
                                 session.address.toString() +
