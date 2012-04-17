@@ -83,6 +83,12 @@ replaceAll(std::string& haystack,
 std::vector<std::string>
 split(const std::string& subject, char delimiter);
 
+/// Return true if haystack begins with needle.
+bool startsWith(const std::string& haystack, const std::string& needle);
+
+/// Return true if haystack ends with needle.
+bool endsWith(const std::string& haystack, const std::string& needle);
+
 } // namespace LogCabin::Core::StringUtil
 } // namespace LogCabin::Core
 } // namespace LogCabin

@@ -1,5 +1,8 @@
 /* Copyright (c) 2011-2012 Stanford University
  *
+ * Copyright (c) 2011 Facebook
+ *    startsWith() and endsWith() functions
+ *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
  * copyright notice and this permission notice appear in all copies.
@@ -108,6 +111,21 @@ split(const std::string& subject, char delimiter)
     while (std::getline(stream, item, delimiter))
         items.push_back(std::move(item));
     return items;
+}
+
+bool
+startsWith(const std::string& haystack, const std::string& needle)
+{
+    return (haystack.compare(0, needle.length(), needle) == 0);
+}
+
+bool
+endsWith(const std::string& haystack, const std::string& needle)
+{
+    if (haystack.length() < needle.length())
+        return false;
+    return (haystack.compare(haystack.length() - needle.length(),
+                             needle.length(), needle) == 0);
 }
 
 } // namespace LogCabin::Core::StringUtil

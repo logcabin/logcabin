@@ -1,5 +1,8 @@
 /* Copyright (c) 2011-2012 Stanford University
  *
+ * Copyright (c) 2011 Facebook
+ *    startsWith() and endsWith() tests
+ *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
  * copyright notice and this permission notice appear in all copies.
@@ -54,6 +57,22 @@ TEST(CoreStringUtilTest, split) {
               split("abc;def;ghi", ';'));
     EXPECT_EQ((std::vector<std::string>{"", "abc\n", "def", "", ""}),
               split(";abc\n;def;;;", ';'));
+}
+
+TEST(CoreStringUtilTest, startsWith) {
+    EXPECT_TRUE(startsWith("foo", "foo"));
+    EXPECT_TRUE(startsWith("foo", "fo"));
+    EXPECT_TRUE(startsWith("foo", ""));
+    EXPECT_TRUE(startsWith("", ""));
+    EXPECT_FALSE(startsWith("f", "foo"));
+}
+
+TEST(CoreStringUtilTest, endsWith) {
+    EXPECT_TRUE(endsWith("foo", "foo"));
+    EXPECT_TRUE(endsWith("foo", "oo"));
+    EXPECT_TRUE(endsWith("foo", ""));
+    EXPECT_TRUE(endsWith("", ""));
+    EXPECT_FALSE(endsWith("o", "foo"));
 }
 
 } // namespace LogCabin::Core::StringUtil::<anonymous>
