@@ -12,8 +12,7 @@ src = [
 ]
 
 env.StaticLibrary("LogCabinCore",
-                  src,
-                  CPPPATH = [ "#" ])
+                  src)
 
 env.Protoc([],
            "ProtoBufTest.proto",
@@ -23,5 +22,4 @@ env.Protoc([],
 
 env.StaticObject("#build/Core/ProtoBufTest.pb.o",
                  "#build/Core/ProtoBufTest.pb.cc",
-                 CPPPATH = "#",
                  CXXFLAGS = "-std=c++0x")

@@ -49,11 +49,11 @@ class ServerClientServiceTest : public ::testing::Test {
             globals.reset(new Globals());
             globals->config.set("storageModule", "memory");
             globals->config.set("uuid", "my-fake-uuid-123");
-            globals->config.set("servers", "localhost");
+            globals->config.set("servers", "127.0.0.1");
             globals->init();
             session = RPC::ClientSession::makeSession(
                 globals->eventLoop,
-                RPC::Address("localhost", Protocol::Common::DEFAULT_PORT),
+                RPC::Address("127.0.0.1", Protocol::Common::DEFAULT_PORT),
                 1024 * 1024);
             thread = std::thread(&Globals::run, globals.get());
         }
@@ -75,7 +75,8 @@ class ServerClientServiceTest : public ::testing::Test {
         RPC::ClientRPC rpc(session,
                            Protocol::Common::ServiceId::CLIENT_SERVICE,
                            1, opCode, request);
-        EXPECT_EQ(Status::OK, rpc.waitForReply(&response, NULL));
+        EXPECT_EQ(Status::OK, rpc.waitForReply(&response, NULL))
+            << rpc.getErrorMessage();
     }
 
     std::unique_ptr<Globals> globals;

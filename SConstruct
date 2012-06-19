@@ -5,7 +5,10 @@ opts = Variables('Local.sc')
 
 opts.AddVariables(
     ("CC", "C Compiler"),
+    ("CPPPATH", "The list of directories that the C preprocessor "
+                "will search for include directories", []),
     ("CXX", "C++ Compiler"),
+    ("CXXFLAGS", "Options that are passed to the C++ compiler", []),
     ("AS", "Assembler"),
     ("LINK", "Linker"),
     ("LIBEVENT2PATH", "libevent-2.0 library path (if necessary).", ""),
@@ -20,13 +23,13 @@ env = Environment(options = opts,
 Help(opts.GenerateHelpText(env))
 
 env.Append(CPPFLAGS = [ "-Wall", "-Wformat=2", "-Wextra", "-Wwrite-strings",
-                        "-Wno-unused-parameter", "-Wmissing-format-attribute",
-                        "-Werror" ])
+                        "-Wno-unused-parameter",
+                        "-Wmissing-format-attribute" ])
 env.Append(CFLAGS = [ "-Wmissing-prototypes", "-Wmissing-declarations",
                       "-Wshadow", "-Wbad-function-cast", "-Werror" ])
-env.Append(CXXFLAGS = [ "-Wno-non-template-friend", "-Woverloaded-virtual",
-                        "-Wcast-qual", "-Wcast-align", "-Wconversion",
-                        "-Weffc++", "-std=c++0x", "-Werror" ])
+env.Prepend(CXXFLAGS = [ "-Wno-non-template-friend", "-Woverloaded-virtual",
+                         "-Wcast-qual", "-Wcast-align", "-Wconversion",
+                         "-Weffc++", "-std=c++0x", "-Werror" ])
 
 if env["BUILDTYPE"] == "DEBUG":
     env.Append(CPPFLAGS = [ "-g", "-DDEBUG" ])
@@ -45,7 +48,9 @@ if env["VERBOSE"] == "0":
     env["LINKCOMSTR"] = "Linking $TARGET"
 
 if env["LIBEVENT2PATH"] != "":
-    env.Append(LIBPATH = env["LIBEVENT2PATH"])
+    env.Append(LIBPATH = [env["LIBEVENT2PATH"]])
+
+env.Append(CPPPATH = '#')
 
 def GetNumCPUs():
     if env["NUMCPUS"] != "0":

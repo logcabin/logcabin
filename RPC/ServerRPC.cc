@@ -156,7 +156,7 @@ ServerRPC::closeSession()
 }
 
 void
-ServerRPC::reject(Status status)
+ServerRPC::reject(RPC::Protocol::Status status)
 {
     active = false;
     ResponseHeaderVersion1& responseHeader = *new ResponseHeaderVersion1();

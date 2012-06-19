@@ -18,6 +18,5 @@ src = [
 ]
 
 env.StaticLibrary("LogCabinRPC",
-                  src,
-                  CPPPATH = [ "#" ])
+                  src)
 

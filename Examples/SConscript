@@ -2,7 +2,7 @@ Import('env')
 
 env.Program("HelloWorld",
             "HelloWorld.cc",
-            LIBPATH = [
+            LIBPATH = env["LIBPATH"] + [
                 "#build/Client",
                 "#build/Protocol",
                 "#build/RPC",
@@ -15,5 +15,4 @@ env.Program("HelloWorld",
                      "libLogCabinEvent",
                      "libLogCabinCore",
                      "pthread", "protobuf", "rt", "cryptopp",
-                     "event_core-2.0", "event_pthreads-2.0" ],
-            CPPPATH = [ "#include", "#" ])
+                     "event_core-2.0", "event_pthreads-2.0" ])

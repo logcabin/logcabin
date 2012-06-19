@@ -9,6 +9,5 @@ src = [
 ]
 
 env.StaticLibrary("LogCabinStorage",
-                  src,
-                  CPPPATH = [ "#" ])
+                  src)
 

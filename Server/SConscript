@@ -8,11 +8,10 @@ src = [
 ]
 
 env.StaticLibrary("LogCabinServer",
-                  src,
-                  CPPPATH = [ "#" ])
+                  src)
 
 env.Program("LogCabin", "Main.cc",
-            LIBPATH = [
+            LIBPATH = env["LIBPATH"] + [
                 "#build/Server",
                 "#build/Storage",
                 "#build/Protocol",
@@ -27,8 +26,7 @@ env.Program("LogCabin", "Main.cc",
                      "libLogCabinEvent",
                      "libLogCabinCore",
                      "pthread", "protobuf", "rt", "cryptopp",
-                     "event_core-2.0", "event_pthreads-2.0" ],
-            CPPPATH = [ "#include", "#" ])
+                     "event_core-2.0", "event_pthreads-2.0" ])
 
 env.Protoc([],
            "InternalLog.proto",
@@ -38,5 +36,4 @@ env.Protoc([],
 
 env.StaticObject("#build/Server/InternalLog.pb.o",
                  "#build/Server/InternalLog.pb.cc",
-                 CPPPATH = "#",
                  CXXFLAGS = "-std=c++0x")

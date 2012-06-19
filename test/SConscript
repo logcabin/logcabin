@@ -43,7 +43,7 @@ env.Program("test",
                 "#Storage",
                 "#Server",
             ], variant_dir='#build'),
-            LIBPATH = [
+            LIBPATH = env["LIBPATH"] + [
                 "#build/test",
                 "#build/Server",
                 "#build/Storage",
@@ -63,6 +63,6 @@ env.Program("test",
                      "libLogCabinCore",
                      "gtest", "pthread", "protobuf", "rt", "cryptopp",
                      "event_core-2.0", "event_pthreads-2.0" ],
-            CPPPATH = ["#", "#include", "#gtest/include"],
+            CPPPATH = env["CPPPATH"] + ["#gtest/include"],
             # -fno-access-control allows tests to access private members
             CXXFLAGS = env["CXXFLAGS"] + ["-fno-access-control"])

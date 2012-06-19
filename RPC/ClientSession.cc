@@ -14,9 +14,11 @@
  */
 
 #include <assert.h>
+#include <string.h>
 #include <unistd.h>
 
 #include "Core/Debug.h"
+#include "Core/StringUtil.h"
 #include "RPC/ClientSession.h"
 
 /**

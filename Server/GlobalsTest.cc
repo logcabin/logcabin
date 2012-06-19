@@ -28,7 +28,7 @@ TEST(ServerGlobalsTest, basics) {
     Globals globals;
     globals.config.set("storageModule", "memory");
     globals.config.set("uuid", "my-fake-uuid-123");
-    globals.config.set("servers", "localhost");
+    globals.config.set("servers", "127.0.0.1");
     globals.init();
     globals.eventLoop.exit();
     globals.run();
@@ -54,13 +54,13 @@ TEST(ServerGlobalsTest, initEmptyServers) {
 TEST(ServerGlobalsTest, initAddressTaken) {
     Event::Loop eventLoop;
     RPC::Server server(eventLoop, 1);
-    EXPECT_EQ("", server.bind(RPC::Address("localhost",
+    EXPECT_EQ("", server.bind(RPC::Address("127.0.0.1",
                                            Protocol::Common::DEFAULT_PORT)));
 
     Globals globals;
     globals.config.set("storageModule", "memory");
     globals.config.set("uuid", "my-fake-uuid-123");
-    globals.config.set("servers", "localhost");
+    globals.config.set("servers", "127.0.0.1");
     EXPECT_DEATH(globals.init(),
                  "in use");
 }
@@ -68,11 +68,11 @@ TEST(ServerGlobalsTest, initAddressTaken) {
 TEST(ServerGlobalsTest, initBindToOneOnly) {
     Event::Loop eventLoop;
     RPC::Server server(eventLoop, 1);
-    EXPECT_EQ("", server.bind(RPC::Address("localhost", 61023)));
+    EXPECT_EQ("", server.bind(RPC::Address("127.0.0.1", 61023)));
     Globals globals;
     globals.config.set("storageModule", "memory");
     globals.config.set("uuid", "my-fake-uuid-123");
-    globals.config.set("servers", "localhost:61023;localhost:61024");
+    globals.config.set("servers", "127.0.0.1:61023;127.0.0.1:61024");
     globals.init();
 }
 

@@ -9,6 +9,5 @@ src = [
 ]
 
 env.StaticLibrary("LogCabinEvent",
-                  src,
-                  CPPPATH = [ "#" ])
+                  src)
 
