@@ -1,32 +1,11 @@
-Import('env')
+Import('env', 'object_files')
 
 src = [
     "ClientService.cc",
     "Globals.cc",
     "LogManager.cc",
-    "#build/Server/InternalLog.pb.o",
 ]
-
-env.StaticLibrary("LogCabinServer",
-                  src)
-
-env.Program("LogCabin", "Main.cc",
-            LIBPATH = env["LIBPATH"] + [
-                "#build/Server",
-                "#build/Storage",
-                "#build/Protocol",
-                "#build/RPC",
-                "#build/Event",
-                "#build/Core",
-            ],
-            LIBS = [ "libLogCabinServer",
-                     "libLogCabinStorage",
-                     "libLogCabinProtocol",
-                     "libLogCabinRPC",
-                     "libLogCabinEvent",
-                     "libLogCabinCore",
-                     "pthread", "protobuf", "rt", "cryptopp",
-                     "event_core-2.0", "event_pthreads-2.0" ])
+object_files['Server'] = env.StaticObject(src)
 
 env.Protoc([],
            "InternalLog.proto",
@@ -34,6 +13,7 @@ env.Protoc([],
            PROTOCPYTHONOUTDIR = None,
            PROTOCOUTDIR = '.')
 
-env.StaticObject("#build/Server/InternalLog.pb.o",
-                 "#build/Server/InternalLog.pb.cc",
-                 CXXFLAGS = "-std=c++0x")
+object_files['Server'].append(
+    env.StaticObject("#build/Server/InternalLog.pb.o",
+                     "#build/Server/InternalLog.pb.cc",
+                     CXXFLAGS = "-std=c++0x"))

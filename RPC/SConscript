@@ -1,4 +1,4 @@
-Import('env')
+Import('env', 'object_files')
 
 src = [
     "Address.cc",
@@ -16,7 +16,4 @@ src = [
     "TCPListener.cc",
     "ThreadDispatchService.cc",
 ]
-
-env.StaticLibrary("LogCabinRPC",
-                  src)
-
+object_files['RPC'] = env.StaticObject(src)

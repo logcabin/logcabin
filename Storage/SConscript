@@ -1,4 +1,4 @@
-Import('env')
+Import('env', 'object_files')
 
 src = [
     "LogEntry.cc",
@@ -7,7 +7,4 @@ src = [
     "FilesystemUtil.cc",
     "MemoryModule.cc",
 ]
-
-env.StaticLibrary("LogCabinStorage",
-                  src)
-
+object_files['Storage'] = env.StaticObject(src)

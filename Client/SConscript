@@ -1,11 +1,8 @@
-Import('env')
+Import('env', 'object_files')
 
 src = [
     "Client.cc",
     "ClientImpl.cc",
     "LeaderRPC.cc",
 ]
-
-env.StaticLibrary("LogCabinClient",
-                  src)
-
+object_files['Client'] = env.StaticObject(src)

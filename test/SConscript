@@ -1,12 +1,7 @@
-Import('env')
+Import('env', 'object_files')
 
-env.SharedObject("#build/test/gtest-all.o",
+env.StaticObject("gtest-all.o",
                  "#gtest/src/gtest-all.cc",
-                 CPPPATH = [ "#gtest", "#gtest/include" ],
-                 CPPFLAGS = [ "-g", "-DDEBUG" ],
-                 CXXFLAGS = "-std=c++0x")
-env.StaticLibrary("#build/test/gtest",
-                 ["gtest-all.o"],
                  CPPPATH = [ "#gtest", "#gtest/include" ],
                  CPPFLAGS = [ "-g", "-DDEBUG" ],
                  CXXFLAGS = "-std=c++0x")
@@ -31,37 +26,24 @@ def GetTestFiles(src_dirs, variant_dir):
                     for src_dir in src_dirs])
 
 env.Program("test",
-            [
-              "TestRunner.cc",
-            ] +
-            GetTestFiles([
-                "#Core",
-                "#Event",
-                "#RPC",
-                "#Protocol",
-                "#Client",
-                "#Storage",
-                "#Server",
-            ], variant_dir='#build'),
-            LIBPATH = env["LIBPATH"] + [
-                "#build/test",
-                "#build/Server",
-                "#build/Storage",
-                "#build/Client",
-                "#build/Protocol",
-                "#build/RPC",
-                "#build/Event",
-                "#build/Core",
-            ],
-            LIBS = [
-                     "libLogCabinServer",
-                     "libLogCabinStorage",
-                     "libLogCabinClient",
-                     "libLogCabinProtocol",
-                     "libLogCabinRPC",
-                     "libLogCabinEvent",
-                     "libLogCabinCore",
-                     "gtest", "pthread", "protobuf", "rt", "cryptopp",
+            (["TestRunner.cc", "gtest-all.o"] +
+             object_files['Server'] +
+             object_files['Storage'] +
+             object_files['Client'] +
+             object_files['Protocol'] +
+             object_files['RPC'] +
+             object_files['Event'] +
+             object_files['Core'] +
+             GetTestFiles([
+                 "#Core",
+                 "#Event",
+                 "#RPC",
+                 "#Protocol",
+                 "#Client",
+                 "#Storage",
+                 "#Server",
+             ], variant_dir='#build')),
+            LIBS = [ "pthread", "protobuf", "rt", "cryptopp",
                      "event_core-2.0", "event_pthreads-2.0" ],
             CPPPATH = env["CPPPATH"] + ["#gtest/include"],
             # -fno-access-control allows tests to access private members

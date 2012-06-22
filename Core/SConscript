@@ -1,4 +1,4 @@
-Import('env')
+Import('env', 'object_files')
 
 src = [
     "Checksum.cc",
@@ -8,11 +8,8 @@ src = [
     "Random.cc",
     "ThreadId.cc",
     "StringUtil.cc",
-    "#build/Core/ProtoBufTest.pb.o",
 ]
-
-env.StaticLibrary("LogCabinCore",
-                  src)
+object_files['Core'] = env.StaticObject(src)
 
 env.Protoc([],
            "ProtoBufTest.proto",
@@ -20,6 +17,7 @@ env.Protoc([],
            PROTOCPYTHONOUTDIR = None,
            PROTOCOUTDIR = '.')
 
-env.StaticObject("#build/Core/ProtoBufTest.pb.o",
-                 "#build/Core/ProtoBufTest.pb.cc",
-                 CXXFLAGS = "-std=c++0x")
+object_files['Core'].append(
+    env.StaticObject("#build/Core/ProtoBufTest.pb.o",
+                     "#build/Core/ProtoBufTest.pb.cc",
+                     CXXFLAGS = "-std=c++0x"))

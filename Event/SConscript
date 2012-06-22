@@ -1,4 +1,4 @@
-Import('env')
+Import('env', 'object_files')
 
 src = [
     "File.cc",
@@ -7,7 +7,4 @@ src = [
     "Signal.cc",
     "Timer.cc",
 ]
-
-env.StaticLibrary("LogCabinEvent",
-                  src)
-
+object_files['Event'] = env.StaticObject(src)

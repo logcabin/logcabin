@@ -69,16 +69,19 @@ def GetNumCPUs():
 
 env.SetOption('num_jobs', GetNumCPUs())
 
+object_files = {}
+Export('object_files')
+
 Export('env')
-SConscript('test/SConscript', variant_dir='build/test')
-SConscript('Client/SConscript', variant_dir='build/Client')
 SConscript('Core/SConscript', variant_dir='build/Core')
 SConscript('Event/SConscript', variant_dir='build/Event')
-SConscript('Examples/SConscript', variant_dir='build/Examples')
-SConscript('Protocol/SConscript', variant_dir='build/Protocol')
 SConscript('RPC/SConscript', variant_dir='build/RPC')
-SConscript('Server/SConscript', variant_dir='build/Server')
+SConscript('Protocol/SConscript', variant_dir='build/Protocol')
+SConscript('Client/SConscript', variant_dir='build/Client')
 SConscript('Storage/SConscript', variant_dir='build/Storage')
+SConscript('Server/SConscript', variant_dir='build/Server')
+SConscript('test/SConscript', variant_dir='build/test')
+SConscript('Examples/SConscript', variant_dir='build/Examples')
 
 # This function is taken from http://www.scons.org/wiki/PhonyTargets
 def PhonyTargets(env = None, **kw):
@@ -91,3 +94,20 @@ PhonyTargets(lint = "scripts/cpplint.py")
 PhonyTargets(doc = "doxygen docs/Doxyfile")
 PhonyTargets(docs = "doxygen docs/Doxyfile")
 
+env.StaticLibrary("build/logcabin",
+                  (object_files['Client'] +
+                   object_files['Protocol'] +
+                   object_files['RPC'] +
+                   object_files['Event'] +
+                   object_files['Core']))
+
+env.Program("build/LogCabin",
+            (["build/Server/Main.cc"] +
+             object_files['Server'] +
+             object_files['Storage'] +
+             object_files['Protocol'] +
+             object_files['RPC'] +
+             object_files['Event'] +
+             object_files['Core']),
+            LIBS = [ "pthread", "protobuf", "rt", "cryptopp",
+                     "event_core-2.0", "event_pthreads-2.0" ])
