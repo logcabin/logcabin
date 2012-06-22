@@ -22,10 +22,6 @@ env = Environment(options = opts,
                   ENV = os.environ)
 Help(opts.GenerateHelpText(env))
 
-# This ensures that the LIBPATH variable will be set,
-# which some of the SConscript files rely on.
-env.SetDefault(LIBPATH = [])
-
 env.Append(CPPFLAGS = [ "-Wall", "-Wformat=2", "-Wextra", "-Wwrite-strings",
                         "-Wno-unused-parameter",
                         "-Wmissing-format-attribute" ])
