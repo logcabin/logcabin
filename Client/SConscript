@@ -3,6 +3,8 @@ Import('env', 'object_files')
 src = [
     "Client.cc",
     "ClientImpl.cc",
+    "ClientImplBase.cc",
     "LeaderRPC.cc",
+    "MockClientImpl.cc",
 ]
 object_files['Client'] = env.StaticObject(src)

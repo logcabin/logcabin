@@ -16,7 +16,9 @@
 #include <string.h>
 
 #include "Client/Client.h"
+#include "Client/ClientImplBase.h"
 #include "Client/ClientImpl.h"
+#include "Client/MockClientImpl.h"
 
 namespace LogCabin {
 namespace Client {
@@ -88,7 +90,7 @@ Entry::getLength() const
 
 ////////// Log //////////
 
-Log::Log(std::shared_ptr<ClientImpl> clientImpl,
+Log::Log(std::shared_ptr<ClientImplBase> clientImpl,
          const std::string& name,
          uint64_t logId)
     : clientImpl(clientImpl)
@@ -128,6 +130,12 @@ Log::getLastId()
 }
 
 ////////// Cluster //////////
+
+Cluster::Cluster(ForTesting t)
+    : clientImpl(std::make_shared<MockClientImpl>())
+{
+    clientImpl->init(clientImpl, "-MOCK-");
+}
 
 Cluster::Cluster(const std::string& hosts)
     : clientImpl(std::make_shared<ClientImpl>())

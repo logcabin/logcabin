@@ -13,12 +13,15 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <mutex>
+#include <map>
+#include <unordered_map>
+#include <vector>
 #include "Client/Client.h"
 #include "Client/ClientImplBase.h"
-#include "Client/LeaderRPC.h"
 
-#ifndef LOGCABIN_CLIENT_CLIENTIMPL_H
-#define LOGCABIN_CLIENT_CLIENTIMPL_H
+#ifndef LOGCABIN_CLIENT_MOCKCLIENTIMPL_H
+#define LOGCABIN_CLIENT_MOCKCLIENTIMPL_H
 
 namespace LogCabin {
 namespace Client {
@@ -27,13 +30,14 @@ namespace Client {
  * The implementation of the client library.
  * This is wrapped by Client::Cluster and Client::Log for usability.
  */
-class ClientImpl : public ClientImplBase {
+class MockClientImpl : public ClientImplBase {
   public:
     /// Constructor.
-    ClientImpl();
+    MockClientImpl();
+    /// Destructor.
+    ~MockClientImpl();
 
     // Implementations of ClientImplBase methods
-    void initDerived();
     Log openLog(const std::string& logName);
     void deleteLog(const std::string& logName);
     std::vector<std::string> listLogs();
@@ -42,30 +46,27 @@ class ClientImpl : public ClientImplBase {
     EntryId getLastId(uint64_t logId);
 
   private:
-    /**
-     * Asks the cluster leader for the range of supported RPC protocol
-     * versions, and select the best one. This is used to make sure the client
-     * and server are speaking the same version of the RPC protocol.
-     */
-    uint32_t negotiateRPCVersion();
 
     /**
-     * Used to send RPCs to the leader of the LogCabin cluster.
+     * Look up a log by ID or throw LogDisappearedException.
+     * Must be called holding #mutex.
      */
-    std::unique_ptr<LeaderRPCBase> leaderRPC;
+    std::vector<Entry>& getLog(uint64_t logId);
 
-    /**
-     * The version of the RPC protocol to use when speaking to the cluster
-     * leader. (This is the result of negotiateRPCVersion().)
-     */
-    uint32_t rpcProtocolVersion;
+    std::mutex mutex;
+    uint64_t nextLogId;
+    std::map<std::string, uint64_t> logNames;
+    // This shared_ptr just exists to make std::vector<Entry> copyable.
+    // This is a work-around for gcc 4.4, which can't handle move-only objects
+    // in maps.
+    std::unordered_map<uint64_t, std::shared_ptr<std::vector<Entry>>> logs;
 
-    // ClientImpl is not copyable
-    ClientImpl(const ClientImpl&) = delete;
-    ClientImpl& operator=(const ClientImpl&) = delete;
+    // MockClientImpl is not copyable
+    MockClientImpl(const MockClientImpl&) = delete;
+    MockClientImpl& operator=(const MockClientImpl&) = delete;
 };
 
 } // namespace LogCabin::Client
 } // namespace LogCabin
 
-#endif /* LOGCABIN_CLIENT_CLIENTIMPL_H */
+#endif /* LOGCABIN_CLIENT_MOCKCLIENTIMPL_H */

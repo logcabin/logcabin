@@ -29,7 +29,7 @@
 namespace LogCabin {
 namespace Client {
 
-class ClientImpl; // forward declaration
+class ClientImplBase; // forward declaration
 
 /**
  * The type of a log entry ID.
@@ -94,6 +94,7 @@ class Entry {
     Entry(const Entry&) = delete;
     Entry& operator=(const Entry&) = delete;
     friend class ClientImpl;
+    friend class MockClientImpl;
 };
 
 
@@ -110,7 +111,7 @@ class LogDisappearedException : public std::exception {
  */
 class Log {
   private:
-    Log(std::shared_ptr<ClientImpl> clientImpl,
+    Log(std::shared_ptr<ClientImplBase> clientImpl,
         const std::string& name,
         uint64_t logId);
   public:
@@ -176,10 +177,11 @@ class Log {
     EntryId getLastId();
 
   private:
-    std::shared_ptr<ClientImpl> clientImpl;
+    std::shared_ptr<ClientImplBase> clientImpl;
     const std::string name;
     const uint64_t logId;
     friend class ClientImpl;
+    friend class MockClientImpl;
 };
 
 /**
@@ -187,6 +189,20 @@ class Log {
  */
 class Cluster {
   public:
+
+    /**
+     * Defines a special type to use as an argument to the constructor that is
+     * for testing purposes only.
+     */
+    enum ForTesting { FOR_TESTING };
+
+    /**
+     * Construct a Cluster object for testing purposes only. Instead of
+     * connecting to a LogCabin cluster, it will keep all state locally in
+     * memory.
+     */
+    explicit Cluster(ForTesting t);
+
     /**
      * Constructor.
      * \param hosts
@@ -217,7 +233,7 @@ class Cluster {
     std::vector<std::string> listLogs();
 
   private:
-    std::shared_ptr<ClientImpl> clientImpl;
+    std::shared_ptr<ClientImplBase> clientImpl;
 };
 
 } // namespace LogCabin::Client

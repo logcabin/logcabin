@@ -42,10 +42,9 @@ class ClientClusterTest : public ::testing::Test {
         mockRPC->expect(OpCode::GET_SUPPORTED_RPC_VERSIONS,
             fromString<Protocol::Client::GetSupportedRPCVersions::Response>(
                         "min_version: 1, max_version: 1"));
-        cluster->clientImpl->init(
-                    cluster->clientImpl,
-                    "127.0.0.1:0",
-                    std::unique_ptr<Client::LeaderRPCBase>(mockRPC));
+        dynamic_cast<Client::ClientImpl*>(cluster->clientImpl.get())->
+            leaderRPC = std::unique_ptr<Client::LeaderRPCBase>(mockRPC);
+        cluster->clientImpl->init(cluster->clientImpl, "127.0.0.1:0");
         mockRPC->popRequest();
     }
     std::unique_ptr<Client::Cluster> cluster;
@@ -53,6 +52,9 @@ class ClientClusterTest : public ::testing::Test {
     ClientClusterTest(const ClientClusterTest&) = delete;
     ClientClusterTest& operator=(const ClientClusterTest&) = delete;
 };
+
+
+// Client::Cluster(FOR_TESTING) tested in MockClientImplTest.cc
 
 TEST_F(ClientClusterTest, constructor) {
     // TODO(ongaro): test

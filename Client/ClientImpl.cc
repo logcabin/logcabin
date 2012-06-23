@@ -40,18 +40,13 @@ using Protocol::Client::OpCode;
 ClientImpl::ClientImpl()
     : leaderRPC()             // set in init()
     , rpcProtocolVersion(~0U) // set in init()
-    , self()                  // set in init()
 {
 }
 
 void
-ClientImpl::init(std::weak_ptr<ClientImpl> self,
-                 const std::string& hosts,
-                 std::unique_ptr<LeaderRPCBase> mockRPC)
+ClientImpl::initDerived()
 {
-    this->self = self;
-    leaderRPC = std::move(mockRPC);
-    if (!leaderRPC)
+    if (!leaderRPC) // sometimes set in unit tests
         leaderRPC.reset(new LeaderRPC(RPC::Address(hosts, 0)));
     rpcProtocolVersion = negotiateRPCVersion();
 }
