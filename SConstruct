@@ -22,14 +22,22 @@ env = Environment(options = opts,
                   ENV = os.environ)
 Help(opts.GenerateHelpText(env))
 
-env.Append(CPPFLAGS = [ "-Wall", "-Wformat=2", "-Wextra", "-Wwrite-strings",
-                        "-Wno-unused-parameter",
-                        "-Wmissing-format-attribute" ])
-env.Append(CFLAGS = [ "-Wmissing-prototypes", "-Wmissing-declarations",
-                      "-Wshadow", "-Wbad-function-cast", "-Werror" ])
-env.Prepend(CXXFLAGS = [ "-Wno-non-template-friend", "-Woverloaded-virtual",
-                         "-Wcast-qual", "-Wcast-align", "-Wconversion",
-                         "-Weffc++", "-std=c++0x", "-Werror" ])
+env.Prepend(CXXFLAGS = [
+    "-std=c++0x",
+    "-Werror",
+    "-Wall",
+    "-Wextra",
+    "-Wcast-align",
+    "-Wcast-qual",
+    "-Wconversion",
+    "-Weffc++",
+    "-Wformat=2",
+    "-Wmissing-format-attribute",
+    "-Wno-non-template-friend",
+    "-Wno-unused-parameter",
+    "-Woverloaded-virtual",
+    "-Wwrite-strings",
+    ])
 
 if env["BUILDTYPE"] == "DEBUG":
     env.Append(CPPFLAGS = [ "-g", "-DDEBUG" ])
