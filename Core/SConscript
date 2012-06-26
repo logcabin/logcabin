@@ -9,15 +9,5 @@ src = [
     "ThreadId.cc",
     "StringUtil.cc",
 ]
-object_files['Core'] = env.StaticObject(src)
-
-env.Protoc([],
-           "ProtoBufTest.proto",
-           PROTOCPROTOPATH = ['.'],
-           PROTOCPYTHONOUTDIR = None,
-           PROTOCOUTDIR = '.')
-
-object_files['Core'].append(
-    env.StaticObject("#build/Core/ProtoBufTest.pb.o",
-                     "#build/Core/ProtoBufTest.pb.cc",
-                     CXXFLAGS = "-std=c++0x"))
+object_files['Core'] = (env.StaticObject(src) +
+                        env.Protobuf("ProtoBufTest.proto"))

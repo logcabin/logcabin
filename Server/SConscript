@@ -5,15 +5,5 @@ src = [
     "Globals.cc",
     "LogManager.cc",
 ]
-object_files['Server'] = env.StaticObject(src)
-
-env.Protoc([],
-           "InternalLog.proto",
-           PROTOCPROTOPATH = ['.'],
-           PROTOCPYTHONOUTDIR = None,
-           PROTOCOUTDIR = '.')
-
-object_files['Server'].append(
-    env.StaticObject("#build/Server/InternalLog.pb.o",
-                     "#build/Server/InternalLog.pb.cc",
-                     CXXFLAGS = "-std=c++0x"))
+object_files['Server'] = (env.StaticObject(src) +
+                          env.Protobuf("InternalLog.proto"))

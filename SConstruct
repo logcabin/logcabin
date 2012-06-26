@@ -60,6 +60,18 @@ if env["LIBEVENT2PATH"] != "":
 
 env.Append(CPPPATH = '#')
 
+# Define protocol buffers builder to simplify SConstruct files
+def Protobuf(env, source):
+    # First build the proto file
+    cc = env.Protoc(source,
+                    PROTOCPROTOPATH = ["."],
+                    PROTOCPYTHONOUTDIR = None,
+                    PROTOCOUTDIR = ".")[1]
+    # Then build the resulting C++ file with no warnings
+    return env.StaticObject(cc,
+                            CXXFLAGS = "-std=c++0x")
+env.AddMethod(Protobuf)
+
 def GetNumCPUs():
     if env["NUMCPUS"] != "0":
         return int(env["NUMCPUS"])
