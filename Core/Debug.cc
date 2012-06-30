@@ -20,6 +20,8 @@
 #include <ctime>
 #include <mutex>
 #include <strings.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include "Core/Debug.h"
 #include "Core/StringUtil.h"
@@ -65,6 +67,8 @@ std::vector<std::pair<std::string, std::string>> policy;
 /**
  * A cache of the results of getLogLevel(), since that function is slow.
  * This needs to be cleared when the policy changes.
+ * The key to the map is a pointer to the absolute filename, which should be a
+ * string literal.
  *
  * Protected by #mutex.
  */
@@ -86,7 +90,9 @@ logLevelFromString(const std::string& level)
         if (strcasecmp(logLevelToString[i], level.c_str()) == 0)
             return LogLevel(i);
     }
-    PANIC("'%s' is not a valid log level.", level.c_str());
+    log((LogLevel::ERROR), __FILE__, __LINE__, __FUNCTION__,
+        "'%s' is not a valid log level.\n", level.c_str());
+    abort();
 }
 
 /**
@@ -95,6 +101,9 @@ logLevelFromString(const std::string& level)
  * This is slow, so isLogging() caches the results in isLoggingCache.
  *
  * Must be called with #mutex held.
+ *
+ * \param fileName
+ *      Relative filename.
  */
 LogLevel
 getLogLevel(const char* fileName)
@@ -181,7 +190,7 @@ isLogging(LogLevel level, const char* fileName)
     LogLevel verbosity;
     auto it = isLoggingCache.find(fileName);
     if (it == isLoggingCache.end()) {
-        verbosity = getLogLevel(fileName);
+        verbosity = getLogLevel(relativeFileName(fileName));
         isLoggingCache[fileName] = verbosity;
     } else {
         verbosity = it->second;
