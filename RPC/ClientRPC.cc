@@ -49,6 +49,7 @@ ClientRPC::ClientRPC(std::shared_ptr<RPC::ClientSession> session,
     requestHeader.toBigEndian();
 
     // Send the request to the server
+    assert(session); // makes debugging more obvious for somewhat common error
     opaqueRPC = session->sendRequest(std::move(requestBuffer));
 }
 
