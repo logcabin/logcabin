@@ -63,7 +63,8 @@ env.Append(CPPPATH = '#')
 # Define protocol buffers builder to simplify SConstruct files
 def Protobuf(env, source):
     # First build the proto file
-    cc = env.Protoc(source,
+    cc = env.Protoc(os.path.splitext(source)[0] + '.pb.cc',
+                    source,
                     PROTOCPROTOPATH = ["."],
                     PROTOCPYTHONOUTDIR = None,
                     PROTOCOUTDIR = ".")[1]
