@@ -153,7 +153,7 @@ __attribute__((format(printf, 5, 6)));
  * \copydetails ERROR
  */
 #define PANIC(format, ...) do { \
-    ERROR(format, ##__VA_ARGS__); \
+    ERROR(format " Exiting...", ##__VA_ARGS__); \
     ::abort(); \
 } while (0)
 
