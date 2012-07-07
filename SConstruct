@@ -12,7 +12,7 @@ opts.AddVariables(
     ("AS", "Assembler"),
     ("LINK", "Linker"),
     ("LIBEVENT2PATH", "libevent-2.0 library path (if necessary).", ""),
-    ("BUILDTYPE", "Build type (RELEASE or DEBUG)", "RELEASE"),
+    ("BUILDTYPE", "Build type (RELEASE or DEBUG)", "DEBUG"),
     ("VERBOSE", "Show full build information (0 or 1)", "0"),
     ("NUMCPUS", "Number of CPUs to use for build (0 means auto).", "0"),
 )
@@ -24,7 +24,6 @@ Help(opts.GenerateHelpText(env))
 
 env.Prepend(CXXFLAGS = [
     "-std=c++0x",
-    "-Werror",
     "-Wall",
     "-Wextra",
     "-Wcast-align",
@@ -127,4 +126,4 @@ env.Program("build/LogCabin",
              object_files['Event'] +
              object_files['Core']),
             LIBS = [ "pthread", "protobuf", "rt", "cryptopp",
-                     "event_core-2.0", "event_pthreads-2.0" ])
+                     "event_core", "event_pthreads" ])

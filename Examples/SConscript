@@ -3,4 +3,4 @@ Import('env')
 env.Program("HelloWorld",
             ["HelloWorld.cc", "#build/liblogcabin.a"],
             LIBS = [ "pthread", "protobuf", "rt", "cryptopp",
-                     "event_core-2.0", "event_pthreads-2.0" ])
+                     "event_core", "event_pthreads" ])

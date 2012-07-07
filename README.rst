@@ -77,8 +77,8 @@ libraries:
 - pthread
 - protobuf
 - cryptopp
-- event_core-2.0
-- event_pthreads-2.0
+- event_core
+- event_pthreads
 
 Documentation
 =============
