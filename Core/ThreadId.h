@@ -38,7 +38,7 @@ const uint64_t NONE = 0;
 /**
  * Returns a unique identifier for the current thread.
  */
-uint64_t get();
+uint64_t getId();
 
 } // namespace LogCabin::Core::ThreadId
 } // namespace LogCabin::Core

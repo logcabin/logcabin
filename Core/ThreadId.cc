@@ -60,7 +60,7 @@ assign()
  *   been returned this value or ever will be returned this value)
  */
 uint64_t
-get()
+getId()
 {
     if (Internal::id == 0)
         Internal::assign();

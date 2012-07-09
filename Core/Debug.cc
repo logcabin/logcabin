@@ -216,7 +216,7 @@ log(LogLevel level,
             now.tv_sec, now.tv_nsec / 1000,
             relativeFileName(fileName), lineNum, functionName,
             logLevelToString[uint32_t(level)],
-            getpid(), ThreadId::get());
+            getpid(), ThreadId::getId());
 
     va_start(ap, format);
     vfprintf(stream, format, ap);
