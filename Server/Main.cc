@@ -20,6 +20,7 @@
 #include <string>
 
 #include "Core/Debug.h"
+#include "Core/ThreadId.h"
 #include "Server/Globals.h"
 
 namespace {
@@ -88,6 +89,8 @@ class OptionParser {
 int
 main(int argc, char** argv)
 {
+    LogCabin::Core::ThreadId::setName("evloop");
+
     // Parse command line args.
     OptionParser options(argc, argv);
     NOTICE("Using config file %s", options.configFilename.c_str());

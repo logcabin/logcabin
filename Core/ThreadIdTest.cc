@@ -57,6 +57,16 @@ TEST_F(CoreThreadIdTest, basics) {
     EXPECT_EQ(3U, value);
 }
 
+TEST_F(CoreThreadIdTest, names) {
+    EXPECT_EQ("thread 1", ThreadId::getName());
+    ThreadId::setName("foo");
+    EXPECT_EQ("foo", ThreadId::getName());
+    ThreadId::setName("bar");
+    EXPECT_EQ("bar", ThreadId::getName());
+    ThreadId::setName("");
+    EXPECT_EQ("thread 1", ThreadId::getName());
+}
+
 } // namespace LogCabin::Core::<anonymous>
 } // namespace LogCabin::Core
 } // namespace LogCabin

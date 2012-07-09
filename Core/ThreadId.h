@@ -14,6 +14,7 @@
  */
 
 #include <cinttypes>
+#include <string>
 
 #ifndef LOGCABIN_CORE_THREADID_H
 #define LOGCABIN_CORE_THREADID_H
@@ -39,6 +40,23 @@ const uint64_t NONE = 0;
  * Returns a unique identifier for the current thread.
  */
 uint64_t getId();
+
+/**
+ * Set the friendly name for the current thread.
+ * This can be later retrieved with getName().
+ * Calling setName with an empty string will reset the thread to its default
+ * name.
+ */
+void setName(const std::string& name);
+
+/**
+ * Get the friendly name for the current thread.
+ * This is useful in messages to users.
+ *
+ * You should arrange for setName() to be called when the thread is
+ * created; otherwise you'll see an unhelpful name like "thread 3".
+ */
+std::string getName();
 
 } // namespace LogCabin::Core::ThreadId
 } // namespace LogCabin::Core
