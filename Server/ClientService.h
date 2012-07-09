@@ -37,6 +37,7 @@ class ClientService : public RPC::Service {
     ~ClientService();
 
     void handleRPC(RPC::ServerRPC rpc);
+    std::string getName() const;
 
   private:
 

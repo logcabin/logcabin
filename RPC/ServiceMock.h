@@ -146,6 +146,8 @@ class ServiceMock : public RPC::Service {
      */
     void handleRPC(RPC::ServerRPC serverRPC);
 
+    std::string getName() const;
+
   private:
     /**
      * Call the Handler when the specified request arrives (in FIFO order).

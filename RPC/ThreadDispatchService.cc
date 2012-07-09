@@ -72,6 +72,12 @@ ThreadDispatchService::handleRPC(ServerRPC serverRPC)
     conditionVariable.notify_one();
 }
 
+std::string
+ThreadDispatchService::getName() const
+{
+    return threadSafeService->getName();
+}
+
 void
 ThreadDispatchService::workerMain()
 {

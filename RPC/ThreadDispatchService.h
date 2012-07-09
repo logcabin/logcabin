@@ -62,6 +62,7 @@ class ThreadDispatchService : public Service {
     ~ThreadDispatchService();
 
     void handleRPC(ServerRPC serverRPC);
+    std::string getName() const;
 
   private:
     /**
