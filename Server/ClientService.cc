@@ -73,6 +73,13 @@ ClientService::handleRPC(RPC::ServerRPC rpc)
     }
 }
 
+std::string
+ClientService::getName() const
+{
+    return "ClientService";
+}
+
+
 /**
  * Place this at the top of each RPC handler. Afterwards, 'request' will refer
  * to the protocol buffer for the request with all required fields set.

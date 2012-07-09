@@ -14,8 +14,10 @@
  */
 
 #include <mutex>
+#include <unordered_map>
 
 #include "Core/ThreadId.h"
+#include "Core/StringUtil.h"
 
 namespace LogCabin {
 namespace Core {
@@ -39,6 +41,13 @@ std::mutex mutex;
 uint64_t nextId = 1;
 
 /**
+ * A map from thread ID to thread name.
+ * Not all threads may be present in this map; only those that have had their
+ * name set will be found here.
+ */
+std::unordered_map<uint64_t, std::string> threadNames;
+
+/**
  * Pick a unique value to use as the thread identifier for the current
  * thread. This value is saved in the thread-specific variable #id.
  */
@@ -60,11 +69,36 @@ assign()
  *   been returned this value or ever will be returned this value)
  */
 uint64_t
-get()
+getId()
 {
     if (Internal::id == 0)
         Internal::assign();
     return Internal::id;
+}
+
+void
+setName(const std::string& name)
+{
+    // get the thread ID before locking to avoid deadlock
+    uint64_t id = getId();
+    std::unique_lock<std::mutex> lockGuard(Internal::mutex);
+    if (name.empty())
+        Internal::threadNames.erase(id);
+    else
+        Internal::threadNames[id] = name;
+}
+
+std::string
+getName()
+{
+    // get the thread ID before locking to avoid deadlock
+    uint64_t id = getId();
+    std::unique_lock<std::mutex> lockGuard(Internal::mutex);
+    auto it = Internal::threadNames.find(id);
+    if (it == Internal::threadNames.end())
+        return StringUtil::format("thread %lu", id);
+    else
+        return it->second;
 }
 
 } // namespace LogCabin::Core::ThreadId

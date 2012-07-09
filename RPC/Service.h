@@ -46,6 +46,12 @@ class Service {
      */
     virtual void handleRPC(ServerRPC serverRPC) = 0;
 
+    /**
+     * Return a short name for this service which can be used in things like
+     * log messages.
+     */
+    virtual std::string getName() const = 0;
+
     // Service is non-copyable.
     Service(const Service&) = delete;
     Service& operator=(const Service&) = delete;

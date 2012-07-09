@@ -15,6 +15,8 @@
 
 #include <assert.h>
 
+#include "Core/StringUtil.h"
+#include "Core/ThreadId.h"
 #include "RPC/ThreadDispatchService.h"
 
 namespace LogCabin {
@@ -72,9 +74,19 @@ ThreadDispatchService::handleRPC(ServerRPC serverRPC)
     conditionVariable.notify_one();
 }
 
+std::string
+ThreadDispatchService::getName() const
+{
+    return threadSafeService->getName();
+}
+
 void
 ThreadDispatchService::workerMain()
 {
+    Core::ThreadId::setName(
+        Core::StringUtil::format("%s(%lu)",
+                                 threadSafeService->getName().c_str(),
+                                 Core::ThreadId::getId()));
     while (true) {
         ServerRPC rpc;
         { // find an RPC to process

@@ -42,19 +42,29 @@ class CoreThreadIdTest : public ::testing::Test {
 // Helper function that runs in a separate thread.  It reads its id and
 // saves it in the variable pointed to by its argument.
 static void readThreadId(uint64_t* p) {
-    *p = ThreadId::get();
+    *p = ThreadId::getId();
 }
 
 TEST_F(CoreThreadIdTest, basics) {
     uint64_t value;
-    EXPECT_EQ(1U, ThreadId::get());
-    EXPECT_EQ(1U, ThreadId::get());
+    EXPECT_EQ(1U, ThreadId::getId());
+    EXPECT_EQ(1U, ThreadId::getId());
     std::thread thread1(readThreadId, &value);
     thread1.join();
     EXPECT_EQ(2U, value);
     std::thread thread2(readThreadId, &value);
     thread2.join();
     EXPECT_EQ(3U, value);
+}
+
+TEST_F(CoreThreadIdTest, names) {
+    EXPECT_EQ("thread 1", ThreadId::getName());
+    ThreadId::setName("foo");
+    EXPECT_EQ("foo", ThreadId::getName());
+    ThreadId::setName("bar");
+    EXPECT_EQ("bar", ThreadId::getName());
+    ThreadId::setName("");
+    EXPECT_EQ("thread 1", ThreadId::getName());
 }
 
 } // namespace LogCabin::Core::<anonymous>

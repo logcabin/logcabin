@@ -37,6 +37,9 @@ class EchoService : public RPC::Service {
         usleep(sleepMicros);
         ++count;
     }
+    std::string getName() const {
+        return "EchoService";
+    }
     std::atomic<uint32_t> sleepMicros;
     std::atomic<uint32_t> count;
 };

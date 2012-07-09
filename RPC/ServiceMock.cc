@@ -73,6 +73,12 @@ ServiceMock::handleRPC(RPC::ServerRPC rpc)
     responseQueue.pop();
 }
 
+std::string
+ServiceMock::getName() const
+{
+    return "MockService";
+}
+
 void
 ServiceMock::expect(uint16_t opCode,
                     const Message& request,

@@ -65,8 +65,8 @@ Loop::Lock::Lock(Event::Loop& eventLoop)
 {
     std::unique_lock<std::mutex> lockGuard(eventLoop.mutex);
     ++eventLoop.numLocks;
-    if (eventLoop.runningThread != Core::ThreadId::get() &&
-        eventLoop.lockOwner != Core::ThreadId::get()) {
+    if (eventLoop.runningThread != Core::ThreadId::getId() &&
+        eventLoop.lockOwner != Core::ThreadId::getId()) {
         // This is an actual lock: we're not running inside the event loop, and
         //                         we're not recursively locking.
         if (eventLoop.runningThread != Core::ThreadId::NONE)
@@ -76,7 +76,7 @@ Loop::Lock::Lock(Event::Loop& eventLoop)
             eventLoop.safeToLock.wait(lockGuard);
         }
         // Take ownership of the lock
-        eventLoop.lockOwner = Core::ThreadId::get();
+        eventLoop.lockOwner = Core::ThreadId::getId();
     }
     ++eventLoop.numActiveLocks;
 }
@@ -162,7 +162,7 @@ Loop::runForever()
                 shouldExit = false;
                 return;
             }
-            runningThread = Core::ThreadId::get();
+            runningThread = Core::ThreadId::getId();
         }
         int r = event_base_dispatch(unqualify(base));
         if (r == -1) {
