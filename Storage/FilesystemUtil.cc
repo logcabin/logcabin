@@ -111,14 +111,10 @@ tmpnam()
 }
 
 namespace System {
-#if DEBUG
 // This is mocked out in some unit tests.
 ssize_t (*writev)(int fildes,
                   const struct iovec* iov,
                   int iovcnt) = ::writev;
-#else
-using ::writev;
-#endif
 }
 
 ssize_t
