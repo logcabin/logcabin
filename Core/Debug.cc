@@ -31,6 +31,8 @@ namespace LogCabin {
 namespace Core {
 namespace Debug {
 
+std::string processName = Core::StringUtil::format("%u", getpid());
+
 namespace Internal {
 
 /**
@@ -212,11 +214,11 @@ log(LogLevel level,
     // fprintf, but must be explicit since we're using two calls here.
     flockfile(stream);
 
-    fprintf(stream, "%010lu.%06lu %s:%d in %s() %s[%d:%s]: ",
+    fprintf(stream, "%010lu.%06lu %s:%d in %s() %s[%s:%s]: ",
             now.tv_sec, now.tv_nsec / 1000,
             relativeFileName(fileName), lineNum, functionName,
             logLevelToString[uint32_t(level)],
-            getpid(), ThreadId::getName().c_str());
+            processName.c_str(), ThreadId::getName().c_str());
 
     va_start(ap, format);
     vfprintf(stream, format, ap);

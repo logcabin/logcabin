@@ -125,6 +125,12 @@ log(LogLevel level,
     const char* format, ...)
 __attribute__((format(printf, 5, 6)));
 
+/**
+ * A short name to be used in log messages to identify this process.
+ * This defaults to the UNIX process ID.
+ */
+extern std::string processName;
+
 } // namespace LogCabin::Core::Debug
 } // namespace LogCabin::Core
 } // namespace LogCabin
