@@ -14,6 +14,7 @@
  */
 
 #include <mutex>
+#include <sys/prctl.h>
 #include <unordered_map>
 
 #include "Core/ThreadId.h"
@@ -86,6 +87,9 @@ setName(const std::string& name)
         Internal::threadNames.erase(id);
     else
         Internal::threadNames[id] = name;
+    // set system thread name, useful for gdb
+    // name is truncated at first 16 characters
+    prctl(PR_SET_NAME, name.c_str(), 0, 0, 0);
 }
 
 std::string
