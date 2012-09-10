@@ -75,6 +75,10 @@ TEST(CoreStringUtilTest, endsWith) {
     EXPECT_FALSE(endsWith("o", "foo"));
 }
 
+TEST(CoreStringUtilTest, toString) {
+    EXPECT_EQ("3", toString(3));
+}
+
 } // namespace LogCabin::Core::StringUtil::<anonymous>
 } // namespace LogCabin::Core::StringUtil
 } // namespace LogCabin::Core

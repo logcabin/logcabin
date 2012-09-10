@@ -13,6 +13,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -88,6 +89,20 @@ bool startsWith(const std::string& haystack, const std::string& needle);
 
 /// Return true if haystack ends with needle.
 bool endsWith(const std::string& haystack, const std::string& needle);
+
+/**
+ * Return a string returned from the given object's stream operator.
+ * This is useful when you're dealing with strings, but the object you want to
+ * print only has a stream operator.
+ */
+template<typename T>
+std::string
+toString(const T& t)
+{
+    std::stringstream ss;
+    ss << t;
+    return ss.str();
+}
 
 } // namespace LogCabin::Core::StringUtil
 } // namespace LogCabin::Core
