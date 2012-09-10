@@ -105,6 +105,9 @@ TEST_F(ServerClientServiceTest, getSupportedRPCVersions) {
               "max_version: 1", response);
 }
 
+// These tests were written for the LogManager version of the ClientService,
+// not for the Consensus/StateMachine version.
+#if 0
 TEST_F(ServerClientServiceTest, openLog) {
     init();
     Protocol::Client::OpenLog::Request request;
@@ -256,6 +259,7 @@ TEST_F(ServerClientServiceTest, getLastId) {
     EXPECT_EQ("ok: { head_entry_id: 0 }",
               response);
 }
+#endif
 
 } // namespace LogCabin::Server::<anonymous>
 } // namespace LogCabin::Server

@@ -15,6 +15,14 @@
 
 #include "RPC/Service.h"
 
+
+#include "build/Protocol/Raft.pb.h"
+#include "Core/Debug.h"
+#include "Core/ProtoBuf.h"
+#include "RPC/ClientRPC.h"
+#include "Protocol/Common.h"
+#include "RPC/ClientSession.h"
+
 #ifndef LOGCABIN_SERVER_CLIENTSERVICE_H
 #define LOGCABIN_SERVER_CLIENTSERVICE_H
 
@@ -23,6 +31,7 @@ namespace Server {
 
 // forward declaration
 class Globals;
+class Replication;
 
 /**
  * This is LogCabin's application-facing RPC service. As some of these RPCs may
@@ -50,7 +59,14 @@ class ClientService : public RPC::Service {
     void append(RPC::ServerRPC rpc);
     void read(RPC::ServerRPC rpc);
     void getLastId(RPC::ServerRPC rpc);
+    void getConfiguration(RPC::ServerRPC rpc);
+    void setConfiguration(RPC::ServerRPC rpc);
 
+    std::pair<RaftConsensus::ClientResult, uint64_t>
+    submit(RPC::ServerRPC& rpc, const google::protobuf::Message& command);
+
+    RaftConsensus::ClientResult
+    catchUpStateMachine(RPC::ServerRPC& rpc);
 
     /**
      * The LogCabin daemon's top-level objects.

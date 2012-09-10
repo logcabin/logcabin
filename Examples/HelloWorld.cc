@@ -42,7 +42,7 @@ printLogContents(Log& log, const char* logName)
 int
 main(int argc, char** argv)
 {
-    Cluster cluster("127.0.0.1:61023");
+    Cluster cluster("logcabin:61023");
     std::vector<std::string> logNames = cluster.listLogs();
     std::cout << "Logs:" << std::endl;
     for (auto it = logNames.begin(); it != logNames.end(); ++it)

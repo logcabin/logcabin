@@ -52,7 +52,7 @@ enum {
      * The service that LogCabin servers use to communicate with each other.
      * The consensus protocol runs over this service.
      */
-    REPLICATION_SERVICE = 2,
+    RAFT_SERVICE = 2,
 
 };
 }

@@ -129,6 +129,18 @@ Log::getLastId()
     return clientImpl->getLastId(logId);
 }
 
+////////// ConfigurationResult //////////
+
+ConfigurationResult::ConfigurationResult()
+    : status(OK)
+    , badServers()
+{
+}
+
+ConfigurationResult::~ConfigurationResult()
+{
+}
+
 ////////// Cluster //////////
 
 Cluster::Cluster(ForTesting t)
@@ -167,6 +179,19 @@ std::vector<std::string>
 Cluster::listLogs()
 {
     return clientImpl->listLogs();
+}
+
+std::pair<uint64_t, Configuration>
+Cluster::getConfiguration()
+{
+    return clientImpl->getConfiguration();
+}
+
+ConfigurationResult
+Cluster::setConfiguration(uint64_t oldId,
+                          const Configuration& newConfiguration)
+{
+    return clientImpl->setConfiguration(oldId, newConfiguration);
 }
 
 } // namespace LogCabin::Client

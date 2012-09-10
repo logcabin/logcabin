@@ -1,9 +1,16 @@
 Import('env', 'object_files')
 
 src = [
+    "RaftConsensus.cc",
+    "RaftConsensusInvariants.cc",
+    "RaftLog.cc",
+    "RaftService.cc",
     "ClientService.cc",
+    "Consensus.cc",
     "Globals.cc",
     "LogManager.cc",
+    "StateMachine.cc",
 ]
 object_files['Server'] = (env.StaticObject(src) +
-                          env.Protobuf("InternalLog.proto"))
+                          env.Protobuf("InternalLog.proto") +
+                          env.Protobuf("RaftLogMetadata.proto"))

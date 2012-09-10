@@ -119,7 +119,6 @@ TEST_F(ClientLeaderRPCTest, connectHost) {
               leaderRPC->leaderSession->toString());
 }
 
-
 } // namespace LogCabin::Client::<anonymous>
 } // namespace LogCabin::Client
 } // namespace LogCabin

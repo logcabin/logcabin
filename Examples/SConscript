@@ -1,6 +1,12 @@
 Import('env')
 
+libs = [ "pthread", "protobuf", "rt", "cryptopp",
+         "event_core", "event_pthreads" ]
+
 env.Program("HelloWorld",
             ["HelloWorld.cc", "#build/liblogcabin.a"],
-            LIBS = [ "pthread", "protobuf", "rt", "cryptopp",
-                     "event_core", "event_pthreads" ])
+            LIBS = libs)
+
+env.Program("Reconfigure",
+            ["Reconfigure.cc", "#build/liblogcabin.a"],
+            LIBS = libs)

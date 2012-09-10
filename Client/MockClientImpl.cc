@@ -105,6 +105,22 @@ MockClientImpl::getLastId(uint64_t logId)
     return log.back().id;
 }
 
+std::pair<uint64_t, Configuration>
+MockClientImpl::getConfiguration()
+{
+    return {0, {}};
+}
+
+ConfigurationResult
+MockClientImpl::setConfiguration(uint64_t oldId,
+                                 const Configuration& newConfiguration)
+{
+    ConfigurationResult result;
+    result.status = ConfigurationResult::BAD;
+    result.badServers = newConfiguration;
+    return result;
+}
+
 std::vector<Entry>&
 MockClientImpl::getLog(uint64_t logId)
 {

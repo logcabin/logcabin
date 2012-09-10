@@ -44,6 +44,10 @@ class MockClientImpl : public ClientImplBase {
     EntryId append(uint64_t logId, const Entry& entry, EntryId expectedId);
     std::vector<Entry> read(uint64_t logId, EntryId from);
     EntryId getLastId(uint64_t logId);
+    std::pair<uint64_t, Configuration> getConfiguration();
+    ConfigurationResult setConfiguration(
+                uint64_t oldId,
+                const Configuration& newConfiguration);
 
   private:
 

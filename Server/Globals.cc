@@ -19,9 +19,12 @@
 #include "Core/StringUtil.h"
 #include "Protocol/Common.h"
 #include "RPC/Server.h"
+#include "Server/RaftService.h"
+#include "Server/RaftConsensus.h"
 #include "Server/ClientService.h"
 #include "Server/Globals.h"
 #include "Server/LogManager.h"
+#include "Server/StateMachine.h"
 
 namespace LogCabin {
 namespace Server {
@@ -47,6 +50,9 @@ Globals::Globals()
     , eventLoop()
     , sigIntHandler(eventLoop)
     , logManager()
+    , raft()
+    , stateMachine()
+    , raftService()
     , clientService()
     , rpcServer()
 {
@@ -60,14 +66,22 @@ Globals::~Globals()
 }
 
 void
-Globals::init()
+Globals::init(uint64_t serverId)
 {
     if (logManager.getExclusiveAccess().get() == NULL) {
         logManager.reset(new LogManager(config));
     }
 
+    if (!raft) {
+        raft.reset(new RaftConsensus(*this));
+    }
+
+    if (!raftService) {
+        raftService.reset(new RaftService(*this));
+    }
+
     if (!clientService) {
-        clientService.reset(new Server::ClientService(*this));
+        clientService.reset(new ClientService(*this));
     }
 
     if (!rpcServer) {
@@ -75,9 +89,13 @@ Globals::init()
                                         Protocol::Common::MAX_MESSAGE_LENGTH));
 
         uint32_t maxThreads = config.read<uint16_t>("maxThreads", 16);
+        rpcServer->registerService(Protocol::Common::ServiceId::RAFT_SERVICE,
+                                   raftService,
+                                   maxThreads);
         rpcServer->registerService(Protocol::Common::ServiceId::CLIENT_SERVICE,
                                    clientService,
                                    maxThreads);
+
 
         std::string configServers = config.read<std::string>("servers", "");
         std::vector<std::string> listenAddresses =
@@ -86,14 +104,19 @@ Globals::init()
             PANIC("No server addresses specified to listen on. "
                   "You must set the 'servers' configuration option.");
         }
-        std::string error;
-        for (auto it = listenAddresses.begin();
-             it != listenAddresses.end();
-             ++it) {
-            RPC::Address address(*it, Protocol::Common::DEFAULT_PORT);
+        std::string error = "Server ID has no matching address";
+        for (uint32_t i = 0; i < listenAddresses.size(); ++i) {
+            if (serverId != 0 && serverId != i + 1)
+                continue;
+            RPC::Address address(listenAddresses[i],
+                                 Protocol::Common::DEFAULT_PORT);
             error = rpcServer->bind(address);
             if (error.empty()) {
                 NOTICE("Serving on %s", address.toString().c_str());
+                raft->serverId = i + 1;
+                Core::Debug::processName =
+                    Core::StringUtil::format("%lu", raft->serverId);
+                raft->init();
                 break;
             }
         }
@@ -104,6 +127,11 @@ Globals::init()
                   error.c_str());
         }
     }
+
+    if (!stateMachine) {
+        stateMachine.reset(new StateMachine(raft));
+    }
+
 }
 
 void

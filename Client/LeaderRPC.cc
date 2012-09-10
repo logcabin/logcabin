@@ -13,6 +13,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <unistd.h>
+
 #include "Client/LeaderRPC.h"
 #include "Core/Debug.h"
 #include "Protocol/Common.h"

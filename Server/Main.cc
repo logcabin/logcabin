@@ -34,14 +34,16 @@ class OptionParser {
         : argc(argc)
         , argv(argv)
         , configFilename("logcabin.conf")
+        , serverId(0)
     {
         while (true) {
             static struct option longOptions[] = {
                {"config",  required_argument, NULL, 'c'},
                {"help",  no_argument, NULL, 'h'},
+               {"id",  required_argument, NULL, 'i'},
                {0, 0, 0, 0}
             };
-            int c = getopt_long(argc, argv, "c:h", longOptions, NULL);
+            int c = getopt_long(argc, argv, "c:hi:", longOptions, NULL);
 
             // Detect the end of the options.
             if (c == -1)
@@ -53,6 +55,9 @@ class OptionParser {
                     exit(0);
                 case 'c':
                     configFilename = optarg;
+                    break;
+                case 'i':
+                    serverId = atol(optarg);
                     break;
                 case '?':
                 default:
@@ -72,16 +77,21 @@ class OptionParser {
     void usage() {
         std::cout << "Usage: " << argv[0] << " [options]" << std::endl;
         std::cout << "Options: " << std::endl;
-        std::cout << "  -h, --help     "
+        std::cout << "  -h, --help          "
                   << "Print this usage information" << std::endl;
-        std::cout << "  -c, --config <file>      "
+        std::cout << "  -c, --config <file> "
                   << "Write output to <file> "
                   << "(default: logcabin.conf)" << std::endl;
+        std::cout << "  -i, --id <id>       "
+                  << "Set server id to <id> "
+                  << "(default: index of first bindable address + 1)"
+                  << std::endl;
     }
 
     int& argc;
     char**& argv;
     std::string configFilename;
+    uint64_t serverId;
 };
 
 } // anonymous namespace
@@ -90,6 +100,7 @@ int
 main(int argc, char** argv)
 {
     LogCabin::Core::ThreadId::setName("evloop");
+    //LogCabin::Core::Debug::setLogPolicy({{"Server", "VERBOSE"}});
 
     // Parse command line args.
     OptionParser options(argc, argv);
@@ -98,7 +109,7 @@ main(int argc, char** argv)
     // Initialize and run Globals.
     LogCabin::Server::Globals globals;
     globals.config.readFile(options.configFilename.c_str());
-    globals.init();
+    globals.init(options.serverId);
     globals.run();
     return 0;
 }

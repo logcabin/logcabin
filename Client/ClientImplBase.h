@@ -68,6 +68,11 @@ class ClientImplBase {
     /// See Log::getLastId.
     virtual EntryId getLastId(uint64_t logId) = 0;
 
+    virtual std::pair<uint64_t, Configuration> getConfiguration() = 0;
+    virtual ConfigurationResult setConfiguration(
+                uint64_t oldId,
+                const Configuration& newConfiguration) = 0;
+
   protected:
     /**
      * This is used to keep this object alive while there are outstanding

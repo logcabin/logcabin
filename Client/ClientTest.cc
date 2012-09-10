@@ -101,6 +101,8 @@ TEST_F(ClientClusterTest, listLogs_normal) {
     EXPECT_EQ("", *mockRPC->popRequest());
 }
 
+// TODO(ongaro): test getConfiguration, setConfiguraton
+
 class ClientLogTest : public ClientClusterTest {
   public:
     ClientLogTest()

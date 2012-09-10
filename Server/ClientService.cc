@@ -19,9 +19,11 @@
 #include "RPC/Buffer.h"
 #include "RPC/ProtoBuf.h"
 #include "RPC/ServerRPC.h"
+#include "Server/RaftConsensus.h"
 #include "Server/ClientService.h"
 #include "Server/Globals.h"
 #include "Server/LogManager.h"
+#include "Server/StateMachine.h"
 #include "Storage/Log.h"
 #include "Storage/LogEntry.h"
 
@@ -68,6 +70,12 @@ ClientService::handleRPC(RPC::ServerRPC rpc)
         case OpCode::GET_LAST_ID:
             getLastId(std::move(rpc));
             break;
+        case OpCode::GET_CONFIGURATION:
+            getConfiguration(std::move(rpc));
+            break;
+        case OpCode::SET_CONFIGURATION:
+            setConfiguration(std::move(rpc));
+            break;
         default:
             rpc.rejectInvalidRequest();
     }
@@ -93,6 +101,7 @@ ClientService::getName() const
 
 ////////// RPC handlers //////////
 
+
 void
 ClientService::getSupportedRPCVersions(RPC::ServerRPC rpc)
 {
@@ -102,14 +111,48 @@ ClientService::getSupportedRPCVersions(RPC::ServerRPC rpc)
     rpc.reply(response);
 }
 
+typedef RaftConsensus::ClientResult Result;
+typedef Protocol::Client::Command Command;
+
+
+std::pair<Result, uint64_t>
+ClientService::submit(RPC::ServerRPC& rpc,
+                      const google::protobuf::Message& command)
+{
+    std::string cmdStr = Core::ProtoBuf::dumpString(command, false);
+    std::pair<Result, uint64_t> result = globals.raft->replicate(cmdStr);
+    if (result.first == Result::RETRY || result.first == Result::NOT_LEADER) {
+        Protocol::Client::Error error;
+        error.set_error_code(Protocol::Client::Error::NOT_LEADER);
+        rpc.returnError(error);
+    }
+    return result;
+}
+
+Result
+ClientService::catchUpStateMachine(RPC::ServerRPC& rpc)
+{
+    std::pair<Result, uint64_t> result = globals.raft->getLastCommittedId();
+    if (result.first == Result::RETRY || result.first == Result::NOT_LEADER) {
+        Protocol::Client::Error error;
+        error.set_error_code(Protocol::Client::Error::NOT_LEADER);
+        rpc.returnError(error);
+        return result.first;
+    }
+    globals.stateMachine->wait(result.second);
+    return result.first;
+}
+
 void
 ClientService::openLog(RPC::ServerRPC rpc)
 {
     PRELUDE(OpenLog);
-    Core::RWPtr<LogManager> logManager =
-        globals.logManager.getExclusiveAccess();
-    Storage::LogId logId = logManager->createLog(request.log_name());
-    response.set_log_id(logId);
+    Command command;
+    *command.mutable_open_log() = request;
+    std::pair<Result, uint64_t> result = submit(rpc, command);
+    if (result.first != Result::SUCCESS)
+        return;
+    response = globals.stateMachine->getResponse(result.second).open_log();
     rpc.reply(response);
 }
 
@@ -117,9 +160,11 @@ void
 ClientService::deleteLog(RPC::ServerRPC rpc)
 {
     PRELUDE(DeleteLog);
-    Core::RWPtr<LogManager> logManager =
-        globals.logManager.getExclusiveAccess();
-    logManager->deleteLog(request.log_name());
+    Command command;
+    *command.mutable_delete_log() = request;
+    std::pair<Result, uint64_t> result = submit(rpc, command);
+    if (result.first != Result::SUCCESS)
+        return;
     rpc.reply(response);
 }
 
@@ -127,11 +172,9 @@ void
 ClientService::listLogs(RPC::ServerRPC rpc)
 {
     PRELUDE(ListLogs);
-    Core::RWPtr<const LogManager> logManager =
-        globals.logManager.getSharedAccess();
-    std::vector<std::string> logNames = logManager->listLogs();
-    for (auto it = logNames.begin(); it != logNames.end(); ++it)
-        response.add_log_names(*it);
+    if (catchUpStateMachine(rpc) != Result::SUCCESS)
+        return;
+    globals.stateMachine->listLogs(request, response);
     rpc.reply(response);
 }
 
@@ -139,46 +182,12 @@ void
 ClientService::append(RPC::ServerRPC rpc)
 {
     PRELUDE(Append);
-
-    // Optimistically prepare the log entry before grabbing locks
-    Storage::LogEntry entry(0, RPC::Buffer()); // placeholder
-    {
-        std::vector<Storage::EntryId> invalidations(
-                            request.invalidates().begin(),
-                            request.invalidates().end());
-        if (request.has_data()) {
-            const std::string& requestData = request.data();
-            RPC::Buffer data(new char[requestData.length()],
-                             uint32_t(requestData.length()),
-                             RPC::Buffer::deleteArrayFn<char>);
-            memcpy(data.getData(), requestData.c_str(), requestData.length());
-            entry = Storage::LogEntry(
-                /* createTime = */ 0,
-                /* data = */ std::move(data),
-                /* invalidations = */ std::move(invalidations));
-        } else {
-            entry = Storage::LogEntry(
-                /* createTime = */ 0,
-                /* invalidations = */ std::move(invalidations));
-        }
-    }
-
-    // Try to execute the append
-    Core::RWPtr<const LogManager> logManager =
-        globals.logManager.getSharedAccess();
-    Core::RWPtr<Storage::Log> log =
-        logManager->getLogExclusive(request.log_id());
-    if (log.get() != NULL) {
-        if (request.has_expected_entry_id() &&
-            log->getLastId() + 1 != request.expected_entry_id()) {
-            response.mutable_ok()->set_entry_id(Storage::NO_ENTRY_ID);
-        } else {
-            Storage::EntryId entryId = log->append(std::move(entry));
-            response.mutable_ok()->set_entry_id(entryId);
-        }
-    } else {
-        response.mutable_log_disappeared();
-    }
+    Command command;
+    *command.mutable_append() = request;
+    std::pair<Result, uint64_t> result = submit(rpc, command);
+    if (result.first != Result::SUCCESS)
+        return;
+    response = globals.stateMachine->getResponse(result.second).append();
     rpc.reply(response);
 }
 
@@ -186,31 +195,9 @@ void
 ClientService::read(RPC::ServerRPC rpc)
 {
     PRELUDE(Read);
-    Core::RWPtr<const LogManager> logManager =
-        globals.logManager.getSharedAccess();
-    Core::RWPtr<const Storage::Log> log =
-        logManager->getLogShared(request.log_id());
-    if (log.get() != NULL) {
-        std::deque<const Storage::LogEntry*> entries =
-            log->readFrom(request.from_entry_id());
-        for (auto it = entries.begin(); it != entries.end(); ++it) {
-            const Storage::LogEntry& logEntry = *(*it);
-            auto responseEntry = response.mutable_ok()->add_entry();
-            responseEntry->set_entry_id(logEntry.entryId);
-            for (auto invIt = logEntry.invalidations.begin();
-                 invIt != logEntry.invalidations.end();
-                 ++invIt) {
-                responseEntry->add_invalidates(*invIt);
-            }
-            if (logEntry.hasData) {
-                responseEntry->set_data(logEntry.data.getData(),
-                                        logEntry.data.getLength());
-            }
-        }
-        response.mutable_ok();
-    } else {
-        response.mutable_log_disappeared();
-    }
+    if (catchUpStateMachine(rpc) != Result::SUCCESS)
+        return;
+    globals.stateMachine->read(request, response);
     rpc.reply(response);
 }
 
@@ -218,18 +205,65 @@ void
 ClientService::getLastId(RPC::ServerRPC rpc)
 {
     PRELUDE(GetLastId);
-    Core::RWPtr<const LogManager> logManager =
-        globals.logManager.getSharedAccess();
-    Core::RWPtr<const Storage::Log> log =
-        logManager->getLogShared(request.log_id());
-    if (log.get() != NULL) {
-        Storage::EntryId headEntryId = log->getLastId();
-        response.mutable_ok()->set_head_entry_id(headEntryId);
-    } else {
-        response.mutable_log_disappeared();
+    if (catchUpStateMachine(rpc) != Result::SUCCESS)
+        return;
+    globals.stateMachine->getLastId(request, response);
+    rpc.reply(response);
+}
+
+void
+ClientService::getConfiguration(RPC::ServerRPC rpc)
+{
+    PRELUDE(GetConfiguration);
+    Protocol::Raft::SimpleConfiguration configuration;
+    uint64_t id;
+    Result result = globals.raft->getConfiguration(configuration, id);
+    if (result == Result::RETRY || result == Result::NOT_LEADER) {
+        Protocol::Client::Error error;
+        error.set_error_code(Protocol::Client::Error::NOT_LEADER);
+        rpc.returnError(error);
+        return;
+    }
+    response.set_id(id);
+    for (auto it = configuration.servers().begin();
+         it != configuration.servers().end();
+         ++it) {
+        Protocol::Client::Server* server = response.add_servers();
+        server->set_server_id(it->server_id());
+        server->set_address(it->address());
     }
     rpc.reply(response);
 }
+
+void
+ClientService::setConfiguration(RPC::ServerRPC rpc)
+{
+    PRELUDE(SetConfiguration);
+    Protocol::Raft::SimpleConfiguration newConfiguration;
+    for (auto it = request.new_servers().begin();
+         it != request.new_servers().end();
+         ++it) {
+        Protocol::Raft::Server* s = newConfiguration.add_servers();
+        s->set_server_id(it->server_id());
+        s->set_address(it->address());
+    }
+    Result result = globals.raft->setConfiguration(
+                        request.old_id(),
+                        newConfiguration);
+    if (result == Result::SUCCESS) {
+        response.mutable_ok();
+    } else if (result == Result::RETRY || result == Result::NOT_LEADER) {
+        Protocol::Client::Error error;
+        error.set_error_code(Protocol::Client::Error::NOT_LEADER);
+        rpc.returnError(error);
+        return;
+    } else if (result == Result::FAIL) {
+        // TODO(ongaro): can't distinguish changed from bad
+        response.mutable_configuration_changed();
+    }
+    rpc.reply(response);
+}
+
 
 } // namespace LogCabin::Server
 } // namespace LogCabin

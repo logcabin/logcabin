@@ -185,6 +185,43 @@ class Log {
 };
 
 /**
+ * A list of servers.
+ * The first component is the server ID.
+ * The second component is the network address of the server.
+ * Used in Cluster::getConfiguration and Cluster::setConfiguration.
+ */
+typedef std::vector<std::pair<uint64_t, std::string>> Configuration;
+
+/**
+ * Returned by Cluster::setConfiguration.
+ */
+struct ConfigurationResult {
+    ConfigurationResult();
+    ~ConfigurationResult();
+    enum Status {
+        /**
+         * The operation succeeded.
+         */
+        OK = 0,
+        /**
+         * The supplied 'oldId' is no longer current.
+         * Call GetConfiguration, re-apply your changes, and try again.
+         */
+        CHANGED = 1,
+        /**
+         * The reconfiguration was aborted because some servers are
+         * unavailable.
+         */
+        BAD = 2,
+    } status;
+
+    /**
+     * If status is BAD, the servers that were unavailable to join the cluster.
+     */
+    Configuration badServers;
+};
+
+/**
  * A handle to the LogCabin cluster.
  */
 class Cluster {
@@ -231,6 +268,26 @@ class Cluster {
      *      The name of each existing log in sorted order.
      */
     std::vector<std::string> listLogs();
+
+    /**
+     * Get the current, stable cluster configuration.
+     * \return
+     *      first: configurationId: Identifies the configuration.
+     *             Pass this to setConfiguration later.
+     *      second: The list of servers in the configuration.
+     */
+    std::pair<uint64_t, Configuration> getConfiguration();
+
+    /**
+     * Change the cluster's configuration.
+     * \param oldId
+     *      The ID of the cluster's current configuration.
+     * \param newConfiguration
+     *      The list of servers in the new configuration.
+     */
+    ConfigurationResult setConfiguration(
+                                uint64_t oldId,
+                                const Configuration& newConfiguration);
 
   private:
     std::shared_ptr<ClientImplBase> clientImpl;

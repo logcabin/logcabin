@@ -33,8 +33,11 @@ class Server;
 namespace Server {
 
 // forward declarations
+class RaftConsensus;
+class RaftService;
 class ClientService;
 class LogManager;
+class StateMachine;
 
 /**
  * Holds the LogCabin daemon's top-level objects.
@@ -66,7 +69,7 @@ class Globals {
      * Finish initializing this object.
      * This should be called after #config has been filled in.
      */
-    void init();
+    void init(uint64_t serverId = 0);
 
     /**
      * Run the event loop until SIGINT or someone calls Event::Loop::exit().
@@ -96,7 +99,22 @@ class Globals {
      */
     Core::RWManager<LogManager> logManager;
 
+    /**
+     * Consensus module.
+     */
+    std::shared_ptr<Server::RaftConsensus> raft;
+
+    /**
+     * State machine used to process client requests.
+     */
+    std::shared_ptr<Server::StateMachine> stateMachine;
+
   private:
+
+    /**
+     * Service used to communicate between servers.
+     */
+    std::shared_ptr<Server::RaftService> raftService;
 
     /**
      * The application-facing facing RPC service.
@@ -104,8 +122,7 @@ class Globals {
     std::shared_ptr<Server::ClientService> clientService;
 
     /**
-     * Listens for inbound RPCs and passes them off to the services
-     * (just to #clientService for now).
+     * Listens for inbound RPCs and passes them off to the services.
      */
     std::unique_ptr<RPC::Server> rpcServer;
 

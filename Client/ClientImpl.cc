@@ -188,5 +188,56 @@ ClientImpl::getLastId(uint64_t logId)
           Core::ProtoBuf::dumpString(response, false).c_str());
 }
 
+std::pair<uint64_t, Configuration>
+ClientImpl::getConfiguration()
+{
+    Protocol::Client::GetConfiguration::Request request;
+    Protocol::Client::GetConfiguration::Response response;
+    leaderRPC->call(OpCode::GET_CONFIGURATION, request, response);
+    Configuration configuration;
+    for (auto it = response.servers().begin();
+         it != response.servers().end();
+         ++it) {
+        configuration.emplace_back(it->server_id(), it->address());
+    }
+    return {response.id(), configuration};
+}
+
+ConfigurationResult
+ClientImpl::setConfiguration(uint64_t oldId,
+                             const Configuration& newConfiguration)
+{
+    Protocol::Client::SetConfiguration::Request request;
+    request.set_old_id(oldId);
+    for (auto it = newConfiguration.begin();
+         it != newConfiguration.end();
+         ++it) {
+        Protocol::Client::Server* s = request.add_new_servers();
+        s->set_server_id(it->first);
+        s->set_address(it->second);
+    }
+    Protocol::Client::SetConfiguration::Response response;
+    leaderRPC->call(OpCode::SET_CONFIGURATION, request, response);
+    ConfigurationResult result;
+    if (response.has_ok()) {
+        return result;
+    }
+    if (response.has_configuration_changed()) {
+        result.status = ConfigurationResult::CHANGED;
+        return result;
+    }
+    if (response.has_configuration_bad()) {
+        result.status = ConfigurationResult::BAD;
+        for (auto it = response.configuration_bad().bad_servers().begin();
+             it != response.configuration_bad().bad_servers().end();
+             ++it) {
+            result.badServers.emplace_back(it->server_id(), it->address());
+        }
+        return result;
+    }
+    PANIC("Did not understand server response to append RPC:\n%s",
+          Core::ProtoBuf::dumpString(response, false).c_str());
+}
+
 } // namespace LogCabin::Client
 } // namespace LogCabin

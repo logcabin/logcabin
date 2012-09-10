@@ -1,0 +1,209 @@
+// Copyright (c) 2012 Stanford University
+//
+// Permission to use, copy, modify, and distribute this software for any
+// purpose with or without fee is hereby granted, provided that the above
+// copyright notice and this permission notice appear in all copies.
+//
+// THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR(S) DISCLAIM ALL WARRANTIES
+// WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+// MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL AUTHORS BE LIABLE FOR
+// ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+// WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+// ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+// OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+package LogCabin.Protocol.Raft;
+
+/**
+ * \file
+ * This file contains the formats for RPCs between servers using the Raft
+ * protocol.
+ */
+
+/**
+ * Identifies which RPC is being executed.
+ */
+enum OpCode {
+    // Keep these numbers dense.
+    GET_SUPPORTED_RPC_VERSIONS = 0;
+    REQUEST_VOTE = 1;
+    APPEND_ENTRY = 2;
+};
+
+/**
+ * The type of "service-specific error" replies that this service returns.
+ */
+message Error {
+    // No errors are defined.
+    //enum Code {
+    //};
+    //required Code error_code = 1;
+}
+
+/**
+ * A server in a configuration.
+ */
+message Server {
+    /**
+     * The ID of the server.
+     */
+    required uint64 server_id = 1;
+    /**
+     * The network address of the server.
+     */
+    required string address = 2;
+}
+
+/**
+ * A stable configuraton, in which a simple majority constitutes a quorum.
+ */
+message SimpleConfiguration {
+    repeated Server servers = 1;
+}
+
+/**
+ * A stable or transitional configuration.
+ */
+message Configuration {
+    /**
+     * The servers in a stable configuration, or the old servers in a
+     * transitional configuration.
+     */
+    required SimpleConfiguration prev_configuration = 1;
+    /**
+     * Not present in a stable configuration, or the new servers in a
+     * transitional configuration.
+     */
+    optional SimpleConfiguration next_configuration = 2;
+}
+
+/**
+ * The type of payload stored in a log entry.
+ */
+enum EntryType {
+    /**
+     * Stores a 'Configuration', to be used internally by the consensus module.
+     */
+    CONFIGURATION = 1;
+    /**
+     * Stores a command to be processed by the state machine.
+     */
+    DATA = 2;
+};
+
+/**
+ * Log entry.
+ */
+message Entry {
+    /**
+     * The term in which the entry was first created.
+     */
+    required uint64 term = 1;
+    /**
+     * See EntryType.
+     */
+    required EntryType type = 2;
+    // the following are mutually exclusive, depending on 'type'
+    /**
+     * A Configuration to be used internally by the consensus module.
+     */
+    optional Configuration configuration = 3;
+    /**
+     * A command to be processed by the state machine.
+     */
+    optional bytes data = 4;
+}
+
+/**
+ * RequestVote RPC: ask a server for its vote in an election and/or get a
+ * server's log information.
+ */
+message RequestVote {
+    message Request {
+        /**
+         * ID of the caller, so that if it re-requests the vote from the
+         * callee, the server will respond granted.
+         */
+        required uint64 server_id = 1;
+        /**
+         * Caller's term.
+         */
+        required uint64 term = 2;
+        /**
+         * Term of last entry in caller's log.
+         * Used to compare log completeness.
+         */
+        required uint64 last_log_term = 3;
+        /**
+         * ID of last entry in caller's log.
+         * Used to compare log completeness.
+         */
+        required uint64 last_log_id = 4;
+    }
+    message Response {
+        /**
+         * Callee's term, for caller to update itself.
+         */
+        required uint64 term = 1;
+        /**
+         * True if the follower granted the candidate its vote, false
+         * otherwise.
+         */
+        required bool granted = 2;
+        /**
+         * For new leader to determine where it and the follower's logs
+         * diverge.
+         * Term of last log entry.
+         */
+        required uint64 last_log_term = 3;
+        /**
+         * ID of last log entry.
+         */
+        required uint64 last_log_id = 4;
+        /**
+         * First entry ID in last log term.
+         */
+        required uint64 begin_last_term_id = 5;
+    }
+}
+
+/**
+ * AppendEntry RPC: replicate log entries to a follower.
+ */
+// TODO(ongaro): rename to AppendEntries
+message AppendEntry {
+    message Request {
+        /**
+         * ID of leader (caller), so the follower can redirect clients.
+         */
+        required uint64 server_id = 1;
+        /**
+         * Caller's term.
+         */
+        required uint64 term = 2;
+        /**
+         * ID of entry preceding entries, or ID of last log entry for
+         * heartbeat.
+         */
+        required uint64 prev_log_id = 3;
+        /**
+         * Term of prev_log_id. Used for an assertion.
+         */
+        required uint64 prev_log_term = 4;
+        /**
+         * Log entries for follower to store, or empty for heartbeat.
+         */
+        repeated Entry entries = 5;
+        /**
+         * Last committed entry that the follower has, so the follower can
+         * advance its state machine.
+         */
+        required uint64 committed_id = 6;
+    }
+    message Response {
+        /**
+         * Callee's term, for the caller to update itself.
+         */
+        required uint64 term = 1;
+    }
+}

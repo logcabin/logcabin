@@ -31,6 +31,8 @@ enum OpCode {
     APPEND      = 4;
     READ        = 5;
     GET_LAST_ID = 6;
+    GET_CONFIGURATION = 7;
+    SET_CONFIGURATION = 8;
 };
 
 /**
@@ -241,4 +243,103 @@ message GetLastId {
          */
         optional LogDisappeared log_disappeared = 2;
     }
+}
+
+/**
+ * A server in a configuration. Used in the GetConfiguration and
+ * SetConfiguration RPCs.
+ */
+message Server {
+    /**
+     * The ID of the server.
+     */
+    required uint64 server_id = 1;
+    /**
+     * The network address of the server.
+     */
+    required string address = 2;
+}
+
+/**
+ * GetConfiguration RPC: Get the current cluster configuration.
+ * This will only return stable configurations; the client will be asked to
+ * retry otherwise.
+ */
+message GetConfiguration {
+    message Request {
+    }
+    message Response {
+        /**
+         * Identifies the configuration. Pass this to SetConfiguration later.
+         */
+        required uint64 id = 1;
+        /**
+         * The list of servers in the configuration.
+         */
+        repeated Server servers = 2;
+    }
+}
+
+/**
+ * SetConfiguration RPC: Change the cluster's configuration.
+ */
+message SetConfiguration {
+    message Request {
+        /**
+         * The ID of the cluster's current configuration.
+         */
+        required uint64 old_id = 1;
+        /**
+         * The list of servers in the new configuration.
+         */
+        repeated Server new_servers = 2;
+    }
+    message Response {
+        // The following are mutually exclusive.
+        message OK {
+        }
+        message ConfigurationChanged {
+        }
+        message ConfigurationBad {
+            /**
+             * The servers that were unavailable to join the cluster.
+             */
+            repeated Server bad_servers = 1;
+        }
+        /**
+         * Set if the operation succeeded.
+         */
+        optional OK ok = 1;
+        /**
+         * Set if the supplied 'old_id' is no longer current.
+         * Call GetConfiguration, re-apply your changes, and try again.
+         */
+        optional ConfigurationChanged configuration_changed = 2;
+        /**
+         * Set if the reconfiguration was aborted because some servers are
+         * unavailable.
+         */
+        optional ConfigurationBad configuration_bad = 3;
+    }
+}
+
+
+/**
+ * This is what the state machine takes in from the replicated log.
+ */
+message Command {
+    // The following are mutually exclusive.
+    optional OpenLog.Request open_log = 1;
+    optional DeleteLog.Request delete_log = 2;
+    optional Append.Request append = 3;
+}
+
+/**
+ * This is what the state machine outputs.
+ */
+message CommandResponse {
+    // The following are mutually exclusive.
+    optional OpenLog.Response open_log = 1;
+    optional DeleteLog.Response delete_log = 2;
+    optional Append.Response append = 3;
 }

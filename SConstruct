@@ -109,6 +109,7 @@ PhonyTargets(check = "scripts/cpplint.py")
 PhonyTargets(lint = "scripts/cpplint.py")
 PhonyTargets(doc = "doxygen docs/Doxyfile")
 PhonyTargets(docs = "doxygen docs/Doxyfile")
+PhonyTargets(tags = "ctags -R --exclude=build --exclude=docs .")
 
 env.StaticLibrary("build/logcabin",
                   (object_files['Client'] +
