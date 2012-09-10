@@ -14,7 +14,9 @@
  */
 
 #include <gtest/gtest.h>
+#include <string>
 #include <thread>
+#include <unordered_map>
 
 #include "Core/ThreadId.h"
 
@@ -25,6 +27,7 @@ namespace ThreadId {
 namespace Internal {
 extern __thread uint64_t id;
 extern uint64_t nextId;
+extern std::unordered_map<uint64_t, std::string> threadNames;
 }
 }
 
@@ -36,6 +39,7 @@ class CoreThreadIdTest : public ::testing::Test {
     {
         ThreadId::Internal::id = 0;
         ThreadId::Internal::nextId = 1;
+        ThreadId::Internal::threadNames.clear();
     }
 };
 
