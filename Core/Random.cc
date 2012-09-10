@@ -13,7 +13,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <assert.h>
+#include <cassert>
+#include <cmath>
+#include <cstdint>
 #include <event2/util.h>
 
 #include "Core/Random.h"
@@ -37,6 +39,13 @@ getRandomBytes()
     T buf;
     evutil_secure_rng_get_bytes(&buf, sizeof(buf));
     return buf;
+}
+
+/// Return a random number between 0 and 1.
+double
+randomUnit()
+{
+    return (double(random64()) / double(UINT64_MAX));
 }
 
 } // anonymous namespace
@@ -63,6 +72,18 @@ uint64_t
 random64()
 {
     return getRandomBytes<uint64_t>();
+}
+
+double
+randomRangeDouble(double start, double end)
+{
+    return start + randomUnit()  * (end - start);
+}
+
+uint64_t
+randomRange(uint64_t start, uint64_t end)
+{
+    return lround(randomRangeDouble(double(start), double(end)));
 }
 
 } // namespace LogCabin::Core::Random

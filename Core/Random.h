@@ -32,6 +32,11 @@ uint16_t random16();
 uint32_t random32();
 /// Return eight random bytes.
 uint64_t random64();
+/// Return a random floating point number between start and end, inclusive.
+double randomRangeDouble(double start, double end);
+/// Return a random integer between start and end, inclusive.
+uint64_t randomRange(uint64_t start, uint64_t end);
+
 
 } // namespace LogCabin::Core::Random
 
