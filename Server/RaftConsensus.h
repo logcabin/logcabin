@@ -805,19 +805,11 @@ class RaftConsensus : public Consensus {
     void scanForConfiguration();
 
     /**
-     * Set the timer to become a candidate to about FOLLOWER_TIMEOUT_MS from
-     * now and notify #stateChanged.
+     * Set the timer to start a new election and notify #stateChanged.
+     * The timer is set for ELECTION_TIMEOUT_MS plus some random jitter from
+     * now.
      */
-    void setFollowerTimer();
-
-    /**
-     * Set the timer to start a new election as a candidate and notify
-     * #stateChanged.
-     * \param attempt
-     *      How many elections this candidate has participated in since it
-     *      became a candidate. The first time, this should be 1.
-     */
-    void setCandidateTimer(uint64_t attempt);
+    void setElectionTimer();
 
     /**
      * Transitions to being a candidate from being a follower or candidate.
@@ -845,7 +837,7 @@ class RaftConsensus : public Consensus {
     /**
      * Return true if the server has confirmed its leadership during this call,
      * false otherwise. This is used to provide non-stale read operations to
-     * clients. It gives up after FOLLOWER_TIMEOUT_MS, since stepDownThread
+     * clients. It gives up after ELECTION_TIMEOUT_MS, since stepDownThread
      * will return to the follower state after that time.
      */
     bool upToDateLeader(std::unique_lock<Mutex>& lockGuard) const;
@@ -865,14 +857,7 @@ class RaftConsensus : public Consensus {
      * A follower waits for about this much inactivity before becoming a
      * candidate and starting a new election. Const except for unit tests.
      */
-    static uint64_t FOLLOWER_TIMEOUT_MS;
-
-    /**
-     * The expected amount of time it takes a server to broadcast to the
-     * cluster. Used to calculate how long a candidate should wait before
-     * attempting another election. Const except for unit tests.
-     */
-    static uint64_t CANDIDATE_TIMEOUT_MS;
+    static uint64_t ELECTION_TIMEOUT_MS;
 
     /**
      * A leader sends RPCs at least this often, even if there is no data to
@@ -963,13 +948,6 @@ class RaftConsensus : public Consensus {
      * leader). See #State.
      */
     State state;
-
-    /**
-     * How many elections this candidate has participated in since it
-     * became a candidate. Set to 0 in stepDown() and incremented in
-     * startNewElection. Used as argument to setCandidateTimer.
-     */
-    uint64_t electionAttempt;
 
     /**
      * The largest entry ID for which a quorum is known to have stored the same

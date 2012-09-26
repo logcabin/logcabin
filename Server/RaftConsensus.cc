@@ -501,11 +501,9 @@ Configuration::getServer(uint64_t newServerId)
 
 ////////// RaftConsensus //////////
 
-uint64_t RaftConsensus::FOLLOWER_TIMEOUT_MS = 150;
+uint64_t RaftConsensus::ELECTION_TIMEOUT_MS = 150;
 
-uint64_t RaftConsensus::CANDIDATE_TIMEOUT_MS = 150;
-
-uint64_t RaftConsensus::HEARTBEAT_PERIOD_MS = FOLLOWER_TIMEOUT_MS / 2;
+uint64_t RaftConsensus::HEARTBEAT_PERIOD_MS = ELECTION_TIMEOUT_MS / 2;
 
 // this is just set high for now so log messages shut up
 uint64_t RaftConsensus::RPC_FAILURE_BACKOFF_MS = 2000;
@@ -523,7 +521,6 @@ RaftConsensus::RaftConsensus(Globals& globals)
     , configuration()
     , currentTerm(0)
     , state(State::FOLLOWER)
-    , electionAttempt(0)
     , committedId(0)
     , leaderId(0)
     , votedFor(0)
@@ -826,11 +823,11 @@ RaftConsensus::setConfiguration(
     stateChanged.notify_all();
 
     // Wait for new servers to be caught up. This will abort if not every
-    // server makes progress in a FOLLOWER_TIMEOUT_MS period.
+    // server makes progress in a ELECTION_TIMEOUT_MS period.
     ++currentEpoch;
     uint64_t epoch = currentEpoch;
     TimePoint checkProgressAt =
-        Clock::now() + std::chrono::milliseconds(FOLLOWER_TIMEOUT_MS);
+        Clock::now() + std::chrono::milliseconds(ELECTION_TIMEOUT_MS);
     while (true) {
         if (exiting || term != currentTerm)
             return ClientResult::NOT_LEADER;
@@ -848,7 +845,7 @@ RaftConsensus::setConfiguration(
                 epoch = currentEpoch;
                 checkProgressAt =
                     (Clock::now() +
-                     std::chrono::milliseconds(FOLLOWER_TIMEOUT_MS));
+                     std::chrono::milliseconds(ELECTION_TIMEOUT_MS));
             }
         }
         stateChanged.wait_until(lockGuard, checkProgressAt);
@@ -1009,7 +1006,7 @@ RaftConsensus::stepDownThreadMain()
         // it's about when other servers will start elections and bump the
         // term.
         TimePoint stepDownAt =
-            Clock::now() + std::chrono::milliseconds(FOLLOWER_TIMEOUT_MS);
+            Clock::now() + std::chrono::milliseconds(ELECTION_TIMEOUT_MS);
         uint64_t term = currentTerm;
         uint64_t epoch = currentEpoch; // currentEpoch was incremented above
         while (true) {
@@ -1183,7 +1180,7 @@ RaftConsensus::appendEntry(std::unique_lock<Mutex>& lockGuard,
                 std::chrono::duration_cast<std::chrono::milliseconds>(
                     duration).count();
             if (uint64_t(labs(peer.lastCatchUpIterationMs -
-                              thisCatchUpIterationMs)) < FOLLOWER_TIMEOUT_MS) {
+                              thisCatchUpIterationMs)) < ELECTION_TIMEOUT_MS) {
                 peer.isCaughtUp_ = true;
                 stateChanged.notify_all();
             } else {
@@ -1333,39 +1330,11 @@ RaftConsensus::scanForConfiguration()
 }
 
 void
-RaftConsensus::setFollowerTimer()
+RaftConsensus::setElectionTimer()
 {
-    uint64_t ms = Core::Random::randomRange(
-                            FOLLOWER_TIMEOUT_MS,
-                            uint64_t(double(FOLLOWER_TIMEOUT_MS) * 1.25));
+    uint64_t ms = Core::Random::randomRange(ELECTION_TIMEOUT_MS,
+                                            ELECTION_TIMEOUT_MS * 2);
     VERBOSE("Will become candidate in %lu ms", ms);
-    startElectionAt = Clock::now() + std::chrono::milliseconds(ms);
-    stateChanged.notify_all();
-}
-
-void
-RaftConsensus::setCandidateTimer(uint64_t attempt)
-{
-    // truncated random exponential backoff
-    //  The timer is set for a random value between
-    //      0 and CANDIDATE_TIMEOUT_MS * 2**(attempt - 1)
-    // from now. If this value exceeds FOLLOWER_TIMEOUT_MS, FOLLOWER_TIMEOUT_MS
-    // is used instead.
-    // TODO(ongaro): john suggests multiplying by N-ish, and using the
-    // broadcast time instead of 0.
-    assert(attempt > 0);
-    uint64_t scale;
-    if (attempt == 1)
-        scale = 1;
-    else if (attempt > 20)
-        scale = (2 << 18);
-    else
-        scale = (2 << (attempt - 2));
-    // scale is now 2**(attempt-1)
-    uint64_t minMs = 0;
-    uint64_t maxMs = std::min(CANDIDATE_TIMEOUT_MS * scale,
-                              FOLLOWER_TIMEOUT_MS);
-    uint64_t ms = Core::Random::randomRange(minMs, maxMs);
     startElectionAt = Clock::now() + std::chrono::milliseconds(ms);
     stateChanged.notify_all();
 }
@@ -1378,7 +1347,7 @@ RaftConsensus::startNewElection()
         // go back to sleep.
         return;
     }
-    if (electionAttempt == 0) {
+    if (state == State::FOLLOWER) {
         // too verbose otherwise when server is partitioned
         NOTICE("Running for election in term %lu", currentTerm + 1);
     }
@@ -1386,8 +1355,7 @@ RaftConsensus::startNewElection()
     state = State::CANDIDATE;
     leaderId = 0;
     votedFor = serverId;
-    ++electionAttempt;
-    setCandidateTimer(electionAttempt);
+    setElectionTimer();
     configuration->forEach(&Server::beginRequestVote);
     updateLogMetadata();
     interruptAll();
@@ -1410,8 +1378,7 @@ RaftConsensus::stepDown(uint64_t newTerm)
         configuration->resetStagingServers();
     }
     state = State::FOLLOWER;
-    electionAttempt = 0;
-    setFollowerTimer();
+    setElectionTimer();
     interruptAll();
 }
 

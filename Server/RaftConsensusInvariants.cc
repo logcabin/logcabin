@@ -134,13 +134,6 @@ Invariants::checkBasic()
             expect(consensus.state != RaftConsensus::State::LEADER);
     }
 
-    // A follower's electionAttempt should be 0, and a candidate's should be
-    // greater than 0.
-    if (consensus.state == RaftConsensus::State::FOLLOWER)
-        expect(consensus.electionAttempt == 0);
-    else if (consensus.state == RaftConsensus::State::CANDIDATE)
-        expect(consensus.electionAttempt > 0);
-
     // The committedId doesn't exceed the length of the log.
     expect(consensus.committedId <= consensus.log->getLastLogId());
 

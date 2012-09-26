@@ -297,8 +297,7 @@ class ServerRaftConsensusTest : public ::testing::Test {
         , entry4()
         , entry5()
     {
-        RaftConsensus::FOLLOWER_TIMEOUT_MS = 5000;
-        RaftConsensus::CANDIDATE_TIMEOUT_MS = 1000;
+        RaftConsensus::ELECTION_TIMEOUT_MS = 5000;
         RaftConsensus::HEARTBEAT_PERIOD_MS = 2500;
         RaftConsensus::RPC_FAILURE_BACKOFF_MS = 3000;
         RaftConsensus::SOFT_RPC_SIZE_LIMIT = 1024;
@@ -403,7 +402,7 @@ TEST_F(ServerRaftConsensusTest, init_blanklog)
     EXPECT_EQ(0U, consensus->committedId);
     EXPECT_LT(Clock::mockValue, consensus->startElectionAt);
     EXPECT_GT(Clock::mockValue +
-              milliseconds(RaftConsensus::FOLLOWER_TIMEOUT_MS * 2),
+              milliseconds(RaftConsensus::ELECTION_TIMEOUT_MS * 2),
               consensus->startElectionAt);
 }
 
@@ -548,7 +547,7 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntry_callerStale)
     EXPECT_EQ("term: 11", response);
 }
 
-// this tests the leaderId == 0 branch, setFollowerTimer(), and heartbeat
+// this tests the leaderId == 0 branch, setElectionTimer(), and heartbeat
 TEST_F(ServerRaftConsensusTest, handleAppendEntry_newLeaderAndCommittedId)
 {
     init();
@@ -573,7 +572,7 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntry_newLeaderAndCommittedId)
     EXPECT_EQ(10U, consensus->currentTerm);
     EXPECT_LT(Clock::mockValue, consensus->startElectionAt);
     EXPECT_GT(Clock::mockValue +
-              milliseconds(RaftConsensus::FOLLOWER_TIMEOUT_MS * 2),
+              milliseconds(RaftConsensus::ELECTION_TIMEOUT_MS * 2),
               consensus->startElectionAt);
     EXPECT_EQ(1U, consensus->committedId);
     EXPECT_EQ("term: 10", response);
@@ -783,9 +782,9 @@ setConfigurationHelper(RaftConsensus* consensus)
     TimePoint waitUntil(
                 consensus->stateChanged.lastWaitUntilTimeSinceEpoch);
     EXPECT_EQ(round(Clock::mockValue) +
-              milliseconds(RaftConsensus::FOLLOWER_TIMEOUT_MS),
+              milliseconds(RaftConsensus::ELECTION_TIMEOUT_MS),
               waitUntil);
-    Clock::mockValue += milliseconds(RaftConsensus::FOLLOWER_TIMEOUT_MS);
+    Clock::mockValue += milliseconds(RaftConsensus::ELECTION_TIMEOUT_MS);
 }
 
 TEST_F(ServerRaftConsensusTest, setConfiguration_catchupFail)
@@ -1098,7 +1097,7 @@ class StepDownThreadMainHelper2 {
         } else if (iter == 3) {
             EXPECT_EQ(3U, consensus.currentEpoch);
             Clock::mockValue +=
-                milliseconds(RaftConsensus::FOLLOWER_TIMEOUT_MS);
+                milliseconds(RaftConsensus::ELECTION_TIMEOUT_MS);
         } else if (iter == 4) {
             EXPECT_EQ(3U, consensus.currentEpoch);
             consensus.exit();
@@ -1136,7 +1135,6 @@ TEST_F(ServerRaftConsensusTest, abortElection)
     EXPECT_EQ(6U, consensus->currentTerm);
     consensus->abortElection(7);
     EXPECT_EQ(7U, consensus->currentTerm);
-    EXPECT_EQ(1U, consensus->electionAttempt);
     EXPECT_EQ(0U, consensus->leaderId);
     EXPECT_EQ(0U, consensus->votedFor);
     EXPECT_TRUE(getPeer(2)->requestVoteDone);
@@ -1596,33 +1594,19 @@ TEST_F(ServerRaftConsensusTest, scanForConfiguration)
     EXPECT_EQ(2U, consensus->configuration->id);
 }
 
-TEST_F(ServerRaftConsensusTest, setFollowerTimer)
+TEST_F(ServerRaftConsensusTest, setElectionTimer)
 {
     // TODO(ongaro): seed the random number generator and make sure the values
     // look sane
     init();
     for (uint64_t i = 0; i < 100; ++i) {
-        consensus->setFollowerTimer();
+        consensus->setElectionTimer();
         EXPECT_LE(Clock::now() +
-                  milliseconds(RaftConsensus::FOLLOWER_TIMEOUT_MS),
+                  milliseconds(RaftConsensus::ELECTION_TIMEOUT_MS),
                   consensus->startElectionAt);
         EXPECT_GT(Clock::now() +
-                  milliseconds(RaftConsensus::FOLLOWER_TIMEOUT_MS) * 2,
+                  milliseconds(RaftConsensus::ELECTION_TIMEOUT_MS) * 2,
                   consensus->startElectionAt);
-    }
-}
-
-TEST_F(ServerRaftConsensusTest, setCandidateTimer)
-{
-    // TODO(ongaro): seed the random number generator and make sure the values
-    // look sane
-    init();
-    for (uint64_t i = 1; i <= 100; ++i) {
-        consensus->setCandidateTimer(i);
-        EXPECT_LT(Clock::now(), consensus->startElectionAt) << i;
-        EXPECT_GT(Clock::now() +
-                  milliseconds(RaftConsensus::FOLLOWER_TIMEOUT_MS),
-                  consensus->startElectionAt) << i;
     }
 }
 
@@ -1633,11 +1617,10 @@ TEST_F(ServerRaftConsensusTest, startNewElection)
     // no configuration yet -> no op
     consensus->startNewElection();
     EXPECT_EQ(State::FOLLOWER, consensus->state);
-    EXPECT_EQ(0U, consensus->electionAttempt);
     EXPECT_EQ(0U, consensus->currentTerm);
     EXPECT_LT(Clock::now(), consensus->startElectionAt);
     EXPECT_GT(Clock::now() +
-              milliseconds(RaftConsensus::FOLLOWER_TIMEOUT_MS) * 2,
+              milliseconds(RaftConsensus::ELECTION_TIMEOUT_MS) * 2,
               consensus->startElectionAt);
 
     // need other votes to win
@@ -1646,13 +1629,12 @@ TEST_F(ServerRaftConsensusTest, startNewElection)
     consensus->append(entry5);
     consensus->startNewElection();
     EXPECT_EQ(State::CANDIDATE, consensus->state);
-    EXPECT_EQ(1U, consensus->electionAttempt);
     EXPECT_EQ(6U, consensus->currentTerm);
     EXPECT_EQ(0U, consensus->leaderId);
     EXPECT_EQ(1U, consensus->votedFor);
     EXPECT_LT(Clock::now(), consensus->startElectionAt);
     EXPECT_GT(Clock::now() +
-              milliseconds(RaftConsensus::FOLLOWER_TIMEOUT_MS),
+              milliseconds(RaftConsensus::ELECTION_TIMEOUT_MS) * 2,
               consensus->startElectionAt);
 
     // already won
@@ -1686,7 +1668,6 @@ TEST_F(ServerRaftConsensusTest, stepDown)
     consensus->stateChanged.notify_all();
     EXPECT_NE(0U, consensus->leaderId);
     EXPECT_NE(0U, consensus->votedFor);
-    EXPECT_NE(0U, consensus->electionAttempt);
     EXPECT_EQ(TimePoint::max(), consensus->startElectionAt);
     EXPECT_EQ(Configuration::State::STAGING, consensus->configuration->state);
 
@@ -1694,11 +1675,10 @@ TEST_F(ServerRaftConsensusTest, stepDown)
     consensus->stepDown(10);
     EXPECT_EQ(0U, consensus->leaderId);
     EXPECT_EQ(0U, consensus->votedFor);
-    EXPECT_EQ(0U, consensus->electionAttempt);
     EXPECT_EQ(Configuration::State::STABLE, consensus->configuration->state);
     EXPECT_LT(Clock::now(), consensus->startElectionAt);
     EXPECT_GT(Clock::now() +
-              milliseconds(RaftConsensus::FOLLOWER_TIMEOUT_MS) * 2,
+              milliseconds(RaftConsensus::ELECTION_TIMEOUT_MS) * 2,
               consensus->startElectionAt);
 
     // from candidate to same term
@@ -1708,10 +1688,9 @@ TEST_F(ServerRaftConsensusTest, stepDown)
     consensus->stepDown(consensus->currentTerm);
     EXPECT_NE(0U, consensus->leaderId);
     EXPECT_NE(0U, consensus->votedFor);
-    EXPECT_EQ(0U, consensus->electionAttempt);
     EXPECT_LT(Clock::now(), consensus->startElectionAt);
     EXPECT_GT(Clock::now() +
-              milliseconds(RaftConsensus::FOLLOWER_TIMEOUT_MS) * 2,
+              milliseconds(RaftConsensus::ELECTION_TIMEOUT_MS) * 2,
               consensus->startElectionAt);
 }
 
