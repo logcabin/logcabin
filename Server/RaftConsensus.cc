@@ -67,11 +67,6 @@ LocalServer::~LocalServer()
 }
 
 void
-LocalServer::abortRequestVote()
-{
-}
-
-void
 LocalServer::beginRequestVote()
 {
 }
@@ -134,14 +129,6 @@ Peer::Peer(uint64_t serverId, RaftConsensus& consensus)
 
 Peer::~Peer()
 {
-}
-
-void
-Peer::abortRequestVote()
-{
-    requestVoteDone = true;
-    haveVote_ = false;
-    lastAgreeId = 0;
 }
 
 void
@@ -670,17 +657,15 @@ RaftConsensus::handleAppendEntry(
 
     // Record the leader ID as a hint for clients.
     if (leaderId == 0) {
-        // Candidates must step down when they discover the current leader.
-        stepDown(currentTerm);
         leaderId = request.server_id();
         NOTICE("All hail leader %lu for term %lu", leaderId, currentTerm);
+    } else {
+        assert(leaderId == request.server_id());
     }
-    assert(leaderId == request.server_id());
-    assert(state == State::FOLLOWER);
 
-    // This request is a sign of life from the current leader. Reset our timer
-    // so that we do not start a new election soon.
+    // This request is a sign of life from the current leader.
     stepDown(currentTerm);
+    setElectionTimer();
 
     // For an entry to fit into our log, it must not leave a gap.
     assert(request.prev_log_id() <= log->getLastLogId());
@@ -766,11 +751,7 @@ RaftConsensus::handleRequestVote(
         VERBOSE("Caller(%lu) has newer term, updating. "
                 "Ours was %lu, theirs is %lu",
                 request.server_id(), currentTerm, request.term());
-        if (state == State::CANDIDATE) {
-            abortElection(request.term());
-        } else {
-            stepDown(request.term());
-        }
+        stepDown(request.term());
     }
 
     // At this point, if leaderId != 0, we could tell the caller to step down.
@@ -789,6 +770,7 @@ RaftConsensus::handleRequestVote(
         VERBOSE("Voting for %lu in term %lu",
                 request.server_id(), currentTerm);
         stepDown(currentTerm);
+        setElectionTimer();
         votedFor = request.server_id();
         updateLogMetadata();
     }
@@ -1040,19 +1022,6 @@ RaftConsensus::stepDownThreadMain()
 //// RaftConsensus private methods that MUST NOT acquire the lock
 
 void
-RaftConsensus::abortElection(uint64_t newTerm)
-{
-    assert(state == State::CANDIDATE);
-    assert(currentTerm < newTerm);
-    currentTerm = newTerm;
-    leaderId = 0;
-    votedFor = 0;
-    configuration->forEach(&Server::abortRequestVote);
-    updateLogMetadata();
-    interruptAll();
-}
-
-void
 RaftConsensus::advanceCommittedId()
 {
     if (state != State::LEADER) {
@@ -1284,12 +1253,7 @@ RaftConsensus::requestVote(std::unique_lock<Mutex>& lockGuard, Peer& peer)
     }
 
     if (response.term() > currentTerm) {
-        if (state == State::LEADER) {
-            stepDown(response.term());
-        } else {
-            assert(state == State::CANDIDATE);
-            abortElection(response.term());
-        }
+        stepDown(response.term());
     } else {
         peer.requestVoteDone = true;
         peer.lastAckEpoch = epoch;
@@ -1389,7 +1353,8 @@ RaftConsensus::stepDown(uint64_t newTerm)
         configuration->resetStagingServers();
     }
     state = State::FOLLOWER;
-    setElectionTimer();
+    if (startElectionAt == TimePoint::max())
+        setElectionTimer();
     interruptAll();
 }
 

@@ -153,6 +153,17 @@ Invariants::checkBasic()
         expect(consensus.votedFor == consensus.serverId);
     }
 
+    // A follower and candidate always has a timer set; a leader has it at
+    // TimePoint::max().
+    if (consensus.state == RaftConsensus::State::LEADER) {
+        expect(consensus.startElectionAt == TimePoint::max());
+    } else {
+        expect(consensus.startElectionAt > TimePoint::min());
+        expect(consensus.startElectionAt <=
+               Clock::now() + std::chrono::milliseconds(
+                                    RaftConsensus::ELECTION_TIMEOUT_MS * 2));
+    }
+
     // Log metadata is updated when the term or vote changes.
     expect(consensus.log->metadata.current_term() == consensus.currentTerm);
     expect(consensus.log->metadata.voted_for() == consensus.votedFor);

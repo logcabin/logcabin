@@ -708,6 +708,8 @@ TEST_F(ServerRaftConsensusTest, handleRequestVote)
     consensus->startNewElection();
     EXPECT_EQ(State::CANDIDATE, consensus->state);
     request.set_term(12);
+    TimePoint oldStartElectionAt = consensus->startElectionAt;
+    Clock::mockValue += milliseconds(2);
     consensus->handleRequestVote(request, response);
     EXPECT_EQ("term: 12 "
               "granted: false "
@@ -715,7 +717,9 @@ TEST_F(ServerRaftConsensusTest, handleRequestVote)
               "last_log_id: 2 "
               "begin_last_term_id: 2 ",
               response);
-    EXPECT_EQ(State::CANDIDATE, consensus->state);
+    EXPECT_EQ(State::FOLLOWER, consensus->state);
+    // check that the election timer was not reset
+    EXPECT_EQ(oldStartElectionAt, consensus->startElectionAt);
     EXPECT_EQ(0U, consensus->votedFor);
 
     // as candidate, log is ok
@@ -1125,21 +1129,6 @@ TEST_F(ServerRaftConsensusTest, stepDownThreadMain_twoServers)
     consensus->stepDownThreadMain();
 }
 
-TEST_F(ServerRaftConsensusTest, abortElection)
-{
-    init();
-    consensus->stepDown(5);
-    consensus->append(entry1);
-    consensus->append(entry5);
-    consensus->startNewElection();
-    EXPECT_EQ(6U, consensus->currentTerm);
-    consensus->abortElection(7);
-    EXPECT_EQ(7U, consensus->currentTerm);
-    EXPECT_EQ(0U, consensus->leaderId);
-    EXPECT_EQ(0U, consensus->votedFor);
-    EXPECT_TRUE(getPeer(2)->requestVoteDone);
-}
-
 TEST_F(ServerRaftConsensusTest, advanceCommittedId_noAdvance)
 {
     init();
@@ -1481,8 +1470,12 @@ TEST_F(ServerRaftConsensusPTest, requestVote_termStale)
     response.set_term(9);
     peerService->reply(Protocol::Raft::OpCode::REQUEST_VOTE,
                        request, response);
+    TimePoint oldStartElectionAt = consensus->startElectionAt;
+    Clock::mockValue += milliseconds(2);
     consensus->requestVote(lockGuard, peer);
-    EXPECT_EQ(State::CANDIDATE, consensus->state);
+    EXPECT_EQ(State::FOLLOWER, consensus->state);
+    // check that the election timer was not reset
+    EXPECT_EQ(oldStartElectionAt, consensus->startElectionAt);
     EXPECT_EQ(9U, consensus->currentTerm);
 }
 
@@ -1685,13 +1678,16 @@ TEST_F(ServerRaftConsensusTest, stepDown)
     consensus->append(entry5);
     consensus->startNewElection();
     consensus->leaderId = 3;
+    TimePoint oldStartElectionAt = consensus->startElectionAt;
+    Clock::mockValue += milliseconds(2);
     consensus->stepDown(consensus->currentTerm);
     EXPECT_NE(0U, consensus->leaderId);
     EXPECT_NE(0U, consensus->votedFor);
-    EXPECT_LT(Clock::now(), consensus->startElectionAt);
-    EXPECT_GT(Clock::now() +
-              milliseconds(RaftConsensus::ELECTION_TIMEOUT_MS) * 2,
-              consensus->startElectionAt);
+    EXPECT_EQ(oldStartElectionAt, consensus->startElectionAt);
+
+    // from follower to new term
+    consensus->stepDown(consensus->currentTerm + 1);
+    EXPECT_EQ(oldStartElectionAt, consensus->startElectionAt);
 }
 
 TEST_F(ServerRaftConsensusTest, updateLogMetadata)

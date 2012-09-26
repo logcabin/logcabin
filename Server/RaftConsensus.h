@@ -105,12 +105,6 @@ class Server {
      */
     virtual ~Server();
     /**
-     * Stop requesting the Server's vote. Called when we are no longer
-     * interested in the current election. Return immediately. The condition
-     * variable in RaftConsensus will be notified separately.
-     */
-    virtual void abortRequestVote() = 0;
-    /**
      * Begin requesting the Server's vote in the current election. Return
      * immediately. The condition variable in RaftConsensus will be notified
      * separately.
@@ -180,7 +174,6 @@ class LocalServer : public Server {
     ~LocalServer();
     void exit();
     void beginRequestVote();
-    void abortRequestVote();
     uint64_t getLastAgreeId() const;
     bool haveVote() const;
     uint64_t getLastAckEpoch() const;
@@ -211,7 +204,6 @@ class Peer : public Server {
     ~Peer();
 
     // Methods implemented from Server interface.
-    void abortRequestVote();
     void beginRequestVote();
     void exit();
     uint64_t getLastAckEpoch() const;
@@ -714,16 +706,6 @@ class RaftConsensus : public Consensus {
 
 
     /**
-     * Called when a candidate discovers a server with a newer term.
-     * It stays as a CANDIDATE, but does not issue any new RPCs or process
-     * existing RPCs until it times out and starts the next election.
-     * \pre
-     *      state is CANDIDATE.
-     *      currentTerm < newTerm.
-     */
-    void abortElection(uint64_t newTerm);
-
-    /**
      * Move forward #committedId if possible. Called only on leaders after
      * receiving RPC responses. If committedId changes, this will notify
      * #stateChanged. It will also change the configuration or step down due to
@@ -771,7 +753,7 @@ class RaftConsensus : public Consensus {
     /**
      * Notify the #stateChanged condition variable and cancel all current RPCs.
      * This should be called when stepping down, starting a new election,
-     * aborting an election, or exiting.
+     * or exiting.
      */
     void interruptAll();
 
@@ -830,8 +812,10 @@ class RaftConsensus : public Consensus {
     /**
      * Transition to being a follower. This is called when we
      * receive an RPC request with newer term, receive an RPC response
-     * indicating our term is stale, or discover a current leader as a
+     * indicating our term is stale, or discover a current leader while a
      * candidate. In this last case, newTerm will be the same as currentTerm.
+     * This will call setElectionTimer for you if no election timer is
+     * currently set.
      */
     void stepDown(uint64_t newTerm);
 
