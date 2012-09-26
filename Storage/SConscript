@@ -2,9 +2,6 @@ Import('env', 'object_files')
 
 src = [
     "LogEntry.cc",
-    "Factory.cc",
-    "FilesystemModule.cc",
     "FilesystemUtil.cc",
-    "MemoryModule.cc",
 ]
 object_files['Storage'] = env.StaticObject(src)

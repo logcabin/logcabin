@@ -36,7 +36,6 @@ namespace Server {
 class RaftConsensus;
 class RaftService;
 class ClientService;
-class LogManager;
 class StateMachine;
 
 /**
@@ -98,10 +97,6 @@ class Globals {
     ExitHandler sigTermHandler;
 
   public:
-    /**
-     * Used by the client service for managing and accessing logs.
-     */
-    Core::RWManager<LogManager> logManager;
 
     /**
      * Consensus module.

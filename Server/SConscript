@@ -8,9 +8,7 @@ src = [
     "ClientService.cc",
     "Consensus.cc",
     "Globals.cc",
-    "LogManager.cc",
     "StateMachine.cc",
 ]
 object_files['Server'] = (env.StaticObject(src) +
-                          env.Protobuf("InternalLog.proto") +
                           env.Protobuf("RaftLogMetadata.proto"))

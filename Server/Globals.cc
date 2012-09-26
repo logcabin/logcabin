@@ -23,7 +23,6 @@
 #include "Server/RaftConsensus.h"
 #include "Server/ClientService.h"
 #include "Server/Globals.h"
-#include "Server/LogManager.h"
 #include "Server/StateMachine.h"
 
 namespace LogCabin {
@@ -50,7 +49,6 @@ Globals::Globals()
     , eventLoop()
     , sigIntHandler(eventLoop, SIGINT)
     , sigTermHandler(eventLoop, SIGTERM)
-    , logManager()
     , raft()
     , stateMachine()
     , raftService()
@@ -69,10 +67,6 @@ Globals::~Globals()
 void
 Globals::init(uint64_t serverId)
 {
-    if (logManager.getExclusiveAccess().get() == NULL) {
-        logManager.reset(new LogManager(config));
-    }
-
     if (!raft) {
         raft.reset(new RaftConsensus(*this));
     }

@@ -22,7 +22,6 @@
 #include "Server/RaftConsensus.h"
 #include "Server/ClientService.h"
 #include "Server/Globals.h"
-#include "Server/LogManager.h"
 #include "Server/StateMachine.h"
 #include "Storage/Log.h"
 #include "Storage/LogEntry.h"

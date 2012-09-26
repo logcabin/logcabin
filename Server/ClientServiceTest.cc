@@ -23,7 +23,6 @@
 #include "RPC/ClientRPC.h"
 #include "RPC/ClientSession.h"
 #include "Server/Globals.h"
-#include "Server/LogManager.h"
 #include "Storage/Log.h"
 #include "Storage/LogEntry.h"
 
