@@ -147,6 +147,11 @@ class Server {
      * Should monotonically change from false to true.
      */
     virtual bool isCaughtUp() const = 0;
+    /**
+     * Make the next heartbeat RPC happen soon. Return immediately.
+     * The condition variable in RaftConsensus will be notified separately.
+     */
+    virtual void scheduleHeartbeat() = 0;
 
     /**
      * The ID of this server.
@@ -180,6 +185,7 @@ class LocalServer : public Server {
     bool haveVote() const;
     uint64_t getLastAckEpoch() const;
     bool isCaughtUp() const;
+    void scheduleHeartbeat();
     RaftConsensus& consensus;
 };
 
@@ -212,6 +218,7 @@ class Peer : public Server {
     uint64_t getLastAgreeId() const;
     bool haveVote() const;
     bool isCaughtUp() const;
+    void scheduleHeartbeat();
 
     /**
      * Execute a remote procedure call on the server's RaftService. As this

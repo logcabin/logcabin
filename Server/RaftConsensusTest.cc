@@ -1719,8 +1719,12 @@ TEST_F(ServerRaftConsensusTest, upToDateLeader)
     EXPECT_TRUE(consensus->upToDateLeader(lockGuard));
     // leader of non-trivial cluster -> wait, then true
     consensus->append(entry5);
+    Peer* peer = getPeer(2);
     consensus->stateChanged.callback = std::bind(setLastAckEpoch, getPeer(2));
+    peer->nextHeartbeatTime = TimePoint::max();
     EXPECT_TRUE(consensus->upToDateLeader(lockGuard));
+    EXPECT_EQ(round(Clock::now()),
+              peer->nextHeartbeatTime);
 }
 
 } // namespace LogCabin::Server::<anonymous>

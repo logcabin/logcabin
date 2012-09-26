@@ -105,6 +105,11 @@ LocalServer::isCaughtUp() const
     return true;
 }
 
+void
+LocalServer::scheduleHeartbeat()
+{
+}
+
 ////////// Peer //////////
 
 Peer::Peer(uint64_t serverId, RaftConsensus& consensus)
@@ -176,6 +181,12 @@ bool
 Peer::isCaughtUp() const
 {
     return isCaughtUp_;
+}
+
+void
+Peer::scheduleHeartbeat()
+{
+    nextHeartbeatTime = Clock::now();
 }
 
 bool
@@ -1397,6 +1408,8 @@ RaftConsensus::upToDateLeader(std::unique_lock<Mutex>& lockGuard) const
 {
     ++currentEpoch;
     uint64_t epoch = currentEpoch;
+    // schedule a heartbeat now so that this returns quickly
+    configuration->forEach(&Server::scheduleHeartbeat);
     while (true) {
         if (exiting || state != State::LEADER)
             return false;
