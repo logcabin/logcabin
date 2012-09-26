@@ -31,15 +31,15 @@ namespace Server {
 
 ////////// Globals::SigIntHandler //////////
 
-Globals::SigIntHandler::SigIntHandler(Event::Loop& eventLoop)
-    : Signal(eventLoop, SIGINT)
+Globals::ExitHandler::ExitHandler(Event::Loop& eventLoop, int signalNumber)
+    : Signal(eventLoop, signalNumber)
 {
 }
 
 void
-Globals::SigIntHandler::handleSignalEvent()
+Globals::ExitHandler::handleSignalEvent()
 {
-    VERBOSE("Received SIGINT; shutting down.");
+    NOTICE("%s: shutting down", strsignal(signalNumber));
     eventLoop.exit();
 }
 
@@ -48,7 +48,8 @@ Globals::SigIntHandler::handleSignalEvent()
 Globals::Globals()
     : config()
     , eventLoop()
-    , sigIntHandler(eventLoop)
+    , sigIntHandler(eventLoop, SIGINT)
+    , sigTermHandler(eventLoop, SIGTERM)
     , logManager()
     , raft()
     , stateMachine()

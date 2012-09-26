@@ -59,6 +59,11 @@ class Signal {
      */
     Event::Loop& eventLoop;
 
+    /**
+     * The signal number identifying which signal to receive (man signal.h).
+     */
+    const int signalNumber;
+
   private:
     /**
      * The signal event from libevent.

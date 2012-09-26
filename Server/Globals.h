@@ -48,12 +48,11 @@ class StateMachine;
 class Globals {
   private:
     /**
-     * Turns SIGINT signals (such as keyboard interrupt) into an exit from
-     * an event loop.
+     * Exits from the event loop upon receiving a UNIX signal.
      */
-    class SigIntHandler : public Event::Signal {
+    class ExitHandler : public Event::Signal {
       public:
-        explicit SigIntHandler(Event::Loop& eventLoop);
+        ExitHandler(Event::Loop& eventLoop, int signalNumber);
         void handleSignalEvent();
     };
 
@@ -72,7 +71,8 @@ class Globals {
     void init(uint64_t serverId = 0);
 
     /**
-     * Run the event loop until SIGINT or someone calls Event::Loop::exit().
+     * Run the event loop until SIGINT, SIGTERM, or someone calls
+     * Event::Loop::exit().
      */
     void run();
 
@@ -88,10 +88,14 @@ class Globals {
 
   private:
     /**
-     * Turns SIGINT signals (such as keyboard interrupt) into an exit from
-     * #eventLoop.
+     * Exits the event loop upon receiving SIGINT (keyboard interrupt).
      */
-    SigIntHandler sigIntHandler;
+    ExitHandler sigIntHandler;
+
+    /**
+     * Exits the event loop upon receiving SIGTERM (kill).
+     */
+    ExitHandler sigTermHandler;
 
   public:
     /**

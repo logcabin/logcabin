@@ -44,6 +44,7 @@ onSignalFired(evutil_socket_t fd, short events, void* signal) // NOLINT
 
 Signal::Signal(Event::Loop& eventLoop, int signalNumber)
     : eventLoop(eventLoop)
+    , signalNumber(signalNumber)
     , event(NULL)
 {
     event = qualify(evsignal_new(unqualify(eventLoop.base),
