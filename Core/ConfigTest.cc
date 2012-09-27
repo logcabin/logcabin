@@ -31,11 +31,8 @@ using std::string;
 class CoreConfigTest : public ::testing::Test {
   public:
     CoreConfigTest()
-        : tmpdir(Storage::FilesystemUtil::tmpnam())
+        : tmpdir(Storage::FilesystemUtil::mkdtemp())
     {
-        if (mkdir(tmpdir.c_str(), 0755) != 0)
-            PANIC("Couldn't create temporary directory for tests");
-
         int fd = open((tmpdir + "/a").c_str(), O_WRONLY|O_CREAT, 0644);
         if (fd < 0)
             PANIC("Couldn't open temp file");

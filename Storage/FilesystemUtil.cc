@@ -102,11 +102,12 @@ syncDir(const std::string& path)
 }
 
 std::string
-tmpnam()
+mkdtemp()
 {
-    char d[L_tmpnam];
-    std::string path = ::tmpnam(d);
-    assert(path != "" && path != "/");
+    char d[] = "/tmp/logcabinXXXXXX";
+    const char* path = ::mkdtemp(d);
+    if (path == NULL)
+        PANIC("Couldn't create temporary directory");
     return path;
 }
 

@@ -79,10 +79,8 @@ writev(int fildes, const struct iovec* iov, int iovcnt)
 class StorageFilesystemUtilTest : public ::testing::Test {
   public:
     StorageFilesystemUtilTest()
-        : tmpdir(FilesystemUtil::tmpnam())
+        : tmpdir(FilesystemUtil::mkdtemp())
     {
-        if (mkdir(tmpdir.c_str(), 0755) != 0)
-            PANIC("Couldn't create temporary directory for tests");
         MockWritev::state.reset(new MockWritev::State);
     }
     ~StorageFilesystemUtilTest() {
@@ -152,8 +150,12 @@ TEST_F(StorageFilesystemUtilTest, syncDir) {
                  "open");
 }
 
-TEST_F(StorageFilesystemUtilTest, tmpnam) {
-    EXPECT_NE(FilesystemUtil::tmpnam(), FilesystemUtil::tmpnam());
+TEST_F(StorageFilesystemUtilTest, mkdtemp) {
+    std::string a = FilesystemUtil::mkdtemp();
+    std::string b = FilesystemUtil::mkdtemp();
+    EXPECT_NE(a, b);
+    Storage::FilesystemUtil::remove(a);
+    Storage::FilesystemUtil::remove(b);
 }
 
 TEST_F(StorageFilesystemUtilTest, writeCommon) {

@@ -56,13 +56,9 @@ void remove(const std::string& path);
 void syncDir(const std::string& path);
 
 /**
- * Return a path suitable for use as a temporary file or directory that is
- * likely to not exist.
- * \warning
- *      Be aware of the race condition that other processes may take this name
- *      between this call and the caller creating the file or directory.
+ * Return a path to a temporary directory.
  */
-std::string tmpnam();
+std::string mkdtemp();
 
 /**
  * A wrapper around write that retries interrupted calls.
