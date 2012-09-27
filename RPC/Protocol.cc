@@ -13,8 +13,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <endian.h>
-
+#include "Core/Endian.h"
 #include "RPC/Protocol.h"
 
 namespace LogCabin {

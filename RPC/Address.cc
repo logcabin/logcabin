@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "Core/Debug.h"
+#include "Core/Endian.h"
 #include "Core/Random.h"
 #include "RPC/Address.h"
 
