@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include "build/Protocol/Raft.pb.h"
 #include "Core/Debug.h"

@@ -57,7 +57,7 @@ class OptionParser {
                     configFilename = optarg;
                     break;
                 case 'i':
-                    serverId = atol(optarg);
+                    serverId = uint64_t(atol(optarg));
                     break;
                 case '?':
                 default:

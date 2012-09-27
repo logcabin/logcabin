@@ -147,7 +147,7 @@ ClientImpl::read(uint64_t logId, EntryId from)
     if (response.has_ok()) {
         const auto& returnedEntries = response.ok().entry();
         std::vector<Entry> entries;
-        entries.reserve(returnedEntries.size());
+        entries.reserve(uint64_t(returnedEntries.size()));
         for (auto it = returnedEntries.begin();
              it != returnedEntries.end();
              ++it) {

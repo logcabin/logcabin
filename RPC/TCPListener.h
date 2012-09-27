@@ -23,7 +23,7 @@
 
 // forward declaration
 namespace LibEvent {
-class evconnlistener;
+struct evconnlistener;
 }
 
 namespace LogCabin {

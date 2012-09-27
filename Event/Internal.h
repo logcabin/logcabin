@@ -32,14 +32,14 @@
 // forward declarations
 
 namespace LibEvent {
-class event_base;
-class event;
-class evconnlistener;
+struct event_base;
+struct event;
+struct evconnlistener;
 }
 
-class event_base;
-class event;
-class evconnlistener;
+struct event_base;
+struct event;
+struct evconnlistener;
 
 namespace LibEvent {
 

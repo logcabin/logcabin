@@ -33,7 +33,10 @@ class Server;
 namespace Server {
 
 // forward declarations
+namespace RaftConsensusInternal {
 class RaftConsensus;
+}
+using RaftConsensusInternal::RaftConsensus;
 class RaftService;
 class ClientService;
 class StateMachine;

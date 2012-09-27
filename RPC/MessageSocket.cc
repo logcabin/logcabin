@@ -190,8 +190,8 @@ MessageSocket::readable()
         if (bytesRead == -1)
             return; // disconnected, must return immediately
         inbound.bytesRead += bytesRead;
-        if ((inbound.bytesRead == (sizeof(Header) +
-                                   inbound.header.payloadLength))) {
+        if (inbound.bytesRead == (sizeof(Header) +
+                                  inbound.header.payloadLength)) {
             // Transition to receiving header
             inbound.bytesRead = 0;
             onReceiveMessage(inbound.header.messageId,

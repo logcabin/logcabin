@@ -1157,10 +1157,10 @@ RaftConsensus::appendEntry(std::unique_lock<Mutex>& lockGuard,
             Clock::duration duration =
                 Clock::now() - peer.thisCatchUpIterationStart;
             uint64_t thisCatchUpIterationMs =
-                std::chrono::duration_cast<std::chrono::milliseconds>(
-                    duration).count();
-            if (uint64_t(labs(peer.lastCatchUpIterationMs -
-                              thisCatchUpIterationMs)) < ELECTION_TIMEOUT_MS) {
+                uint64_t(std::chrono::duration_cast<std::chrono::milliseconds>(
+                    duration).count());
+            if (uint64_t(labs(int64_t(peer.lastCatchUpIterationMs -
+                              thisCatchUpIterationMs))) < ELECTION_TIMEOUT_MS) {
                 peer.isCaughtUp_ = true;
                 stateChanged.notify_all();
             } else {

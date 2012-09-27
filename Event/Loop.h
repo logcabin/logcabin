@@ -26,8 +26,8 @@
  * with libevent2's unqualified types.
  */
 namespace LibEvent {
-class event_base;
-class event;
+struct event_base;
+struct event;
 }
 
 namespace LogCabin {

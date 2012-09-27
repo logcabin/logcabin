@@ -127,8 +127,9 @@ ssize_t
 write(int fildes,
        std::initializer_list<std::pair<const void*, uint32_t>> data)
 {
+    using Core::Util::downCast;
     size_t totalBytes = 0;
-    uint32_t iovcnt = Core::Util::downCast<uint32_t>(data.size());
+    uint32_t iovcnt = downCast<uint32_t>(data.size());
     struct iovec iov[iovcnt];
     uint32_t i = 0;
     for (auto it = data.begin(); it != data.end(); ++it) {
@@ -140,21 +141,22 @@ write(int fildes,
 
     size_t bytesRemaining = totalBytes;
     while (true) {
-         ssize_t written = System::writev(fildes, iov, iovcnt);
+         ssize_t written = System::writev(fildes, iov, downCast<int>(iovcnt));
          if (written == -1) {
              if (errno == EINTR)
                  continue;
              return -1;
          }
-         bytesRemaining -= written;
+         bytesRemaining = downCast<size_t>(bytesRemaining -
+                                           downCast<size_t>(written));
          if (bytesRemaining == 0)
-             return totalBytes;
+             return downCast<ssize_t>(totalBytes);
          for (uint32_t i = 0; i < iovcnt; ++i) {
              if (iov[i].iov_len < static_cast<size_t>(written)) {
                  written -= iov[i].iov_len;
                  iov[i].iov_len = 0;
              } else if (iov[i].iov_len >= static_cast<size_t>(written)) {
-                 iov[i].iov_len -= written;
+                 iov[i].iov_len = iov[i].iov_len - downCast<size_t>(written);
                  iov[i].iov_base = (static_cast<char*>(iov[i].iov_base) +
                                     written);
                  break;

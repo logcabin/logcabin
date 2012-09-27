@@ -15,8 +15,8 @@
 
 #include <cassert>
 #include <cmath>
-#include <cstdint>
 #include <event2/util.h>
+#include <limits>
 
 #include "Core/Random.h"
 #include "Event/Internal.h"
@@ -45,7 +45,8 @@ getRandomBytes()
 double
 randomUnit()
 {
-    return (double(random64()) / double(UINT64_MAX));
+    return (double(random64()) /
+            double(std::numeric_limits<uint64_t>::max()));
 }
 
 } // anonymous namespace

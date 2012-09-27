@@ -164,7 +164,7 @@ ClientRPC::waitForReply(google::protobuf::Message* response,
             PANIC("Unknown status %u returned from server after sending it "
                   "protocol version 1 in the request header. This probably "
                   "indicates a bug in the server.",
-                  responseHeader.prefix.status);
+                  uint32_t(responseHeader.prefix.status));
     }
 
 }
