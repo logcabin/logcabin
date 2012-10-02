@@ -13,7 +13,14 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+/**
+ * \file
+ * Changes the membership of a LogCabin cluster.
+ */
+
+#include <getopt.h>
 #include <iostream>
+#include <string>
 
 #include "Client/Client.h"
 
@@ -22,6 +29,72 @@ namespace {
 using LogCabin::Client::Cluster;
 using LogCabin::Client::Configuration;
 using LogCabin::Client::ConfigurationResult;
+
+/**
+ * Parses argv for the main function.
+ */
+class OptionParser {
+  public:
+    OptionParser(int& argc, char**& argv)
+        : argc(argc)
+        , argv(argv)
+        , cluster("logcabin:61023")
+        , servers()
+    {
+        while (true) {
+            static struct option longOptions[] = {
+               {"cluster",  required_argument, NULL, 'c'},
+               {"help",  no_argument, NULL, 'h'},
+               {0, 0, 0, 0}
+            };
+            int c = getopt_long(argc, argv, "c:h", longOptions, NULL);
+
+            // Detect the end of the options.
+            if (c == -1)
+                break;
+
+            switch (c) {
+                case 'h':
+                    usage();
+                    exit(0);
+                case 'c':
+                    cluster = optarg;
+                    break;
+                case '?':
+                default:
+                    // getopt_long already printed an error message.
+                    usage();
+                    exit(1);
+            }
+        }
+
+        // Additional command line arguments are required.
+        if (optind == argc) {
+            usage();
+            exit(1);
+        }
+        while (optind < argc) {
+            servers.push_back(argv[optind]);
+            ++optind;
+        }
+    }
+
+    void usage() {
+        std::cout << "Usage: " << argv[0] << " [options] <servers>"
+                  << std::endl;
+        std::cout << "Options: " << std::endl;
+        std::cout << "  -h, --help          "
+                  << "Print this usage information" << std::endl;
+        std::cout << "  -c, --cluster <address> "
+                  << "The network address of the LogCabin cluster"
+                  << "(default: logcabin:61023)" << std::endl;
+    }
+
+    int& argc;
+    char**& argv;
+    std::string cluster;
+    std::vector<std::string> servers;
+};
 
 void
 printConfiguration(const std::pair<uint64_t, Configuration>& configuration)
@@ -41,17 +114,17 @@ printConfiguration(const std::pair<uint64_t, Configuration>& configuration)
 int
 main(int argc, char** argv)
 {
-    Cluster cluster("logcabin:61023");
+    OptionParser options(argc, argv);
+    Cluster cluster(options.cluster);
+
     std::pair<uint64_t, Configuration> configuration =
         cluster.getConfiguration();
     printConfiguration(configuration);
 
     uint64_t id = configuration.first;
-    Configuration servers = configuration.second;
-    servers.emplace_back(2, "192.168.2.2:61023");
-    servers.emplace_back(3, "192.168.2.3:61023");
-    servers.emplace_back(4, "192.168.2.4:61023");
-    servers.emplace_back(5, "192.168.2.5:61023");
+    Configuration servers;
+    for (uint64_t i = 0; i < options.servers.size(); ++i)
+        servers.emplace_back(i + 1, options.servers.at(i));
     ConfigurationResult result = cluster.setConfiguration(id, servers);
 
     std::cout << "Reconfiguration ";
@@ -69,5 +142,4 @@ main(int argc, char** argv)
     }
 
     printConfiguration(cluster.getConfiguration());
-
 }
