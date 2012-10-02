@@ -13,6 +13,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <cassert>
 #include <functional>
 #include <mutex>
 
@@ -83,6 +84,28 @@ class Mutex {
     std::function<void()> callback;
 
     friend class ConditionVariable;
+};
+
+/**
+ * Release a mutex upon construction, reacquires it upon destruction.
+ * \tparam Mutex
+ *      Type of mutex (either std::mutex or Core::Mutex).
+ */
+template<typename Mutex>
+class MutexUnlock {
+  public:
+    explicit MutexUnlock(std::unique_lock<Mutex>& guard)
+        : guard(guard)
+    {
+        assert(guard.owns_lock());
+        guard.unlock();
+    }
+    ~MutexUnlock()
+    {
+        guard.lock();
+    }
+  private:
+    std::unique_lock<Mutex>& guard;
 };
 
 } // namespace LogCabin::Core
