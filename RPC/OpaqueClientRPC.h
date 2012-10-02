@@ -15,6 +15,7 @@
 
 #include <cinttypes>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <string>
 
@@ -135,8 +136,14 @@ class OpaqueClientRPC {
 
     /**
      * Update the fields of this object if the RPC has not completed.
+     * Must be called with the lock held.
      */
     void update();
+
+    /**
+     * Protects all the members of this class.
+     */
+    mutable std::mutex mutex;
 
     /**
      * The session on which this RPC is executing.

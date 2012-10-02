@@ -77,8 +77,7 @@ ClientRPC::operator=(ClientRPC&& other)
 void
 ClientRPC::cancel()
 {
-    if (!isReady())
-        opaqueRPC.cancel();
+    opaqueRPC.cancel();
 }
 
 bool

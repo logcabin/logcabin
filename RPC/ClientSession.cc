@@ -280,17 +280,18 @@ ClientSession::cancel(OpaqueClientRPC& rpc)
     std::shared_ptr<ClientSession> selfGuard(self.lock());
 
     std::unique_lock<std::mutex> mutexGuard(mutex);
+    auto it = responses.find(rpc.responseToken);
+    if (it == responses.end())
+        return;
+    delete it->second;
+    responses.erase(it);
+    responseReceived.notify_all();
 
     --numActiveRPCs;
     // Even if numActiveRPCs == 0, it's simpler here to just let the timer wake
     // up an extra time and clean up. Otherwise, we'd need to grab an
     // Event::Loop::Lock prior to the mutex to call deschedule() without
     // inducing deadlock.
-
-    auto it = responses.find(rpc.responseToken);
-    assert(it != responses.end());
-    delete it->second;
-    responses.erase(it);
 }
 
 void
@@ -303,14 +304,18 @@ ClientSession::update(OpaqueClientRPC& rpc)
 
     std::unique_lock<std::mutex> mutexGuard(mutex);
     auto it = responses.find(rpc.responseToken);
-    assert(it != responses.end());
+    if (it == responses.end()) {
+        // RPC was cancelled, fields set already
+        assert(rpc.ready);
+        return;
+    }
     Response* response = it->second;
     if (response->ready)
         rpc.reply = std::move(response->reply);
     else if (!errorMessage.empty())
         rpc.errorMessage = errorMessage;
     else
-        return;
+        return; // not ready
     rpc.ready = true;
     rpc.session.reset();
 
@@ -319,28 +324,20 @@ ClientSession::update(OpaqueClientRPC& rpc)
 }
 
 void
-ClientSession::wait(OpaqueClientRPC& rpc)
+ClientSession::wait(const OpaqueClientRPC& rpc)
 {
-    // The RPC may be holding the last reference to this session. This
-    // temporary reference makes sure this object isn't destroyed until after
-    // we return from this method. It must be the first line in this method.
-    std::shared_ptr<ClientSession> selfGuard(self.lock());
-
     std::unique_lock<std::mutex> mutexGuard(mutex);
-    Response* response = responses[rpc.responseToken];
-    while (!response->ready && errorMessage.empty())
+    while (true) {
+        if (!errorMessage.empty())
+            return; // session has error
+        auto it = responses.find(rpc.responseToken);
+        if (it == responses.end())
+            return; // RPC was cancelled or already updated
+        Response* response = it->second;
+        if (response->ready)
+            return; // RPC has completed
         responseReceived.wait(mutexGuard);
-    if (response->ready)
-        rpc.reply = std::move(response->reply);
-    else
-        rpc.errorMessage = errorMessage;
-    rpc.ready = true;
-    rpc.session.reset();
-
-    delete response;
-    // It's unsafe to keep an iterator from before the wait() call, so it's
-    // necessary to look up rpc.responseToken in the map again.
-    responses.erase(rpc.responseToken);
+    }
 }
 
 } // namespace LogCabin::RPC

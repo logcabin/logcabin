@@ -199,9 +199,21 @@ TEST_F(RPCClientSessionTest, cancel) {
     OpaqueClientRPC rpc = session->sendRequest(buf("hi"));
     EXPECT_EQ(1U, session->numActiveRPCs);
     rpc.cancel();
+    rpc.cancel(); // intentionally duplicated
     EXPECT_EQ(0U, session->numActiveRPCs);
     EXPECT_TRUE(rpc.ready);
     EXPECT_FALSE(rpc.session);
+    EXPECT_EQ(0U, rpc.reply.getLength());
+    EXPECT_EQ("RPC canceled by user", rpc.errorMessage);
+    EXPECT_EQ(0U, session->responses.size());
+    // TODO(ongaro): Test notify with Core/ConditionVariable
+}
+
+TEST_F(RPCClientSessionTest, updateCanceled) {
+    OpaqueClientRPC rpc = session->sendRequest(buf("hi"));
+    rpc.cancel();
+    rpc.update();
+    EXPECT_TRUE(rpc.ready);
     EXPECT_EQ(0U, rpc.reply.getLength());
     EXPECT_EQ("RPC canceled by user", rpc.errorMessage);
     EXPECT_EQ(0U, session->responses.size());
@@ -244,6 +256,14 @@ TEST_F(RPCClientSessionTest, updateError) {
 
 TEST_F(RPCClientSessionTest, waitNotReady) {
     // It's hard to test this one since it'll block.
+    // TODO(ongaro): Use Core/ConditionVariable
+}
+
+TEST_F(RPCClientSessionTest, waitCanceled) {
+    OpaqueClientRPC rpc = session->sendRequest(buf("hi"));
+    rpc.cancel();
+    rpc.waitForReply();
+    EXPECT_TRUE(rpc.ready);
 }
 
 TEST_F(RPCClientSessionTest, waitReady) {

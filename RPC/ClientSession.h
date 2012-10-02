@@ -168,6 +168,8 @@ class ClientSession {
     /**
      * Called by the RPC when it is no longer interested in its response.
      *
+     * This may be called while holding the RPC's lock.
+     *
      * TODO(ongaro): It'd be nice to cancel sending the request if it hasn't
      * already gone out, but I guess that's going to be a pretty rare case.
      */
@@ -175,15 +177,19 @@ class ClientSession {
 
     /**
      * Called by the RPC when it wants to be learn of its response
-     * (non-blocking). This is the non-blocking version of wait().
+     * (non-blocking).
+     *
+     * This must be called while holding the RPC's lock.
      */
     void update(OpaqueClientRPC& rpc);
 
     /**
-     * Called by the RPC when it wants to wait for its response (blocking).
-     * This is the blocking version of update().
+     * Called by the RPC to wait for its response (blocking). The caller should
+     * call update() after this returns to learn of the response.
+     *
+     * This must not be called while holding the RPC's lock.
      */
-    void wait(OpaqueClientRPC& rpc);
+    void wait(const OpaqueClientRPC& rpc);
 
     /**
      * This is used to keep this object alive while there are outstanding RPCs.
@@ -252,6 +258,7 @@ class ClientSession {
      * The number of outstanding RPC requests that have been sent but whose
      * responses have not yet been received. This does not include ping
      * requests sent by the #timer (which aren't real RPCs).
+     * TODO(ongaro): Document what this is for.
      */
     uint32_t numActiveRPCs;
 

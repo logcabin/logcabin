@@ -13,6 +13,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include "Core/Mutex.h"
 #include "RPC/ClientSession.h"
 #include "RPC/OpaqueClientRPC.h"
 
@@ -20,7 +21,8 @@ namespace LogCabin {
 namespace RPC {
 
 OpaqueClientRPC::OpaqueClientRPC()
-    : session()
+    : mutex()
+    , session()
     , responseToken(~0UL)
     , ready(false)
     , reply()
@@ -29,7 +31,8 @@ OpaqueClientRPC::OpaqueClientRPC()
 }
 
 OpaqueClientRPC::OpaqueClientRPC(OpaqueClientRPC&& other)
-    : session(std::move(other.session))
+    : mutex()
+    , session(std::move(other.session))
     , responseToken(std::move(other.responseToken))
     , ready(std::move(other.ready))
     , reply(std::move(other.reply))
@@ -45,6 +48,7 @@ OpaqueClientRPC::~OpaqueClientRPC()
 OpaqueClientRPC&
 OpaqueClientRPC::operator=(OpaqueClientRPC&& other)
 {
+    std::unique_lock<std::mutex> mutexGuard(mutex);
     session = std::move(other.session);
     responseToken = std::move(other.responseToken);
     ready = std::move(other.ready);
@@ -56,6 +60,7 @@ OpaqueClientRPC::operator=(OpaqueClientRPC&& other)
 void
 OpaqueClientRPC::cancel()
 {
+    std::unique_lock<std::mutex> mutexGuard(mutex);
     if (ready)
         return;
     if (session)
@@ -69,7 +74,8 @@ OpaqueClientRPC::cancel()
 Buffer
 OpaqueClientRPC::extractReply()
 {
-    waitForReply();
+    waitForReply(); // called without the lock held to avoid deadlock with self
+    std::unique_lock<std::mutex> mutexGuard(mutex);
     if (!errorMessage.empty())
         throw Error(errorMessage);
     return std::move(reply);
@@ -78,6 +84,7 @@ OpaqueClientRPC::extractReply()
 std::string
 OpaqueClientRPC::getErrorMessage() const
 {
+    std::unique_lock<std::mutex> mutexGuard(mutex);
     const_cast<OpaqueClientRPC*>(this)->update();
     return errorMessage;
 }
@@ -85,6 +92,7 @@ OpaqueClientRPC::getErrorMessage() const
 bool
 OpaqueClientRPC::isReady()
 {
+    std::unique_lock<std::mutex> mutexGuard(mutex);
     update();
     return ready;
 }
@@ -92,6 +100,7 @@ OpaqueClientRPC::isReady()
 Buffer*
 OpaqueClientRPC::peekReply()
 {
+    std::unique_lock<std::mutex> mutexGuard(mutex);
     update();
     if (ready && errorMessage.empty())
         return &reply;
@@ -102,10 +111,16 @@ OpaqueClientRPC::peekReply()
 void
 OpaqueClientRPC::waitForReply()
 {
+    std::unique_lock<std::mutex> mutexGuard(mutex);
     if (ready)
         return;
     if (session) {
-        session->wait(*this);
+        {
+            // release the mutex while calling wait()
+            Core::MutexUnlock<std::mutex> unlockGuard(mutexGuard);
+            session->wait(*this);
+        }
+        update();
     } else {
         ready = true;
         errorMessage = "This RPC was never associated with a ClientSession.";
