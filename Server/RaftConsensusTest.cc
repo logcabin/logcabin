@@ -1305,8 +1305,13 @@ TEST_F(ServerRaftConsensusTest, becomeLeader)
 TEST_F(ServerRaftConsensusTest, interruptAll)
 {
     init();
+    consensus->stepDown(5);
+    consensus->append(entry1);
+    consensus->append(entry5);
     consensus->stateChanged.notificationCount = 0;
     consensus->interruptAll();
+    Peer& peer = *getPeer(2);
+    EXPECT_EQ("RPC canceled by user", peer.rpc.getErrorMessage());
     EXPECT_EQ(1U, consensus->stateChanged.notificationCount);
 }
 

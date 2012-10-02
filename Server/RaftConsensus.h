@@ -23,6 +23,7 @@
 #include "Core/Mutex.h"
 #include "Core/ConditionVariable.h"
 #include "Core/Time.h"
+#include "RPC/ClientRPC.h"
 #include "Server/RaftLog.h"
 #include "Server/Consensus.h"
 
@@ -36,7 +37,6 @@ namespace Event {
 class Loop;
 }
 namespace RPC {
-class ClientRPC;
 class ClientSession;
 }
 
@@ -135,6 +135,11 @@ class Server {
      */
     virtual bool haveVote() const = 0;
     /**
+     * Cancel any outstanding RPCs to this Server.
+     * The condition variable in RaftConsensus will be notified separately.
+     */
+    virtual void interrupt() = 0;
+    /**
      * Return true once this Server is ready to be added to the cluster. This
      * means it has received enough of our log to where it is not expected to
      * cause an availability problem when added to the cluster configuration.
@@ -177,6 +182,7 @@ class LocalServer : public Server {
     uint64_t getLastAgreeId() const;
     bool haveVote() const;
     uint64_t getLastAckEpoch() const;
+    void interrupt();
     bool isCaughtUp() const;
     void scheduleHeartbeat();
     RaftConsensus& consensus;
@@ -210,6 +216,7 @@ class Peer : public Server {
     uint64_t getLastAgreeId() const;
     bool haveVote() const;
     bool isCaughtUp() const;
+    void interrupt();
     void scheduleHeartbeat();
 
     /**
@@ -222,6 +229,9 @@ class Peer : public Server {
      *      The request that was received from the other server.
      * \param[out] response
      *      Where the reply should be placed.
+     * \param[in] lockGuard
+     *      The Raft lock, which is released internally to allow for I/O
+     *      concurrency.
      * \return
      *      True if the RPC succeeded and the response was filled in; false
      *      otherwise.
@@ -229,7 +239,8 @@ class Peer : public Server {
     bool
     callRPC(Protocol::Raft::OpCode opCode,
             const google::protobuf::Message& request,
-            google::protobuf::Message& response);
+            google::protobuf::Message& response,
+            std::unique_lock<Mutex>& lockGuard);
 
     /**
      * Launch this Peer's thread, which should run
@@ -247,7 +258,8 @@ class Peer : public Server {
      * member for efficiency.) As this operation might take a while, it should
      * be called without RaftConsensus lock.
      */
-    std::shared_ptr<RPC::ClientSession> getSession();
+    std::shared_ptr<RPC::ClientSession>
+    getSession(std::unique_lock<Mutex>& lockGuard);
 
   public:
 
@@ -325,6 +337,13 @@ class Peer : public Server {
      * Caches the result of getSession().
      */
     std::shared_ptr<RPC::ClientSession> session;
+
+    /**
+     * callRPC() places its RPC here so that interrupt() may cancel it.
+     * Setting this member and canceling the RPC must be done while holding the
+     * Raft lock; waiting on the RPC is done without holding that lock.
+     */
+    RPC::ClientRPC rpc;
 
     /**
      * A thread that is used to send RPCs to the follower.

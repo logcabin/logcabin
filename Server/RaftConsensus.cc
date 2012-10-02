@@ -94,6 +94,11 @@ LocalServer::haveVote() const
     return (consensus.votedFor == serverId);
 }
 
+void
+LocalServer::interrupt()
+{
+}
+
 bool
 LocalServer::isCaughtUp() const
 {
@@ -123,6 +128,7 @@ Peer::Peer(uint64_t serverId, RaftConsensus& consensus)
     , thisCatchUpIterationGoalId(~0UL)
     , isCaughtUp_(false)
     , session()
+    , rpc()
     , thread()
 {
 }
@@ -163,6 +169,11 @@ Peer::haveVote() const
     return haveVote_;
 }
 
+void
+Peer::interrupt()
+{
+    rpc.cancel();
+}
 
 bool
 Peer::isCaughtUp() const
@@ -178,16 +189,18 @@ Peer::scheduleHeartbeat()
 
 bool
 Peer::callRPC(Protocol::Raft::OpCode opCode,
-        const google::protobuf::Message& request,
-        google::protobuf::Message& response)
+              const google::protobuf::Message& request,
+              google::protobuf::Message& response,
+              std::unique_lock<Mutex>& lockGuard)
 {
     typedef RPC::ClientRPC::Status RPCStatus;
-
-    RPC::ClientRPC rpc(getSession(),
-                       Protocol::Common::ServiceId::RAFT_SERVICE,
-                       /* serviceSpecificErrorVersion = */ 0,
-                       opCode,
-                       request);
+    rpc = RPC::ClientRPC(getSession(lockGuard),
+                         Protocol::Common::ServiceId::RAFT_SERVICE,
+                         /* serviceSpecificErrorVersion = */ 0,
+                         opCode,
+                         request);
+    // release lock for concurrency
+    Core::MutexUnlock<Mutex> unlockGuard(lockGuard);
     switch (rpc.waitForReply(&response, NULL)) {
         case RPCStatus::OK:
             return true;
@@ -211,9 +224,11 @@ Peer::startThread(std::shared_ptr<Peer> self)
 }
 
 std::shared_ptr<RPC::ClientSession>
-Peer::getSession()
+Peer::getSession(std::unique_lock<Mutex>& lockGuard)
 {
     if (!session || !session->getErrorMessage().empty()) {
+        // release lock for concurrency
+        Core::MutexUnlock<Mutex> unlockGuard(lockGuard);
         session = RPC::ClientSession::makeSession(
             eventLoop,
             RPC::Address(address, Protocol::Common::DEFAULT_PORT),
@@ -1122,10 +1137,9 @@ RaftConsensus::appendEntry(std::unique_lock<Mutex>& lockGuard,
     Protocol::Raft::AppendEntry::Response response;
     TimePoint start = Clock::now();
     uint64_t epoch = currentEpoch;
-    lockGuard.unlock();
     bool ok = peer.callRPC(Protocol::Raft::OpCode::APPEND_ENTRY,
-                           request, response);
-    lockGuard.lock();
+                           request, response,
+                           lockGuard);
     if (!ok) {
         peer.backoffUntil = start +
             std::chrono::milliseconds(RPC_FAILURE_BACKOFF_MS);
@@ -1188,8 +1202,9 @@ void
 RaftConsensus::interruptAll()
 {
     stateChanged.notify_all();
-    // TODO(ongaro): ideally, this would go abort any current RPC, but RPC
-    // objects aren't presently thread-safe
+    // A configuration is sometimes missing for unit tests.
+    if (configuration)
+        configuration->forEach(&Server::interrupt);
 }
 
 bool
@@ -1231,14 +1246,12 @@ RaftConsensus::requestVote(std::unique_lock<Mutex>& lockGuard, Peer& peer)
     request.set_last_log_id(log->getLastLogId());
 
     Protocol::Raft::RequestVote::Response response;
-    lockGuard.unlock();
     VERBOSE("requestVote start");
     TimePoint start = Clock::now();
     uint64_t epoch = currentEpoch;
     bool ok = peer.callRPC(Protocol::Raft::OpCode::REQUEST_VOTE,
-                                    request, response);
+                           request, response, lockGuard);
     VERBOSE("requestVote done");
-    lockGuard.lock();
     if (!ok) {
         peer.backoffUntil = start +
             std::chrono::milliseconds(RPC_FAILURE_BACKOFF_MS);
