@@ -3,4 +3,6 @@ build
 /docs/doxygen/
 Local.sc
 logcabin.conf
+/scripts/localconfig.py
+smoketest.conf
 *.pyc

@@ -28,6 +28,7 @@ import sys
 
 __all__ = ['git_branch',
         'hosts', 'obj_dir', 'obj_path', 'scripts_path',
+        'smokehosts',
         'top_path']
 
 # git_branch is the name of the current git branch, which is used
@@ -72,6 +73,9 @@ for i in range(1, 61):
     hosts.append(('rc%02d' % i,
                   '192.168.1.%d' % (100 + i),
                   i))
+
+# The set of hosts available for basic correctness testing.
+smokehosts = hosts
 
 # Full path to the directory containing RAMCloud executables.
 obj_path = '%s/%s' % (top_path, obj_dir)

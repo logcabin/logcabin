@@ -1,0 +1,7 @@
+#!/bin/sh
+scripts/smoketest.py >/dev/null
+status=$?
+if [ $status -ne 0 ]; then
+    echo "Smoke test exited with status $status"
+fi
+exit $status
