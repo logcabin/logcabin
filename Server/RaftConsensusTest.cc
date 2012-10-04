@@ -1013,6 +1013,7 @@ TEST_F(ServerRaftConsensusPTest, followerThreadMain)
     // first and second requestVote RPCs succeed
     Protocol::Raft::RequestVote::Request vrequest;
     vrequest.set_server_id(1);
+    vrequest.set_recipient_id(2);
     vrequest.set_term(6);
     vrequest.set_last_log_term(5);
     vrequest.set_last_log_id(1);
@@ -1030,6 +1031,7 @@ TEST_F(ServerRaftConsensusPTest, followerThreadMain)
     // first appendEntry sends data
     Protocol::Raft::AppendEntry::Request arequest;
     arequest.set_server_id(1);
+    arequest.set_recipient_id(2);
     arequest.set_term(6);
     arequest.set_prev_log_term(0);
     arequest.set_prev_log_id(0);
@@ -1210,6 +1212,7 @@ class ServerRaftConsensusPATest : public ServerRaftConsensusPTest {
         peer->requestVoteDone = true;
 
         request.set_server_id(1);
+        request.set_recipient_id(2);
         request.set_term(6);
         request.set_prev_log_term(0);
         request.set_prev_log_id(0);
@@ -1392,6 +1395,7 @@ TEST_F(ServerRaftConsensusPTest, requestVote_rpcFailed)
 
     Protocol::Raft::RequestVote::Request request;
     request.set_server_id(1);
+    request.set_recipient_id(2);
     request.set_term(6);
     request.set_last_log_term(5);
     request.set_last_log_id(1);
@@ -1417,6 +1421,7 @@ TEST_F(ServerRaftConsensusPTest, requestVote_ignoreResult)
 
     Protocol::Raft::RequestVote::Request request;
     request.set_server_id(1);
+    request.set_recipient_id(2);
     request.set_term(5);
     request.set_last_log_term(5);
     request.set_last_log_id(1);
@@ -1448,6 +1453,7 @@ TEST_F(ServerRaftConsensusPTest, requestVote_termStale)
 
     Protocol::Raft::RequestVote::Request request;
     request.set_server_id(1);
+    request.set_recipient_id(2);
     request.set_term(6);
     request.set_last_log_term(1);
     request.set_last_log_id(2);
@@ -1514,6 +1520,7 @@ TEST_F(ServerRaftConsensusPTest, requestVote_termOkAsLeader)
     // Peer2 has an extraneous term.
     Protocol::Raft::RequestVote::Request request;
     request.set_server_id(1);
+    request.set_recipient_id(2);
     request.set_term(6);
     request.set_last_log_term(2);
     request.set_last_log_id(4);
@@ -1536,6 +1543,7 @@ TEST_F(ServerRaftConsensusPTest, requestVote_termOkAsLeader)
 
     // 2. Get vote from peer3, still a candidate
     // Peer3 has a prefix of the candidate's log.
+    request.set_recipient_id(3);
     response.set_granted(true);
     response.set_last_log_term(1);
     response.set_last_log_id(1);
@@ -1551,6 +1559,7 @@ TEST_F(ServerRaftConsensusPTest, requestVote_termOkAsLeader)
 
     // 3. Get vote from peer4, become leader
     // Peer4 has an empty log.
+    request.set_recipient_id(4);
     response.set_last_log_term(0);
     response.set_last_log_id(0);
     response.set_begin_last_term_id(0);
@@ -1565,6 +1574,7 @@ TEST_F(ServerRaftConsensusPTest, requestVote_termOkAsLeader)
 
     // 4. Get log info from peer5, new committed ID
     // Peer5 has some extraneous entries.
+    request.set_recipient_id(5);
     response.set_last_log_term(2);
     response.set_last_log_id(5);
     response.set_begin_last_term_id(2);

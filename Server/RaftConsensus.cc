@@ -1098,6 +1098,7 @@ RaftConsensus::appendEntry(std::unique_lock<Mutex>& lockGuard,
     // Build up request
     Protocol::Raft::AppendEntry::Request request;
     request.set_server_id(serverId);
+    request.set_recipient_id(peer.serverId);
     request.set_term(currentTerm);
     uint64_t lastLogId = log->getLastLogId();
     uint64_t prevLogId = peer.lastAgreeId;
@@ -1241,6 +1242,7 @@ RaftConsensus::requestVote(std::unique_lock<Mutex>& lockGuard, Peer& peer)
 {
     Protocol::Raft::RequestVote::Request request;
     request.set_server_id(serverId);
+    request.set_recipient_id(peer.serverId);
     request.set_term(currentTerm);
     request.set_last_log_term(log->getTerm(log->getLastLogId()));
     request.set_last_log_id(log->getLastLogId());
