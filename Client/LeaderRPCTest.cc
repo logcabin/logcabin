@@ -17,6 +17,7 @@
 #include <thread>
 
 #include "Client/LeaderRPC.h"
+#include "Core/Debug.h"
 #include "Core/ProtoBuf.h"
 #include "Protocol/Common.h"
 #include "RPC/ClientSession.h"
@@ -46,18 +47,22 @@ class ClientLeaderRPCTest : public ::testing::Test {
                                      Protocol::Common::MAX_MESSAGE_LENGTH));
         RPC::Address address("127.0.0.1", Protocol::Common::DEFAULT_PORT);
         EXPECT_EQ("", server->bind(address));
-        serverThread = std::thread(&Event::Loop::runForever, &serverEventLoop);
         server->registerService(Protocol::Common::ServiceId::CLIENT_SERVICE,
                                 service, 1);
         leaderRPC.reset(new LeaderRPC(address));
 
-        request.set_log_name("logName");
-        expResponse.set_log_id(3);
+        request.set_log_id(3);
+        expResponse.mutable_ok()->set_head_entry_id(4);
     }
     ~ClientLeaderRPCTest()
     {
         serverEventLoop.exit();
-        serverThread.join();
+        if (serverThread.joinable())
+            serverThread.join();
+    }
+
+    void init() {
+        serverThread = std::thread(&Event::Loop::runForever, &serverEventLoop);
     }
 
     Event::Loop serverEventLoop;
@@ -65,16 +70,17 @@ class ClientLeaderRPCTest : public ::testing::Test {
     std::unique_ptr<RPC::Server> server;
     std::thread serverThread;
     std::unique_ptr<LeaderRPC> leaderRPC;
-    Protocol::Client::OpenLog::Request request;
-    Protocol::Client::OpenLog::Response response;
-    Protocol::Client::OpenLog::Response expResponse;
+    Protocol::Client::GetLastId::Request request;
+    Protocol::Client::GetLastId::Response response;
+    Protocol::Client::GetLastId::Response expResponse;
 };
 
 // constructor and destructor tested adequately in tests for call()
 
 TEST_F(ClientLeaderRPCTest, callOK) {
-    service->reply(OpCode::OPEN_LOG, request, expResponse);
-    leaderRPC->call(OpCode::OPEN_LOG, request, response);
+    init();
+    service->reply(OpCode::GET_LAST_ID, request, expResponse);
+    leaderRPC->call(OpCode::GET_LAST_ID, request, response);
     EXPECT_EQ(expResponse, response);
 }
 
@@ -82,28 +88,47 @@ TEST_F(ClientLeaderRPCTest, callOK) {
 // see handleServiceSpecificErrorNotLeader below.
 
 TEST_F(ClientLeaderRPCTest, callRPCFailed) {
-    service->closeSession(OpCode::OPEN_LOG, request);
-    service->reply(OpCode::OPEN_LOG, request, expResponse);
-    leaderRPC->call(OpCode::OPEN_LOG, request, response);
+    init();
+    service->closeSession(OpCode::GET_LAST_ID, request);
+    service->reply(OpCode::GET_LAST_ID, request, expResponse);
+    leaderRPC->call(OpCode::GET_LAST_ID, request, response);
     EXPECT_EQ(expResponse, response);
 }
 
 TEST_F(ClientLeaderRPCTest, handleServiceSpecificErrorNotLeader) {
+    init();
     Protocol::Client::Error error;
     error.set_error_code(Protocol::Client::Error::NOT_LEADER);
 
     // no hint
-    service->serviceSpecificError(OpCode::OPEN_LOG, request, error);
+    service->serviceSpecificError(OpCode::GET_LAST_ID, request, error);
 
     // sucky hint
     error.set_leader_hint("127.0.0.1:0");
-    service->serviceSpecificError(OpCode::OPEN_LOG, request, error);
+    service->serviceSpecificError(OpCode::GET_LAST_ID, request, error);
 
     // ok, fine, let it through
-    service->reply(OpCode::OPEN_LOG, request, expResponse);
+    service->reply(OpCode::GET_LAST_ID, request, expResponse);
 
-    leaderRPC->call(OpCode::OPEN_LOG, request, response);
+    leaderRPC->call(OpCode::GET_LAST_ID, request, response);
     EXPECT_EQ(expResponse, response);
+}
+
+TEST_F(ClientLeaderRPCTest, handleServiceSpecificErrorSessionExpired) {
+    Protocol::Client::Error error;
+    error.set_error_code(Protocol::Client::Error::SESSION_EXPIRED);
+
+    leaderRPC->eventLoop.exit();
+    leaderRPC->eventLoopThread.join();
+
+    EXPECT_DEATH({
+            leaderRPC->eventLoopThread = std::thread(&Event::Loop::runForever,
+                                                     &leaderRPC->eventLoop);
+            init();
+            service->serviceSpecificError(OpCode::GET_LAST_ID, request, error);
+            leaderRPC->call(OpCode::GET_LAST_ID, request, response);
+        },
+        "Session expired");
 }
 
 // connect() tested adequately in tests for call()
@@ -113,6 +138,7 @@ TEST_F(ClientLeaderRPCTest, connectRandom) {
 }
 
 TEST_F(ClientLeaderRPCTest, connectHost) {
+    init();
     leaderRPC->connectHost("127.0.0.2:0", leaderRPC->leaderSession);
     EXPECT_EQ("Closed session: Failed to connect socket to 127.0.0.2:0 "
               "(resolved to 127.0.0.2:0)",

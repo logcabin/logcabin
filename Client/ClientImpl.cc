@@ -37,9 +37,64 @@ const uint32_t MAX_RPC_PROTOCOL_VERSION = 1;
 
 using Protocol::Client::OpCode;
 
+
+////////// class ClientImpl::ExactlyOnceRPCHelper //////////
+
+ClientImpl::ExactlyOnceRPCHelper::ExactlyOnceRPCHelper(ClientImpl* client)
+    : client(client)
+    , mutex()
+    , outstandingRPCNumbers()
+    , clientId(0)
+    , nextRPCNumber(1)
+{
+}
+
+ClientImpl::ExactlyOnceRPCHelper::~ExactlyOnceRPCHelper()
+{
+}
+
+Protocol::Client::ExactlyOnceRPCInfo
+ClientImpl::ExactlyOnceRPCHelper::getRPCInfo()
+{
+    std::unique_lock<std::mutex> lockGuard(mutex);
+    Protocol::Client::ExactlyOnceRPCInfo rpcInfo;
+    if (client == NULL) {
+        // Filling in rpcInfo is disabled for some unit tests, since it's
+        // easier if they treat rpcInfo opaquely.
+        return rpcInfo;
+    }
+    if (clientId == 0) {
+        Protocol::Client::OpenSession::Request request;
+        Protocol::Client::OpenSession::Response response;
+        client->leaderRPC->call(OpCode::OPEN_SESSION, request, response);
+        clientId = response.client_id();
+        assert(clientId > 0);
+    }
+
+    rpcInfo.set_client_id(clientId);
+    uint64_t rpcNumber = nextRPCNumber;
+    ++nextRPCNumber;
+    rpcInfo.set_rpc_number(rpcNumber);
+    outstandingRPCNumbers.insert(rpcNumber);
+    rpcInfo.set_first_outstanding_rpc(*outstandingRPCNumbers.begin());
+    return rpcInfo;
+}
+
+void
+ClientImpl::ExactlyOnceRPCHelper::doneWithRPC(
+                    const Protocol::Client::ExactlyOnceRPCInfo& rpcInfo)
+{
+    std::unique_lock<std::mutex> lockGuard(mutex);
+    outstandingRPCNumbers.erase(rpcInfo.rpc_number());
+}
+
+
+////////// class ClientImpl //////////
+
 ClientImpl::ClientImpl()
     : leaderRPC()             // set in init()
     , rpcProtocolVersion(~0U) // set in init()
+    , exactlyOnceRPCHelper(this)
 {
 }
 
@@ -85,9 +140,11 @@ Log
 ClientImpl::openLog(const std::string& logName)
 {
     Protocol::Client::OpenLog::Request request;
+    *request.mutable_exactly_once() = exactlyOnceRPCHelper.getRPCInfo();
     request.set_log_name(logName);
     Protocol::Client::OpenLog::Response response;
     leaderRPC->call(OpCode::OPEN_LOG, request, response);
+    exactlyOnceRPCHelper.doneWithRPC(request.exactly_once());
     return Log(self.lock(), logName, response.log_id());
 }
 
@@ -95,9 +152,11 @@ void
 ClientImpl::deleteLog(const std::string& logName)
 {
     Protocol::Client::DeleteLog::Request request;
+    *request.mutable_exactly_once() = exactlyOnceRPCHelper.getRPCInfo();
     request.set_log_name(logName);
     Protocol::Client::DeleteLog::Response response;
     leaderRPC->call(OpCode::DELETE_LOG, request, response);
+    exactlyOnceRPCHelper.doneWithRPC(request.exactly_once());
 }
 
 std::vector<std::string>
@@ -116,6 +175,7 @@ EntryId
 ClientImpl::append(uint64_t logId, const Entry& entry, EntryId expectedId)
 {
     Protocol::Client::Append::Request request;
+    *request.mutable_exactly_once() = exactlyOnceRPCHelper.getRPCInfo();
     request.set_log_id(logId);
     if (expectedId != NO_ID)
         request.set_expected_entry_id(expectedId);
@@ -128,6 +188,7 @@ ClientImpl::append(uint64_t logId, const Entry& entry, EntryId expectedId)
         request.set_data(entry.getData(), entry.getLength());
     Protocol::Client::Append::Response response;
     leaderRPC->call(OpCode::APPEND, request, response);
+    exactlyOnceRPCHelper.doneWithRPC(request.exactly_once());
     if (response.has_ok())
         return response.ok().entry_id();
     if (response.has_log_disappeared())

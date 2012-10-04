@@ -16,6 +16,7 @@
 #include "RPC/Service.h"
 
 
+#include "build/Protocol/Client.pb.h"
 #include "build/Protocol/Raft.pb.h"
 #include "Core/Debug.h"
 #include "Core/ProtoBuf.h"
@@ -53,6 +54,7 @@ class ClientService : public RPC::Service {
     ////////// RPC handlers //////////
 
     void getSupportedRPCVersions(RPC::ServerRPC rpc);
+    void openSession(RPC::ServerRPC rpc);
     void openLog(RPC::ServerRPC rpc);
     void deleteLog(RPC::ServerRPC rpc);
     void listLogs(RPC::ServerRPC rpc);
@@ -67,6 +69,12 @@ class ClientService : public RPC::Service {
 
     RaftConsensus::ClientResult
     catchUpStateMachine(RPC::ServerRPC& rpc);
+
+    bool
+    getResponse(RPC::ServerRPC& rpc,
+                uint64_t entryId,
+                const Protocol::Client::ExactlyOnceRPCInfo& rpcInfo,
+                Protocol::Client::CommandResponse& response);
 
     /**
      * The LogCabin daemon's top-level objects.

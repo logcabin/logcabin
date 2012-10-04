@@ -1,0 +1,94 @@
+/* Copyright (c) 2012 Stanford University
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR(S) DISCLAIM ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL AUTHORS BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+#include <gtest/gtest.h>
+
+#include "Client/ClientImpl.h"
+#include "Client/LeaderRPCMock.h"
+#include "Core/ProtoBuf.h"
+#include "Core/StringUtil.h"
+#include "build/Protocol/Client.pb.h"
+
+// Most of the tests for ClientImpl are in ClientTest.cc.
+
+namespace LogCabin {
+namespace {
+
+using Core::ProtoBuf::fromString;
+
+class ClientClientImplExactlyOnceTest : public ::testing::Test {
+  public:
+    typedef Client::LeaderRPCMock::OpCode OpCode;
+    typedef Protocol::Client::ExactlyOnceRPCInfo RPCInfo;
+    ClientClientImplExactlyOnceTest()
+        : client()
+        , mockRPC()
+        , rpcInfo1()
+        , rpcInfo2()
+    {
+        mockRPC = new Client::LeaderRPCMock();
+        client.leaderRPC = std::unique_ptr<Client::LeaderRPCBase>(mockRPC);
+
+        mockRPC->expect(OpCode::OPEN_SESSION,
+            fromString<Protocol::Client::OpenSession::Response>(
+                        "client_id: 3"));
+        rpcInfo1 = client.exactlyOnceRPCHelper.getRPCInfo();
+        rpcInfo2 = client.exactlyOnceRPCHelper.getRPCInfo();
+    }
+    Client::ClientImpl client;
+    Client::LeaderRPCMock* mockRPC;
+    RPCInfo rpcInfo1;
+    RPCInfo rpcInfo2;
+
+    ClientClientImplExactlyOnceTest(
+        const ClientClientImplExactlyOnceTest&) = delete;
+    ClientClientImplExactlyOnceTest&
+    operator=(const ClientClientImplExactlyOnceTest&) = delete;
+};
+
+
+TEST_F(ClientClientImplExactlyOnceTest, getRPCInfo) {
+    EXPECT_EQ((std::set<uint64_t>{1, 2}),
+              client.exactlyOnceRPCHelper.outstandingRPCNumbers);
+    EXPECT_EQ(3U, client.exactlyOnceRPCHelper.clientId);
+    EXPECT_EQ(3U, client.exactlyOnceRPCHelper.nextRPCNumber);
+    EXPECT_EQ(3U, rpcInfo1.client_id());
+    EXPECT_EQ(1U, rpcInfo1.first_outstanding_rpc());
+    EXPECT_EQ(1U, rpcInfo1.rpc_number());
+    EXPECT_EQ(3U, rpcInfo2.client_id());
+    EXPECT_EQ(1U, rpcInfo2.first_outstanding_rpc());
+    EXPECT_EQ(2U, rpcInfo2.rpc_number());
+}
+
+TEST_F(ClientClientImplExactlyOnceTest, doneWithRPC) {
+    client.exactlyOnceRPCHelper.doneWithRPC(rpcInfo1);
+    EXPECT_EQ((std::set<uint64_t>{2}),
+              client.exactlyOnceRPCHelper.outstandingRPCNumbers);
+    RPCInfo rpcInfo3 = client.exactlyOnceRPCHelper.getRPCInfo();
+    EXPECT_EQ(2U, rpcInfo3.first_outstanding_rpc());
+    client.exactlyOnceRPCHelper.doneWithRPC(rpcInfo3);
+    EXPECT_EQ((std::set<uint64_t>{2}),
+              client.exactlyOnceRPCHelper.outstandingRPCNumbers);
+    RPCInfo rpcInfo4 = client.exactlyOnceRPCHelper.getRPCInfo();
+    EXPECT_EQ(2U, rpcInfo4.first_outstanding_rpc());
+    client.exactlyOnceRPCHelper.doneWithRPC(rpcInfo2);
+    EXPECT_EQ((std::set<uint64_t>{4}),
+              client.exactlyOnceRPCHelper.outstandingRPCNumbers);
+    RPCInfo rpcInfo5 = client.exactlyOnceRPCHelper.getRPCInfo();
+    EXPECT_EQ(4U, rpcInfo5.first_outstanding_rpc());
+}
+
+} // namespace LogCabin::<anonymous>
+} // namespace LogCabin

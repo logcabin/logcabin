@@ -38,14 +38,17 @@ class ClientClusterTest : public ::testing::Test {
         : cluster(new Client::Cluster("-MOCK-SKIP-INIT-"))
         , mockRPC()
     {
+        Client::ClientImpl* client =
+            dynamic_cast<Client::ClientImpl*>(cluster->clientImpl.get());
         mockRPC = new Client::LeaderRPCMock();
         mockRPC->expect(OpCode::GET_SUPPORTED_RPC_VERSIONS,
             fromString<Protocol::Client::GetSupportedRPCVersions::Response>(
                         "min_version: 1, max_version: 1"));
-        dynamic_cast<Client::ClientImpl*>(cluster->clientImpl.get())->
-            leaderRPC = std::unique_ptr<Client::LeaderRPCBase>(mockRPC);
+        client->leaderRPC = std::unique_ptr<Client::LeaderRPCBase>(mockRPC);
         cluster->clientImpl->init(cluster->clientImpl, "127.0.0.1:0");
         mockRPC->popRequest();
+
+        client->exactlyOnceRPCHelper.client = NULL;
     }
     std::unique_ptr<Client::Cluster> cluster;
     Client::LeaderRPCMock* mockRPC;
@@ -65,7 +68,8 @@ TEST_F(ClientClusterTest, openLog) {
         fromString<Protocol::Client::OpenLog::Response>(
             "log_id: 1"));
     Client::Log log = cluster->openLog("testLog");
-    EXPECT_EQ("log_name: 'testLog'",
+    EXPECT_EQ("log_name: 'testLog' "
+              "exactly_once {} ",
               *mockRPC->requestLog.at(0).second);
     EXPECT_EQ("testLog", log.name);
     EXPECT_EQ(1U, log.logId);
@@ -75,7 +79,8 @@ TEST_F(ClientClusterTest, deleteLog) {
     mockRPC->expect(OpCode::DELETE_LOG,
         fromString<Protocol::Client::DeleteLog::Response>(""));
     cluster->deleteLog("testLog");
-    EXPECT_EQ("log_name: 'testLog'",
+    EXPECT_EQ("log_name: 'testLog' "
+              "exactly_once {} ",
               *mockRPC->popRequest());
 }
 
@@ -128,7 +133,8 @@ TEST_F(ClientLogTest, append_empty)
     Protocol::Client::Append::Request request;
     request.CopyFrom(*mockRPC->popRequest());
     EXPECT_EQ("log_id: 1 "
-              "data: '' ",
+              "data: '' "
+              "exactly_once {} ",
               request);
     EXPECT_TRUE(request.has_data());
     EXPECT_EQ(0U, request.data().size());
@@ -143,7 +149,8 @@ TEST_F(ClientLogTest, append_justData)
     EXPECT_EQ(32U,
               log->append(entry));
     EXPECT_EQ("log_id: 1 "
-              "data: 'hello' ",
+              "data: 'hello' "
+              "exactly_once {} ",
               *mockRPC->popRequest());
 }
 
@@ -156,7 +163,8 @@ TEST_F(ClientLogTest, append_withInvalidates)
     EXPECT_EQ(32U, log->append(entry));
     EXPECT_EQ("log_id: 1 "
               "data: 'hello' "
-              "invalidates: [10, 12, 14]",
+              "invalidates: [10, 12, 14] "
+              "exactly_once {} ",
               *mockRPC->popRequest());
 }
 
@@ -170,7 +178,8 @@ TEST_F(ClientLogTest, append_expectedIdOk)
               log->append(entry, 32));
     EXPECT_EQ("log_id: 1 "
               "data: 'hello' "
-              "expected_entry_id: 32",
+              "expected_entry_id: 32 "
+              "exactly_once {} ",
               *mockRPC->popRequest());
 }
 
@@ -184,7 +193,8 @@ TEST_F(ClientLogTest, append_expectedIdStale)
               log->append(entry, 32));
     EXPECT_EQ("log_id: 1 "
               "data: 'hello' "
-              "expected_entry_id: 32",
+              "expected_entry_id: 32 "
+              "exactly_once {} ",
               *mockRPC->popRequest());
 }
 
@@ -197,7 +207,8 @@ TEST_F(ClientLogTest, append_logDisappeared)
     EXPECT_THROW(log->append(entry),
                  Client::LogDisappearedException);
     EXPECT_EQ("log_id: 1 "
-              "data: 'hello' ",
+              "data: 'hello' "
+              "exactly_once {} ",
               *mockRPC->popRequest());
 }
 
@@ -208,7 +219,8 @@ TEST_F(ClientLogTest, invalidate_empty)
             "ok { entry_id: 32 }"));
     EXPECT_EQ(32U,
               log->invalidate({}));
-    EXPECT_EQ("log_id: 1 ",
+    EXPECT_EQ("log_id: 1 "
+              "exactly_once {} ",
               *mockRPC->popRequest());
 }
 
@@ -221,7 +233,8 @@ TEST_F(ClientLogTest, invalidate_expectedIdOK)
               log->invalidate({1}, 32));
     EXPECT_EQ("log_id: 1 "
               "invalidates: [1] "
-              "expected_entry_id: 32 ",
+              "expected_entry_id: 32 "
+              "exactly_once {} ",
               *mockRPC->popRequest());
 }
 
@@ -234,7 +247,8 @@ TEST_F(ClientLogTest, invalidate_expectedIdStale)
               log->invalidate({1}, 32));
     EXPECT_EQ("log_id: 1 "
               "invalidates: [1] "
-              "expected_entry_id: 32 ",
+              "expected_entry_id: 32 "
+              "exactly_once {} ",
               *mockRPC->popRequest());
 }
 
@@ -246,7 +260,8 @@ TEST_F(ClientLogTest, invalidate_logDisappeared)
     EXPECT_THROW(log->invalidate({1}),
                  Client::LogDisappearedException);
     EXPECT_EQ("log_id: 1 "
-              "invalidates: [1] ",
+              "invalidates: [1] "
+              "exactly_once {} ",
               *mockRPC->popRequest());
 }
 

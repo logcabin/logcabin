@@ -75,6 +75,9 @@ ClientService::handleRPC(RPC::ServerRPC rpc)
         case OpCode::SET_CONFIGURATION:
             setConfiguration(std::move(rpc));
             break;
+        case OpCode::OPEN_SESSION:
+            openSession(std::move(rpc));
+            break;
         default:
             rpc.rejectInvalidRequest();
     }
@@ -112,6 +115,7 @@ ClientService::getSupportedRPCVersions(RPC::ServerRPC rpc)
 
 typedef RaftConsensus::ClientResult Result;
 typedef Protocol::Client::Command Command;
+typedef Protocol::Client::CommandResponse CommandResponse;
 
 
 std::pair<Result, uint64_t>
@@ -142,6 +146,36 @@ ClientService::catchUpStateMachine(RPC::ServerRPC& rpc)
     return result.first;
 }
 
+bool
+ClientService::getResponse(RPC::ServerRPC& rpc,
+                           uint64_t entryId,
+                           const Protocol::Client::ExactlyOnceRPCInfo& rpcInfo,
+                           Protocol::Client::CommandResponse& response)
+{
+    globals.stateMachine->wait(entryId);
+    bool ok = globals.stateMachine->getResponse(rpcInfo, response);
+    if (!ok) {
+        Protocol::Client::Error error;
+        error.set_error_code(Protocol::Client::Error::SESSION_EXPIRED);
+        rpc.returnError(error);
+        return false;
+    }
+    return true;
+}
+
+void
+ClientService::openSession(RPC::ServerRPC rpc)
+{
+    PRELUDE(OpenSession);
+    Command command;
+    *command.mutable_open_session() = request;
+    std::pair<Result, uint64_t> result = submit(rpc, command);
+    if (result.first != Result::SUCCESS)
+        return;
+    response.set_client_id(result.second);
+    rpc.reply(response);
+}
+
 void
 ClientService::openLog(RPC::ServerRPC rpc)
 {
@@ -151,8 +185,12 @@ ClientService::openLog(RPC::ServerRPC rpc)
     std::pair<Result, uint64_t> result = submit(rpc, command);
     if (result.first != Result::SUCCESS)
         return;
-    response = globals.stateMachine->getResponse(result.second).open_log();
-    rpc.reply(response);
+    CommandResponse commandResponse;
+    if (!getResponse(rpc, result.second, request.exactly_once(),
+                     commandResponse)) {
+        return;
+    }
+    rpc.reply(commandResponse.open_log());
 }
 
 void
@@ -186,8 +224,12 @@ ClientService::append(RPC::ServerRPC rpc)
     std::pair<Result, uint64_t> result = submit(rpc, command);
     if (result.first != Result::SUCCESS)
         return;
-    response = globals.stateMachine->getResponse(result.second).append();
-    rpc.reply(response);
+    CommandResponse commandResponse;
+    if (!getResponse(rpc, result.second, request.exactly_once(),
+                     commandResponse)) {
+        return;
+    }
+    rpc.reply(commandResponse.append());
 }
 
 void
@@ -262,7 +304,6 @@ ClientService::setConfiguration(RPC::ServerRPC rpc)
     }
     rpc.reply(response);
 }
-
 
 } // namespace LogCabin::Server
 } // namespace LogCabin

@@ -35,7 +35,12 @@ class StateMachine {
     explicit StateMachine(std::shared_ptr<Consensus> consensus);
     ~StateMachine();
 
-    Protocol::Client::CommandResponse getResponse(uint64_t id) const;
+    /**
+     * \warning
+     *      Be sure to wait() first!
+     */
+    bool getResponse(const Protocol::Client::ExactlyOnceRPCInfo& rpcInfo,
+                     Protocol::Client::CommandResponse& response) const;
 
     void wait(uint64_t entryId) const;
 
@@ -54,6 +59,12 @@ class StateMachine {
     typedef Protocol::Client::Read::Response::OK::Entry Entry;
     typedef std::vector<Entry> Log;
 
+    /**
+     * Return true if the state machine should ignore the command (because it
+     * is a duplicate of a previous command).
+     */
+    bool ignore(const Protocol::Client::ExactlyOnceRPCInfo& rpcInfo) const;
+
     void advance(uint64_t entryId, const std::string& data);
 
     void openLog(const Protocol::Client::OpenLog::Request& request,
@@ -62,13 +73,44 @@ class StateMachine {
                    Protocol::Client::DeleteLog::Response& response);
     void append(const Protocol::Client::Append::Request& request,
                 Protocol::Client::Append::Response& response);
+    void openSession(uint64_t entryId,
+                     const Protocol::Client::OpenSession::Request& request);
 
     std::shared_ptr<Consensus> consensus;
     mutable std::mutex mutex;
     mutable std::condition_variable cond;
     std::thread thread;
     uint64_t lastEntryId; // only written to by thread
-    std::unordered_map<uint64_t, Protocol::Client::CommandResponse> responses;
+
+    /**
+     * Tracks state for a particular client.
+     * Used to prevent duplicate processing of duplicate RPCs.
+     */
+    struct Session {
+        Session()
+            : firstOutstandingRPC(0)
+            , responses()
+        {
+        }
+        /**
+         * Largest firstOutstandingRPC number processed from this client.
+         * (RPCs that are ignored do not count for this purpose.)
+         */
+        uint64_t firstOutstandingRPC;
+        /**
+         * Maps from RPC numbers to responses.
+         * Responses for RPCs numbered less that firstOutstandingRPC are
+         * discarded from this map.
+         */
+        std::unordered_map<uint64_t, Protocol::Client::CommandResponse>
+            responses;
+    };
+
+    /**
+     * Client ID to Session map.
+     * TODO(ongaro): Will need to clean up stale sessions somehow.
+     */
+    std::unordered_map<uint64_t, Session> sessions;
 
     /**
      * Look up a log by ID or throw LogDisappearedException.

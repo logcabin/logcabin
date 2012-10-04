@@ -33,7 +33,7 @@ StateMachine::StateMachine(std::shared_ptr<Consensus> consensus)
     , cond()
     , thread(&StateMachine::threadMain, this)
     , lastEntryId(0)
-    , responses()
+    , sessions()
     , nextLogId(1)
     , logNames()
     , logs()
@@ -46,13 +46,26 @@ StateMachine::~StateMachine()
     thread.join();
 }
 
-PC::CommandResponse
-StateMachine::getResponse(uint64_t id) const
+bool
+StateMachine::getResponse(const PC::ExactlyOnceRPCInfo& rpcInfo,
+                          PC::CommandResponse& response) const
 {
     std::unique_lock<std::mutex> lockGuard(mutex);
-    while (lastEntryId < id)
-        cond.wait(lockGuard);
-    return responses.at(id);
+    auto sessionIt = sessions.find(rpcInfo.client_id());
+    if (sessionIt == sessions.end()) {
+        WARNING("Client session expired but client still active");
+        return false;
+    }
+    const Session& session = sessionIt->second;
+    auto responseIt = session.responses.find(rpcInfo.rpc_number());
+    if (responseIt == session.responses.end()) {
+        // The response for this RPC has already been removed: the client is
+        // not waiting for it. This request is just a duplicate that is safe to
+        // drop.
+        return false;
+    }
+    response = responseIt->second;
+    return true;
 }
 
 void
@@ -126,24 +139,64 @@ StateMachine::threadMain()
     }
 }
 
+bool
+StateMachine::ignore(const PC::ExactlyOnceRPCInfo& rpcInfo) const
+{
+    auto it = sessions.find(rpcInfo.client_id());
+    if (it == sessions.end())
+        return true; // no such session
+    const Session& session = it->second;
+    if (session.responses.find(rpcInfo.rpc_number()) !=
+        session.responses.end()) {
+        return true; // response exists
+    }
+    if (rpcInfo.rpc_number() < session.firstOutstandingRPC)
+        return true; // response already discarded
+    return false;
+}
 
 void
 StateMachine::advance(uint64_t entryId, const std::string& data)
 {
     PC::Command command = Core::ProtoBuf::fromString<PC::Command>(data);
-    PC::CommandResponse& commandResponse = responses[entryId];
+    PC::CommandResponse commandResponse;
+    PC::ExactlyOnceRPCInfo rpcInfo;
     if (command.has_open_log()) {
-        openLog(*command.mutable_open_log(),
-                *commandResponse.mutable_open_log());
+        rpcInfo = command.open_log().exactly_once();
+        if (ignore(rpcInfo))
+            return;
+        openLog(command.open_log(), *commandResponse.mutable_open_log());
     } else if (command.has_delete_log()) {
-        deleteLog(*command.mutable_delete_log(),
-                  *commandResponse.mutable_delete_log());
+        rpcInfo = command.delete_log().exactly_once();
+        if (ignore(rpcInfo))
+            return;
+        deleteLog(command.delete_log(), *commandResponse.mutable_delete_log());
     } else if (command.has_append()) {
-        append(*command.mutable_append(),
-               *commandResponse.mutable_append());
+        rpcInfo = command.append().exactly_once();
+        if (ignore(rpcInfo))
+            return;
+        append(command.append(), *commandResponse.mutable_append());
+    } else if (command.has_open_session()) {
+        openSession(entryId, command.open_session());
+        return;
     } else {
         PANIC("unknown command at %lu: %s", entryId, data.c_str());
     }
+
+    Session& session = sessions[rpcInfo.client_id()];
+    if (session.firstOutstandingRPC < rpcInfo.rpc_number())
+        session.firstOutstandingRPC = rpcInfo.rpc_number();
+
+    // Discard unneeded responses in session
+    auto it = session.responses.begin();
+    while (it != session.responses.end()) {
+        if (it->first < rpcInfo.first_outstanding_rpc())
+            it = session.responses.erase(it);
+        else
+            ++it;
+    }
+    // Add new response to session
+    session.responses[rpcInfo.rpc_number()] = commandResponse;
 }
 
 void
@@ -167,7 +220,6 @@ void
 StateMachine::deleteLog(const PC::DeleteLog::Request& request,
                         PC::DeleteLog::Response& response)
 {
-    std::unique_lock<std::mutex> lockGuard(mutex);
     auto it = logNames.find(request.log_name());
     if (it == logNames.end())
         return;
@@ -201,6 +253,15 @@ StateMachine::append(const PC::Append::Request& request,
         entry.set_data(request.data());
     log.push_back(entry);
     response.mutable_ok()->set_entry_id(newId);
+}
+
+void
+StateMachine::openSession(
+        uint64_t entryId,
+        const Protocol::Client::OpenSession::Request& request)
+{
+    uint64_t clientId = entryId;
+    sessions.insert({clientId, {}});
 }
 
 } // namespace LogCabin::Server

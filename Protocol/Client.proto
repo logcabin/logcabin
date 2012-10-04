@@ -25,6 +25,7 @@ package LogCabin.Protocol.Client;
 enum OpCode {
     // Keep these numbers dense.
     GET_SUPPORTED_RPC_VERSIONS = 0;
+    OPEN_SESSION = 9;
     OPEN_LOG    = 1;
     DELETE_LOG  = 2;
     LIST_LOGS   = 3;
@@ -46,6 +47,11 @@ message Error {
          * to who the leader is (see leader_hint field).
          */
         NOT_LEADER = 1;
+        /**
+         * This session is no longer valid. Its state has been discarded on the
+         * server. The client should treat this as a fatal error.
+         */
+        SESSION_EXPIRED = 2;
     };
     required Code error_code = 1;
     /**
@@ -54,6 +60,26 @@ message Error {
      * leader.
      */
     optional string leader_hint = 2;
+}
+
+/**
+ * This is included in some RPCs to prevent processing of duplicated RPCs.
+ */
+message ExactlyOnceRPCInfo {
+    /**
+     * A session ID returned from the OpenSession RPC.
+     */
+    required uint64 client_id = 1;
+    /**
+     * The lowest numbered RPC for which the client has not yet received a
+     * response. The server may discard all copies of responses for RPCs with
+     * smaller numbers.
+     */
+    required uint64 first_outstanding_rpc = 2;
+    /**
+     * A strictly increasing sequence number for the RPC.
+     */
+    required uint64 rpc_number = 3;
 }
 
 /**
@@ -76,10 +102,27 @@ message GetSupportedRPCVersions {
 }
 
 /**
+ * OpenSession RPC: Open a new session with the cluster. Sessions are necessary
+ * for some RPCs to provide exactly-once semantics.
+ */
+message OpenSession {
+    message Request {
+    }
+    message Response {
+        /**
+         * The ID assigned to the client.
+         */
+        required uint64 client_id = 1;
+    }
+}
+
+/**
  * OpenLog RPC: Open or create a log by its name.
  */
 message OpenLog {
     message Request {
+        /// See ExactlyOnceRPCInfo.
+        required ExactlyOnceRPCInfo exactly_once = 10;
         /**
          * The name of the log, which may or may not exist.
          */
@@ -98,6 +141,8 @@ message OpenLog {
  */
 message DeleteLog {
     message Request {
+        /// See ExactlyOnceRPCInfo.
+        required ExactlyOnceRPCInfo exactly_once = 10;
         /**
          * The name of the log, which may or may not exist.
          */
@@ -111,7 +156,6 @@ message DeleteLog {
 /**
  * ListLogs RPC: List all available logs.
  */
-
 message ListLogs {
     message Request {
     }
@@ -129,6 +173,8 @@ message ListLogs {
  */
 message Append {
     message Request {
+        /// See ExactlyOnceRPCInfo.
+        required ExactlyOnceRPCInfo exactly_once = 10;
         /**
          * The ID for the log to extend.
          */
@@ -323,12 +369,12 @@ message SetConfiguration {
     }
 }
 
-
 /**
  * This is what the state machine takes in from the replicated log.
  */
 message Command {
     // The following are mutually exclusive.
+    optional OpenSession.Request open_session = 4;
     optional OpenLog.Request open_log = 1;
     optional DeleteLog.Request delete_log = 2;
     optional Append.Request append = 3;
@@ -339,6 +385,7 @@ message Command {
  */
 message CommandResponse {
     // The following are mutually exclusive.
+    optional OpenSession.Response open_session = 4;
     optional OpenLog.Response open_log = 1;
     optional DeleteLog.Response delete_log = 2;
     optional Append.Response append = 3;

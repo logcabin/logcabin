@@ -13,6 +13,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <mutex>
+#include <set>
+
 #include "Client/Client.h"
 #include "Client/ClientImplBase.h"
 #include "Client/LeaderRPC.h"
@@ -63,6 +66,64 @@ class ClientImpl : public ClientImplBase {
      * leader. (This is the result of negotiateRPCVersion().)
      */
     uint32_t rpcProtocolVersion;
+
+    /**
+     * This class helps with providing exactly-once semantics for RPCs. For
+     * example, it assigns sequence numbers to RPCs, which servers then use to 
+     * prevent duplicate processing of duplicate requests.
+     *
+     * This class is implemented in a monitor style.
+     */
+    class ExactlyOnceRPCHelper {
+      public:
+        /**
+         * Constructor.
+         * \param client
+         *     Used to open a session with the cluster. Should not be NULL.
+         */
+        explicit ExactlyOnceRPCHelper(ClientImpl* client);
+        /**
+         * Destructor.
+         */
+        ~ExactlyOnceRPCHelper();
+        /**
+         * Call this before sending an RPC.
+         */
+        Protocol::Client::ExactlyOnceRPCInfo getRPCInfo();
+        /**
+         * Call this after receiving an RPCs response.
+         */
+        void doneWithRPC(const Protocol::Client::ExactlyOnceRPCInfo&);
+
+      private:
+        /**
+         * Used to open a session with the cluster.
+         * const and non-NULL except for unit tests.
+         */
+        ClientImpl* client;
+        /**
+         * Protects all the members of this class.
+         */
+        std::mutex mutex;
+        /**
+         * The numbers of the RPCs for which this client is still awaiting a
+         * response.
+         */
+        std::set<uint64_t> outstandingRPCNumbers;
+        /**
+         * The client's session ID as returned by the open session RPC, or 0 if
+         * one has not yet been assigned.
+         */
+        uint64_t clientId;
+        /**
+         * The number to assign to the next RPC.
+         */
+        uint64_t nextRPCNumber;
+
+        // ExactlyOnceRPCHelper is not copyable.
+        ExactlyOnceRPCHelper(const ExactlyOnceRPCHelper&) = delete;
+        ExactlyOnceRPCHelper& operator=(const ExactlyOnceRPCHelper&) = delete;
+    } exactlyOnceRPCHelper;
 
     // ClientImpl is not copyable
     ClientImpl(const ClientImpl&) = delete;

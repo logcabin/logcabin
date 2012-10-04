@@ -39,7 +39,8 @@ LeaderRPC::~LeaderRPC()
 {
     leaderSession.reset();
     eventLoop.exit();
-    eventLoopThread.join();
+    if (eventLoopThread.joinable())
+        eventLoopThread.join();
 }
 
 void
@@ -103,6 +104,8 @@ LeaderRPC::handleServiceSpecificError(
                 connectRandom(cachedSession);
             }
             break;
+        case Protocol::Client::Error::SESSION_EXPIRED:
+            PANIC("Session expired");
         default:
             // Hmm, we don't know what this server is trying to tell us, but
             // something is wrong. The server shouldn't reply back with error
