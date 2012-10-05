@@ -83,7 +83,7 @@ TEST_F(RPCClientSessionTest, onReceiveMessage) {
     session->messageSocket->onReceiveMessage(1, buf("a"));
 
     // Normal
-    session->timer.schedule(1);
+    session->timer.schedule(1000000000);
     session->responses[1] = new ClientSession::Response();
     session->messageSocket->onReceiveMessage(1, buf("b"));
     EXPECT_TRUE(session->responses[1]->ready);
