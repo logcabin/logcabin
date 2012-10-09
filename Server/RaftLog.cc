@@ -24,125 +24,22 @@
 #include "Core/StringUtil.h"
 #include "RPC/Buffer.h"
 #include "RPC/ProtoBuf.h"
-#include "Storage/FilesystemUtil.h"
 #include "Server/RaftLog.h"
 
 namespace LogCabin {
 namespace Server {
 namespace RaftConsensusInternal {
 
-namespace FilesystemUtil = Storage::FilesystemUtil;
-
-namespace {
-bool
-fileToProto(const std::string& path, google::protobuf::Message& out)
-{
-    int fd = open(path.c_str(), O_RDONLY);
-    if (fd == -1)
-        return false;
-    else
-        close(fd);
-    FilesystemUtil::FileContents file(path);
-#if BINARY_FORMAT
-    RPC::Buffer contents(const_cast<void*>(file.get(0, file.getFileLength())),
-                         file.getFileLength(), NULL);
-    return RPC::ProtoBuf::parse(contents, out);
-#else
-    std::string contents(
-            static_cast<const char*>(file.get(0, file.getFileLength())),
-            file.getFileLength());
-    Core::ProtoBuf::Internal::fromString(contents, out);
-    return true;
-#endif
-}
-
-void
-protoToFile(const google::protobuf::Message& in,
-            const std::string& path)
-{
-#if BINARY_FORMAT
-    RPC::Buffer contents;
-    RPC::ProtoBuf::serialize(in, contents);
-#else
-    std::string contents(Core::ProtoBuf::dumpString(in, false));
-#endif
-    int fd = open(path.c_str(), O_CREAT|O_WRONLY, 0600);
-    // TODO(ongaro): error?
-#if BINARY_FORMAT
-    FilesystemUtil::write(fd, contents.getData(), contents.getLength());
-#else
-    FilesystemUtil::write(fd, contents.data(), uint32_t(contents.length()));
-#endif
-    // TODO(ongaro): error?
-    close(fd);
-    // TODO(ongaro): error?
-}
-}
-
 ////////// Log //////////
 
-Log::Log(const std::string& path)
-    : path(path)
-    , metadata()
+Log::Log()
+    : metadata()
     , entries()
 {
-    if (!path.empty()) {
-        if (mkdir(path.c_str(), 0755) == 0) {
-            FilesystemUtil::syncDir(path + "/..");
-        } else {
-            if (errno != EEXIST) {
-                PANIC("Failed to create directory for FilesystemLog:"
-                      " mkdir(%s) failed: %s", path.c_str(), strerror(errno));
-            }
-        }
-
-        bool success = fileToProto(path + "/metadata", metadata);
-        if (!success)
-            WARNING("Error reading metadata");
-
-        std::vector<uint64_t> entryIds = getEntryIds();
-        std::sort(entryIds.begin(), entryIds.end());
-        for (auto it = entryIds.begin(); it != entryIds.end(); ++it) {
-            std::string entryPath = Core::StringUtil::format("%s/%016lx",
-                                                             path.c_str(),
-                                                             *it);
-            uint64_t entryId = append(read(entryPath));
-            assert(entryId == *it);
-        }
-    }
 }
 
-std::vector<uint64_t>
-Log::getEntryIds() const
+Log::~Log()
 {
-    std::vector<std::string> filenames = FilesystemUtil::ls(path);
-    std::vector<uint64_t> entryIds;
-    for (auto it = filenames.begin(); it != filenames.end(); ++it) {
-        const std::string& filename = *it;
-        if (filename == "metadata")
-            continue;
-        uint64_t entryId;
-        unsigned bytesConsumed;
-        int matched = sscanf(filename.c_str(), "%016lx%n", // NOLINT
-                             &entryId, &bytesConsumed);
-        if (matched != 1 || bytesConsumed != filename.length()) {
-            WARNING("%s doesn't look like a valid entry ID (from %s)",
-                 filename.c_str(),
-                 (path + "/" + filename).c_str());
-            continue;
-        }
-        entryIds.push_back(entryId);
-    }
-    return entryIds;
-}
-
-Log::Entry
-Log::read(const std::string& entryPath) const
-{
-    Protocol::Raft::Entry entry;
-    bool success = fileToProto(entryPath, entry);
-    assert(success);
-    return entry;
 }
 
 uint64_t
@@ -150,11 +47,6 @@ Log::append(const Entry& entry)
 {
     entries.push_back(entry);
     uint64_t entryId = entries.size();
-    if (!path.empty()) {
-        protoToFile(entry, Core::StringUtil::format("%s/%016lx",
-                                                    path.c_str(),
-                                                    entryId));
-    }
     return entryId;
 }
 
@@ -198,30 +90,14 @@ Log::getTerm(uint64_t entryId) const
 void
 Log::truncate(uint64_t lastEntryId)
 {
-    if (lastEntryId < entries.size()) {
-        if (!path.empty()) {
-            for (auto entryId = getLastLogId();
-                 entryId > lastEntryId;
-                 --entryId) {
-                FilesystemUtil::remove(Core::StringUtil::format("%s/%016lx",
-                                                                 path.c_str(),
-                                                                 entryId));
-            }
-        }
+    if (lastEntryId < entries.size())
         entries.resize(lastEntryId);
-    }
 }
 
 void
 Log::updateMetadata()
 {
-    if (!path.empty()) {
-        protoToFile(metadata, path + "/metadata");
-    }
 }
-
-// TODO(ongaro): worry about corruption
-// TODO(ongaro): worry about fail-stop
 
 } // namespace LogCabin::Server::RaftConsensusInternal
 } // namespace LogCabin::Server

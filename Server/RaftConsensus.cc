@@ -32,6 +32,7 @@
 #include "RPC/ServerRPC.h"
 #include "Server/RaftConsensus.h"
 #include "Server/Globals.h"
+#include "Server/SimpleFileLog.h"
 #include "Server/StateMachine.h"
 
 namespace LogCabin {
@@ -566,7 +567,8 @@ RaftConsensus::init()
 
     if (!log) { // some unit tests pre-set the log; don't overwrite it
         // TODO(ongaro): use configuration option instead of hard-coded string
-        log.reset(new Log(Core::StringUtil::format("log/%lu", serverId)));
+        log.reset(new SimpleFileLog(
+                        Core::StringUtil::format("log/%lu", serverId)));
     }
     NOTICE("Last log ID: %lu", log->getLastLogId());
     if (log->metadata.has_current_term())

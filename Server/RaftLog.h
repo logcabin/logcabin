@@ -36,7 +36,8 @@ class Log {
 
     typedef Protocol::Raft::Entry Entry;
 
-    explicit Log(const std::string& path = "");
+    Log();
+    virtual ~Log();
 
     /**
      * Append a new entry to the log.
@@ -45,7 +46,7 @@ class Log {
      * \return
      *      The newly appended entry's entryId.
      */
-    uint64_t append(const Entry& entry);
+    virtual uint64_t append(const Entry& entry);
 
     /**
      * Get the entry ID of the earliest entry with the same term as the last
@@ -53,7 +54,7 @@ class Log {
      *      The entry ID of the first entry in the log's last term, or 0 if the
      *      log is empty.
      */
-    uint64_t getBeginLastTermId() const;
+    virtual uint64_t getBeginLastTermId() const;
 
     /**
      * Look up an entry by ID.
@@ -62,7 +63,7 @@ class Log {
      * \return
      *      The entry corresponding to that entry ID.
      */
-    const Entry& getEntry(uint64_t entryId) const;
+    virtual const Entry& getEntry(uint64_t entryId) const;
 
     /**
      * Get the entry ID of the most recent entry in the log.
@@ -70,7 +71,7 @@ class Log {
      *      The entry ID of the most recent entry in the log,
      *      or 0 if the log is empty.
      */
-    uint64_t getLastLogId() const;
+    virtual uint64_t getLastLogId() const;
 
     /**
      * Get the term of an entry in the log.
@@ -80,7 +81,7 @@ class Log {
      *      The term of the given entry in the log if it exists,
      *      or 0 otherwise.
      */
-    uint64_t getTerm(uint64_t entryId) const;
+    virtual uint64_t getTerm(uint64_t entryId) const;
 
     /**
      * Delete the log entries past the given entry ID.
@@ -89,26 +90,19 @@ class Log {
      *      than lastEntryId. This can be any entry ID, including 0 and those
      *      past the end of the log.
      */
-    void truncate(uint64_t lastEntryId);
+    virtual void truncate(uint64_t lastEntryId);
 
     /**
      * Call this after changing #metadata.
      */
-    void updateMetadata();
-
-    std::string path;
+    virtual void updateMetadata();
 
     /**
      * Opaque metadata that the log keeps track of.
      */
     RaftLogMetadata::Metadata metadata;
 
-  private:
-
-    std::vector<uint64_t> getEntryIds() const;
-
-    Entry read(const std::string& entryPath) const;
-
+  protected:
 
     /** index is EntryId - 1 */
     std::vector<Entry> entries;
