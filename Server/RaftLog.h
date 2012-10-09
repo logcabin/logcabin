@@ -34,17 +34,7 @@ namespace RaftConsensusInternal {
 class Log {
   public:
 
-      // TODO(ongaro): Is there any point to this vs using
-      // Protocol::Raft::Entry directly?
-    struct Entry {
-        Entry();
-        // TODO(ongaro): client serial number
-        uint64_t entryId;
-        uint64_t term;
-        Protocol::Raft::EntryType type;
-        std::string data;
-        Protocol::Raft::Configuration configuration;
-    };
+    typedef Protocol::Raft::Entry Entry;
 
     explicit Log(const std::string& path = "");
 

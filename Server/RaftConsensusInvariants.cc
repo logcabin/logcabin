@@ -92,8 +92,8 @@ Invariants::checkBasic()
          entryId <= consensus.log->getLastLogId();
          ++entryId) {
         const Log::Entry& entry = consensus.log->getEntry(entryId);
-        expect(entry.term >= lastTerm);
-        lastTerm = entry.term;
+        expect(entry.term() >= lastTerm);
+        lastTerm = entry.term();
     }
     // The terms in the log do not exceed currentTerm
     expect(lastTerm <= consensus.currentTerm);
@@ -104,7 +104,7 @@ Invariants::checkBasic()
          entryId > 0;
          --entryId) {
         const Log::Entry& entry = consensus.log->getEntry(entryId);
-        if (entry.type == Protocol::Raft::EntryType::CONFIGURATION) {
+        if (entry.type() == Protocol::Raft::EntryType::CONFIGURATION) {
             expect(consensus.configuration->id == entryId);
             expect(consensus.configuration->state !=
                    Configuration::State::BLANK);

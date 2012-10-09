@@ -57,7 +57,7 @@ fileToProto(const std::string& path, google::protobuf::Message& out)
 }
 
 void
-protoToFile(google::protobuf::Message& in,
+protoToFile(const google::protobuf::Message& in,
             const std::string& path)
 {
 #if BINARY_FORMAT
@@ -77,17 +77,6 @@ protoToFile(google::protobuf::Message& in,
     close(fd);
     // TODO(ongaro): error?
 }
-}
-
-////////// Log::Entry //////////
-
-Log::Entry::Entry()
-    : entryId(0)
-    , term(0)
-    , type()
-    , data()
-    , configuration()
-{
 }
 
 ////////// Log //////////
@@ -150,16 +139,9 @@ Log::getEntryIds() const
 Log::Entry
 Log::read(const std::string& entryPath) const
 {
-    Protocol::Raft::Entry entryProto;
-    bool success = fileToProto(entryPath, entryProto);
+    Protocol::Raft::Entry entry;
+    bool success = fileToProto(entryPath, entry);
     assert(success);
-    Log::Entry entry;
-    entry.term = entryProto.term();
-    entry.type = entryProto.type();
-    if (entry.type == Protocol::Raft::EntryType::CONFIGURATION)
-        entry.configuration = entryProto.configuration();
-    else
-        entry.data = entryProto.data();
     return entry;
 }
 
@@ -168,18 +150,10 @@ Log::append(const Entry& entry)
 {
     entries.push_back(entry);
     uint64_t entryId = entries.size();
-    entries.back().entryId = entryId;
     if (!path.empty()) {
-        Protocol::Raft::Entry entryProto;
-        entryProto.set_term(entry.term);
-        entryProto.set_type(entry.type);
-        if (entry.type == Protocol::Raft::EntryType::CONFIGURATION)
-            *entryProto.mutable_configuration() = entry.configuration;
-        else
-            entryProto.set_data(entry.data);
-        protoToFile(entryProto, Core::StringUtil::format("%s/%016lx",
-                                                         path.c_str(),
-                                                         entryId));
+        protoToFile(entry, Core::StringUtil::format("%s/%016lx",
+                                                    path.c_str(),
+                                                    entryId));
     }
     return entryId;
 }
@@ -218,7 +192,7 @@ Log::getTerm(uint64_t entryId) const
     uint64_t index = entryId - 1; // may roll over to ~0UL
     if (index >= entries.size())
         return 0;
-    return entries.at(index).term;
+    return entries.at(index).term();
 }
 
 void

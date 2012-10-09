@@ -28,9 +28,8 @@ class ServerRaftLogTest : public ::testing::Test {
         : log()
         , sampleEntry()
     {
-        sampleEntry.entryId = 300;
-        sampleEntry.term = 40;
-        sampleEntry.data = "foo";
+        sampleEntry.set_term(40);
+        sampleEntry.set_data("foo");
     }
     Log log;
     Log::Entry sampleEntry;
@@ -40,9 +39,8 @@ TEST_F(ServerRaftLogTest, basic)
 {
     EXPECT_EQ(1U, log.append(sampleEntry));
     Log::Entry entry = log.getEntry(1);
-    EXPECT_EQ(1U, entry.entryId);
-    EXPECT_EQ(40U, entry.term);
-    EXPECT_EQ("foo", entry.data);
+    EXPECT_EQ(40U, entry.term());
+    EXPECT_EQ("foo", entry.data());
 }
 
 TEST_F(ServerRaftLogTest, getBeginLastTermId)
@@ -52,7 +50,7 @@ TEST_F(ServerRaftLogTest, getBeginLastTermId)
     EXPECT_EQ(1U, log.getBeginLastTermId());
     log.append(sampleEntry);
     EXPECT_EQ(1U, log.getBeginLastTermId());
-    sampleEntry.term = 80;
+    sampleEntry.set_term(80);
     log.append(sampleEntry);
     EXPECT_EQ(3U, log.getBeginLastTermId());
 }
@@ -60,9 +58,8 @@ TEST_F(ServerRaftLogTest, getBeginLastTermId)
 TEST_F(ServerRaftLogTest, getEntry)
 {
     Log::Entry entry = log.getEntry(log.append(sampleEntry));
-    EXPECT_EQ(1U, entry.entryId);
-    EXPECT_EQ(40U, entry.term);
-    EXPECT_EQ("foo", entry.data);
+    EXPECT_EQ(40U, entry.term());
+    EXPECT_EQ("foo", entry.data());
     EXPECT_THROW(log.getEntry(0), std::out_of_range);
     EXPECT_THROW(log.getEntry(2), std::out_of_range);
 }

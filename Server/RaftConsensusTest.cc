@@ -307,25 +307,25 @@ class ServerRaftConsensusTest : public ::testing::Test {
         Clock::useMockValue = true;
         Clock::mockValue = Clock::now();
 
-        entry1.term = 1;
-        entry1.type = Protocol::Raft::EntryType::CONFIGURATION;
-        entry1.configuration = desc(d);
+        entry1.set_term(1);
+        entry1.set_type(Protocol::Raft::EntryType::CONFIGURATION);
+        *entry1.mutable_configuration() = desc(d);
 
-        entry2.term = 2;
-        entry2.type = Protocol::Raft::EntryType::DATA;
-        entry2.data = "hello";
+        entry2.set_term(2);
+        entry2.set_type(Protocol::Raft::EntryType::DATA);
+        entry2.set_data("hello");
 
-        entry3.term = 3;
-        entry3.type = Protocol::Raft::EntryType::CONFIGURATION;
-        entry3.configuration = desc(d2);
+        entry3.set_term(3);
+        entry3.set_type(Protocol::Raft::EntryType::CONFIGURATION);
+        *entry3.mutable_configuration() = desc(d2);
 
-        entry4.term = 4;
-        entry4.type = Protocol::Raft::EntryType::DATA;
-        entry4.data = "goodbye";
+        entry4.set_term(4);
+        entry4.set_type(Protocol::Raft::EntryType::DATA);
+        entry4.set_data("goodbye");
 
-        entry5.term = 5;
-        entry5.type = Protocol::Raft::EntryType::CONFIGURATION;
-        entry5.configuration = desc(d3);
+        entry5.set_term(5);
+        entry5.set_type(Protocol::Raft::EntryType::CONFIGURATION);
+        *entry5.mutable_configuration() = desc(d3);
     }
     void init() {
         consensus->log.reset(new Log());
@@ -413,15 +413,15 @@ TEST_F(ServerRaftConsensusTest, init_nonblanklog)
     log.metadata.set_current_term(30);
     log.metadata.set_voted_for(63);
     Log::Entry entry;
-    entry.term = 1;
-    entry.type = Protocol::Raft::EntryType::CONFIGURATION;
-    entry.configuration = desc(d);
+    entry.set_term(1);
+    entry.set_type(Protocol::Raft::EntryType::CONFIGURATION);
+    *entry.mutable_configuration() = desc(d);
     log.append(entry);
 
     Log::Entry entry2;
-    entry2.term = 2;
-    entry2.type = Protocol::Raft::EntryType::DATA;
-    entry.data = "hello, world";
+    entry2.set_term(2);
+    entry2.set_type(Protocol::Raft::EntryType::DATA);
+    entry2.set_data("hello, world");
     log.append(entry2);
 
     consensus->init();
@@ -457,8 +457,8 @@ TEST_F(ServerRaftConsensusTest, getConfiguration_retry)
     init();
     consensus->append(entry1);
     consensus->startNewElection();
-    entry5.term = 1;
-    entry5.configuration = desc(d4);
+    entry5.set_term(1);
+    *entry5.mutable_configuration() = desc(d4);
     consensus->append(entry5);
     EXPECT_EQ(State::LEADER, consensus->state);
     EXPECT_EQ(1U, consensus->committedId);
@@ -492,8 +492,8 @@ class AppendAndCommit {
     void operator()() {
         using Core::StringUtil::format;
         Log::Entry entry;
-        entry.term = 50;
-        entry.data = format("entry%lu", consensus.log->getLastLogId() + 1);
+        entry.set_term(50);
+        entry.set_data(format("entry%lu", consensus.log->getLastLogId() + 1));
         consensus.committedId = consensus.log->append(entry);
     }
     RaftConsensus& consensus;
@@ -603,15 +603,13 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntry_append)
     EXPECT_EQ(2U, consensus->log->getLastLogId());
     EXPECT_EQ(1U, consensus->configuration->id);
     const Log::Entry& l1 = consensus->log->getEntry(1);
-    EXPECT_EQ(1U, l1.entryId);
-    EXPECT_EQ(4U, l1.term);
-    EXPECT_EQ(Protocol::Raft::EntryType::CONFIGURATION, l1.type);
-    EXPECT_EQ(d3, l1.configuration);
+    EXPECT_EQ(4U, l1.term());
+    EXPECT_EQ(Protocol::Raft::EntryType::CONFIGURATION, l1.type());
+    EXPECT_EQ(d3, l1.configuration());
     const Log::Entry& l2 = consensus->log->getEntry(2);
-    EXPECT_EQ(2U, l2.entryId);
-    EXPECT_EQ(5U, l2.term);
-    EXPECT_EQ(Protocol::Raft::EntryType::DATA, l2.type);
-    EXPECT_EQ("hello", l2.data);
+    EXPECT_EQ(5U, l2.term());
+    EXPECT_EQ(Protocol::Raft::EntryType::DATA, l2.type());
+    EXPECT_EQ("hello", l2.data());
 }
 
 TEST_F(ServerRaftConsensusTest, handleAppendEntry_truncate)
@@ -644,14 +642,14 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntry_truncate)
     EXPECT_EQ(4U, consensus->log->getLastLogId());
     EXPECT_EQ(1U, consensus->configuration->id);
     const Log::Entry& l1 = consensus->log->getEntry(1);
-    EXPECT_EQ(Protocol::Raft::EntryType::CONFIGURATION, l1.type);
-    EXPECT_EQ(d, l1.configuration);
+    EXPECT_EQ(Protocol::Raft::EntryType::CONFIGURATION, l1.type());
+    EXPECT_EQ(d, l1.configuration());
     const Log::Entry& l2 = consensus->log->getEntry(2);
-    EXPECT_EQ("hello", l2.data);
+    EXPECT_EQ("hello", l2.data());
     const Log::Entry& l3 = consensus->log->getEntry(3);
-    EXPECT_EQ("foo", l3.data);
+    EXPECT_EQ("foo", l3.data());
     const Log::Entry& l4 = consensus->log->getEntry(4);
-    EXPECT_EQ("bar", l4.data);
+    EXPECT_EQ("bar", l4.data());
 }
 
 TEST_F(ServerRaftConsensusTest, handleAppendEntry_duplicate)
@@ -674,9 +672,9 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntry_duplicate)
     EXPECT_EQ("term: 10", response);
     EXPECT_EQ(1U, consensus->log->getLastLogId());
     const Log::Entry& l1 = consensus->log->getEntry(1);
-    EXPECT_EQ(Protocol::Raft::EntryType::CONFIGURATION, l1.type);
-    EXPECT_EQ(d, l1.configuration);
-    EXPECT_EQ("", l1.data);
+    EXPECT_EQ(Protocol::Raft::EntryType::CONFIGURATION, l1.type());
+    EXPECT_EQ(d, l1.configuration());
+    EXPECT_EQ("", l1.data());
 }
 
 TEST_F(ServerRaftConsensusTest, handleRequestVote)
@@ -826,14 +824,14 @@ TEST_F(ServerRaftConsensusTest, setConfiguration_replicateFail)
     EXPECT_EQ(ClientResult::NOT_LEADER, consensus->setConfiguration(1, c));
     EXPECT_EQ(2U, consensus->log->getLastLogId());
     const Log::Entry& l2 = consensus->log->getEntry(2);
-    EXPECT_EQ(Protocol::Raft::EntryType::CONFIGURATION, l2.type);
+    EXPECT_EQ(Protocol::Raft::EntryType::CONFIGURATION, l2.type());
     EXPECT_EQ("prev_configuration {"
                   "servers { server_id: 1, address: '127.0.0.1:61023' }"
               "}"
               "next_configuration {"
                   "servers { server_id: 2, address: '127.0.0.1:61024' }"
               "}",
-              l2.configuration);
+              l2.configuration());
 }
 
 TEST_F(ServerRaftConsensusTest, setConfiguration_replicateOkJustUs)
@@ -847,11 +845,11 @@ TEST_F(ServerRaftConsensusTest, setConfiguration_replicateOkJustUs)
     EXPECT_EQ(ClientResult::SUCCESS, consensus->setConfiguration(1, c));
     EXPECT_EQ(3U, consensus->log->getLastLogId());
     const Log::Entry& l3 = consensus->log->getEntry(3);
-    EXPECT_EQ(Protocol::Raft::EntryType::CONFIGURATION, l3.type);
+    EXPECT_EQ(Protocol::Raft::EntryType::CONFIGURATION, l3.type());
     EXPECT_EQ("prev_configuration {"
                   "servers { server_id: 1, address: '127.0.0.1:61024' }"
               "}",
-              l3.configuration);
+              l3.configuration());
 }
 
 class SetConfigurationHelper3 {
@@ -996,7 +994,7 @@ TEST_F(ServerRaftConsensusPTest, followerThreadMain)
 {
     init();
     consensus->stepDown(5);
-    entry5.configuration = desc(
+    *entry5.mutable_configuration() = desc(
         "prev_configuration {"
         "    servers { server_id: 1, address: '127.0.0.1:61023' }"
         "    servers { server_id: 2, address: '127.0.0.1:61024' }"
@@ -1039,7 +1037,7 @@ TEST_F(ServerRaftConsensusPTest, followerThreadMain)
     Protocol::Raft::Entry* e = arequest.add_entries();
     e->set_term(5);
     e->set_type(Protocol::Raft::EntryType::CONFIGURATION);
-    *e->mutable_configuration() = entry5.configuration;
+    *e->mutable_configuration() = entry5.configuration();
     Protocol::Raft::AppendEntry::Response aresponse;
     aresponse.set_term(6);
     peerService->reply(Protocol::Raft::OpCode::APPEND_ENTRY,
@@ -1146,7 +1144,7 @@ TEST_F(ServerRaftConsensusTest, advanceCommittedId_commitCfgWithoutSelf)
     consensus->stepDown(5);
     consensus->append(entry1);
     consensus->startNewElection();
-    entry1.configuration = desc(
+    *entry1.mutable_configuration() = desc(
         "prev_configuration {"
         "    servers { server_id: 1, address: '127.0.0.1:61023' }"
         "}"
@@ -1178,11 +1176,11 @@ TEST_F(ServerRaftConsensusTest, advanceCommittedId_commitTransitionToSelf)
     EXPECT_EQ(3U, consensus->committedId);
     EXPECT_EQ(3U, consensus->log->getLastLogId());
     const Log::Entry& l3 = consensus->log->getEntry(3);
-    EXPECT_EQ(Protocol::Raft::EntryType::CONFIGURATION, l3.type);
+    EXPECT_EQ(Protocol::Raft::EntryType::CONFIGURATION, l3.type());
     EXPECT_EQ("prev_configuration {"
                   "servers { server_id: 1, address: '127.0.0.1:61025' }"
               "}",
-              l3.configuration);
+              l3.configuration());
 }
 
 TEST_F(ServerRaftConsensusTest, append)
@@ -1220,15 +1218,15 @@ class ServerRaftConsensusPATest : public ServerRaftConsensusPTest {
         Protocol::Raft::Entry* e1 = request.add_entries();
         e1->set_term(1);
         e1->set_type(Protocol::Raft::EntryType::CONFIGURATION);
-        *e1->mutable_configuration() = entry1.configuration;
+        *e1->mutable_configuration() = entry1.configuration();
         Protocol::Raft::Entry* e2 = request.add_entries();
         e2->set_term(2);
         e2->set_type(Protocol::Raft::EntryType::DATA);
-        e2->set_data(entry2.data);
+        e2->set_data(entry2.data());
         Protocol::Raft::Entry* e3 = request.add_entries();
         e3->set_term(5);
         e3->set_type(Protocol::Raft::EntryType::CONFIGURATION);
-        *e3->mutable_configuration() = entry5.configuration;
+        *e3->mutable_configuration() = entry5.configuration();
 
         response.set_term(6);
     }
@@ -1329,7 +1327,7 @@ TEST_F(ServerRaftConsensusTest, isLeaderReady)
     EXPECT_FALSE(consensus->isLeaderReady());
     consensus->advanceCommittedId();
     EXPECT_TRUE(consensus->isLeaderReady());
-    entry2.term = 6;
+    entry2.set_term(6);
     EXPECT_TRUE(consensus->isLeaderReady());
     consensus->advanceCommittedId();
     EXPECT_TRUE(consensus->isLeaderReady());
@@ -1446,7 +1444,7 @@ TEST_F(ServerRaftConsensusPTest, requestVote_termStale)
     consensus->stepDown(5);
     consensus->append(entry1);
     consensus->startNewElection(); // become leader
-    entry1.configuration = desc(d4);
+    *entry1.mutable_configuration() = desc(d4);
     consensus->append(entry1);
     EXPECT_EQ(State::LEADER, consensus->state);
     Peer& peer = *getPeer(2);
@@ -1494,7 +1492,7 @@ TEST_F(ServerRaftConsensusPTest, requestVote_termOkAsLeader)
 {
     init();
     consensus->stepDown(5);
-    entry1.configuration = desc(
+    *entry1.mutable_configuration() = desc(
         "prev_configuration {"
         "    servers { server_id: 1, address: '127.0.0.1:61023' }"
         "    servers { server_id: 2, address: '127.0.0.1:61024' }"
@@ -1612,7 +1610,7 @@ TEST_F(ServerRaftConsensusTest, setElectionTimer)
         EXPECT_LE(Clock::now() +
                   milliseconds(RaftConsensus::ELECTION_TIMEOUT_MS),
                   consensus->startElectionAt);
-        EXPECT_GT(Clock::now() +
+        EXPECT_GE(Clock::now() +
                   milliseconds(RaftConsensus::ELECTION_TIMEOUT_MS) * 2,
                   consensus->startElectionAt);
     }
@@ -1647,15 +1645,15 @@ TEST_F(ServerRaftConsensusTest, startNewElection)
 
     // already won
     consensus->stepDown(7);
-    entry1.term = 7;
+    entry1.set_term(7);
     consensus->append(entry1);
     consensus->startNewElection();
     EXPECT_EQ(State::LEADER, consensus->state);
 
     // not part of current configuration
     consensus->stepDown(10);
-    entry1.term = 9;
-    entry1.configuration = desc(
+    entry1.set_term(9);
+    *entry1.mutable_configuration() = desc(
         "prev_configuration {"
             "servers { server_id: 2, address: '127.0.0.1:61025' }"
         "}");

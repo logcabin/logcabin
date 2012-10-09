@@ -639,10 +639,10 @@ RaftConsensus::getNextEntry(uint64_t lastEntryId) const
         if (committedId >= nextEntryId) {
             const Log::Entry& logEntry = log->getEntry(nextEntryId);
             Consensus::Entry entry;
-            entry.entryId = logEntry.entryId;
-            if (logEntry.type == Protocol::Raft::EntryType::DATA) {
+            entry.entryId = nextEntryId;
+            if (logEntry.type() == Protocol::Raft::EntryType::DATA) {
                 entry.hasData = true;
-                entry.data = logEntry.data;
+                entry.data = logEntry.data();
             }
             return entry;
         }
@@ -709,7 +709,8 @@ RaftConsensus::handleAppendEntry(
          it != request.entries().end();
          ++it) {
         ++entryId;
-        if (log->getTerm(entryId) == it->term())
+        const Protocol::Raft::Entry& entry = *it;
+        if (log->getTerm(entryId) == entry.term())
             continue;
         if (log->getLastLogId() >= entryId) {
             assert(committedId < entryId);
@@ -722,19 +723,6 @@ RaftConsensus::handleAppendEntry(
                 // truncate can affect current configuration
                 scanForConfiguration();
             }
-        }
-        Log::Entry entry;
-        entry.term = it->term();
-        entry.type = it->type();
-        switch (entry.type) {
-            case Protocol::Raft::EntryType::CONFIGURATION:
-                entry.configuration = it->configuration();
-                break;
-            case Protocol::Raft::EntryType::DATA:
-                entry.data = it->data();
-                break;
-            default:
-                PANIC("bad entry type");
         }
         uint64_t e = append(entry);
         assert(e == entryId);
@@ -806,8 +794,8 @@ RaftConsensus::replicate(const std::string& operation)
     std::unique_lock<Mutex> lockGuard(mutex);
     VERBOSE("replicate(%s)", operation.c_str());
     Log::Entry entry;
-    entry.type = Protocol::Raft::EntryType::DATA;
-    entry.data = operation;
+    entry.set_type(Protocol::Raft::EntryType::DATA);
+    entry.set_data(operation);
     return replicateEntry(entry, lockGuard);
 }
 
@@ -865,8 +853,8 @@ RaftConsensus::setConfiguration(
         configuration->description.prev_configuration();
     *newConfiguration.mutable_next_configuration() = nextConfiguration;
     Log::Entry entry;
-    entry.type = Protocol::Raft::EntryType::CONFIGURATION;
-    entry.configuration = newConfiguration;
+    entry.set_type(Protocol::Raft::EntryType::CONFIGURATION);
+    *entry.mutable_configuration() = newConfiguration;
     std::pair<ClientResult, uint64_t> result =
         replicateEntry(entry, lockGuard);
     if (result.first != ClientResult::SUCCESS)
@@ -1069,9 +1057,9 @@ RaftConsensus::advanceCommittedId()
         if (configuration->state == Configuration::State::TRANSITIONAL &&
             isLeaderReady()) {
             Log::Entry entry;
-            entry.term = currentTerm;
-            entry.type = Protocol::Raft::EntryType::CONFIGURATION;
-            *entry.configuration.mutable_prev_configuration() =
+            entry.set_term(currentTerm);
+            entry.set_type(Protocol::Raft::EntryType::CONFIGURATION);
+            *entry.mutable_configuration()->mutable_prev_configuration() =
                 configuration->description.next_configuration();
             append(entry);
             advanceCommittedId();
@@ -1083,10 +1071,10 @@ RaftConsensus::advanceCommittedId()
 uint64_t
 RaftConsensus::append(const Log::Entry& entry)
 {
-    assert(entry.term != 0);
+    assert(entry.term() != 0);
     uint64_t entryId = log->append(entry);
-    if (entry.type == Protocol::Raft::EntryType::CONFIGURATION)
-        configuration->setConfiguration(entryId, entry.configuration);
+    if (entry.type() == Protocol::Raft::EntryType::CONFIGURATION)
+        configuration->setConfiguration(entryId, entry.configuration());
     stateChanged.notify_all();
     return entryId;
 }
@@ -1108,24 +1096,12 @@ RaftConsensus::appendEntry(std::unique_lock<Mutex>& lockGuard,
     uint64_t numEntries = 0;
     for (uint64_t entryId = prevLogId + 1; entryId <= lastLogId; ++entryId) {
         const Log::Entry& entry = log->getEntry(entryId);
-        Protocol::Raft::Entry* e = request.add_entries();
-        e->set_term(entry.term);
-        e->set_type(entry.type);
-        switch (entry.type) {
-            case Protocol::Raft::EntryType::CONFIGURATION:
-                *e->mutable_configuration() = entry.configuration;
-                break;
-            case Protocol::Raft::EntryType::DATA:
-                e->set_data(entry.data);
-                break;
-            default:
-                PANIC("bad entry type");
-        }
+        *request.add_entries() = entry;
         uint64_t requestSize =
             Core::Util::downCast<uint64_t>(request.ByteSize());
         if (requestSize < SOFT_RPC_SIZE_LIMIT || numEntries == 0) {
             // this entry fits, send it
-            VERBOSE("sending entry <id=%lu,term=%lu>", entryId, entry.term);
+            VERBOSE("sending entry <id=%lu,term=%lu>", entryId, entry.term());
             ++numEntries;
         } else {
             // this entry doesn't fit, discard it
@@ -1223,10 +1199,10 @@ RaftConsensus::replicateEntry(Log::Entry& entry,
     if (state == State::LEADER) {
         if (!isLeaderReady())
             return {ClientResult::RETRY, 0};
-        entry.term = currentTerm;
+        entry.set_term(currentTerm);
         uint64_t entryId = append(entry);
         advanceCommittedId();
-        while (!exiting && currentTerm == entry.term) {
+        while (!exiting && currentTerm == entry.term()) {
             if (committedId >= entryId) {
                 VERBOSE("replicate succeeded");
                 return {ClientResult::SUCCESS, entryId};
@@ -1310,8 +1286,8 @@ RaftConsensus::scanForConfiguration()
 {
     for (uint64_t entryId = log->getLastLogId(); entryId > 0; --entryId) {
         const Log::Entry& entry = log->getEntry(entryId);
-        if (entry.type == Protocol::Raft::EntryType::CONFIGURATION) {
-            configuration->setConfiguration(entryId, entry.configuration);
+        if (entry.type() == Protocol::Raft::EntryType::CONFIGURATION) {
+            configuration->setConfiguration(entryId, entry.configuration());
             return;
         }
     }
