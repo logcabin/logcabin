@@ -19,9 +19,11 @@
 #include <unistd.h>
 
 #include "build/Protocol/Raft.pb.h"
+#include "Core/Checksum.h"
 #include "Core/Debug.h"
 #include "Core/ProtoBuf.h"
 #include "Core/StringUtil.h"
+#include "Core/Util.h"
 #include "RPC/Buffer.h"
 #include "RPC/ProtoBuf.h"
 #include "Storage/FilesystemUtil.h"
@@ -33,29 +35,44 @@ namespace RaftConsensusInternal {
 
 namespace FilesystemUtil = Storage::FilesystemUtil;
 using FilesystemUtil::File;
+using Core::StringUtil::format;
 
 namespace {
-bool
+std::string
 fileToProto(const File& dir, const std::string& path,
             google::protobuf::Message& out)
 {
     FilesystemUtil::File file =
         FilesystemUtil::tryOpenFile(dir, path, O_RDONLY);
-    if (file.fd == -1)
-        return false;
+    if (file.fd == -1) {
+        return format("Could not open %s: %s",
+                      file.path.c_str(), strerror(errno));
+    }
     FilesystemUtil::FileContents reader(file);
+
+    char checksum[Core::Checksum::MAX_LENGTH];
+    uint32_t bytesRead = reader.copyPartial(0, checksum, sizeof32(checksum));
+    uint32_t checksumBytes = Core::Checksum::length(checksum, bytesRead);
+    if (checksumBytes == 0)
+        return format("File %s missing checksum", file.path.c_str());
+
+    uint32_t dataLen = reader.getFileLength() - checksumBytes;
+    const void* data = reader.get(checksumBytes, dataLen);
+    std::string error = Core::Checksum::verify(checksum, data, dataLen);
+    if (!error.empty()) {
+        return format("Checksum verification failure on %s: %s",
+                      file.path.c_str(), error.c_str());
+    }
+
 #if BINARY_FORMAT
-    RPC::Buffer contents(
-            const_cast<void*>(reader.get(0, reader.getFileLength())),
-            reader.getFileLength(), NULL);
-    return RPC::ProtoBuf::parse(contents, out);
+    RPC::Buffer contents(const_cast<void*>(data), dataLen, NULL);
+    if (!RPC::ProtoBuf::parse(contents, out))
+        return format("Failed to parse protobuf in %s", file.path.c_str());
 #else
-    std::string contents(
-            static_cast<const char*>(reader.get(0, reader.getFileLength())),
-            reader.getFileLength());
+    std::string contents(static_cast<const char*>(data), dataLen);
     Core::ProtoBuf::Internal::fromString(contents, out);
-    return true;
 #endif
+    return "";
 }
 
 void
@@ -64,17 +81,28 @@ protoToFile(const google::protobuf::Message& in,
 {
     FilesystemUtil::File file =
         FilesystemUtil::openFile(dir, path, O_CREAT|O_WRONLY|O_TRUNC);
-    ssize_t written;
+    const void* data = NULL;
+    uint32_t len = 0;
 #if BINARY_FORMAT
     RPC::Buffer contents;
     RPC::ProtoBuf::serialize(in, contents);
-    written = FilesystemUtil::write(file.fd, contents.getData(),
-                                    contents.getLength());
+    data = contents.getData();
+    len = contents.getLenhgt();
 #else
     std::string contents(Core::ProtoBuf::dumpString(in, false));
-    written = FilesystemUtil::write(file.fd, contents.data(),
-                                    uint32_t(contents.length()));
+    contents = "\n" + contents;
+    data = contents.data();
+    len = uint32_t(contents.length());
 #endif
+    char checksum[Core::Checksum::MAX_LENGTH];
+    uint32_t checksumLen = Core::Checksum::calculate("SHA-1",
+                                                     data, len,
+                                                     checksum);
+
+    ssize_t written = FilesystemUtil::write(file.fd, {
+        {checksum, checksumLen},
+        {data, len},
+    });
     if (written == -1) {
         PANIC("Failed to write to %s: %s",
               file.path.c_str(), strerror(errno));
@@ -94,9 +122,9 @@ protoToFile(const google::protobuf::Message& in,
 SimpleFileLog::SimpleFileLog(const std::string& path)
     : dir(FilesystemUtil::openDir(path))
 {
-    bool success = fileToProto(dir, "metadata", metadata);
-    if (!success)
-        WARNING("Error reading metadata");
+    std::string error = fileToProto(dir, "metadata", metadata);
+    if (!error.empty())
+        WARNING("Error reading metadata: %s", error.c_str());
 
     std::vector<uint64_t> entryIds = getEntryIds();
     std::sort(entryIds.begin(), entryIds.end());
@@ -165,8 +193,9 @@ Log::Entry
 SimpleFileLog::read(const std::string& entryPath) const
 {
     Protocol::Raft::Entry entry;
-    bool success = fileToProto(dir, entryPath, entry);
-    assert(success);
+    std::string error = fileToProto(dir, entryPath, entry);
+    if (!error.empty())
+        PANIC("Could not parse file: %s", error.c_str());
     return entry;
 }
 

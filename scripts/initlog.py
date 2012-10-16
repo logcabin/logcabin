@@ -23,6 +23,7 @@ to the desired size.
 from __future__ import print_function
 from optparse import OptionParser
 import os
+import sha
 import sys
 
 if __name__ == '__main__':
@@ -56,13 +57,18 @@ if __name__ == '__main__':
     print('Creating directory: log/%d' % server_id)
     os.mkdir('log')
     os.mkdir('log/%d' % server_id)
-    print('Writing: log/%d/metadata' % server_id)
-    open('log/%d/metadata' % server_id, 'w').write("""
+
+    def write(filename, contents):
+        filename = 'log/%d/%s' % (server_id, filename)
+        print('Writing: %s' % filename)
+        checksum = 'SHA-1:%s\0' % sha.sha(contents).hexdigest()
+        open(filename, 'w').write(checksum + contents)
+
+    write('metadata', """
 current_term: 1
 voted_for: 1
 """)
-    print('Writing: log/%d/0000000000000001' % server_id)
-    open('log/%d/0000000000000001' % server_id, 'w').write("""
+    write('0000000000000001', """
 term: 1
 type: CONFIGURATION
 configuration {
