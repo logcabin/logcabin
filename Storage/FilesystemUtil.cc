@@ -24,6 +24,7 @@
 #include <unistd.h>
 
 #include "Core/Debug.h"
+#include "Core/StringUtil.h"
 #include "Core/Util.h"
 #include "Storage/FilesystemUtil.h"
 
@@ -31,14 +32,93 @@ namespace LogCabin {
 namespace Storage {
 namespace FilesystemUtil {
 
-std::vector<std::string>
-ls(const std::string& path)
+File::File()
+    : fd(-1)
+    , path()
 {
-    DIR* dir = opendir(path.c_str());
+}
+
+File::File(File&& other)
+    : fd(other.fd)
+    , path(other.path)
+{
+    other.fd = -1;
+    other.path.clear();
+}
+
+File::File(int fd, std::string path)
+    : fd(fd)
+    , path(path)
+{
+}
+
+File::~File()
+{
+    close();
+}
+
+File&
+File::operator=(File&& other)
+{
+    std::swap(fd, other.fd);
+    std::swap(path, other.path);
+    return *this;
+}
+
+void
+File::close()
+{
+    if (fd < 0)
+        return;
+    if (::close(fd) != 0) {
+        PANIC("Failed to close file %s: %s",
+              path.c_str(), strerror(errno));
+    }
+    fd = -1;
+    path.clear();
+}
+
+int
+File::release()
+{
+    int ret = fd;
+    fd = -1;
+    path.clear();
+    return ret;
+}
+
+File
+dup(const File& file)
+{
+    int newFd = ::dup(file.fd);
+    if (newFd == -1) {
+        PANIC("Dup failed on fd %d for path %s: %s",
+              file.fd, file.path.c_str(), strerror(errno));
+    }
+    return File(newFd, file.path);
+}
+
+void
+fsync(const File& file)
+{
+    if (::fsync(file.fd) != 0) {
+        PANIC("Could not fsync %s: %s",
+              file.path.c_str(), strerror(errno));
+    }
+}
+
+std::vector<std::string>
+lsHelper(DIR* dir, const std::string& path)
+{
     if (dir == NULL) {
         PANIC("Could not list contents of %s: %s",
               path.c_str(), strerror(errno));
     }
+
+    // If dir was opened with fdopendir and was read from previously, this is
+    // needed to rewind the directory, at least on eglibc v2.13. The unit test
+    // "ls_RewindDir" shows the exact problem.
+    rewinddir(dir);
 
     std::vector<std::string> contents;
     while (true) {
@@ -64,6 +144,68 @@ ls(const std::string& path)
     return contents;
 }
 
+std::vector<std::string>
+ls(const std::string& path)
+{
+    return lsHelper(opendir(path.c_str()), path);
+}
+
+std::vector<std::string>
+ls(const File& dir)
+{
+    return lsHelper(fdopendir(dup(dir).release()), dir.path);
+}
+
+File
+openDir(const std::string& path)
+{
+    assert(!path.empty());
+    int r = mkdir(path.c_str(), 0755);
+    if (r == 0) {
+        FilesystemUtil::syncDir(path + "/..");
+    } else {
+        if (errno != EEXIST) {
+            PANIC("Could not create directory %s: %s",
+                  path.c_str(), strerror(errno));
+        }
+    }
+    // It'd be awesome if one could do O_RDONLY|O_CREAT|O_DIRECTORY here,
+    // but at least on eglibc v2.13, this combination of flags creates a
+    // regular file!
+    int fd = open(path.c_str(), O_RDONLY|O_DIRECTORY);
+    if (fd == -1) {
+        PANIC("Could not open %s: %s",
+              path.c_str(), strerror(errno));
+    }
+    return File(fd, path);
+}
+
+File
+openFile(const File& dir, const std::string& child, int flags)
+{
+    assert(!Core::StringUtil::startsWith(child, "/"));
+    int fd = openat(dir.fd, child.c_str(), flags, 0644);
+    if (fd == -1) {
+        PANIC("Could not open %s/%s: %s",
+              dir.path.c_str(), child.c_str(), strerror(errno));
+    }
+    return File(fd, dir.path + "/" + child);
+}
+
+File
+tryOpenFile(const File& dir, const std::string& child, int flags)
+{
+    assert(!Core::StringUtil::startsWith(child, "/"));
+    int fd = openat(dir.fd, child.c_str(), flags, 0644);
+    if (fd == -1) {
+        if (errno == EEXIST || errno == ENOENT)
+            return File();
+        PANIC("Could not open %s/%s: %s",
+              dir.path.c_str(), child.c_str(), strerror(errno));
+    }
+    return File(fd, dir.path + "/" + child);
+}
+
 void
 remove(const std::string& path)
 {
@@ -84,6 +226,18 @@ remove(const std::string& path)
 }
 
 void
+removeFile(const File& dir, const std::string& path)
+{
+    assert(!Core::StringUtil::startsWith(path, "/"));
+    if (::unlinkat(dir.fd, path.c_str(), 0) == 0)
+        return;
+    if (errno == ENOENT)
+        return;
+    PANIC("Could not remove %s/%s: %s",
+          dir.path.c_str(), path.c_str(), strerror(errno));
+}
+
+void
 syncDir(const std::string& path)
 {
     int fd = open(path.c_str(), O_RDONLY);
@@ -91,7 +245,7 @@ syncDir(const std::string& path)
         PANIC("Could not open %s: %s",
               path.c_str(), strerror(errno));
     }
-    if (fsync(fd) != 0) {
+    if (::fsync(fd) != 0) {
         PANIC("Could not fsync %s: %s",
               path.c_str(), strerror(errno));
     }
@@ -168,44 +322,39 @@ write(int fildes,
 
 // class FileContents
 
-FileContents::FileContents(const std::string& path)
-    : path(path)
-    , fd(-1)
+FileContents::FileContents(const File& origFile)
+    : file(dup(origFile))
     , fileLen(0)
     , map(NULL)
 {
-    fd = open(path.c_str(), O_RDONLY);
-    if (fd == -1) {
-        PANIC("Could not open %s: %s",
-              path.c_str(), strerror(errno));
-    }
     struct stat stat;
-    if (fstat(fd, &stat) != 0) {
+    if (fstat(file.fd, &stat) != 0) {
         PANIC("Could not stat %s: %s",
-              path.c_str(), strerror(errno));
+              file.path.c_str(), strerror(errno));
     }
     if (stat.st_size > ~0U) {
         PANIC("File %s too big",
-              path.c_str());
+              file.path.c_str());
     }
     fileLen = Core::Util::downCast<uint32_t>(stat.st_size);
 
-    map = mmap(NULL, fileLen, PROT_READ, MAP_SHARED, fd, 0);
-    if (map == NULL) {
-        PANIC("Could not map %s: %s",
-              path.c_str(), strerror(errno));
+    // len of 0 for empty files results in invalid argument
+    if (fileLen > 0) {
+        map = mmap(NULL, fileLen, PROT_READ, MAP_SHARED, file.fd, 0);
+        if (map == MAP_FAILED) {
+            PANIC("Could not map %s: %s",
+                  file.path.c_str(), strerror(errno));
+        }
     }
 }
 
 FileContents::~FileContents()
 {
+    if (map == NULL)
+        return;
     if (munmap(const_cast<void*>(map), fileLen) != 0) {
         WARNING("Failed to munmap file %s: %s",
-                path.c_str(), strerror(errno));
-    }
-    if (close(fd) != 0) {
-        WARNING("Failed to close file %s: %s",
-                path.c_str(), strerror(errno));
+                file.path.c_str(), strerror(errno));
     }
 }
 
@@ -214,7 +363,7 @@ FileContents::copy(uint32_t offset, void* buf, uint32_t length)
 {
     if (copyPartial(offset, buf, length) != length) {
         PANIC("File %s too short or corrupt",
-              path.c_str());
+              file.path.c_str());
     }
 }
 
@@ -233,7 +382,7 @@ FileContents::getHelper(uint32_t offset, uint32_t length)
 {
     if (length != 0 && offset + length > fileLen) {
         PANIC("File %s too short or corrupt",
-              path.c_str());
+              file.path.c_str());
     }
     return static_cast<const char*>(map) + offset;
 }

@@ -13,6 +13,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include "Storage/FilesystemUtil.h"
 #include "Server/RaftLog.h"
 
 #ifndef LOGCABIN_SERVER_SIMPLEFILELOG_H
@@ -39,7 +40,7 @@ class SimpleFileLog : public Log {
 
 
   protected:
-    std::string path;
+    Storage::FilesystemUtil::File dir;
 
     std::vector<uint64_t> getEntryIds() const;
     Entry read(const std::string& entryPath) const;

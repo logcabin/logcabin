@@ -32,25 +32,27 @@ namespace Server {
 namespace RaftConsensusInternal {
 
 namespace FilesystemUtil = Storage::FilesystemUtil;
+using FilesystemUtil::File;
 
 namespace {
 bool
-fileToProto(const std::string& path, google::protobuf::Message& out)
+fileToProto(const File& dir, const std::string& path,
+            google::protobuf::Message& out)
 {
-    int fd = open(path.c_str(), O_RDONLY);
-    if (fd == -1)
+    FilesystemUtil::File file =
+        FilesystemUtil::tryOpenFile(dir, path, O_RDONLY);
+    if (file.fd == -1)
         return false;
-    else
-        close(fd);
-    FilesystemUtil::FileContents file(path);
+    FilesystemUtil::FileContents reader(file);
 #if BINARY_FORMAT
-    RPC::Buffer contents(const_cast<void*>(file.get(0, file.getFileLength())),
-                         file.getFileLength(), NULL);
+    RPC::Buffer contents(
+            const_cast<void*>(reader.get(0, reader.getFileLength())),
+            reader.getFileLength(), NULL);
     return RPC::ProtoBuf::parse(contents, out);
 #else
     std::string contents(
-            static_cast<const char*>(file.get(0, file.getFileLength())),
-            file.getFileLength());
+            static_cast<const char*>(reader.get(0, reader.getFileLength())),
+            reader.getFileLength());
     Core::ProtoBuf::Internal::fromString(contents, out);
     return true;
 #endif
@@ -58,52 +60,48 @@ fileToProto(const std::string& path, google::protobuf::Message& out)
 
 void
 protoToFile(const google::protobuf::Message& in,
-            const std::string& path)
+            const File& dir, const std::string& path)
 {
+    FilesystemUtil::File file =
+        FilesystemUtil::openFile(dir, path, O_CREAT|O_WRONLY|O_TRUNC);
+    ssize_t written;
 #if BINARY_FORMAT
     RPC::Buffer contents;
     RPC::ProtoBuf::serialize(in, contents);
+    written = FilesystemUtil::write(file.fd, contents.getData(),
+                                    contents.getLength());
 #else
     std::string contents(Core::ProtoBuf::dumpString(in, false));
+    written = FilesystemUtil::write(file.fd, contents.data(),
+                                    uint32_t(contents.length()));
 #endif
-    int fd = open(path.c_str(), O_CREAT|O_WRONLY, 0600);
-    // TODO(ongaro): error?
-#if BINARY_FORMAT
-    FilesystemUtil::write(fd, contents.getData(), contents.getLength());
-#else
-    FilesystemUtil::write(fd, contents.data(), uint32_t(contents.length()));
-#endif
-    // TODO(ongaro): error?
-    close(fd);
-    // TODO(ongaro): error?
+    if (written == -1) {
+        PANIC("Failed to write to %s: %s",
+              file.path.c_str(), strerror(errno));
+    }
+
+    // sync file contents to disk
+    FilesystemUtil::fsync(file);
+
+    // sync directory entry to disk (needed if we created fd)
+    FilesystemUtil::fsync(dir);
 }
 }
 
 ////////// Log //////////
+//
 
 SimpleFileLog::SimpleFileLog(const std::string& path)
-    : path(path)
+    : dir(FilesystemUtil::openDir(path))
 {
-    assert(!path.empty());
-    if (mkdir(path.c_str(), 0755) == 0) {
-        FilesystemUtil::syncDir(path + "/..");
-    } else {
-        if (errno != EEXIST) {
-            PANIC("Failed to create directory for FilesystemLog:"
-                  " mkdir(%s) failed: %s", path.c_str(), strerror(errno));
-        }
-    }
-
-    bool success = fileToProto(path + "/metadata", metadata);
+    bool success = fileToProto(dir, "metadata", metadata);
     if (!success)
         WARNING("Error reading metadata");
 
     std::vector<uint64_t> entryIds = getEntryIds();
     std::sort(entryIds.begin(), entryIds.end());
     for (auto it = entryIds.begin(); it != entryIds.end(); ++it) {
-        std::string entryPath = Core::StringUtil::format("%s/%016lx",
-                                                         path.c_str(),
-                                                         *it);
+        std::string entryPath = Core::StringUtil::format("%016lx", *it);
         uint64_t entryId = Log::append(read(entryPath));
         assert(entryId == *it);
     }
@@ -117,21 +115,17 @@ uint64_t
 SimpleFileLog::append(const Entry& entry)
 {
     uint64_t entryId = Log::append(entry);
-    protoToFile(entry, Core::StringUtil::format("%s/%016lx",
-                                                path.c_str(),
-                                                entryId));
+    protoToFile(entry, dir, Core::StringUtil::format("%016lx", entryId));
     return entryId;
 }
 
 void
 SimpleFileLog::truncate(uint64_t lastEntryId)
 {
-    for (auto entryId = getLastLogId();
-         entryId > lastEntryId;
-         --entryId) {
-        FilesystemUtil::remove(Core::StringUtil::format("%s/%016lx",
-                                                         path.c_str(),
-                                                         entryId));
+    for (auto entryId = getLastLogId(); entryId > lastEntryId; --entryId) {
+        FilesystemUtil::removeFile(dir, Core::StringUtil::format("%016lx",
+                                                                 entryId));
+        FilesystemUtil::fsync(dir);
     }
     Log::truncate(lastEntryId);
 }
@@ -140,13 +134,13 @@ void
 SimpleFileLog::updateMetadata()
 {
     Log::updateMetadata();
-    protoToFile(metadata, path + "/metadata");
+    protoToFile(metadata, dir, "metadata");
 }
 
 std::vector<uint64_t>
 SimpleFileLog::getEntryIds() const
 {
-    std::vector<std::string> filenames = FilesystemUtil::ls(path);
+    std::vector<std::string> filenames = FilesystemUtil::ls(dir);
     std::vector<uint64_t> entryIds;
     for (auto it = filenames.begin(); it != filenames.end(); ++it) {
         const std::string& filename = *it;
@@ -158,8 +152,8 @@ SimpleFileLog::getEntryIds() const
                              &entryId, &bytesConsumed);
         if (matched != 1 || bytesConsumed != filename.length()) {
             WARNING("%s doesn't look like a valid entry ID (from %s)",
-                 filename.c_str(),
-                 (path + "/" + filename).c_str());
+                    filename.c_str(),
+                    (dir.path + "/" + filename).c_str());
             continue;
         }
         entryIds.push_back(entryId);
@@ -171,7 +165,7 @@ Log::Entry
 SimpleFileLog::read(const std::string& entryPath) const
 {
     Protocol::Raft::Entry entry;
-    bool success = fileToProto(entryPath, entry);
+    bool success = fileToProto(dir, entryPath, entry);
     assert(success);
     return entry;
 }

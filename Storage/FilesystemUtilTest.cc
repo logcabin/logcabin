@@ -33,6 +33,7 @@ namespace Storage {
 using std::queue;
 using std::string;
 using std::vector;
+using FilesystemUtil::File;
 
 namespace FilesystemUtil {
 namespace System {
@@ -74,25 +75,46 @@ writev(int fildes, const struct iovec* iov, int iovcnt)
     return allowWrite;
 }
 
-} // namespace Dlog::Storage::MockWritev
+} // namespace LogCabin::Storage::MockWritev
 
 class StorageFilesystemUtilTest : public ::testing::Test {
   public:
     StorageFilesystemUtilTest()
-        : tmpdir(FilesystemUtil::mkdtemp())
+        : tmpdir(makeTmpDir())
     {
         MockWritev::state.reset(new MockWritev::State);
     }
     ~StorageFilesystemUtilTest() {
+        tmpdir.close();
         // It's a bit dubious to be using the functions we're testing to set up
         // the test fixture. Hopefully this won't trash your home directory.
-        FilesystemUtil::remove(tmpdir);
+        FilesystemUtil::remove(tmpdir.path);
         FilesystemUtil::System::writev = ::writev;
         MockWritev::state.reset();
     }
-    std::string tmpdir;
+    File makeTmpDir() {
+        std::string path = FilesystemUtil::mkdtemp();
+        return File(open(path.c_str(), O_RDONLY|O_DIRECTORY), path);
+    }
+    File tmpdir;
 };
 
+namespace FS = FilesystemUtil;
+
+TEST_F(StorageFilesystemUtilTest, dup) {
+    File d1 = FS::dup(tmpdir);
+    EXPECT_NE(d1.fd, tmpdir.fd);
+    EXPECT_GE(d1.fd, 0);
+    EXPECT_EQ(d1.path, tmpdir.path);
+    EXPECT_DEATH(FS::dup(File()),
+                 "Dup failed");
+}
+
+TEST_F(StorageFilesystemUtilTest, fsync) {
+    FS::fsync(tmpdir);
+    EXPECT_DEATH(FS::fsync(File()),
+                 "Could not fsync");
+}
 
 TEST_F(StorageFilesystemUtilTest, ls) {
     EXPECT_DEATH(FilesystemUtil::ls("/path/does/not/exist"),
@@ -100,53 +122,119 @@ TEST_F(StorageFilesystemUtilTest, ls) {
     // TODO(ongaro): Test readdir_r failure.
 
     EXPECT_EQ((vector<string> {}),
-              Core::STLUtil::sorted(FilesystemUtil::ls(tmpdir)));
+              Core::STLUtil::sorted(FilesystemUtil::ls(tmpdir.path)));
 
-    EXPECT_EQ(0, mkdir((tmpdir + "/a").c_str(), 0755));
-    int fd = open((tmpdir + "/b").c_str(), O_WRONLY|O_CREAT, 0644);
+    EXPECT_EQ(0, mkdir((tmpdir.path + "/a").c_str(), 0755));
+    int fd = open((tmpdir.path + "/b").c_str(), O_WRONLY|O_CREAT, 0644);
     EXPECT_LE(0, fd);
     EXPECT_EQ(0, close(fd));
-    EXPECT_EQ(0, mkdir((tmpdir + "/c").c_str(), 0755));
+    EXPECT_EQ(0, mkdir((tmpdir.path + "/c").c_str(), 0755));
     EXPECT_EQ((vector<string> { "a", "b", "c" }),
+              Core::STLUtil::sorted(FilesystemUtil::ls(tmpdir.path)));
+}
+
+TEST_F(StorageFilesystemUtilTest, ls_fd) {
+    EXPECT_DEATH(FilesystemUtil::ls(File(-1, "/path/does/not/exist")),
+                 "Bad file descriptor");
+    EXPECT_EQ((vector<string> {}),
+              Core::STLUtil::sorted(FilesystemUtil::ls(tmpdir)));
+
+    EXPECT_EQ(0, mkdir((tmpdir.path + "/a").c_str(), 0755));
+    int fd = open((tmpdir.path + "/b").c_str(), O_WRONLY|O_CREAT, 0644);
+    EXPECT_LE(0, fd);
+    EXPECT_EQ(0, close(fd));
+    EXPECT_EQ(0, mkdir((tmpdir.path + "/c").c_str(), 0755));
+    EXPECT_EQ((vector<string> { "a", "b", "c" }),
+              Core::STLUtil::sorted(FilesystemUtil::ls(tmpdir)));
+}
+
+TEST_F(StorageFilesystemUtilTest, openDir) {
+    EXPECT_DEATH(FS::openDir(tmpdir.path + "/a/b"),
+                 "Could not create directory");
+    File d1 = FS::openDir(tmpdir.path + "/a");
+    EXPECT_EQ(tmpdir.path + "/a", d1.path);
+    EXPECT_LE(0, d1.fd);
+    File d2 = FS::openDir(tmpdir.path + "/a");
+    EXPECT_EQ(tmpdir.path + "/a", d2.path);
+    EXPECT_LE(0, d2.fd);
+}
+
+TEST_F(StorageFilesystemUtilTest, openFile) {
+    EXPECT_DEATH(openFile(tmpdir, "d", O_RDONLY),
+                 "Could not open");
+    File f = openFile(tmpdir, "d", O_RDONLY|O_CREAT);
+    EXPECT_EQ(tmpdir.path + "/d", f.path);
+    EXPECT_LE(0, f.fd);
+}
+
+TEST_F(StorageFilesystemUtilTest, tryOpenFile) {
+    FS::openDir(tmpdir.path + "/d");
+    EXPECT_DEATH(openFile(tmpdir, "d", O_WRONLY),
+                 "Could not open");
+    File f1 = tryOpenFile(tmpdir, "e", O_RDONLY|O_CREAT);
+    EXPECT_EQ(tmpdir.path + "/e", f1.path);
+    EXPECT_LE(0, f1.fd);
+    File f2 = tryOpenFile(tmpdir, "f", O_RDONLY);
+    EXPECT_EQ("", f2.path);
+    EXPECT_EQ(-1, f2.fd);
+}
+
+// This test makes sure we call rewinddir after fdopendir. This is needed at
+// least on eglibc v2.13.
+TEST_F(StorageFilesystemUtilTest, ls_rewindDir) {
+    EXPECT_EQ(0, mkdir((tmpdir.path + "/a").c_str(), 0755));
+    EXPECT_EQ((vector<string> { "a" }),
+              Core::STLUtil::sorted(FilesystemUtil::ls(tmpdir)));
+    // If this second ls comes out blank, it's probably because rewinddir was
+    // not called.
+    EXPECT_EQ((vector<string> { "a" }),
               Core::STLUtil::sorted(FilesystemUtil::ls(tmpdir)));
 }
 
 TEST_F(StorageFilesystemUtilTest, remove) {
     // does not exist
-    FilesystemUtil::remove(tmpdir + "/a");
+    FilesystemUtil::remove(tmpdir.path + "/a");
 
     // dir exists with no children
-    EXPECT_EQ(0, mkdir((tmpdir + "/b").c_str(), 0755));
-    FilesystemUtil::remove(tmpdir + "/b");
+    EXPECT_EQ(0, mkdir((tmpdir.path + "/b").c_str(), 0755));
+    FilesystemUtil::remove(tmpdir.path + "/b");
 
     // file exists with no children
-    int fd = open((tmpdir + "/c").c_str(), O_WRONLY|O_CREAT, 0644);
+    int fd = open((tmpdir.path + "/c").c_str(), O_WRONLY|O_CREAT, 0644);
     EXPECT_LE(0, fd);
     EXPECT_EQ(0, close(fd));
-    FilesystemUtil::remove(tmpdir + "/c");
+    FilesystemUtil::remove(tmpdir.path + "/c");
 
     // dir exists with children
-    EXPECT_EQ(0, mkdir((tmpdir + "/d").c_str(), 0755));
-    EXPECT_EQ(0, mkdir((tmpdir + "/d/e").c_str(), 0755));
-    EXPECT_EQ(0, mkdir((tmpdir + "/d/f").c_str(), 0755));
-    FilesystemUtil::remove(tmpdir + "/d");
+    EXPECT_EQ(0, mkdir((tmpdir.path + "/d").c_str(), 0755));
+    EXPECT_EQ(0, mkdir((tmpdir.path + "/d/e").c_str(), 0755));
+    EXPECT_EQ(0, mkdir((tmpdir.path + "/d/f").c_str(), 0755));
+    FilesystemUtil::remove(tmpdir.path + "/d");
 
     EXPECT_EQ((vector<string> {}),
               Core::STLUtil::sorted(FilesystemUtil::ls(tmpdir)));
 
     // error
-    EXPECT_EQ(0, mkdir((tmpdir + "/g").c_str(), 0755));
-    EXPECT_DEATH(FilesystemUtil::remove(tmpdir + "/g/."),
+    EXPECT_EQ(0, mkdir((tmpdir.path + "/g").c_str(), 0755));
+    EXPECT_DEATH(FilesystemUtil::remove(tmpdir.path + "/g/."),
                  "Could not remove");
+}
+
+TEST_F(StorageFilesystemUtilTest, removeFile) {
+    FS::removeFile(tmpdir, "a");
+    FS::openFile(tmpdir, "b", O_RDONLY|O_CREAT);
+    FS::removeFile(tmpdir, "b");
+    EXPECT_EQ((vector<string> {}),
+              Core::STLUtil::sorted(FilesystemUtil::ls(tmpdir)));
 }
 
 TEST_F(StorageFilesystemUtilTest, syncDir) {
     // I don't know of a way to observe that this does anything,
     // but at least we can run through it and make sure nothing panics.
     // -Diego
-    FilesystemUtil::syncDir(tmpdir);
-    FilesystemUtil::syncDir(tmpdir + "/..");
-    EXPECT_DEATH(FilesystemUtil::syncDir(tmpdir + "/a"),
+    FilesystemUtil::syncDir(tmpdir.path);
+    FilesystemUtil::syncDir(tmpdir.path + "/..");
+    EXPECT_DEATH(FilesystemUtil::syncDir(tmpdir.path + "/a"),
                  "open");
 }
 
@@ -159,7 +247,7 @@ TEST_F(StorageFilesystemUtilTest, mkdtemp) {
 }
 
 TEST_F(StorageFilesystemUtilTest, writeCommon) {
-    int fd = open((tmpdir + "/a").c_str(), O_RDWR|O_CREAT, 0644);
+    int fd = open((tmpdir.path + "/a").c_str(), O_RDWR|O_CREAT, 0644);
     EXPECT_LE(0, fd);
     EXPECT_EQ(13, FilesystemUtil::write(fd, {
             {"hello ", 6},
@@ -191,27 +279,28 @@ TEST_F(StorageFilesystemUtilTest, writeInterruption) {
 
 class StorageFileContentsTest : public StorageFilesystemUtilTest {
     StorageFileContentsTest()
-        : path(tmpdir + "/a") {
-        int fd = open(path.c_str(), O_WRONLY|O_CREAT, 0644);
-        if (FilesystemUtil::write(fd, "hello world!", 13) != 13)
+        : rawFile(FilesystemUtil::openFile(tmpdir, "a", O_RDWR|O_CREAT))
+    {
+        if (FilesystemUtil::write(rawFile.fd, "hello world!", 13) != 13)
             PANIC("write failed");
-        close(fd);
     }
-    std::string path;
+    File rawFile;
 };
 
 TEST_F(StorageFileContentsTest, constructor) {
-    EXPECT_DEATH(FilesystemUtil::FileContents file(tmpdir + "/b"),
-                 "Could not open");
+    // extra parenthesis to disambiguate parsing, see
+    // http://en.wikipedia.org/wiki/Most_vexing_parse
+    EXPECT_DEATH(FilesystemUtil::FileContents x((File())),
+                 "Bad file descriptor");
 }
 
 TEST_F(StorageFileContentsTest, getFileLength) {
-    FilesystemUtil::FileContents file(path);
+    FilesystemUtil::FileContents file(rawFile);
     EXPECT_EQ(13U, file.getFileLength());
 }
 
 TEST_F(StorageFileContentsTest, copy) {
-    FilesystemUtil::FileContents file(path);
+    FilesystemUtil::FileContents file(rawFile);
     char buf[13];
     strcpy(buf, "cccccccccccc"); // NOLINT
     file.copy(0, buf, 13);
@@ -227,9 +316,9 @@ TEST_F(StorageFileContentsTest, copy) {
 }
 
 TEST_F(StorageFileContentsTest, copyPartial) {
+    FilesystemUtil::FileContents file(rawFile);
     char buf[13];
     strcpy(buf, "cccccccccccc"); // NOLINT
-    FilesystemUtil::FileContents file(path);
     EXPECT_EQ(13U, file.copyPartial(0, buf, 13));
     EXPECT_STREQ("hello world!", buf);
     strcpy(buf, "cccccccccccc"); // NOLINT
@@ -244,7 +333,7 @@ TEST_F(StorageFileContentsTest, copyPartial) {
 }
 
 TEST_F(StorageFileContentsTest, get) {
-    FilesystemUtil::FileContents file(path);
+    FilesystemUtil::FileContents file(rawFile);
     EXPECT_STREQ("hello world!",
                  file.get<char>(0, 13));
     file.get<char>(13, 0); // should be ok, result doesn't matter
@@ -253,6 +342,18 @@ TEST_F(StorageFileContentsTest, get) {
                  "ERROR");
     EXPECT_DEATH(file.get(1, 13),
                  "ERROR");
+}
+
+TEST_F(StorageFileContentsTest, emptyFile) {
+    File emptyFile = FS::openFile(tmpdir, "empty", O_CREAT|O_RDONLY);
+    FS::FileContents file(emptyFile);
+    EXPECT_EQ(0U, file.getFileLength());
+    file.copy(0, NULL, 0);
+    EXPECT_EQ(0U, file.copyPartial(0, NULL, 0));
+    EXPECT_EQ(0U, file.copyPartial(0, NULL, 1));
+    EXPECT_EQ(0U, file.copyPartial(1, NULL, 1));
+    file.get(0, 0);
+    file.get(1, 0);
 }
 
 } // namespace LogCabin::Storage

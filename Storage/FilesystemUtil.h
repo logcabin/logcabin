@@ -30,7 +30,78 @@ namespace Storage {
 namespace FilesystemUtil {
 
 /**
- * List the contents of a directory.
+ * A File object is just a wrapper around a file descriptor; it represents
+ * either an open file, an open directory, or an empty placeholder. It takes
+ * charge of closing the file descriptor when it is done and tracks the path
+ * used to open the file descriptor in order to provide useful error messages.
+ */
+class File {
+  public:
+    /// Default constructor.
+    File();
+    /// Move constructor.
+    File(File&& other);
+    /**
+     * Constructor.
+     * \param fd
+     *      An open file descriptor.
+     * \param path
+     *      The path used to open fd; used for error messages.
+     */
+    File(int fd, std::string path);
+    /// Destructor.
+    ~File();
+
+    /// Move assignment.
+    File& operator=(File&& other);
+
+    /**
+     * Close the file.
+     * This object's fd and path are cleared.
+     */
+    void close();
+
+    /**
+     * Disassociate the file descriptor from this object.
+     * The caller is in charge of closing the file descriptor. This object's fd
+     * and path are cleared.
+     * \return
+     *      The file descriptor.
+     */
+    int release();
+
+    /**
+     * The open file descriptor, or -1 otherwise.
+     */
+    int fd;
+    /**
+     * The path used to open fd, or empty. Used for error messages.
+     */
+    std::string path;
+
+    // File is not copyable.
+    File(const File&) = delete;
+    File& operator=(const File&) = delete;
+};
+
+/**
+ * Clones a file descriptor. See man 2 dup.
+ * \param file
+ *      An open file descriptor.
+ * \return
+ *      A copy of 'file' with a new file descriptor.
+ */
+File dup(const File& file);
+
+/**
+ * Flush changes to a File to its underlying storage device.
+ * \param file
+ *      An open file descriptor.
+ */
+void fsync(const File& file);
+
+/**
+ * List the contents of a directory by path.
  * Panics if the 'path' is not a directory.
  * \param path
  *      The path to the directory whose contents to list.
@@ -42,12 +113,56 @@ namespace FilesystemUtil {
 std::vector<std::string> ls(const std::string& path);
 
 /**
+ * List the contents of an open directory.
+ * Panics if 'dir' is not a directory.
+ * \param dir
+ *      An open file descriptor to the directory whose contents to list.
+ * \return
+ *      The names of the directory entries in the order returned by readdir.
+ */
+std::vector<std::string> ls(const File& dir);
+
+/**
+ * Open a directory, creating it if it doesn't exist.
+ */
+File openDir(const std::string& path);
+
+/**
+ * Open a file. See man 2 openat.
+ *
+ * Panics if the file could not be opened; see #tryOpenFile() if this isn't
+ * what you want.
+ */
+File openFile(const File& dir, const std::string& child, int flags);
+
+/**
+ * Open a file. See man 2 openat.
+ *
+ * Returns a default-constructed File object if the file could not be opened
+ * due to EEXIST or ENOENT; see #openFile() if this isn't what you want.
+ */
+File tryOpenFile(const File& dir, const std::string& child, int flags);
+
+/**
  * Remove the file or directory at path.
  * If path is a directory, its contents will also be removed.
  * If path does not exist, this returns without an error.
  * This operation is not atomic but is idempotent.
  */
 void remove(const std::string& path);
+
+/**
+ * Remove the file relative to an open directory.
+ * If path does not exist, this returns without an error.
+ * This does not fsync the directory.
+ * \param dir
+ *      An open file descriptor to the directory containing path.
+ * \param path
+ *      The path of the file to remove, relative to dirFd.
+ *      This must be a file; it may not be a directory.
+ */
+void
+removeFile(const File& dir, const std::string& path);
 
 /**
  * Open a directory, fsync it, and close it. This is useful to fsync a
@@ -98,15 +213,12 @@ class FileContents {
   public:
     /**
      * Constructor.
-     * If the file at 'path' can't be opened, this will PANIC.
-     * \param path
-     *      The filesystem path of the file to read.
+     * \param file
+     *      An open file descriptor for the file to read.
      */
-    explicit FileContents(const std::string& path);
-
+    explicit FileContents(const File& file);
     /// Destructor.
     ~FileContents();
-
     /**
      * Return the length of the file.
      */
@@ -167,13 +279,11 @@ class FileContents {
   private:
     /// Used internally by get().
     const void* getHelper(uint32_t offset, uint32_t length);
-    /// See constructor.
-    const std::string path;
-    /// The file descriptor returned by open().
-    int fd;
+    /// An open file descriptor for the file to read.
+    File file;
     /// The number of bytes in the file.
     uint32_t fileLen;
-    /// The value returned by mmap().
+    /// The value returned by mmap(), or NULL for empty files.
     const void* map;
     FileContents(const FileContents&) = delete;
     FileContents& operator=(const FileContents&) = delete;
