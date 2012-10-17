@@ -13,6 +13,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include "build/Server/SimpleFileLog.pb.h"
 #include "Storage/FilesystemUtil.h"
 #include "Server/RaftLog.h"
 
@@ -40,8 +41,12 @@ class SimpleFileLog : public Log {
 
 
   protected:
+    SimpleFileLogMetadata::Metadata metadata;
     Storage::FilesystemUtil::File dir;
+    Storage::FilesystemUtil::File lostAndFound;
 
+    std::string readMetadata(const std::string& filename,
+                             SimpleFileLogMetadata::Metadata& metadata) const;
     std::vector<uint64_t> getEntryIds() const;
     Entry read(const std::string& entryPath) const;
 };

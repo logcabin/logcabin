@@ -159,6 +159,17 @@ TEST_F(StorageFilesystemUtilTest, openDir) {
     EXPECT_LE(0, d2.fd);
 }
 
+TEST_F(StorageFilesystemUtilTest, openDir_fd) {
+    EXPECT_DEATH(FS::openDir(tmpdir, "a/b"),
+                 "Could not create directory");
+    File d1 = FS::openDir(tmpdir, "a");
+    EXPECT_EQ(tmpdir.path + "/a", d1.path);
+    EXPECT_LE(0, d1.fd);
+    File d2 = FS::openDir(tmpdir, "a");
+    EXPECT_EQ(tmpdir.path + "/a", d2.path);
+    EXPECT_LE(0, d2.fd);
+}
+
 TEST_F(StorageFilesystemUtilTest, openFile) {
     EXPECT_DEATH(openFile(tmpdir, "d", O_RDONLY),
                  "Could not open");
@@ -226,6 +237,17 @@ TEST_F(StorageFilesystemUtilTest, removeFile) {
     FS::removeFile(tmpdir, "b");
     EXPECT_EQ((vector<string> {}),
               Core::STLUtil::sorted(FilesystemUtil::ls(tmpdir)));
+}
+
+TEST_F(StorageFilesystemUtilTest, rename) {
+    File ac = openDir(tmpdir, "a");
+    openDir(tmpdir, "b");
+    FS::rename(tmpdir, "a", tmpdir, "c");
+    FS::rename(tmpdir, "b", ac, "d");
+    EXPECT_EQ((vector<string> {"c"}),
+              Core::STLUtil::sorted(FilesystemUtil::ls(tmpdir)));
+    EXPECT_EQ((vector<string> {"d"}),
+              Core::STLUtil::sorted(FilesystemUtil::ls(ac)));
 }
 
 TEST_F(StorageFilesystemUtilTest, syncDir) {

@@ -64,10 +64,16 @@ if __name__ == '__main__':
         checksum = 'SHA-1:%s\0' % sha.sha(contents).hexdigest()
         open(filename, 'w').write(checksum + contents)
 
-    write('metadata', """
-current_term: 1
-voted_for: 1
-""")
+    metadata = """
+version: 1
+entries: 1
+raft_metadata: {
+    current_term: 1
+    voted_for: 1
+}
+"""
+    write('metadata1', metadata)
+    write('metadata2', metadata)
     write('0000000000000001', """
 term: 1
 type: CONFIGURATION

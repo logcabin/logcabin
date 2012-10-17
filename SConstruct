@@ -69,7 +69,7 @@ def Protobuf(env, source):
                     PROTOCOUTDIR = ".")[1]
     # Then build the resulting C++ file with no warnings
     return env.StaticObject(cc,
-                            CXXFLAGS = "-std=c++0x")
+                            CXXFLAGS = "-std=c++0x -Ibuild")
 env.AddMethod(Protobuf)
 
 def GetNumCPUs():

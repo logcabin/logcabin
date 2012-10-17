@@ -45,8 +45,8 @@ fileToProto(const File& dir, const std::string& path,
     FilesystemUtil::File file =
         FilesystemUtil::tryOpenFile(dir, path, O_RDONLY);
     if (file.fd == -1) {
-        return format("Could not open %s: %s",
-                      file.path.c_str(), strerror(errno));
+        return format("Could not open %s/%s: %s",
+                      dir.path.c_str(), path.c_str(), strerror(errno));
     }
     FilesystemUtil::FileContents reader(file);
 
@@ -117,22 +117,94 @@ protoToFile(const google::protobuf::Message& in,
 }
 
 ////////// Log //////////
-//
+
+std::string
+SimpleFileLog::readMetadata(const std::string& filename,
+                            SimpleFileLogMetadata::Metadata& metadata) const
+{
+    std::string error = fileToProto(dir, filename, metadata);
+    if (!error.empty())
+        return error;
+    for (auto it = metadata.entries().begin();
+         it != metadata.entries().end();
+         ++it) {
+        uint64_t entryId = *it;
+        Protocol::Raft::Entry entry;
+        error = fileToProto(dir, format("%016lx", entryId), entry);
+        if (!error.empty()) {
+            return format("Could not parse file %s/%016lx: %s",
+                          dir.path.c_str(), entryId, error.c_str());
+        }
+    }
+    return "";
+}
 
 SimpleFileLog::SimpleFileLog(const std::string& path)
-    : dir(FilesystemUtil::openDir(path))
+    : metadata()
+    , dir(FilesystemUtil::openDir(path))
+    , lostAndFound(FilesystemUtil::openDir(dir, "unknown"))
 {
-    std::string error = fileToProto(dir, "metadata", metadata);
-    if (!error.empty())
-        WARNING("Error reading metadata: %s", error.c_str());
+    std::vector<uint64_t> fsEntryIds = getEntryIds();
 
-    std::vector<uint64_t> entryIds = getEntryIds();
+    SimpleFileLogMetadata::Metadata metadata1;
+    SimpleFileLogMetadata::Metadata metadata2;
+    std::string error1 = readMetadata("metadata1", metadata1);
+    std::string error2 = readMetadata("metadata2", metadata2);
+    if (error1.empty() && error2.empty()) {
+        if (metadata1.version() > metadata2.version())
+            metadata = metadata1;
+        else
+            metadata = metadata2;
+    } else if (error1.empty()) {
+        metadata = metadata1;
+    } else if (error2.empty()) {
+        metadata = metadata2;
+    } else {
+        // Brand new servers won't have metadata.
+        WARNING("Error reading metadata1: %s", error1.c_str());
+        WARNING("Error reading metadata2: %s", error2.c_str());
+        if (!fsEntryIds.empty()) {
+            PANIC("No readable metadata file but found entries in %s",
+                  dir.path.c_str());
+        }
+    }
+    std::vector<uint64_t> entryIds(metadata.entries().begin(),
+                                   metadata.entries().end());
+    std::sort(fsEntryIds.begin(), fsEntryIds.end());
     std::sort(entryIds.begin(), entryIds.end());
+    std::vector<uint64_t> found;
+    std::set_difference(fsEntryIds.begin(), fsEntryIds.end(),
+                        entryIds.begin(), entryIds.end(),
+                        std::inserter(found, found.begin()));
+
+    std::string time;
+    {
+        struct timespec now;
+        clock_gettime(CLOCK_REALTIME, &now);
+        time = format("%010lu.%06lu", now.tv_sec, now.tv_nsec / 1000);
+    }
+    for (auto it = found.begin(); it != found.end(); ++it) {
+        uint64_t entryId = *it;
+        std::string oldName = format("%016lx", entryId);
+        std::string newName = format("%s-%016lx", time.c_str(), entryId);
+        WARNING("Moving extraneous file %s/%s to %s/%s",
+                dir.path.c_str(), oldName.c_str(),
+                lostAndFound.path.c_str(), newName.c_str());
+        FilesystemUtil::rename(dir, oldName,
+                               lostAndFound, newName);
+        FilesystemUtil::fsync(lostAndFound);
+        FilesystemUtil::fsync(dir);
+    }
+
     for (auto it = entryIds.begin(); it != entryIds.end(); ++it) {
-        std::string entryPath = Core::StringUtil::format("%016lx", *it);
-        uint64_t entryId = Log::append(read(entryPath));
+        uint64_t entryId = Log::append(read(format("%016lx", *it)));
         assert(entryId == *it);
     }
+
+    Log::metadata = metadata.raft_metadata();
+    // Write both metadata files
+    updateMetadata();
+    updateMetadata();
 }
 
 SimpleFileLog::~SimpleFileLog()
@@ -143,26 +215,36 @@ uint64_t
 SimpleFileLog::append(const Entry& entry)
 {
     uint64_t entryId = Log::append(entry);
-    protoToFile(entry, dir, Core::StringUtil::format("%016lx", entryId));
+    protoToFile(entry, dir, format("%016lx", entryId));
+    updateMetadata();
     return entryId;
 }
 
 void
 SimpleFileLog::truncate(uint64_t lastEntryId)
 {
-    for (auto entryId = getLastLogId(); entryId > lastEntryId; --entryId) {
-        FilesystemUtil::removeFile(dir, Core::StringUtil::format("%016lx",
-                                                                 entryId));
-        FilesystemUtil::fsync(dir);
-    }
+    // update metadata before removing files in case of interruption
     Log::truncate(lastEntryId);
+    updateMetadata();
+    for (auto entryId = getLastLogId(); entryId > lastEntryId; --entryId)
+        FilesystemUtil::removeFile(dir, format("%016lx", entryId));
+    // fsync(dir) not needed because of metadata
 }
 
 void
 SimpleFileLog::updateMetadata()
 {
     Log::updateMetadata();
-    protoToFile(metadata, dir, "metadata");
+    *metadata.mutable_raft_metadata() = Log::metadata;
+    metadata.mutable_entries()->Clear();
+    for (uint64_t entryId = 1; entryId <= Log::entries.size(); ++entryId)
+        metadata.add_entries(entryId);
+    metadata.set_version(metadata.version() + 1);
+    if (metadata.version() % 2 == 1) {
+        protoToFile(metadata, dir, "metadata1");
+    } else {
+        protoToFile(metadata, dir, "metadata2");
+    }
 }
 
 std::vector<uint64_t>
@@ -172,8 +254,11 @@ SimpleFileLog::getEntryIds() const
     std::vector<uint64_t> entryIds;
     for (auto it = filenames.begin(); it != filenames.end(); ++it) {
         const std::string& filename = *it;
-        if (filename == "metadata")
+        if (filename == "metadata1" ||
+            filename == "metadata2" ||
+            filename == "unknown") {
             continue;
+        }
         uint64_t entryId;
         unsigned bytesConsumed;
         int matched = sscanf(filename.c_str(), "%016lx%n", // NOLINT
@@ -198,9 +283,6 @@ SimpleFileLog::read(const std::string& entryPath) const
         PANIC("Could not parse file: %s", error.c_str());
     return entry;
 }
-
-// TODO(ongaro): worry about corruption
-// TODO(ongaro): worry about fail-stop
 
 } // namespace LogCabin::Server::RaftConsensusInternal
 } // namespace LogCabin::Server

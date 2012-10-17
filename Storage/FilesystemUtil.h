@@ -128,6 +128,12 @@ std::vector<std::string> ls(const File& dir);
 File openDir(const std::string& path);
 
 /**
+ * Open a directory relative to an already open directory, creating it if it
+ * doesn't exist.
+ */
+File openDir(const File& dir, const std::string& child);
+
+/**
  * Open a file. See man 2 openat.
  *
  * Panics if the file could not be opened; see #tryOpenFile() if this isn't
@@ -163,6 +169,13 @@ void remove(const std::string& path);
  */
 void
 removeFile(const File& dir, const std::string& path);
+
+/**
+ * Rename a file. See man 2 renameat.
+ * This does not fsync the directories.
+ */
+void rename(const File& oldDir, const std::string& oldChild,
+            const File& newDir, const std::string& newChild);
 
 /**
  * Open a directory, fsync it, and close it. This is useful to fsync a

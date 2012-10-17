@@ -181,6 +181,30 @@ openDir(const std::string& path)
 }
 
 File
+openDir(const File& dir, const std::string& child)
+{
+    assert(!Core::StringUtil::startsWith(child, "/"));
+    int r = mkdirat(dir.fd, child.c_str(), 0755);
+    if (r == 0) {
+        fsync(dir);
+    } else {
+        if (errno != EEXIST) {
+            PANIC("Could not create directory %s/%s: %s",
+                  dir.path.c_str(), child.c_str(), strerror(errno));
+        }
+    }
+    // It'd be awesome if one could do O_RDONLY|O_CREAT|O_DIRECTORY here,
+    // but at least on eglibc v2.13, this combination of flags creates a
+    // regular file!
+    int fd = openat(dir.fd, child.c_str(), O_RDONLY|O_DIRECTORY);
+    if (fd == -1) {
+        PANIC("Could not open %s/%s: %s",
+              dir.path.c_str(), child.c_str(), strerror(errno));
+    }
+    return File(fd, dir.path + "/" + child);
+}
+
+File
 openFile(const File& dir, const std::string& child, int flags)
 {
     assert(!Core::StringUtil::startsWith(child, "/"));
@@ -235,6 +259,21 @@ removeFile(const File& dir, const std::string& path)
         return;
     PANIC("Could not remove %s/%s: %s",
           dir.path.c_str(), path.c_str(), strerror(errno));
+}
+
+void
+rename(const File& oldDir, const std::string& oldChild,
+       const File& newDir, const std::string& newChild)
+{
+    assert(!Core::StringUtil::startsWith(oldChild, "/"));
+    assert(!Core::StringUtil::startsWith(newChild, "/"));
+    if (::renameat(oldDir.fd, oldChild.c_str(),
+                   newDir.fd, newChild.c_str()) == 0)
+        return;
+    PANIC("Could not rename %s/%s to %s/%s: %s",
+          oldDir.path.c_str(), oldChild.c_str(),
+          newDir.path.c_str(), newChild.c_str(),
+          strerror(errno));
 }
 
 void
