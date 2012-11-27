@@ -30,6 +30,7 @@ env.Program("test",
              object_files['Server'] +
              object_files['Storage'] +
              object_files['Client'] +
+             object_files['Tree'] +
              object_files['Protocol'] +
              object_files['RPC'] +
              object_files['Event'] +
@@ -39,6 +40,7 @@ env.Program("test",
                  "#Event",
                  "#RPC",
                  "#Protocol",
+                 "#Tree",
                  "#Client",
                  "#Storage",
                  "#Server",

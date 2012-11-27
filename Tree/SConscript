@@ -1,0 +1,6 @@
+Import('env', 'object_files')
+
+src = [
+    "Tree.cc",
+]
+object_files['Tree'] = env.StaticObject(src)
