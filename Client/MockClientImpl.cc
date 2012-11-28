@@ -13,11 +13,56 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include "Core/Debug.h"
+#include "Core/ProtoBuf.h"
 #include "Core/STLUtil.h"
 #include "Client/MockClientImpl.h"
+#include "Tree/ProtoBuf.h"
 
 namespace LogCabin {
 namespace Client {
+
+namespace PC = LogCabin::Protocol::Client;
+
+namespace {
+/**
+ * This class intercepts LeaderRPC calls from ClientImpl.
+ * It's used to mock out the Tree RPCs by processing them directly.
+ */
+class TreeLeaderRPC : public LeaderRPCBase {
+  public:
+    TreeLeaderRPC()
+        : mutex()
+        , tree()
+    {
+    }
+    void call(OpCode opCode,
+              const google::protobuf::Message& request,
+              google::protobuf::Message& response) {
+        if (opCode == OpCode::OPEN_SESSION) {
+            PC::OpenSession::Response& openSessionResponse =
+                static_cast<PC::OpenSession::Response&>(response);
+            openSessionResponse.set_client_id(1);
+        } else if (opCode == OpCode::READ_ONLY_TREE) {
+            std::unique_lock<std::mutex> lockGuard(mutex);
+            LogCabin::Tree::ProtoBuf::readOnlyTreeRPC(tree,
+                static_cast<const PC::ReadOnlyTree::Request&>(request),
+                static_cast<PC::ReadOnlyTree::Response&>(response));
+        } else if (opCode == OpCode::READ_WRITE_TREE) {
+            std::unique_lock<std::mutex> lockGuard(mutex);
+            LogCabin::Tree::ProtoBuf::readWriteTreeRPC(tree,
+                static_cast<const PC::ReadWriteTree::Request&>(request),
+                static_cast<PC::ReadWriteTree::Response&>(response));
+        } else {
+            PANIC("Unexpected request: %d %s",
+                  opCode,
+                  Core::ProtoBuf::dumpString(request, false).c_str());
+        }
+    }
+    std::mutex mutex; ///< prevents concurrent access to 'tree'
+    LogCabin::Tree::Tree tree;
+};
+} // anonymous namespace
 
 MockClientImpl::MockClientImpl()
     : mutex()
@@ -29,6 +74,12 @@ MockClientImpl::MockClientImpl()
 
 MockClientImpl::~MockClientImpl()
 {
+}
+
+void
+MockClientImpl::initDerived()
+{
+    leaderRPC.reset(new TreeLeaderRPC());
 }
 
 Log

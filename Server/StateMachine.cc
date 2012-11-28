@@ -19,6 +19,7 @@
 #include "RPC/ProtoBuf.h"
 #include "Server/Consensus.h"
 #include "Server/StateMachine.h"
+#include "Tree/ProtoBuf.h"
 
 namespace LogCabin {
 namespace Server {
@@ -37,6 +38,7 @@ StateMachine::StateMachine(std::shared_ptr<Consensus> consensus)
     , nextLogId(1)
     , logNames()
     , logs()
+    , tree()
 {
 }
 
@@ -122,6 +124,14 @@ StateMachine::getLastId(const PC::GetLastId::Request& request,
 }
 
 void
+StateMachine::readOnlyTreeRPC(const PC::ReadOnlyTree::Request& request,
+                              PC::ReadOnlyTree::Response& response) const
+{
+    std::unique_lock<std::mutex> lockGuard(mutex);
+    Tree::ProtoBuf::readOnlyTreeRPC(tree, request, response);
+}
+
+void
 StateMachine::threadMain()
 {
     Core::ThreadId::setName("StateMachine");
@@ -176,6 +186,11 @@ StateMachine::advance(uint64_t entryId, const std::string& data)
         if (ignore(rpcInfo))
             return;
         append(command.append(), *commandResponse.mutable_append());
+    } else if (command.has_tree()) {
+        rpcInfo = command.tree().exactly_once();
+        if (ignore(rpcInfo))
+            return;
+        readWriteTreeRPC(command.tree(), *commandResponse.mutable_tree());
     } else if (command.has_open_session()) {
         openSession(entryId, command.open_session());
         return;
@@ -253,6 +268,13 @@ StateMachine::append(const PC::Append::Request& request,
         entry.set_data(request.data());
     log.push_back(entry);
     response.mutable_ok()->set_entry_id(newId);
+}
+
+void
+StateMachine::readWriteTreeRPC(const PC::ReadWriteTree::Request& request,
+                               PC::ReadWriteTree::Response& response)
+{
+    Tree::ProtoBuf::readWriteTreeRPC(tree, request, response);
 }
 
 void

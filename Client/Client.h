@@ -222,6 +222,61 @@ struct ConfigurationResult {
 };
 
 /**
+ * Status codes returned by Tree operations.
+ */
+enum class Status {
+
+    /**
+     * The operation completed successfully.
+     */
+    OK = 0,
+
+    /**
+     * If an argument is malformed (for example, a path that does not start
+     * with a slash).
+     */
+    INVALID_ARGUMENT = 1,
+
+    /**
+     * If a file or directory that is required for the operation does not
+     * exist.
+     */
+    LOOKUP_ERROR = 2,
+
+    /**
+     * If a directory exists where a file is required or a file exists where
+     * a directory is required.
+     */
+    TYPE_ERROR = 3,
+};
+
+/**
+ * Print a status code to a stream.
+ */
+std::ostream&
+operator<<(std::ostream& os, Status status);
+
+/**
+ * Returned by Tree operations; contain a status code and an error message.
+ */
+struct Result {
+    /**
+     * Default constructor. Sets status to OK and error to the empty string.
+     */
+    Result();
+    /**
+     * A code for whether an operation succeeded or why it did not. This is
+     * meant to be used programmatically.
+     */
+    Status status;
+    /**
+     * If status is not OK, this is a human-readable message describing what
+     * went wrong.
+     */
+    std::string error;
+};
+
+/**
  * A handle to the LogCabin cluster.
  */
 class Cluster {
@@ -288,6 +343,107 @@ class Cluster {
     ConfigurationResult setConfiguration(
                                 uint64_t oldId,
                                 const Configuration& newConfiguration);
+
+    /**
+     * Make sure a directory exists at the given path.
+     * Create parent directories listed in path as necessary.
+     * \param path
+     *      The path where there should be a directory after this call.
+     * \return
+     *      Status and error message. Possible errors are:
+     *       - INVALID_ARGUMENT if path is malformed.
+     *       - TYPE_ERROR if a parent of path is a file.
+     *       - TYPE_ERROR if path exists but is a file.
+     */
+    Result
+    makeDirectory(const std::string& path);
+
+    /**
+     * List the contents of a directory.
+     * \param path
+     *      The directory whose direct children to list.
+     * \param[out] children
+     *      This will be replaced by a listing of the names of the directories
+     *      and files that the directory at 'path' immediately contains. The
+     *      names of directories in this listing will have a trailing slash.
+     *      The order is first directories (sorted lexicographically), then
+     *      files (sorted lexicographically).
+     * \return
+     *      Status and error message. Possible errors are:
+     *       - INVALID_ARGUMENT if path is malformed.
+     *       - LOOKUP_ERROR if a parent of path does not exist.
+     *       - LOOKUP_ERROR if path does not exist.
+     *       - TYPE_ERROR if a parent of path is a file.
+     *       - TYPE_ERROR if path exists but is a file.
+     */
+    Result
+    listDirectory(const std::string& path, std::vector<std::string>& children);
+
+    /**
+     * Make sure a directory does not exist.
+     * Also removes all direct and indirect children of the directory.
+     *
+     * If called with the root directory, this will remove all descendants but
+     * not actually remove the root directory; it will still return status OK.
+     *
+     * \param path
+     *      The path where there should not be a directory after this call.
+     * \return
+     *      Status and error message. Possible errors are:
+     *       - INVALID_ARGUMENT if path is malformed.
+     *       - TYPE_ERROR if a parent of path is a file.
+     *       - TYPE_ERROR if path exists but is a file.
+     */
+    Result
+    removeDirectory(const std::string& path);
+
+    /**
+     * Set the value of a file.
+     * \param path
+     *      The path where there should be a file with the given contents after
+     *      this call.
+     * \param contents
+     *      The new value associated with the file.
+     * \return
+     *      Status and error message. Possible errors are:
+     *       - INVALID_ARGUMENT if path is malformed.
+     *       - INVALID_ARGUMENT if contents are too large to fit in a file.
+     *       - LOOKUP_ERROR if a parent of path does not exist.
+     *       - TYPE_ERROR if a parent of path is a file.
+     *       - TYPE_ERROR if path exists but is a directory.
+     */
+    Result
+    write(const std::string& path, const std::string& contents);
+
+    /**
+     * Get the value of a file.
+     * \param path
+     *      The path of the file whose contents to read.
+     * \param contents
+     *      The current value associated with the file.
+     * \return
+     *      Status and error message. Possible errors are:
+     *       - INVALID_ARGUMENT if path is malformed.
+     *       - LOOKUP_ERROR if a parent of path does not exist.
+     *       - LOOKUP_ERROR if path does not exist.
+     *       - TYPE_ERROR if a parent of path is a file.
+     *       - TYPE_ERROR if path is a directory.
+     */
+    Result
+    read(const std::string& path, std::string& contents);
+
+    /**
+     * Make sure a file does not exist.
+     * \param path
+     *      The path where there should not be a file after this call.
+     * \return
+     *      Status and error message. Possible errors are:
+     *       - INVALID_ARGUMENT if path is malformed.
+     *       - TYPE_ERROR if a parent of path is a file.
+     *       - TYPE_ERROR if path exists but is a directory.
+     */
+    Result
+    removeFile(const std::string& path);
 
   private:
     std::shared_ptr<ClientImplBase> clientImpl;

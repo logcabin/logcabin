@@ -73,6 +73,21 @@ class ClientImplBase {
                 uint64_t oldId,
                 const Configuration& newConfiguration) = 0;
 
+    /// See Cluster::makeDirectory.
+    virtual Result makeDirectory(const std::string& path) = 0;
+    /// See Cluster::listDirectory.
+    virtual Result listDirectory(const std::string& path,
+                                 std::vector<std::string>& children) = 0;
+    /// See Cluster::removeDirectory.
+    virtual Result removeDirectory(const std::string& path) = 0;
+    /// See Cluster::write.
+    virtual Result write(const std::string& path,
+                         const std::string& contents) = 0;
+    /// See Cluster::read.
+    virtual Result read(const std::string& path, std::string& contents) = 0;
+    /// See Cluster::removeFile.
+    virtual Result removeFile(const std::string& path) = 0;
+
   protected:
     /**
      * This is used to keep this object alive while there are outstanding

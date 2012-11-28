@@ -63,6 +63,8 @@ class ClientService : public RPC::Service {
     void getLastId(RPC::ServerRPC rpc);
     void getConfiguration(RPC::ServerRPC rpc);
     void setConfiguration(RPC::ServerRPC rpc);
+    void readOnlyTreeRPC(RPC::ServerRPC rpc);
+    void readWriteTreeRPC(RPC::ServerRPC rpc);
 
     std::pair<RaftConsensus::ClientResult, uint64_t>
     submit(RPC::ServerRPC& rpc, const google::protobuf::Message& command);

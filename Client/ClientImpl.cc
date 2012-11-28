@@ -300,5 +300,108 @@ ClientImpl::setConfiguration(uint64_t oldId,
           Core::ProtoBuf::dumpString(response, false).c_str());
 }
 
+namespace {
+/**
+ * Parse an error response out of a ProtoBuf and into a Result object.
+ */
+template<typename Message>
+Result
+treeError(const Message& response)
+{
+    Result result;
+    result.status = static_cast<Status>(response.status());
+    result.error = response.error();
+    return result;
+}
+} // anonymous namespace
+
+Result
+ClientImpl::makeDirectory(const std::string& path)
+{
+    Protocol::Client::ReadWriteTree::Request request;
+    *request.mutable_exactly_once() = exactlyOnceRPCHelper.getRPCInfo();
+    request.mutable_make_directory()->set_path(path);
+    Protocol::Client::ReadWriteTree::Response response;
+    leaderRPC->call(OpCode::READ_WRITE_TREE, request, response);
+    exactlyOnceRPCHelper.doneWithRPC(request.exactly_once());
+    if (response.status() != Protocol::Client::Status::OK)
+        return treeError(response);
+    return Result();
+}
+
+Result
+ClientImpl::listDirectory(const std::string& path,
+                    std::vector<std::string>& children)
+{
+    children.clear();
+    Protocol::Client::ReadOnlyTree::Request request;
+    request.mutable_list_directory()->set_path(path);
+    Protocol::Client::ReadOnlyTree::Response response;
+    leaderRPC->call(OpCode::READ_ONLY_TREE, request, response);
+    if (response.status() != Protocol::Client::Status::OK)
+        return treeError(response);
+    children = std::vector<std::string>(
+                    response.list_directory().child().begin(),
+                    response.list_directory().child().end());
+    return Result();
+}
+
+Result
+ClientImpl::removeDirectory(const std::string& path)
+{
+    Protocol::Client::ReadWriteTree::Request request;
+    *request.mutable_exactly_once() = exactlyOnceRPCHelper.getRPCInfo();
+    request.mutable_remove_directory()->set_path(path);
+    Protocol::Client::ReadWriteTree::Response response;
+    leaderRPC->call(OpCode::READ_WRITE_TREE, request, response);
+    exactlyOnceRPCHelper.doneWithRPC(request.exactly_once());
+    if (response.status() != Protocol::Client::Status::OK)
+        return treeError(response);
+    return Result();
+}
+
+Result
+ClientImpl::write(const std::string& path, const std::string& contents)
+{
+    Protocol::Client::ReadWriteTree::Request request;
+    *request.mutable_exactly_once() = exactlyOnceRPCHelper.getRPCInfo();
+    request.mutable_write()->set_path(path);
+    request.mutable_write()->set_contents(contents);
+    Protocol::Client::ReadWriteTree::Response response;
+    leaderRPC->call(OpCode::READ_WRITE_TREE, request, response);
+    exactlyOnceRPCHelper.doneWithRPC(request.exactly_once());
+    if (response.status() != Protocol::Client::Status::OK)
+        return treeError(response);
+    return Result();
+}
+
+Result
+ClientImpl::read(const std::string& path, std::string& contents)
+{
+    contents = "";
+    Protocol::Client::ReadOnlyTree::Request request;
+    request.mutable_read()->set_path(path);
+    Protocol::Client::ReadOnlyTree::Response response;
+    leaderRPC->call(OpCode::READ_ONLY_TREE, request, response);
+    if (response.status() != Protocol::Client::Status::OK)
+        return treeError(response);
+    contents = response.read().contents();
+    return Result();
+}
+
+Result
+ClientImpl::removeFile(const std::string& path)
+{
+    Protocol::Client::ReadWriteTree::Request request;
+    *request.mutable_exactly_once() = exactlyOnceRPCHelper.getRPCInfo();
+    request.mutable_remove_file()->set_path(path);
+    Protocol::Client::ReadWriteTree::Response response;
+    leaderRPC->call(OpCode::READ_WRITE_TREE, request, response);
+    exactlyOnceRPCHelper.doneWithRPC(request.exactly_once());
+    if (response.status() != Protocol::Client::Status::OK)
+        return treeError(response);
+    return Result();
+}
+
 } // namespace LogCabin::Client
 } // namespace LogCabin

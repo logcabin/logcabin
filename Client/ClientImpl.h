@@ -47,8 +47,16 @@ class ClientImpl : public ClientImplBase {
     ConfigurationResult setConfiguration(
                             uint64_t oldId,
                             const Configuration& newConfiguration);
+    Result makeDirectory(const std::string& path);
+    Result listDirectory(const std::string& path,
+                         std::vector<std::string>& children);
+    Result removeDirectory(const std::string& path);
+    Result write(const std::string& path,
+                 const std::string& contents);
+    Result read(const std::string& path, std::string& contents);
+    Result removeFile(const std::string& path);
 
-  private:
+  protected:
     /**
      * Asks the cluster leader for the range of supported RPC protocol
      * versions, and select the best one. This is used to make sure the client

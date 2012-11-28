@@ -369,5 +369,97 @@ TEST_F(ClientLogTest, getLastId_logDisappeared)
               *mockRPC->popRequest());
 }
 
+// This is to test the serialization/deserialization of Tree RPCs in both the
+// client library and Tree/ProtoBuf.h.
+class ClientTreeTest : public ::testing::Test {
+  public:
+    ClientTreeTest()
+        : cluster(new Client::Cluster(Client::Cluster::FOR_TESTING))
+    {
+    }
+    std::unique_ptr<Client::Cluster> cluster;
+    ClientTreeTest(const ClientTreeTest&) = delete;
+    ClientTreeTest& operator=(const ClientTreeTest&) = delete;
+};
+
+using Client::Result;
+using Client::Status;
+
+#define EXPECT_OK(c) do { \
+    Result result = (c); \
+    EXPECT_EQ(Status::OK, result.status) << result.error; \
+} while (0)
+
+TEST_F(ClientTreeTest, makeDirectory)
+{
+    EXPECT_OK(cluster->makeDirectory("/foo"));
+    EXPECT_EQ(Status::INVALID_ARGUMENT,
+              cluster->makeDirectory("").status);
+    EXPECT_FALSE(cluster->makeDirectory("").error.empty());
+    std::vector<std::string> children;
+    EXPECT_OK(cluster->listDirectory("/", children));
+    EXPECT_EQ((std::vector<std::string>{"foo/"}),
+              children);
+}
+
+TEST_F(ClientTreeTest, listDirectory)
+{
+    std::vector<std::string> children;
+    EXPECT_EQ(Status::INVALID_ARGUMENT,
+              cluster->listDirectory("", children).status);
+    EXPECT_FALSE(cluster->listDirectory("", children).error.empty());
+    EXPECT_OK(cluster->listDirectory("/", children));
+    EXPECT_EQ((std::vector<std::string>{}),
+              children);
+    EXPECT_OK(cluster->makeDirectory("/foo"));
+    EXPECT_OK(cluster->listDirectory("/", children));
+    EXPECT_EQ((std::vector<std::string>{"foo/"}),
+              children);
+}
+
+TEST_F(ClientTreeTest, removeDirectory)
+{
+    EXPECT_EQ(Status::INVALID_ARGUMENT,
+              cluster->removeDirectory("").status);
+    EXPECT_OK(cluster->makeDirectory("/foo"));
+    EXPECT_OK(cluster->removeDirectory("/foo"));
+    std::vector<std::string> children;
+    EXPECT_OK(cluster->listDirectory("/", children));
+    EXPECT_EQ((std::vector<std::string>{}),
+              children);
+}
+
+TEST_F(ClientTreeTest, write)
+{
+    EXPECT_EQ(Status::INVALID_ARGUMENT,
+              cluster->write("", "bar").status);
+    EXPECT_OK(cluster->write("/foo", "bar"));
+    std::string contents;
+    EXPECT_OK(cluster->read("/foo", contents));
+    EXPECT_EQ("bar", contents);
+}
+
+TEST_F(ClientTreeTest, read)
+{
+    std::string contents;
+    EXPECT_EQ(Status::INVALID_ARGUMENT,
+              cluster->read("", contents).status);
+    EXPECT_OK(cluster->write("/foo", "bar"));
+    EXPECT_OK(cluster->read("/foo", contents));
+    EXPECT_EQ("bar", contents);
+}
+
+TEST_F(ClientTreeTest, removeFile)
+{
+    EXPECT_EQ(Status::INVALID_ARGUMENT,
+              cluster->removeFile("").status);
+    EXPECT_OK(cluster->write("/foo", "bar"));
+    EXPECT_OK(cluster->removeFile("/foo"));
+    std::vector<std::string> children;
+    EXPECT_OK(cluster->listDirectory("/", children));
+    EXPECT_EQ((std::vector<std::string>{}),
+              children);
+}
+
 } // namespace LogCabin::<anonymous>
 } // namespace LogCabin

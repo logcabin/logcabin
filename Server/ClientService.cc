@@ -78,6 +78,12 @@ ClientService::handleRPC(RPC::ServerRPC rpc)
         case OpCode::OPEN_SESSION:
             openSession(std::move(rpc));
             break;
+        case OpCode::READ_ONLY_TREE:
+            readOnlyTreeRPC(std::move(rpc));
+            break;
+        case OpCode::READ_WRITE_TREE:
+            readWriteTreeRPC(std::move(rpc));
+            break;
         default:
             rpc.rejectInvalidRequest();
     }
@@ -304,6 +310,35 @@ ClientService::setConfiguration(RPC::ServerRPC rpc)
     }
     rpc.reply(response);
 }
+
+void
+ClientService::readOnlyTreeRPC(RPC::ServerRPC rpc)
+{
+    PRELUDE(ReadOnlyTree);
+    if (catchUpStateMachine(rpc) != Result::SUCCESS)
+        return;
+    globals.stateMachine->readOnlyTreeRPC(request, response);
+    rpc.reply(response);
+}
+
+void
+ClientService::readWriteTreeRPC(RPC::ServerRPC rpc)
+{
+    PRELUDE(ReadWriteTree);
+    Command command;
+    *command.mutable_tree() = request;
+    std::pair<Result, uint64_t> result = submit(rpc, command);
+    if (result.first != Result::SUCCESS)
+        return;
+    CommandResponse commandResponse;
+    if (!getResponse(rpc, result.second, request.exactly_once(),
+                     commandResponse)) {
+        return;
+    }
+    rpc.reply(commandResponse.tree());
+}
+
+
 
 } // namespace LogCabin::Server
 } // namespace LogCabin

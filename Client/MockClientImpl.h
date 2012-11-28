@@ -18,7 +18,7 @@
 #include <unordered_map>
 #include <vector>
 #include "Client/Client.h"
-#include "Client/ClientImplBase.h"
+#include "Client/ClientImpl.h"
 
 #ifndef LOGCABIN_CLIENT_MOCKCLIENTIMPL_H
 #define LOGCABIN_CLIENT_MOCKCLIENTIMPL_H
@@ -27,10 +27,14 @@ namespace LogCabin {
 namespace Client {
 
 /**
- * The implementation of the client library.
- * This is wrapped by Client::Cluster and Client::Log for usability.
+ * A mock implementation of the client library that operates against a
+ * temporary, local, in-memory implementation.
+ *
+ * TODO(ongaro): This used to derive from ClientImplBase, but we want to make
+ * use of the ClientImpl methods for the tree calls. This needs some more
+ * thought.
  */
-class MockClientImpl : public ClientImplBase {
+class MockClientImpl : public ClientImpl {
   public:
     /// Constructor.
     MockClientImpl();
@@ -38,6 +42,7 @@ class MockClientImpl : public ClientImplBase {
     ~MockClientImpl();
 
     // Implementations of ClientImplBase methods
+    void initDerived();
     Log openLog(const std::string& logName);
     void deleteLog(const std::string& logName);
     std::vector<std::string> listLogs();
@@ -48,6 +53,10 @@ class MockClientImpl : public ClientImplBase {
     ConfigurationResult setConfiguration(
                 uint64_t oldId,
                 const Configuration& newConfiguration);
+
+    // Tree methods use ClientImpl with the special LeaderRPC installed by
+    // initDerived
+    using ClientImpl::read;
 
   private:
 

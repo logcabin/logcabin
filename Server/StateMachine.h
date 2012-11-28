@@ -20,6 +20,7 @@
 #include <unordered_map>
 
 #include "build/Protocol/Client.pb.h"
+#include "Tree/Tree.h"
 
 #ifndef LOGCABIN_SERVER_STATEMACHINE_H
 #define LOGCABIN_SERVER_STATEMACHINE_H
@@ -53,6 +54,10 @@ class StateMachine {
     void getLastId(const Protocol::Client::GetLastId::Request& request,
                    Protocol::Client::GetLastId::Response& response) const;
 
+    void readOnlyTreeRPC(
+                const Protocol::Client::ReadOnlyTree::Request& request,
+                Protocol::Client::ReadOnlyTree::Response& response) const;
+
   private:
     void threadMain();
 
@@ -73,6 +78,9 @@ class StateMachine {
                    Protocol::Client::DeleteLog::Response& response);
     void append(const Protocol::Client::Append::Request& request,
                 Protocol::Client::Append::Response& response);
+    void readWriteTreeRPC(
+                const Protocol::Client::ReadWriteTree::Request& request,
+                Protocol::Client::ReadWriteTree::Response& response);
     void openSession(uint64_t entryId,
                      const Protocol::Client::OpenSession::Request& request);
 
@@ -124,6 +132,12 @@ class StateMachine {
     // This is a work-around for gcc 4.4, which can't handle move-only objects
     // in maps.
     std::unordered_map<uint64_t, std::shared_ptr<Log>> logs;
+
+    /**
+     * The hierarchical key-value store. Used in readOnlyTreeRPC and
+     * readWriteTreeRPC.
+     */
+    Tree::Tree tree;
 };
 
 } // namespace LogCabin::Server

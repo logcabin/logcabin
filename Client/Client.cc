@@ -141,6 +141,37 @@ ConfigurationResult::~ConfigurationResult()
 {
 }
 
+////////// enum Status //////////
+
+std::ostream&
+operator<<(std::ostream& os, Status status)
+{
+    switch (status) {
+        case Status::OK:
+            os << "Status::OK";
+            break;
+        case Status::INVALID_ARGUMENT:
+            os << "Status::INVALID_ARGUMENT";
+            break;
+        case Status::LOOKUP_ERROR:
+            os << "Status::LOOKUP_ERROR";
+            break;
+        case Status::TYPE_ERROR:
+            os << "Status::TYPE_ERROR";
+            break;
+    }
+    return os;
+}
+
+////////// struct Result //////////
+
+Result::Result()
+    : status(Status::OK)
+    , error()
+{
+}
+
+
 ////////// Cluster //////////
 
 Cluster::Cluster(ForTesting t)
@@ -192,6 +223,44 @@ Cluster::setConfiguration(uint64_t oldId,
                           const Configuration& newConfiguration)
 {
     return clientImpl->setConfiguration(oldId, newConfiguration);
+}
+
+
+Result
+Cluster::makeDirectory(const std::string& path)
+{
+    return clientImpl->makeDirectory(path);
+}
+
+Result
+Cluster::listDirectory(const std::string& path,
+                       std::vector<std::string>& children)
+{
+    return clientImpl->listDirectory(path, children);
+}
+
+Result
+Cluster::removeDirectory(const std::string& path)
+{
+    return clientImpl->removeDirectory(path);
+}
+
+Result
+Cluster::write(const std::string& path, const std::string& contents)
+{
+    return clientImpl->write(path, contents);
+}
+
+Result
+Cluster::read(const std::string& path, std::string& contents)
+{
+    return clientImpl->read(path, contents);
+}
+
+Result
+Cluster::removeFile(const std::string& path)
+{
+    return clientImpl->removeFile(path);
 }
 
 } // namespace LogCabin::Client

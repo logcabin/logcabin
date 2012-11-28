@@ -34,6 +34,8 @@ enum OpCode {
     GET_LAST_ID = 6;
     GET_CONFIGURATION = 7;
     SET_CONFIGURATION = 8;
+    READ_ONLY_TREE = 10;
+    READ_WRITE_TREE = 11;
 };
 
 /**
@@ -370,6 +372,82 @@ message SetConfiguration {
 }
 
 /**
+ * The status code returned from Tree operations.
+ * For now, this should be the exact same as Client::Status and Tree::Status.
+ */
+enum Status {
+    OK = 0;
+    INVALID_ARGUMENT = 1;
+    LOOKUP_ERROR = 2;
+    TYPE_ERROR = 3;
+};
+
+/**
+ * Read-only Tree RPC: An RPC to query the hierarchical key-value store.
+ */
+message ReadOnlyTree {
+    message Request {
+        // The following are mutually exclusive.
+        message ListDirectory {
+            required string path = 1;
+        }
+        optional ListDirectory list_directory = 2;
+        message Read {
+            required string path = 1;
+        }
+        optional Read read = 5;
+    }
+    message Response {
+        required Status status = 1;
+        // The following are mutually exclusive.
+        optional string error = 2;
+        message ListDirectory {
+            repeated string child = 1;
+        }
+        optional ListDirectory list_directory = 3;
+        message Read {
+            required bytes contents = 1;
+        }
+        optional Read read = 4;
+    }
+}
+
+/**
+ * Read-write Tree RPC: An RPC that may modify the hierarchical key-value store.
+ */
+message ReadWriteTree {
+    message Request {
+        /// See ExactlyOnceRPCInfo.
+        required ExactlyOnceRPCInfo exactly_once = 10;
+        // The following are mutually exclusive.
+        message MakeDirectory {
+            required string path = 1;
+        }
+        optional MakeDirectory make_directory = 1;
+        message RemoveDirectory {
+            required string path = 1;
+        }
+        optional RemoveDirectory remove_directory = 3;
+        message Write {
+            required string path = 1;
+            required bytes contents = 2;
+        }
+        optional Write write = 4;
+        message RemoveFile {
+            required string path = 1;
+        }
+        optional RemoveFile remove_file = 6;
+
+    }
+    message Response {
+        required Status status = 1;
+        // The following are mutually exclusive.
+        optional string error = 2;
+    }
+}
+
+
+/**
  * This is what the state machine takes in from the replicated log.
  */
 message Command {
@@ -378,6 +456,7 @@ message Command {
     optional OpenLog.Request open_log = 1;
     optional DeleteLog.Request delete_log = 2;
     optional Append.Request append = 3;
+    optional ReadWriteTree.Request tree = 5;
 }
 
 /**
@@ -389,4 +468,5 @@ message CommandResponse {
     optional OpenLog.Response open_log = 1;
     optional DeleteLog.Response delete_log = 2;
     optional Append.Response append = 3;
+    optional ReadWriteTree.Response tree = 5;
 }

@@ -66,7 +66,15 @@ struct Result {
      * Default constructor. Sets status to OK and error to the empty string.
      */
     Result();
+    /**
+     * A code for whether an operation succeeded or why it did not. This is
+     * meant to be used programmatically.
+     */
     Status status;
+    /**
+     * If status is not OK, this is a human-readable message describing what
+     * went wrong.
+     */
     std::string error;
 };
 
