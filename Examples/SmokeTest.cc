@@ -19,6 +19,8 @@
  */
 
 #include <cassert>
+#include <getopt.h>
+#include <iostream>
 
 #include "Client/Client.h"
 
@@ -28,12 +30,69 @@ using LogCabin::Client::Cluster;
 using LogCabin::Client::Entry;
 using LogCabin::Client::Log;
 
+/**
+ * Parses argv for the main function.
+ */
+class OptionParser {
+  public:
+    OptionParser(int& argc, char**& argv)
+        : argc(argc)
+        , argv(argv)
+        , mock(false)
+    {
+        while (true) {
+            static struct option longOptions[] = {
+               {"mock",  no_argument, NULL, 'm'},
+               {"help",  no_argument, NULL, 'h'},
+               {0, 0, 0, 0}
+            };
+            int c = getopt_long(argc, argv, "hm", longOptions, NULL);
+
+            // Detect the end of the options.
+            if (c == -1)
+                break;
+
+            switch (c) {
+                case 'h':
+                    usage();
+                    exit(0);
+                case 'm':
+                    mock = true;
+                    break;
+                case '?':
+                default:
+                    // getopt_long already printed an error message.
+                    usage();
+                    exit(1);
+            }
+        }
+    }
+
+    void usage() {
+        std::cout << "Usage: " << argv[0] << " [--mock]"
+                  << std::endl;
+        std::cout << "Options: " << std::endl;
+        std::cout << "  -h, --help          "
+                  << "Print this usage information" << std::endl;
+        std::cout << "  -m, --mock          "
+                  << "Instead of connecting to a LogCabin cluster, "
+                  << "fake it with a local, in-memory implementation."
+                  << std::endl;
+    }
+
+    int& argc;
+    char**& argv;
+    bool mock;
+};
+
 } // anonymous namespace
 
 int
 main(int argc, char** argv)
 {
-    Cluster cluster("logcabin:61023");
+    OptionParser options(argc, argv);
+    Cluster cluster = options.mock ? Cluster(Cluster::FOR_TESTING)
+                                   : Cluster("logcabin:61023");
 
     Log log = cluster.openLog("smoketest");
     std::string hello = "hello world";
