@@ -10,6 +10,7 @@ opts.AddVariables(
     ("CXX", "C++ Compiler"),
     ("CXXFLAGS", "Options that are passed to the C++ compiler", []),
     ("AS", "Assembler"),
+    ("LIBPATH", "Library paths that are passed to the linker", []),
     ("LINK", "Linker"),
     ("LIBEVENT2PATH", "libevent-2.0 library path (if necessary).", ""),
     ("BUILDTYPE", "Build type (RELEASE or DEBUG)", "DEBUG"),
