@@ -47,14 +47,25 @@ class ClientImpl : public ClientImplBase {
     ConfigurationResult setConfiguration(
                             uint64_t oldId,
                             const Configuration& newConfiguration);
-    Result makeDirectory(const std::string& path);
+    Result canonicalize(const std::string& path,
+                        const std::string& workingDirectory,
+                        std::string& canonical);
+    Result makeDirectory(const std::string& path,
+                         const std::string& workingDirectory);
     Result listDirectory(const std::string& path,
+                         const std::string& workingDirectory,
                          std::vector<std::string>& children);
-    Result removeDirectory(const std::string& path);
+    Result removeDirectory(const std::string& path,
+                           const std::string& workingDirectory);
     Result write(const std::string& path,
+                 const std::string& workingDirectory,
                  const std::string& contents);
-    Result read(const std::string& path, std::string& contents);
-    Result removeFile(const std::string& path);
+    Result read(const std::string& path,
+                const std::string& workingDirectory,
+                std::string& contents);
+    Result removeFile(const std::string& path,
+                      const std::string& workingDirectory);
+
 
   protected:
     /**

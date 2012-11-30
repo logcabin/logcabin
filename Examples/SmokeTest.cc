@@ -31,6 +31,7 @@ using LogCabin::Client::Entry;
 using LogCabin::Client::Log;
 using LogCabin::Client::Result;
 using LogCabin::Client::Status;
+using LogCabin::Client::Tree;
 
 /**
  * Parses argv for the main function.
@@ -115,13 +116,13 @@ main(int argc, char** argv)
     assert(static_cast<const char*>(entries.at(0).getData()) == hello);
     assert(entries.at(0).getId() == 0);
 
-
-    ASSERT_OK(cluster.makeDirectory("/etc"));
-    ASSERT_OK(cluster.write("/etc/passwd", "ha"));
+    Tree tree = cluster.getTree();
+    ASSERT_OK(tree.makeDirectory("/etc"));
+    ASSERT_OK(tree.write("/etc/passwd", "ha"));
     std::string contents;
-    ASSERT_OK(cluster.read("/etc/passwd", contents));
+    ASSERT_OK(tree.read("/etc/passwd", contents));
     assert(contents == "ha");
-    ASSERT_OK(cluster.removeDirectory("/etc"));
+    ASSERT_OK(tree.removeDirectory("/etc"));
 
     return 0;
 }

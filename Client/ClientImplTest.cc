@@ -90,5 +90,62 @@ TEST_F(ClientClientImplExactlyOnceTest, doneWithRPC) {
     EXPECT_EQ(4U, rpcInfo5.first_outstanding_rpc());
 }
 
+using Client::Result;
+using Client::Status;
+
+#define EXPECT_OK(c) do { \
+    Result result = (c); \
+    EXPECT_EQ(Status::OK, result.status) << result.error; \
+} while (0)
+
+class ClientClientImplCanonicalizeTest : public ::testing::Test {
+    ClientClientImplCanonicalizeTest()
+        : client()
+    {
+    }
+    Client::ClientImpl client;
+};
+
+TEST_F(ClientClientImplCanonicalizeTest, canonicalize)
+{
+    std::string real;
+    Result result;
+
+    // path is absolute, working directory is don't care
+    EXPECT_OK(client.canonicalize("/foo/bar/baz", "invalid", real));
+    EXPECT_EQ("/foo/bar/baz", real);
+
+    // path is relative, working directory is broken
+    result = client.canonicalize("bar/baz", "invalid", real);
+    EXPECT_EQ(Status::INVALID_ARGUMENT, result.status);
+    EXPECT_EQ("Can't use relative path 'bar/baz' from working directory "
+              "'invalid' (working directory should be an absolute path)",
+              result.error);
+
+    // path is relative, working directory is absolute
+    EXPECT_OK(client.canonicalize("bar/baz", "/foo", real));
+    EXPECT_EQ("/foo/bar/baz", real);
+
+    // path is relative with ., ..
+    EXPECT_OK(client.canonicalize(".././bar", "/foo", real));
+    EXPECT_EQ("/bar", real);
+
+    // path is relative with too many ..
+    result = client.canonicalize("bar/../..", "/", real);
+    EXPECT_EQ(Status::INVALID_ARGUMENT, result.status);
+    EXPECT_EQ("Path 'bar/../..' from working directory '/' attempts to look "
+              "up directory above root ('/')",
+              result.error);
+
+    // path ends up at /
+    EXPECT_OK(client.canonicalize(".", "/", real));
+    EXPECT_EQ("/", real);
+
+    // leading or trailing slash, duplicate slashes
+    EXPECT_OK(client.canonicalize("bar////baz//", "///", real));
+    EXPECT_EQ("/bar/baz", real);
+}
+
+
 } // namespace LogCabin::<anonymous>
 } // namespace LogCabin

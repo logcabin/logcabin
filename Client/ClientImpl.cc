@@ -18,6 +18,7 @@
 #include "Core/Debug.h"
 #include "Client/ClientImpl.h"
 #include "Core/ProtoBuf.h"
+#include "Core/StringUtil.h"
 #include "RPC/Address.h"
 
 namespace LogCabin {
@@ -313,14 +314,101 @@ treeError(const Message& response)
     result.error = response.error();
     return result;
 }
+
+/**
+ * Split a path into its components. Helper for ClientImpl::canonicalize.
+ * \param[in] path
+ *      Forward slash-delimited path (relative or absolute).
+ * \param[out] components
+ *      The components of path are appended to this vector.
+ */
+void
+split(const std::string& path, std::vector<std::string>& components)
+{
+    std::string word;
+    for (auto it = path.begin(); it != path.end(); ++it) {
+        if (*it == '/') {
+            if (!word.empty()) {
+                components.push_back(word);
+                word.clear();
+            }
+        } else {
+            word += *it;
+        }
+    }
+    if (!word.empty())
+        components.push_back(word);
+}
+
 } // anonymous namespace
 
 Result
-ClientImpl::makeDirectory(const std::string& path)
+ClientImpl::canonicalize(const std::string& path,
+                         const std::string& workingDirectory,
+                         std::string& canonical)
 {
+    canonical = "";
+    std::vector<std::string> components;
+    if (!path.empty() && *path.begin() != '/') {
+        if (workingDirectory.empty() || *workingDirectory.begin() != '/') {
+            Result result;
+            result.status = Status::INVALID_ARGUMENT;
+            result.error = Core::StringUtil::format(
+                        "Can't use relative path '%s' from working directory "
+                        "'%s' (working directory should be an absolute path)",
+                        path.c_str(),
+                        workingDirectory.c_str());
+            return result;
+
+        }
+        split(workingDirectory, components);
+    }
+    split(path, components);
+    // Iron out any ".", ".."
+    size_t i = 0;
+    while (i < components.size()) {
+        if (components.at(i) == "..") {
+            if (i > 0) {
+                // erase previous and ".." components
+                components.erase(components.begin() + i - 1,
+                                 components.begin() + i + 1);
+                --i;
+            } else {
+                Result result;
+                result.status = Status::INVALID_ARGUMENT;
+                result.error = Core::StringUtil::format(
+                            "Path '%s' from working directory '%s' attempts "
+                            "to look up directory above root ('/')",
+                            path.c_str(),
+                            workingDirectory.c_str());
+                return result;
+            }
+        } else if (components.at(i) == ".") {
+            components.erase(components.begin() + i);
+        } else {
+            ++i;
+        }
+    }
+    if (components.empty()) {
+        canonical = "/";
+    } else {
+        for (auto it = components.begin(); it != components.end(); ++it)
+            canonical += "/" + *it;
+    }
+    return Result();
+}
+
+Result
+ClientImpl::makeDirectory(const std::string& path,
+                          const std::string& workingDirectory)
+{
+    std::string realPath;
+    Result result = canonicalize(path, workingDirectory, realPath);
+    if (result.status != Status::OK)
+        return result;
     Protocol::Client::ReadWriteTree::Request request;
     *request.mutable_exactly_once() = exactlyOnceRPCHelper.getRPCInfo();
-    request.mutable_make_directory()->set_path(path);
+    request.mutable_make_directory()->set_path(realPath);
     Protocol::Client::ReadWriteTree::Response response;
     leaderRPC->call(OpCode::READ_WRITE_TREE, request, response);
     exactlyOnceRPCHelper.doneWithRPC(request.exactly_once());
@@ -331,11 +419,16 @@ ClientImpl::makeDirectory(const std::string& path)
 
 Result
 ClientImpl::listDirectory(const std::string& path,
-                    std::vector<std::string>& children)
+                          const std::string& workingDirectory,
+                          std::vector<std::string>& children)
 {
     children.clear();
+    std::string realPath;
+    Result result = canonicalize(path, workingDirectory, realPath);
+    if (result.status != Status::OK)
+        return result;
     Protocol::Client::ReadOnlyTree::Request request;
-    request.mutable_list_directory()->set_path(path);
+    request.mutable_list_directory()->set_path(realPath);
     Protocol::Client::ReadOnlyTree::Response response;
     leaderRPC->call(OpCode::READ_ONLY_TREE, request, response);
     if (response.status() != Protocol::Client::Status::OK)
@@ -347,11 +440,16 @@ ClientImpl::listDirectory(const std::string& path,
 }
 
 Result
-ClientImpl::removeDirectory(const std::string& path)
+ClientImpl::removeDirectory(const std::string& path,
+                            const std::string& workingDirectory)
 {
+    std::string realPath;
+    Result result = canonicalize(path, workingDirectory, realPath);
+    if (result.status != Status::OK)
+        return result;
     Protocol::Client::ReadWriteTree::Request request;
     *request.mutable_exactly_once() = exactlyOnceRPCHelper.getRPCInfo();
-    request.mutable_remove_directory()->set_path(path);
+    request.mutable_remove_directory()->set_path(realPath);
     Protocol::Client::ReadWriteTree::Response response;
     leaderRPC->call(OpCode::READ_WRITE_TREE, request, response);
     exactlyOnceRPCHelper.doneWithRPC(request.exactly_once());
@@ -361,11 +459,17 @@ ClientImpl::removeDirectory(const std::string& path)
 }
 
 Result
-ClientImpl::write(const std::string& path, const std::string& contents)
+ClientImpl::write(const std::string& path,
+                  const std::string& workingDirectory,
+                  const std::string& contents)
 {
+    std::string realPath;
+    Result result = canonicalize(path, workingDirectory, realPath);
+    if (result.status != Status::OK)
+        return result;
     Protocol::Client::ReadWriteTree::Request request;
     *request.mutable_exactly_once() = exactlyOnceRPCHelper.getRPCInfo();
-    request.mutable_write()->set_path(path);
+    request.mutable_write()->set_path(realPath);
     request.mutable_write()->set_contents(contents);
     Protocol::Client::ReadWriteTree::Response response;
     leaderRPC->call(OpCode::READ_WRITE_TREE, request, response);
@@ -376,11 +480,17 @@ ClientImpl::write(const std::string& path, const std::string& contents)
 }
 
 Result
-ClientImpl::read(const std::string& path, std::string& contents)
+ClientImpl::read(const std::string& path,
+                 const std::string& workingDirectory,
+                 std::string& contents)
 {
     contents = "";
+    std::string realPath;
+    Result result = canonicalize(path, workingDirectory, realPath);
+    if (result.status != Status::OK)
+        return result;
     Protocol::Client::ReadOnlyTree::Request request;
-    request.mutable_read()->set_path(path);
+    request.mutable_read()->set_path(realPath);
     Protocol::Client::ReadOnlyTree::Response response;
     leaderRPC->call(OpCode::READ_ONLY_TREE, request, response);
     if (response.status() != Protocol::Client::Status::OK)
@@ -390,11 +500,16 @@ ClientImpl::read(const std::string& path, std::string& contents)
 }
 
 Result
-ClientImpl::removeFile(const std::string& path)
+ClientImpl::removeFile(const std::string& path,
+                       const std::string& workingDirectory)
 {
+    std::string realPath;
+    Result result = canonicalize(path, workingDirectory, realPath);
+    if (result.status != Status::OK)
+        return result;
     Protocol::Client::ReadWriteTree::Request request;
     *request.mutable_exactly_once() = exactlyOnceRPCHelper.getRPCInfo();
-    request.mutable_remove_file()->set_path(path);
+    request.mutable_remove_file()->set_path(realPath);
     Protocol::Client::ReadWriteTree::Response response;
     leaderRPC->call(OpCode::READ_WRITE_TREE, request, response);
     exactlyOnceRPCHelper.doneWithRPC(request.exactly_once());

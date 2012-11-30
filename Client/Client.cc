@@ -19,6 +19,7 @@
 #include "Client/ClientImplBase.h"
 #include "Client/ClientImpl.h"
 #include "Client/MockClientImpl.h"
+#include "Core/StringUtil.h"
 
 namespace LogCabin {
 namespace Client {
@@ -171,6 +172,104 @@ Result::Result()
 {
 }
 
+////////// Tree //////////
+
+Tree::Tree(std::shared_ptr<ClientImplBase> clientImpl,
+           const std::string& workingDirectory)
+    : clientImpl(clientImpl)
+    , mutex()
+    , workingDirectory(workingDirectory)
+{
+}
+
+Tree::Tree(const Tree& other)
+    : clientImpl(other.clientImpl)
+    , mutex()
+    , workingDirectory(other.getWorkingDirectory())
+{
+}
+
+Tree&
+Tree::operator=(const Tree& other)
+{
+    clientImpl = other.clientImpl;
+    std::unique_lock<std::mutex> lockGuard(mutex);
+    workingDirectory = other.getWorkingDirectory();
+    return *this;
+}
+
+Result
+Tree::setWorkingDirectory(const std::string& newWorkingDirectory)
+{
+    // This method sets the working directory regardless of whether it
+    // succeeds -- that way if it doesn't, future relative paths on this Tree
+    // will result in errors instead of operating on the prior working
+    // directory.
+
+    std::unique_lock<std::mutex> lockGuard(mutex);
+    std::string realPath;
+    Result result = clientImpl->canonicalize(newWorkingDirectory,
+                                             workingDirectory,
+                                             realPath);
+    if (result.status != Status::OK) {
+        workingDirectory = Core::StringUtil::format(
+                    "invalid from prior call to setWorkingDirectory('%s') "
+                    "relative to '%s'",
+                    newWorkingDirectory.c_str(), workingDirectory.c_str());
+        return result;
+    }
+    workingDirectory = realPath;
+    return clientImpl->makeDirectory(realPath, "");
+}
+
+std::string
+Tree::getWorkingDirectory() const
+{
+    std::string ret;
+    {
+        std::unique_lock<std::mutex> lockGuard(mutex);
+        ret = workingDirectory;
+    }
+    return ret;
+}
+
+Result
+Tree::makeDirectory(const std::string& path)
+{
+    return clientImpl->makeDirectory(path, getWorkingDirectory());
+}
+
+Result
+Tree::listDirectory(const std::string& path,
+                       std::vector<std::string>& children)
+{
+    return clientImpl->listDirectory(path, getWorkingDirectory(), children);
+}
+
+Result
+Tree::removeDirectory(const std::string& path)
+{
+    return clientImpl->removeDirectory(path, getWorkingDirectory());
+}
+
+Result
+Tree::write(const std::string& path, const std::string& contents)
+{
+    return clientImpl->write(path, getWorkingDirectory(), contents);
+}
+
+Result
+Tree::read(const std::string& path, std::string& contents)
+{
+    return clientImpl->read(path, getWorkingDirectory(), contents);
+}
+
+Result
+Tree::removeFile(const std::string& path)
+{
+    return clientImpl->removeFile(path, getWorkingDirectory());
+}
+
 
 ////////// Cluster //////////
 
@@ -225,42 +324,10 @@ Cluster::setConfiguration(uint64_t oldId,
     return clientImpl->setConfiguration(oldId, newConfiguration);
 }
 
-
-Result
-Cluster::makeDirectory(const std::string& path)
+Tree
+Cluster::getTree()
 {
-    return clientImpl->makeDirectory(path);
-}
-
-Result
-Cluster::listDirectory(const std::string& path,
-                       std::vector<std::string>& children)
-{
-    return clientImpl->listDirectory(path, children);
-}
-
-Result
-Cluster::removeDirectory(const std::string& path)
-{
-    return clientImpl->removeDirectory(path);
-}
-
-Result
-Cluster::write(const std::string& path, const std::string& contents)
-{
-    return clientImpl->write(path, contents);
-}
-
-Result
-Cluster::read(const std::string& path, std::string& contents)
-{
-    return clientImpl->read(path, contents);
-}
-
-Result
-Cluster::removeFile(const std::string& path)
-{
-    return clientImpl->removeFile(path);
+    return Tree(clientImpl, "/");
 }
 
 } // namespace LogCabin::Client

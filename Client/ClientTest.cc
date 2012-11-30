@@ -374,10 +374,12 @@ TEST_F(ClientLogTest, getLastId_logDisappeared)
 class ClientTreeTest : public ::testing::Test {
   public:
     ClientTreeTest()
-        : cluster(new Client::Cluster(Client::Cluster::FOR_TESTING))
+        : cluster(Client::Cluster::FOR_TESTING)
+        , tree(cluster.getTree())
     {
     }
-    std::unique_ptr<Client::Cluster> cluster;
+    Client::Cluster cluster;
+    Client::Tree tree;
     ClientTreeTest(const ClientTreeTest&) = delete;
     ClientTreeTest& operator=(const ClientTreeTest&) = delete;
 };
@@ -390,14 +392,35 @@ using Client::Status;
     EXPECT_EQ(Status::OK, result.status) << result.error; \
 } while (0)
 
+TEST_F(ClientTreeTest, setWorkingDirectory)
+{
+    EXPECT_OK(tree.setWorkingDirectory("foo"));
+    EXPECT_EQ("/foo", tree.getWorkingDirectory());
+    Result result = tree.setWorkingDirectory("../..");
+    EXPECT_EQ(Status::INVALID_ARGUMENT, result.status);
+    EXPECT_EQ("Path '../..' from working directory '/foo' attempts to "
+              "look up directory above root ('/')", result.error);
+    EXPECT_EQ("invalid from prior call to setWorkingDirectory('../..') "
+              "relative to '/foo'",
+              tree.getWorkingDirectory());
+    result = tree.makeDirectory("x");
+    EXPECT_EQ(Status::INVALID_ARGUMENT, result.status);
+    EXPECT_EQ("Can't use relative path 'x' from working directory 'invalid "
+              "from prior call to setWorkingDirectory('../..') relative to "
+              "'/foo'' (working directory should be an absolute path)",
+              result.error);
+    EXPECT_OK(tree.setWorkingDirectory("/"));
+    EXPECT_EQ("/", tree.getWorkingDirectory());
+}
+
 TEST_F(ClientTreeTest, makeDirectory)
 {
-    EXPECT_OK(cluster->makeDirectory("/foo"));
+    EXPECT_OK(tree.makeDirectory("/foo"));
     EXPECT_EQ(Status::INVALID_ARGUMENT,
-              cluster->makeDirectory("").status);
-    EXPECT_FALSE(cluster->makeDirectory("").error.empty());
+              tree.makeDirectory("/..").status);
+    EXPECT_FALSE(tree.makeDirectory("/..").error.empty());
     std::vector<std::string> children;
-    EXPECT_OK(cluster->listDirectory("/", children));
+    EXPECT_OK(tree.listDirectory("/", children));
     EXPECT_EQ((std::vector<std::string>{"foo/"}),
               children);
 }
@@ -406,13 +429,13 @@ TEST_F(ClientTreeTest, listDirectory)
 {
     std::vector<std::string> children;
     EXPECT_EQ(Status::INVALID_ARGUMENT,
-              cluster->listDirectory("", children).status);
-    EXPECT_FALSE(cluster->listDirectory("", children).error.empty());
-    EXPECT_OK(cluster->listDirectory("/", children));
+              tree.listDirectory("/..", children).status);
+    EXPECT_FALSE(tree.listDirectory("/..", children).error.empty());
+    EXPECT_OK(tree.listDirectory("/", children));
     EXPECT_EQ((std::vector<std::string>{}),
               children);
-    EXPECT_OK(cluster->makeDirectory("/foo"));
-    EXPECT_OK(cluster->listDirectory("/", children));
+    EXPECT_OK(tree.makeDirectory("/foo"));
+    EXPECT_OK(tree.listDirectory("/", children));
     EXPECT_EQ((std::vector<std::string>{"foo/"}),
               children);
 }
@@ -420,11 +443,11 @@ TEST_F(ClientTreeTest, listDirectory)
 TEST_F(ClientTreeTest, removeDirectory)
 {
     EXPECT_EQ(Status::INVALID_ARGUMENT,
-              cluster->removeDirectory("").status);
-    EXPECT_OK(cluster->makeDirectory("/foo"));
-    EXPECT_OK(cluster->removeDirectory("/foo"));
+              tree.removeDirectory("/..").status);
+    EXPECT_OK(tree.makeDirectory("/foo"));
+    EXPECT_OK(tree.removeDirectory("/foo"));
     std::vector<std::string> children;
-    EXPECT_OK(cluster->listDirectory("/", children));
+    EXPECT_OK(tree.listDirectory("/", children));
     EXPECT_EQ((std::vector<std::string>{}),
               children);
 }
@@ -432,10 +455,10 @@ TEST_F(ClientTreeTest, removeDirectory)
 TEST_F(ClientTreeTest, write)
 {
     EXPECT_EQ(Status::INVALID_ARGUMENT,
-              cluster->write("", "bar").status);
-    EXPECT_OK(cluster->write("/foo", "bar"));
+              tree.write("/..", "bar").status);
+    EXPECT_OK(tree.write("/foo", "bar"));
     std::string contents;
-    EXPECT_OK(cluster->read("/foo", contents));
+    EXPECT_OK(tree.read("/foo", contents));
     EXPECT_EQ("bar", contents);
 }
 
@@ -443,20 +466,20 @@ TEST_F(ClientTreeTest, read)
 {
     std::string contents;
     EXPECT_EQ(Status::INVALID_ARGUMENT,
-              cluster->read("", contents).status);
-    EXPECT_OK(cluster->write("/foo", "bar"));
-    EXPECT_OK(cluster->read("/foo", contents));
+              tree.read("/..", contents).status);
+    EXPECT_OK(tree.write("/foo", "bar"));
+    EXPECT_OK(tree.read("/foo", contents));
     EXPECT_EQ("bar", contents);
 }
 
 TEST_F(ClientTreeTest, removeFile)
 {
     EXPECT_EQ(Status::INVALID_ARGUMENT,
-              cluster->removeFile("").status);
-    EXPECT_OK(cluster->write("/foo", "bar"));
-    EXPECT_OK(cluster->removeFile("/foo"));
+              tree.removeFile("/..").status);
+    EXPECT_OK(tree.write("/foo", "bar"));
+    EXPECT_OK(tree.removeFile("/foo"));
     std::vector<std::string> children;
-    EXPECT_OK(cluster->listDirectory("/", children));
+    EXPECT_OK(tree.listDirectory("/", children));
     EXPECT_EQ((std::vector<std::string>{}),
               children);
 }

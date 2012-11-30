@@ -20,6 +20,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -277,72 +278,49 @@ struct Result {
 };
 
 /**
- * A handle to the LogCabin cluster.
+ * Provides access to the hierarchical key-value store.
+ * You can get an instance of Tree through Cluster::getTree() or by copying
+ * an existing Tree.
+ *
+ * A Tree has a working directory from which all relative paths (those that do
+ * not begin with a '/' are resolved). This allows different applications and
+ * modules to conveniently access their own subtrees -- they can have their own
+ * Tree instances and set their working directories accordingly.
  */
-class Cluster {
+class Tree {
+  private:
+    /// Constructor.
+    Tree(std::shared_ptr<ClientImplBase> clientImpl,
+         const std::string& workingDirectory);
   public:
+    /// Copy constructor.
+    Tree(const Tree& other);
+    /// Assignment operator.
+    Tree& operator=(const Tree& other);
 
     /**
-     * Defines a special type to use as an argument to the constructor that is
-     * for testing purposes only.
-     */
-    enum ForTesting { FOR_TESTING };
-
-    /**
-     * Construct a Cluster object for testing purposes only. Instead of
-     * connecting to a LogCabin cluster, it will keep all state locally in
-     * memory.
-     */
-    explicit Cluster(ForTesting t);
-
-    /**
-     * Constructor.
-     * \param hosts
-     *      A string describing the hosts in the cluster. This should be of the
-     *      form host:port, where host is usually a DNS name that resolves to
-     *      multiple IP addresses.
-     */
-    explicit Cluster(const std::string& hosts);
-    ~Cluster();
-
-    /**
-     * Open the log by the given name.
-     * If no log by that name exists, one will be created.
-     */
-    Log openLog(const std::string& logName);
-
-    /**
-     * Delete the log with the given name.
-     * If no log by that name exists, this will do nothing.
-     */
-    void deleteLog(const std::string& logName);
-
-    /**
-     * Get a list of logs.
+     * Set the working directory for this object. This directory will be
+     * created if it does not exist.
+     * \param workingDirectory
+     *      The new working directory, which may be relative to the current
+     *      working directory.
      * \return
-     *      The name of each existing log in sorted order.
+     *      Status and error message. Possible errors are:
+     *       - INVALID_ARGUMENT if workingDirectory is malformed.
+     *       - TYPE_ERROR if workingDirectory parent of path is a file.
+     *       - TYPE_ERROR if workingDirectory exists but is a file.
+     *      If this returns an error, future operations on this tree using
+     *      relative paths will fail until a valid working directory is set.
      */
-    std::vector<std::string> listLogs();
+    Result setWorkingDirectory(const std::string& workingDirectory);
 
     /**
-     * Get the current, stable cluster configuration.
+     * Return the working directory for this object.
      * \return
-     *      first: configurationId: Identifies the configuration.
-     *             Pass this to setConfiguration later.
-     *      second: The list of servers in the configuration.
+     *      An absolute path that is the prefix for relative paths used with
+     *      this Tree object.
      */
-    std::pair<uint64_t, Configuration> getConfiguration();
-
-    /**
-     * Change the cluster's configuration.
-     * \param oldId
-     *      The ID of the cluster's current configuration.
-     * \param newConfiguration
-     *      The list of servers in the new configuration.
-     */
-    ConfigurationResult setConfiguration(
-                                uint64_t oldId,
-                                const Configuration& newConfiguration);
+    std::string getWorkingDirectory() const;
 
     /**
      * Make sure a directory exists at the given path.
@@ -444,6 +422,88 @@ class Cluster {
      */
     Result
     removeFile(const std::string& path);
+
+  private:
+    std::shared_ptr<ClientImplBase> clientImpl;
+    mutable std::mutex mutex;
+    std::string workingDirectory;
+    friend class Cluster;
+};
+
+/**
+ * A handle to the LogCabin cluster.
+ */
+class Cluster {
+  public:
+
+    /**
+     * Defines a special type to use as an argument to the constructor that is
+     * for testing purposes only.
+     */
+    enum ForTesting { FOR_TESTING };
+
+    /**
+     * Construct a Cluster object for testing purposes only. Instead of
+     * connecting to a LogCabin cluster, it will keep all state locally in
+     * memory.
+     */
+    explicit Cluster(ForTesting t);
+
+    /**
+     * Constructor.
+     * \param hosts
+     *      A string describing the hosts in the cluster. This should be of the
+     *      form host:port, where host is usually a DNS name that resolves to
+     *      multiple IP addresses.
+     */
+    explicit Cluster(const std::string& hosts);
+    ~Cluster();
+
+    /**
+     * Open the log by the given name.
+     * If no log by that name exists, one will be created.
+     */
+    Log openLog(const std::string& logName);
+
+    /**
+     * Delete the log with the given name.
+     * If no log by that name exists, this will do nothing.
+     */
+    void deleteLog(const std::string& logName);
+
+    /**
+     * Get a list of logs.
+     * \return
+     *      The name of each existing log in sorted order.
+     */
+    std::vector<std::string> listLogs();
+
+    /**
+     * Get the current, stable cluster configuration.
+     * \return
+     *      first: configurationId: Identifies the configuration.
+     *             Pass this to setConfiguration later.
+     *      second: The list of servers in the configuration.
+     */
+    std::pair<uint64_t, Configuration> getConfiguration();
+
+    /**
+     * Change the cluster's configuration.
+     * \param oldId
+     *      The ID of the cluster's current configuration.
+     * \param newConfiguration
+     *      The list of servers in the new configuration.
+     */
+    ConfigurationResult setConfiguration(
+                                uint64_t oldId,
+                                const Configuration& newConfiguration);
+
+    /**
+     * Return an object to access the hierarchical key-value store.
+     * \return
+     *      A Tree object with the working directory of '/'.
+     */
+    Tree getTree();
 
   private:
     std::shared_ptr<ClientImplBase> clientImpl;

@@ -73,20 +73,40 @@ class ClientImplBase {
                 uint64_t oldId,
                 const Configuration& newConfiguration) = 0;
 
+    /**
+     * Return the canonicalized path name resulting from accessing path
+     * relative to workingDirectory.
+     * \return
+     *      Status and error message. Possible errors are:
+     *       - INVALID_ARGUMENT if path is relative and workingDirectory is not
+     *         an absolute path.
+     *       - INVALID_ARGUMENT if path attempts to access above the root
+     *         directory.
+     */
+    virtual Result canonicalize(const std::string& path,
+                                const std::string& workingDirectory,
+                                std::string& canonical) = 0;
     /// See Cluster::makeDirectory.
-    virtual Result makeDirectory(const std::string& path) = 0;
+    virtual Result makeDirectory(const std::string& path,
+                                 const std::string& workingDirectory) = 0;
     /// See Cluster::listDirectory.
     virtual Result listDirectory(const std::string& path,
+                                 const std::string& workingDirectory,
                                  std::vector<std::string>& children) = 0;
     /// See Cluster::removeDirectory.
-    virtual Result removeDirectory(const std::string& path) = 0;
+    virtual Result removeDirectory(const std::string& path,
+                                   const std::string& workingDirectory) = 0;
     /// See Cluster::write.
     virtual Result write(const std::string& path,
+                         const std::string& workingDirectory,
                          const std::string& contents) = 0;
     /// See Cluster::read.
-    virtual Result read(const std::string& path, std::string& contents) = 0;
+    virtual Result read(const std::string& path,
+                        const std::string& workingDirectory,
+                        std::string& contents) = 0;
     /// See Cluster::removeFile.
-    virtual Result removeFile(const std::string& path) = 0;
+    virtual Result removeFile(const std::string& path,
+                              const std::string& workingDirectory) = 0;
 
   protected:
     /**

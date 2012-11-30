@@ -150,11 +150,12 @@ TEST_F(ClientMockClientImplLogTest, getLastId_logDisappeared)
 
 // sanity check for tree operations (read-only and read-write)
 TEST_F(ClientMockClientImplTest, tree) {
+    Client::Tree tree = cluster->getTree();
     EXPECT_EQ(Client::Status::OK,
-              cluster->makeDirectory("/foo").status);
+              tree.makeDirectory("/foo").status);
     std::vector<std::string> children;
     EXPECT_EQ(Client::Status::OK,
-              cluster->listDirectory("/", children).status);
+              tree.listDirectory("/", children).status);
     EXPECT_EQ((std::vector<std::string> {"foo/"}),
               children);
 }
