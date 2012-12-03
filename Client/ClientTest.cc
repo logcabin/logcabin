@@ -392,6 +392,15 @@ using Client::Status;
     EXPECT_EQ(Status::OK, result.status) << result.error; \
 } while (0)
 
+TEST_F(ClientTreeTest, assignment)
+{
+    Client::Tree tree2 =
+        Client::Cluster(Client::Cluster::FOR_TESTING).getTree();
+    tree2.setWorkingDirectory("/foo/bar");
+    tree2 = tree;
+    EXPECT_EQ("/", tree2.getWorkingDirectory());
+}
+
 TEST_F(ClientTreeTest, setWorkingDirectory)
 {
     EXPECT_OK(tree.setWorkingDirectory("foo"));

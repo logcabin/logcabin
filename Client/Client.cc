@@ -172,29 +172,53 @@ Result::Result()
 {
 }
 
+////////// TreeDetails //////////
+
+/**
+ * Implementation-specific members of Client::Tree.
+ */
+class TreeDetails {
+  public:
+    TreeDetails(std::shared_ptr<ClientImplBase> clientImpl,
+                const std::string& workingDirectory)
+        : clientImpl(clientImpl)
+        , workingDirectory(workingDirectory)
+    {
+    }
+    /**
+     * Client implementation.
+     */
+    std::shared_ptr<ClientImplBase> clientImpl;
+    /**
+     * The current working directory for the Tree (an absolute path).
+     */
+    std::string workingDirectory;
+};
+
+
 ////////// Tree //////////
 
 Tree::Tree(std::shared_ptr<ClientImplBase> clientImpl,
            const std::string& workingDirectory)
-    : clientImpl(clientImpl)
-    , mutex()
-    , workingDirectory(workingDirectory)
+    : mutex()
+    , treeDetails(new TreeDetails(clientImpl, workingDirectory))
 {
 }
 
 Tree::Tree(const Tree& other)
-    : clientImpl(other.clientImpl)
-    , mutex()
-    , workingDirectory(other.getWorkingDirectory())
+    : mutex()
+    , treeDetails(other.getTreeDetails())
 {
 }
 
 Tree&
 Tree::operator=(const Tree& other)
 {
-    clientImpl = other.clientImpl;
+    // Hold one lock at a time to avoid deadlock and handle self-assignment.
+    std::shared_ptr<const TreeDetails> otherTreeDetails =
+                                            other.getTreeDetails();
     std::unique_lock<std::mutex> lockGuard(mutex);
-    workingDirectory = other.getWorkingDirectory();
+    treeDetails = otherTreeDetails;
     return *this;
 }
 
@@ -208,68 +232,95 @@ Tree::setWorkingDirectory(const std::string& newWorkingDirectory)
 
     std::unique_lock<std::mutex> lockGuard(mutex);
     std::string realPath;
-    Result result = clientImpl->canonicalize(newWorkingDirectory,
-                                             workingDirectory,
-                                             realPath);
+    Result result = treeDetails->clientImpl->canonicalize(
+                                newWorkingDirectory,
+                                treeDetails->workingDirectory,
+                                realPath);
+    std::shared_ptr<TreeDetails> newTreeDetails(new TreeDetails(*treeDetails));
     if (result.status != Status::OK) {
-        workingDirectory = Core::StringUtil::format(
+        newTreeDetails->workingDirectory = Core::StringUtil::format(
                     "invalid from prior call to setWorkingDirectory('%s') "
                     "relative to '%s'",
-                    newWorkingDirectory.c_str(), workingDirectory.c_str());
+                    newWorkingDirectory.c_str(),
+                    treeDetails->workingDirectory.c_str());
+        treeDetails = newTreeDetails;
         return result;
     }
-    workingDirectory = realPath;
-    return clientImpl->makeDirectory(realPath, "");
+    newTreeDetails->workingDirectory = realPath;
+    treeDetails = newTreeDetails;
+    return treeDetails->clientImpl->makeDirectory(realPath, "");
 }
 
 std::string
 Tree::getWorkingDirectory() const
 {
-    std::string ret;
-    {
-        std::unique_lock<std::mutex> lockGuard(mutex);
-        ret = workingDirectory;
-    }
-    return ret;
+    std::shared_ptr<const TreeDetails> treeDetails = getTreeDetails();
+    return treeDetails->workingDirectory;
 }
 
 Result
 Tree::makeDirectory(const std::string& path)
 {
-    return clientImpl->makeDirectory(path, getWorkingDirectory());
+    std::shared_ptr<const TreeDetails> treeDetails = getTreeDetails();
+    return treeDetails->clientImpl->makeDirectory(
+                                        path,
+                                        treeDetails->workingDirectory);
 }
 
 Result
 Tree::listDirectory(const std::string& path,
                        std::vector<std::string>& children)
 {
-    return clientImpl->listDirectory(path, getWorkingDirectory(), children);
+    std::shared_ptr<const TreeDetails> treeDetails = getTreeDetails();
+    return treeDetails->clientImpl->listDirectory(
+                                        path,
+                                        treeDetails->workingDirectory,
+                                        children);
 }
 
 Result
 Tree::removeDirectory(const std::string& path)
 {
-    return clientImpl->removeDirectory(path, getWorkingDirectory());
+    std::shared_ptr<const TreeDetails> treeDetails = getTreeDetails();
+    return treeDetails->clientImpl->removeDirectory(
+                                        path,
+                                        treeDetails->workingDirectory);
 }
 
 Result
 Tree::write(const std::string& path, const std::string& contents)
 {
-    return clientImpl->write(path, getWorkingDirectory(), contents);
+    std::shared_ptr<const TreeDetails> treeDetails = getTreeDetails();
+    return treeDetails->clientImpl->write(path,
+                                          treeDetails->workingDirectory,
+                                          contents);
 }
 
 Result
 Tree::read(const std::string& path, std::string& contents)
 {
-    return clientImpl->read(path, getWorkingDirectory(), contents);
+    std::shared_ptr<const TreeDetails> treeDetails = getTreeDetails();
+    return treeDetails->clientImpl->read(path,
+                                         treeDetails->workingDirectory,
+                                         contents);
 }
 
 Result
 Tree::removeFile(const std::string& path)
 {
-    return clientImpl->removeFile(path, getWorkingDirectory());
+    std::shared_ptr<const TreeDetails> treeDetails = getTreeDetails();
+    return treeDetails->clientImpl->removeFile(path,
+                                               treeDetails->workingDirectory);
 }
 
+std::shared_ptr<const TreeDetails>
+Tree::getTreeDetails() const
+{
+    std::shared_ptr<const TreeDetails> ret;
+    std::unique_lock<std::mutex> lockGuard(mutex);
+    ret = treeDetails;
+    return ret;
+}
 
 ////////// Cluster //////////
 

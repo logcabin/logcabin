@@ -31,6 +31,7 @@ namespace LogCabin {
 namespace Client {
 
 class ClientImplBase; // forward declaration
+class TreeDetails; // forward declaration
 
 /**
  * The type of a log entry ID.
@@ -424,9 +425,20 @@ class Tree {
     removeFile(const std::string& path);
 
   private:
-    std::shared_ptr<ClientImplBase> clientImpl;
+    /**
+     * Get a reference to the implementation-specific members of this class.
+     */
+    std::shared_ptr<const TreeDetails> getTreeDetails() const;
+    /**
+     * Provides mutual exclusion to treeDetails pointer.
+     */
     mutable std::mutex mutex;
-    std::string workingDirectory;
+    /**
+     * Reference-counted pointer to implementation-specific members. This is
+     * copy-on-write, so 'mutex' need not be held after taking a reference to
+     * treeDetails.
+     */
+    std::shared_ptr<const TreeDetails> treeDetails;
     friend class Cluster;
 };
 
