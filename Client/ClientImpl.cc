@@ -316,6 +316,20 @@ treeError(const Message& response)
 }
 
 /**
+ * If the client has specified a condition for the operation, serialize it into
+ * the request message.
+ */
+template<typename Message>
+void
+setCondition(Message& request, const Condition& condition)
+{
+    if (!condition.first.empty()) {
+        request.mutable_condition()->set_path(condition.first);
+        request.mutable_condition()->set_contents(condition.second);
+    }
+}
+
+/**
  * Split a path into its components. Helper for ClientImpl::canonicalize.
  * \param[in] path
  *      Forward slash-delimited path (relative or absolute).
@@ -400,7 +414,8 @@ ClientImpl::canonicalize(const std::string& path,
 
 Result
 ClientImpl::makeDirectory(const std::string& path,
-                          const std::string& workingDirectory)
+                          const std::string& workingDirectory,
+                          const Condition& condition)
 {
     std::string realPath;
     Result result = canonicalize(path, workingDirectory, realPath);
@@ -408,6 +423,7 @@ ClientImpl::makeDirectory(const std::string& path,
         return result;
     Protocol::Client::ReadWriteTree::Request request;
     *request.mutable_exactly_once() = exactlyOnceRPCHelper.getRPCInfo();
+    setCondition(request, condition);
     request.mutable_make_directory()->set_path(realPath);
     Protocol::Client::ReadWriteTree::Response response;
     leaderRPC->call(OpCode::READ_WRITE_TREE, request, response);
@@ -420,6 +436,7 @@ ClientImpl::makeDirectory(const std::string& path,
 Result
 ClientImpl::listDirectory(const std::string& path,
                           const std::string& workingDirectory,
+                          const Condition& condition,
                           std::vector<std::string>& children)
 {
     children.clear();
@@ -428,6 +445,7 @@ ClientImpl::listDirectory(const std::string& path,
     if (result.status != Status::OK)
         return result;
     Protocol::Client::ReadOnlyTree::Request request;
+    setCondition(request, condition);
     request.mutable_list_directory()->set_path(realPath);
     Protocol::Client::ReadOnlyTree::Response response;
     leaderRPC->call(OpCode::READ_ONLY_TREE, request, response);
@@ -441,7 +459,8 @@ ClientImpl::listDirectory(const std::string& path,
 
 Result
 ClientImpl::removeDirectory(const std::string& path,
-                            const std::string& workingDirectory)
+                            const std::string& workingDirectory,
+                            const Condition& condition)
 {
     std::string realPath;
     Result result = canonicalize(path, workingDirectory, realPath);
@@ -449,6 +468,7 @@ ClientImpl::removeDirectory(const std::string& path,
         return result;
     Protocol::Client::ReadWriteTree::Request request;
     *request.mutable_exactly_once() = exactlyOnceRPCHelper.getRPCInfo();
+    setCondition(request, condition);
     request.mutable_remove_directory()->set_path(realPath);
     Protocol::Client::ReadWriteTree::Response response;
     leaderRPC->call(OpCode::READ_WRITE_TREE, request, response);
@@ -461,7 +481,8 @@ ClientImpl::removeDirectory(const std::string& path,
 Result
 ClientImpl::write(const std::string& path,
                   const std::string& workingDirectory,
-                  const std::string& contents)
+                  const std::string& contents,
+                  const Condition& condition)
 {
     std::string realPath;
     Result result = canonicalize(path, workingDirectory, realPath);
@@ -469,6 +490,7 @@ ClientImpl::write(const std::string& path,
         return result;
     Protocol::Client::ReadWriteTree::Request request;
     *request.mutable_exactly_once() = exactlyOnceRPCHelper.getRPCInfo();
+    setCondition(request, condition);
     request.mutable_write()->set_path(realPath);
     request.mutable_write()->set_contents(contents);
     Protocol::Client::ReadWriteTree::Response response;
@@ -482,6 +504,7 @@ ClientImpl::write(const std::string& path,
 Result
 ClientImpl::read(const std::string& path,
                  const std::string& workingDirectory,
+                 const Condition& condition,
                  std::string& contents)
 {
     contents = "";
@@ -490,6 +513,7 @@ ClientImpl::read(const std::string& path,
     if (result.status != Status::OK)
         return result;
     Protocol::Client::ReadOnlyTree::Request request;
+    setCondition(request, condition);
     request.mutable_read()->set_path(realPath);
     Protocol::Client::ReadOnlyTree::Response response;
     leaderRPC->call(OpCode::READ_ONLY_TREE, request, response);
@@ -501,7 +525,8 @@ ClientImpl::read(const std::string& path,
 
 Result
 ClientImpl::removeFile(const std::string& path,
-                       const std::string& workingDirectory)
+                       const std::string& workingDirectory,
+                       const Condition& condition)
 {
     std::string realPath;
     Result result = canonicalize(path, workingDirectory, realPath);
@@ -509,6 +534,7 @@ ClientImpl::removeFile(const std::string& path,
         return result;
     Protocol::Client::ReadWriteTree::Request request;
     *request.mutable_exactly_once() = exactlyOnceRPCHelper.getRPCInfo();
+    setCondition(request, condition);
     request.mutable_remove_file()->set_path(realPath);
     Protocol::Client::ReadWriteTree::Response response;
     leaderRPC->call(OpCode::READ_WRITE_TREE, request, response);

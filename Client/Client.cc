@@ -160,6 +160,9 @@ operator<<(std::ostream& os, Status status)
         case Status::TYPE_ERROR:
             os << "Status::TYPE_ERROR";
             break;
+        case Status::CONDITION_NOT_MET:
+            os << "Status::CONDITION_NOT_MET";
+            break;
     }
     return os;
 }
@@ -183,6 +186,7 @@ class TreeDetails {
                 const std::string& workingDirectory)
         : clientImpl(clientImpl)
         , workingDirectory(workingDirectory)
+        , condition()
     {
     }
     /**
@@ -193,6 +197,11 @@ class TreeDetails {
      * The current working directory for the Tree (an absolute path).
      */
     std::string workingDirectory;
+    /**
+     * If set, specifies a predicate that must hold for operations to take
+     * effect.
+     */
+    Condition condition;
 };
 
 
@@ -248,7 +257,8 @@ Tree::setWorkingDirectory(const std::string& newWorkingDirectory)
     }
     newTreeDetails->workingDirectory = realPath;
     treeDetails = newTreeDetails;
-    return treeDetails->clientImpl->makeDirectory(realPath, "");
+    return treeDetails->clientImpl->makeDirectory(realPath, "",
+                                                  treeDetails->condition);
 }
 
 std::string
@@ -259,12 +269,51 @@ Tree::getWorkingDirectory() const
 }
 
 Result
+Tree::setCondition(const std::string& path, const std::string& value)
+{
+    // This method sets the condition regardless of whether it succeeds -- that
+    // way if it doesn't, future calls on this Tree will result in errors
+    // instead of operating on the prior condition.
+
+    std::unique_lock<std::mutex> lockGuard(mutex);
+    std::string realPath;
+    Result result = treeDetails->clientImpl->canonicalize(
+                                path,
+                                treeDetails->workingDirectory,
+                                realPath);
+    std::shared_ptr<TreeDetails> newTreeDetails(new TreeDetails(*treeDetails));
+    if (result.status != Status::OK) {
+        newTreeDetails->condition = {
+            Core::StringUtil::format(
+                    "invalid from prior call to setCondition('%s') "
+                    "relative to '%s'",
+                    path.c_str(),
+                    treeDetails->workingDirectory.c_str()),
+            value,
+        };
+        treeDetails = newTreeDetails;
+        return result;
+    }
+    newTreeDetails->condition = {path, value};
+    treeDetails = newTreeDetails;
+    return Result();
+}
+
+std::pair<std::string, std::string>
+Tree::getCondition() const
+{
+    std::shared_ptr<const TreeDetails> treeDetails = getTreeDetails();
+    return treeDetails->condition;
+}
+
+Result
 Tree::makeDirectory(const std::string& path)
 {
     std::shared_ptr<const TreeDetails> treeDetails = getTreeDetails();
     return treeDetails->clientImpl->makeDirectory(
                                         path,
-                                        treeDetails->workingDirectory);
+                                        treeDetails->workingDirectory,
+                                        treeDetails->condition);
 }
 
 Result
@@ -275,6 +324,7 @@ Tree::listDirectory(const std::string& path,
     return treeDetails->clientImpl->listDirectory(
                                         path,
                                         treeDetails->workingDirectory,
+                                        treeDetails->condition,
                                         children);
 }
 
@@ -284,7 +334,8 @@ Tree::removeDirectory(const std::string& path)
     std::shared_ptr<const TreeDetails> treeDetails = getTreeDetails();
     return treeDetails->clientImpl->removeDirectory(
                                         path,
-                                        treeDetails->workingDirectory);
+                                        treeDetails->workingDirectory,
+                                        treeDetails->condition);
 }
 
 Result
@@ -293,7 +344,8 @@ Tree::write(const std::string& path, const std::string& contents)
     std::shared_ptr<const TreeDetails> treeDetails = getTreeDetails();
     return treeDetails->clientImpl->write(path,
                                           treeDetails->workingDirectory,
-                                          contents);
+                                          contents,
+                                          treeDetails->condition);
 }
 
 Result
@@ -302,6 +354,7 @@ Tree::read(const std::string& path, std::string& contents)
     std::shared_ptr<const TreeDetails> treeDetails = getTreeDetails();
     return treeDetails->clientImpl->read(path,
                                          treeDetails->workingDirectory,
+                                         treeDetails->condition,
                                          contents);
 }
 
@@ -310,7 +363,8 @@ Tree::removeFile(const std::string& path)
 {
     std::shared_ptr<const TreeDetails> treeDetails = getTreeDetails();
     return treeDetails->clientImpl->removeFile(path,
-                                               treeDetails->workingDirectory);
+                                               treeDetails->workingDirectory,
+                                               treeDetails->condition);
 }
 
 std::shared_ptr<const TreeDetails>

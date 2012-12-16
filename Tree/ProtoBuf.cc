@@ -29,7 +29,13 @@ readOnlyTreeRPC(const Tree& tree,
                 PC::ReadOnlyTree::Response& response)
 {
     Result result;
-    if (request.has_list_directory()) {
+    if (request.has_condition()) {
+        result = tree.checkCondition(request.condition().path(),
+                                     request.condition().contents());
+    }
+    if (result.status != Status::OK) {
+        // condition does not match, skip
+    } else if (request.has_list_directory()) {
         std::vector<std::string> children;
         result = tree.listDirectory(request.list_directory().path(),
                                     children);
@@ -54,7 +60,13 @@ readWriteTreeRPC(Tree& tree,
                  PC::ReadWriteTree::Response& response)
 {
     Result result;
-    if (request.has_make_directory()) {
+    if (request.has_condition()) {
+        result = tree.checkCondition(request.condition().path(),
+                                     request.condition().contents());
+    }
+    if (result.status != Status::OK) {
+        // condition does not match, skip
+    } else if (request.has_make_directory()) {
         result = tree.makeDirectory(request.make_directory().path());
     } else if (request.has_remove_directory()) {
         result = tree.removeDirectory(request.remove_directory().path());

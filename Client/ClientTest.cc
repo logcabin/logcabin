@@ -422,6 +422,33 @@ TEST_F(ClientTreeTest, setWorkingDirectory)
     EXPECT_EQ("/", tree.getWorkingDirectory());
 }
 
+TEST_F(ClientTreeTest, getCondition)
+{
+    EXPECT_EQ((Client::Condition {"", ""}),
+              tree.getCondition());
+    tree.setCondition("a", "b");
+    EXPECT_EQ((Client::Condition {"a", "b"}),
+              tree.getCondition());
+}
+
+TEST_F(ClientTreeTest, setCondition)
+{
+    EXPECT_OK(tree.setCondition("", ""));
+
+    Result result = tree.setCondition("/..", "x");
+    EXPECT_EQ(Status::INVALID_ARGUMENT,
+              result.status);
+    EXPECT_EQ("Path '/..' from working directory '/' attempts to look up "
+              "directory above root ('/')",
+              result.error);
+    EXPECT_EQ((Client::Condition {
+                   "invalid from prior call to setCondition('/..') "
+                   "relative to '/'",
+                   "x"
+               }),
+               tree.getCondition());
+}
+
 TEST_F(ClientTreeTest, makeDirectory)
 {
     EXPECT_OK(tree.makeDirectory("/foo"));
@@ -491,6 +518,25 @@ TEST_F(ClientTreeTest, removeFile)
     EXPECT_OK(tree.listDirectory("/", children));
     EXPECT_EQ((std::vector<std::string>{}),
               children);
+}
+
+TEST_F(ClientTreeTest, conditions)
+{
+    tree.setCondition("/a", "c");
+    EXPECT_EQ(Status::CONDITION_NOT_MET,
+              tree.makeDirectory("/foo").status);
+    std::vector<std::string> children;
+    EXPECT_EQ(Status::CONDITION_NOT_MET,
+              tree.listDirectory("/", children).status);
+    EXPECT_EQ(Status::CONDITION_NOT_MET,
+              tree.removeDirectory("/").status);
+    EXPECT_EQ(Status::CONDITION_NOT_MET,
+              tree.write("/a", "c").status);
+    std::string contents;
+    EXPECT_EQ(Status::CONDITION_NOT_MET,
+              tree.read("/a", contents).status);
+    EXPECT_EQ(Status::CONDITION_NOT_MET,
+              tree.removeFile("/a").status);
 }
 
 } // namespace LogCabin::<anonymous>

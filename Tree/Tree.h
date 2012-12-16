@@ -50,6 +50,11 @@ enum class Status {
      * a directory is required. 
      */
     TYPE_ERROR = 3,
+
+    /**
+     * A predicate on an operation was not satisfied.
+     */
+    CONDITION_NOT_MET = 4,
 };
 
 /**
@@ -256,6 +261,22 @@ class Tree {
      * Constructor.
      */
     Tree();
+
+    /**
+     * Verify that the file at path has the given contents.
+     * \param path
+     *      The path to the file that must have the contents specified in
+     *      'contents'.
+     * \param contents
+     *      The contents that the file specified by 'path' should have for an
+     *      OK response.
+     * \return
+     *      Status and error message. Possible errors are:
+     *       - CONDITION_NOT_MET upon any error.
+     */
+    Result
+    checkCondition(const std::string& path,
+                   const std::string& contents) const;
 
     /**
      * Make sure a directory exists at the given path.

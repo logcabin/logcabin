@@ -250,6 +250,12 @@ enum class Status {
      * a directory is required.
      */
     TYPE_ERROR = 3,
+
+    /**
+     * A predicate which was previously set on operations with
+     * Tree::setCondition() was not satisfied.
+     */
+    CONDITION_NOT_MET = 4,
 };
 
 /**
@@ -308,7 +314,7 @@ class Tree {
      * \return
      *      Status and error message. Possible errors are:
      *       - INVALID_ARGUMENT if workingDirectory is malformed.
-     *       - TYPE_ERROR if workingDirectory parent of path is a file.
+     *       - TYPE_ERROR if parent of workingDirectory is a file.
      *       - TYPE_ERROR if workingDirectory exists but is a file.
      *      If this returns an error, future operations on this tree using
      *      relative paths will fail until a valid working directory is set.
@@ -322,6 +328,36 @@ class Tree {
      *      this Tree object.
      */
     std::string getWorkingDirectory() const;
+
+    /**
+     * Return the condition set by a previous call to setCondition().
+     * \return
+     *      First component: the absolute path corresponding to the 'path'
+     *      argument of setCondition().
+     *      Second component: the file contents given as the 'value' argument
+     *      of setCondition().
+     */
+    std::pair<std::string, std::string> getCondition() const;
+
+    /**
+     * Set a predicate on all future operations. Future operations will return
+     * Status::CONDITION_NOT_MET and have no effect unless the file at 'path'
+     * has the contents 'value'. To remove the predicate, pass an empty string
+     * as 'path'.
+     * \param path
+     *      The relative or absolute path to the file that must have the
+     *      contents specified in value, or an empty string to clear the
+     *      condition.
+     * \param value
+     *      The contents that the file specified by 'path' must have for future
+     *      operations to succeed.
+     * \return
+     *      Status and error message. Possible errors are:
+     *       - INVALID_ARGUMENT if path is malformed.
+     *      If this returns an error, future operations on this tree will fail
+     *      until a new condition is set or the condition is cleared.
+     */
+    Result setCondition(const std::string& path, const std::string& value);
 
     /**
      * Make sure a directory exists at the given path.

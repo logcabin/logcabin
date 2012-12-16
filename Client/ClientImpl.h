@@ -51,20 +51,26 @@ class ClientImpl : public ClientImplBase {
                         const std::string& workingDirectory,
                         std::string& canonical);
     Result makeDirectory(const std::string& path,
-                         const std::string& workingDirectory);
+                         const std::string& workingDirectory,
+                         const Condition& condition);
     Result listDirectory(const std::string& path,
                          const std::string& workingDirectory,
+                         const Condition& condition,
                          std::vector<std::string>& children);
     Result removeDirectory(const std::string& path,
-                           const std::string& workingDirectory);
+                           const std::string& workingDirectory,
+                           const Condition& condition);
     Result write(const std::string& path,
                  const std::string& workingDirectory,
-                 const std::string& contents);
+                 const std::string& contents,
+                 const Condition& condition);
     Result read(const std::string& path,
                 const std::string& workingDirectory,
+                const Condition& condition,
                 std::string& contents);
     Result removeFile(const std::string& path,
-                      const std::string& workingDirectory);
+                      const std::string& workingDirectory,
+                      const Condition& condition);
 
 
   protected:

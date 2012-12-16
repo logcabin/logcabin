@@ -380,6 +380,25 @@ enum Status {
     INVALID_ARGUMENT = 1;
     LOOKUP_ERROR = 2;
     TYPE_ERROR = 3;
+    CONDITION_NOT_MET = 4;
+};
+
+/**
+ * A predicate on Tree operations.
+ * If set, operations will return CONDITION_NOT_MET and have no effect unless
+ * the file at 'path' has the contents 'contents'.
+ */
+message TreeCondition {
+    /**
+     * The absolute path to the file that must have the contents specified in
+     * 'contents'.
+     */
+    required string path = 1;
+    /**
+     * The contents that the file specified by 'path' must have for the
+     * operation to succeed.
+     */
+    required bytes contents = 2;
 };
 
 /**
@@ -387,6 +406,7 @@ enum Status {
  */
 message ReadOnlyTree {
     message Request {
+        optional TreeCondition condition = 11;
         // The following are mutually exclusive.
         message ListDirectory {
             required string path = 1;
@@ -419,6 +439,7 @@ message ReadWriteTree {
     message Request {
         /// See ExactlyOnceRPCInfo.
         required ExactlyOnceRPCInfo exactly_once = 10;
+        optional TreeCondition condition = 11;
         // The following are mutually exclusive.
         message MakeDirectory {
             required string path = 1;

@@ -268,6 +268,21 @@ TEST_F(TreeTreeTest, mkdirLookup)
     EXPECT_EQ("Parent /c of /c/d is a file", result.error);
 }
 
+TEST_F(TreeTreeTest, checkCondition)
+{
+    tree.write("/a", "b");
+    EXPECT_OK(tree.checkCondition("/a", "b"));
+    Result result;
+    result = tree.checkCondition("/c", "d");
+    EXPECT_EQ(Status::CONDITION_NOT_MET, result.status);
+    EXPECT_EQ("Could not read value at path '/c': /c does not exist",
+              result.error);
+    result = tree.checkCondition("/a", "d");
+    EXPECT_EQ(Status::CONDITION_NOT_MET, result.status);
+    EXPECT_EQ("Path '/a' has value 'b', not 'd' as required",
+              result.error);
+}
+
 TEST_F(TreeTreeTest, makeDirectory)
 {
     EXPECT_OK(tree.makeDirectory("/"));

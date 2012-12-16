@@ -24,6 +24,15 @@ namespace LogCabin {
 namespace Client {
 
 /**
+ * A predicate on tree operations.
+ * First component: the absolute path corresponding to the 'path'
+ * argument of setCondition(), or empty if no condition is set.
+ * Second component: the file contents given as the 'value' argument of
+ * setCondition().
+ */
+typedef std::pair<std::string, std::string> Condition;
+
+/**
  * A base class for the implementation of the client library.
  * This is implemented by Client::ClientImpl and Client::MockClientImpl.
  */
@@ -88,25 +97,31 @@ class ClientImplBase {
                                 std::string& canonical) = 0;
     /// See Cluster::makeDirectory.
     virtual Result makeDirectory(const std::string& path,
-                                 const std::string& workingDirectory) = 0;
+                                 const std::string& workingDirectory,
+                                 const Condition& condition) = 0;
     /// See Cluster::listDirectory.
     virtual Result listDirectory(const std::string& path,
                                  const std::string& workingDirectory,
+                                 const Condition& condition,
                                  std::vector<std::string>& children) = 0;
     /// See Cluster::removeDirectory.
     virtual Result removeDirectory(const std::string& path,
-                                   const std::string& workingDirectory) = 0;
+                                   const std::string& workingDirectory,
+                                   const Condition& condition) = 0;
     /// See Cluster::write.
     virtual Result write(const std::string& path,
                          const std::string& workingDirectory,
-                         const std::string& contents) = 0;
+                         const std::string& contents,
+                         const Condition& condition) = 0;
     /// See Cluster::read.
     virtual Result read(const std::string& path,
                         const std::string& workingDirectory,
+                        const Condition& condition,
                         std::string& contents) = 0;
     /// See Cluster::removeFile.
     virtual Result removeFile(const std::string& path,
-                              const std::string& workingDirectory) = 0;
+                              const std::string& workingDirectory,
+                              const Condition& condition) = 0;
 
   protected:
     /**

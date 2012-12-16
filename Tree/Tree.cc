@@ -43,6 +43,9 @@ operator<<(std::ostream& os, Status status)
         case Status::TYPE_ERROR:
             os << "Status::TYPE_ERROR";
             break;
+        case Status::CONDITION_NOT_MET:
+            os << "Status::CONDITION_NOT_MET";
+            break;
     }
     return os;
 }
@@ -274,6 +277,31 @@ Tree::mkdirLookup(const Path& path, Directory** parent)
     }
     *parent = current;
     return result;
+}
+
+Result
+Tree::checkCondition(const std::string& path,
+                     const std::string& contents) const
+{
+    std::string actualContents;
+    Result readResult = read(path, actualContents);
+    if (readResult.status != Status::OK) {
+        Result result;
+        result.status = Status::CONDITION_NOT_MET;
+        result.error = format("Could not read value at path '%s': %s",
+                              path.c_str(), readResult.error.c_str());
+        return result;
+    }
+    if (contents != actualContents) {
+        Result result;
+        result.status = Status::CONDITION_NOT_MET;
+        result.error = format("Path '%s' has value '%s', not '%s' as required",
+                              path.c_str(),
+                              actualContents.c_str(),
+                              contents.c_str());
+        return result;
+    }
+    return Result();
 }
 
 Result
