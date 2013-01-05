@@ -43,22 +43,22 @@ using std::chrono::milliseconds;
 // class SimpleConfiguration
 
 bool
-idHeart(std::shared_ptr<Server> server)
+idHeart(Server& server)
 {
-    return server->serverId < 3;
+    return server.serverId < 3;
 }
 
 void
-setAddr(std::shared_ptr<Server> server)
+setAddr(Server& server)
 {
     using Core::StringUtil::format;
-    server->address = format("server%lu", server->serverId);
+    server.address = format("server%lu", server.serverId);
 }
 
 uint64_t
-getServerId(std::shared_ptr<Server> server)
+getServerId(Server& server)
 {
-    return server->serverId;
+    return server.serverId;
 }
 
 Protocol::Raft::Configuration desc(const std::string& description) {

@@ -363,9 +363,9 @@ class Peer : public Server {
 class Configuration {
   public:
     typedef std::shared_ptr<Server> ServerRef;
-    typedef std::function<bool(ServerRef)> Predicate;
-    typedef std::function<uint64_t(ServerRef)> GetValue;
-    typedef std::function<void(ServerRef)> SideEffect;
+    typedef std::function<bool(Server&)> Predicate;
+    typedef std::function<uint64_t(Server&)> GetValue;
+    typedef std::function<void(Server&)> SideEffect;
 
   private:
     /**

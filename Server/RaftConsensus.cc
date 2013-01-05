@@ -253,7 +253,7 @@ bool
 Configuration::SimpleConfiguration::all(const Predicate& predicate) const
 {
     for (auto it = servers.begin(); it != servers.end(); ++it) {
-        if (!predicate(*it))
+        if (!predicate(**it))
             return false;
     }
     return true;
@@ -274,7 +274,7 @@ void
 Configuration::SimpleConfiguration::forEach(const SideEffect& sideEffect)
 {
     for (auto it = servers.begin(); it != servers.end(); ++it)
-        sideEffect(*it);
+        sideEffect(**it);
 }
 
 uint64_t
@@ -284,7 +284,7 @@ Configuration::SimpleConfiguration::min(const GetValue& getValue) const
         return 0;
     uint64_t smallest = ~0UL;
     for (auto it = servers.begin(); it != servers.end(); ++it)
-        smallest = std::min(smallest, getValue(*it));
+        smallest = std::min(smallest, getValue(**it));
     return smallest;
 }
 
@@ -295,7 +295,7 @@ Configuration::SimpleConfiguration::quorumAll(const Predicate& predicate) const
         return true;
     uint64_t count = 0;
     for (auto it = servers.begin(); it != servers.end(); ++it)
-        if (predicate(*it))
+        if (predicate(**it))
             ++count;
     return (count >= servers.size() / 2 + 1);
 }
@@ -307,7 +307,7 @@ Configuration::SimpleConfiguration::quorumMin(const GetValue& getValue) const
         return 0;
     std::vector<uint64_t> values;
     for (auto it = servers.begin(); it != servers.end(); ++it)
-        values.push_back(getValue(*it));
+        values.push_back(getValue(**it));
     std::sort(values.begin(), values.end());
     return values.at((values.size() - 1)/ 2);
 }
@@ -336,7 +336,7 @@ void
 Configuration::forEach(const SideEffect& sideEffect)
 {
     for (auto it = knownServers.begin(); it != knownServers.end(); ++it)
-        sideEffect(it->second);
+        sideEffect(*it->second);
 }
 
 bool
@@ -383,9 +383,9 @@ Configuration::resetStagingServers()
 }
 
 namespace {
-void setGCFlag(std::shared_ptr<Server> server)
+void setGCFlag(Server& server)
 {
-    server->gcFlag = true;
+    server.gcFlag = true;
 }
 } // anonymous namespace
 
@@ -425,7 +425,7 @@ Configuration::setConfiguration(
     }
 
     // Servers not in the current configuration need to be told to exit
-    setGCFlag(localServer);
+    setGCFlag(*localServer);
     oldServers.forEach(setGCFlag);
     newServers.forEach(setGCFlag);
     auto it = knownServers.begin();
