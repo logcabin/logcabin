@@ -285,6 +285,46 @@ struct Result {
 };
 
 /**
+ * Base class for LogCabin client exceptions.
+ */
+class Exception : public std::runtime_error {
+  public:
+    explicit Exception(const std::string& error);
+};
+
+/**
+ * See Status::INVALID_ARGUMENT.
+ */
+class InvalidArgumentException : public Exception {
+  public:
+    explicit InvalidArgumentException(const std::string& error);
+};
+
+/**
+ * See Status::LOOKUP_ERROR.
+ */
+class LookupException : public Exception {
+  public:
+    explicit LookupException(const std::string& error);
+};
+
+/**
+ * See Status::TYPE_ERROR.
+ */
+class TypeException : public Exception {
+  public:
+    explicit TypeException(const std::string& error);
+};
+
+/**
+ * See Status::CONDITION_NOT_MET.
+ */
+class ConditionNotMetException : public Exception {
+  public:
+    explicit ConditionNotMetException(const std::string& error);
+};
+
+/**
  * Provides access to the hierarchical key-value store.
  * You can get an instance of Tree through Cluster::getTree() or by copying
  * an existing Tree.
@@ -293,6 +333,11 @@ struct Result {
  * not begin with a '/' are resolved). This allows different applications and
  * modules to conveniently access their own subtrees -- they can have their own
  * Tree instances and set their working directories accordingly.
+ *
+ * Methods that can fail come in two flavors. The first flavor returns Result
+ * values with error codes and messages; the second throws exceptions upon
+ * errors. These can be distinguished by the "Ex" suffix in the names of
+ * methods that throw exceptions.
  */
 class Tree {
   private:
@@ -320,6 +365,11 @@ class Tree {
      *      relative paths will fail until a valid working directory is set.
      */
     Result setWorkingDirectory(const std::string& workingDirectory);
+
+    /**
+     * Like setWorkingDirectory but throws exceptions upon errors.
+     */
+    void setWorkingDirectoryEx(const std::string& workingDirectory);
 
     /**
      * Return the working directory for this object.
@@ -360,6 +410,11 @@ class Tree {
     Result setCondition(const std::string& path, const std::string& value);
 
     /**
+     * Like setCondition but throws exceptions upon errors.
+     */
+    void setConditionEx(const std::string& path, const std::string& value);
+
+    /**
      * Make sure a directory exists at the given path.
      * Create parent directories listed in path as necessary.
      * \param path
@@ -372,6 +427,11 @@ class Tree {
      */
     Result
     makeDirectory(const std::string& path);
+
+    /**
+     * Like makeDirectory but throws exceptions upon errors.
+     */
+    void makeDirectoryEx(const std::string& path);
 
     /**
      * List the contents of a directory.
@@ -395,6 +455,11 @@ class Tree {
     listDirectory(const std::string& path, std::vector<std::string>& children);
 
     /**
+     * Like listDirectory but throws exceptions upon errors.
+     */
+    std::vector<std::string> listDirectoryEx(const std::string& path);
+
+    /**
      * Make sure a directory does not exist.
      * Also removes all direct and indirect children of the directory.
      *
@@ -411,6 +476,12 @@ class Tree {
      */
     Result
     removeDirectory(const std::string& path);
+
+    /**
+     * Like removeDirectory but throws exceptions upon errors.
+     */
+    void
+    removeDirectoryEx(const std::string& path);
 
     /**
      * Set the value of a file.
@@ -431,6 +502,12 @@ class Tree {
     write(const std::string& path, const std::string& contents);
 
     /**
+     * Like write but throws exceptions upon errors.
+     */
+    void
+    writeEx(const std::string& path, const std::string& contents);
+
+    /**
      * Get the value of a file.
      * \param path
      *      The path of the file whose contents to read.
@@ -448,6 +525,12 @@ class Tree {
     read(const std::string& path, std::string& contents);
 
     /**
+     * Like read but throws exceptions upon errors.
+     */
+    std::string
+    readEx(const std::string& path);
+
+    /**
      * Make sure a file does not exist.
      * \param path
      *      The path where there should not be a file after this call.
@@ -459,6 +542,12 @@ class Tree {
      */
     Result
     removeFile(const std::string& path);
+
+    /**
+     * Like removeFile but throws exceptions upon errors.
+     */
+    void
+    removeFileEx(const std::string& path);
 
   private:
     /**

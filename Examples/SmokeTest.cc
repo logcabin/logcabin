@@ -88,15 +88,6 @@ class OptionParser {
     bool mock;
 };
 
-#define ASSERT_OK(expr) do { \
-    Result result = (expr); \
-    if (result.status != Status::OK) { \
-        fprintf(stderr, "Error: %s on line %d\n", \
-                result.error.c_str(), __LINE__); \
-        abort(); \
-    } \
-} while (0)
-
 } // anonymous namespace
 
 int
@@ -117,12 +108,11 @@ main(int argc, char** argv)
     assert(entries.at(0).getId() == 0);
 
     Tree tree = cluster.getTree();
-    ASSERT_OK(tree.makeDirectory("/etc"));
-    ASSERT_OK(tree.write("/etc/passwd", "ha"));
-    std::string contents;
-    ASSERT_OK(tree.read("/etc/passwd", contents));
+    tree.makeDirectoryEx("/etc");
+    tree.writeEx("/etc/passwd", "ha");
+    std::string contents = tree.readEx("/etc/passwd");
     assert(contents == "ha");
-    ASSERT_OK(tree.removeDirectory("/etc"));
+    tree.removeDirectoryEx("/etc");
 
     return 0;
 }

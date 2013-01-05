@@ -24,6 +24,24 @@
 namespace LogCabin {
 namespace Client {
 
+namespace {
+void throwException(const Result& result)
+{
+    switch (result.status) {
+        case Status::OK:
+            return;
+        case Status::INVALID_ARGUMENT:
+            throw InvalidArgumentException(result.error);
+        case Status::LOOKUP_ERROR:
+            throw LookupException(result.error);
+        case Status::TYPE_ERROR:
+            throw TypeException(result.error);
+        case Status::CONDITION_NOT_MET:
+            throw ConditionNotMetException(result.error);
+    }
+}
+} // anonymous namespace
+
 ////////// Entry //////////
 
 Entry::Entry(const void* data, uint32_t length,
@@ -175,6 +193,33 @@ Result::Result()
 {
 }
 
+////////// class Exception //////////
+
+Exception::Exception(const std::string& error)
+    : std::runtime_error(error)
+{
+}
+
+InvalidArgumentException::InvalidArgumentException(const std::string& error)
+    : Exception(error)
+{
+}
+
+LookupException::LookupException(const std::string& error)
+    : Exception(error)
+{
+}
+
+TypeException::TypeException(const std::string& error)
+    : Exception(error)
+{
+}
+
+ConditionNotMetException::ConditionNotMetException(const std::string& error)
+    : Exception(error)
+{
+}
+
 ////////// TreeDetails //////////
 
 /**
@@ -261,6 +306,12 @@ Tree::setWorkingDirectory(const std::string& newWorkingDirectory)
                                                   treeDetails->condition);
 }
 
+void
+Tree::setWorkingDirectoryEx(const std::string& workingDirectory)
+{
+    throwException(setWorkingDirectory(workingDirectory));
+}
+
 std::string
 Tree::getWorkingDirectory() const
 {
@@ -299,6 +350,12 @@ Tree::setCondition(const std::string& path, const std::string& value)
     return Result();
 }
 
+void
+Tree::setConditionEx(const std::string& path, const std::string& value)
+{
+    throwException(setCondition(path, value));
+}
+
 std::pair<std::string, std::string>
 Tree::getCondition() const
 {
@@ -316,6 +373,12 @@ Tree::makeDirectory(const std::string& path)
                                         treeDetails->condition);
 }
 
+void
+Tree::makeDirectoryEx(const std::string& path)
+{
+    throwException(makeDirectory(path));
+}
+
 Result
 Tree::listDirectory(const std::string& path,
                        std::vector<std::string>& children)
@@ -328,6 +391,14 @@ Tree::listDirectory(const std::string& path,
                                         children);
 }
 
+std::vector<std::string>
+Tree::listDirectoryEx(const std::string& path)
+{
+    std::vector<std::string> children;
+    throwException(listDirectory(path, children));
+    return children;
+}
+
 Result
 Tree::removeDirectory(const std::string& path)
 {
@@ -336,6 +407,12 @@ Tree::removeDirectory(const std::string& path)
                                         path,
                                         treeDetails->workingDirectory,
                                         treeDetails->condition);
+}
+
+void
+Tree::removeDirectoryEx(const std::string& path)
+{
+    throwException(removeDirectory(path));
 }
 
 Result
@@ -348,6 +425,12 @@ Tree::write(const std::string& path, const std::string& contents)
                                           treeDetails->condition);
 }
 
+void
+Tree::writeEx(const std::string& path, const std::string& contents)
+{
+    throwException(write(path, contents));
+}
+
 Result
 Tree::read(const std::string& path, std::string& contents)
 {
@@ -358,6 +441,14 @@ Tree::read(const std::string& path, std::string& contents)
                                          contents);
 }
 
+std::string
+Tree::readEx(const std::string& path)
+{
+    std::string contents;
+    throwException(read(path, contents));
+    return contents;
+}
+
 Result
 Tree::removeFile(const std::string& path)
 {
@@ -365,6 +456,12 @@ Tree::removeFile(const std::string& path)
     return treeDetails->clientImpl->removeFile(path,
                                                treeDetails->workingDirectory,
                                                treeDetails->condition);
+}
+
+void
+Tree::removeFileEx(const std::string& path)
+{
+    throwException(removeFile(path));
 }
 
 std::shared_ptr<const TreeDetails>
