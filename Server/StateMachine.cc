@@ -256,7 +256,7 @@ StateMachine::append(const PC::Append::Request& request,
     uint64_t newId = log.size();
     uint64_t expectedId = NO_ENTRY_ID;
     if (request.has_expected_entry_id())
-        expectedId = request.has_expected_entry_id();
+        expectedId = request.expected_entry_id();
     if (expectedId != NO_ENTRY_ID && expectedId != newId) {
         response.mutable_ok()->set_entry_id(NO_ENTRY_ID);
         return;

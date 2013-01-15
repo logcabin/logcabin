@@ -100,7 +100,7 @@ main(int argc, char** argv)
     Log log = cluster.openLog("smoketest");
     std::string hello = "hello world";
     Entry e(hello.c_str(), uint32_t(hello.length() + 1));
-    assert(log.append(e) == 0);
+    assert(log.append(e, 0) == 0);
 
     std::vector<Entry> entries = log.read(0);
     assert(entries.size() == 1U);
