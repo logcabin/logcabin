@@ -139,8 +139,10 @@ Invariants::checkBasic()
 
     // advanceCommittedId is called everywhere it needs to be.
     if (consensus.state == RaftConsensus::State::LEADER) {
-        expect(consensus.committedId >=
-               consensus.configuration->quorumMin(&Server::getLastAgreeId));
+        uint64_t majorityEntry =
+            consensus.configuration->quorumMin(&Server::getLastAgreeId);
+        expect(consensus.log->getTerm(majorityEntry) != consensus.currentTerm
+               || consensus.committedId >= majorityEntry);
     }
 
     // A leader always points its leaderId at itself.
@@ -231,12 +233,10 @@ Invariants::checkPeerBasic()
             continue;
         if (consensus.exiting)
             expect(peer->exiting);
-        if (peer->requestVoteDone) {
-            expect(peer->lastAgreeId <= consensus.log->getLastLogId());
-        } else {
+        if (!peer->requestVoteDone) {
             expect(!peer->haveVote_);
-            expect(peer->lastAgreeId == 0);
         }
+        expect(peer->lastAgreeId <= consensus.log->getLastLogId());
         expect(peer->lastAckEpoch <= consensus.currentEpoch);
         expect(peer->nextHeartbeatTime <= Clock::now() +
                std::chrono::milliseconds(consensus.HEARTBEAT_PERIOD_MS));

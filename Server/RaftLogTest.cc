@@ -43,18 +43,6 @@ TEST_F(ServerRaftLogTest, basic)
     EXPECT_EQ("foo", entry.data());
 }
 
-TEST_F(ServerRaftLogTest, getBeginLastTermId)
-{
-    EXPECT_EQ(0U, log.getBeginLastTermId());
-    log.append(sampleEntry);
-    EXPECT_EQ(1U, log.getBeginLastTermId());
-    log.append(sampleEntry);
-    EXPECT_EQ(1U, log.getBeginLastTermId());
-    sampleEntry.set_term(80);
-    log.append(sampleEntry);
-    EXPECT_EQ(3U, log.getBeginLastTermId());
-}
-
 TEST_F(ServerRaftLogTest, getEntry)
 {
     Log::Entry entry = log.getEntry(log.append(sampleEntry));

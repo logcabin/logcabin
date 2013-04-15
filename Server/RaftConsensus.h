@@ -111,6 +111,12 @@ class Server {
      */
     virtual void beginRequestVote() = 0;
     /**
+     * Begin replicating to the Server in the current term. Return
+     * immediately. The condition variable in RaftConsensus will be notified
+     * separately.
+     */
+    virtual void beginLeadership() = 0;
+    /**
      * Inform any threads belonging to this Server to exit. Return immediately.
      * The condition variable in RaftConsensus will be notified separately.
      */
@@ -120,11 +126,10 @@ class Server {
      */
     virtual uint64_t getLastAckEpoch() const = 0;
     /**
-     * Return the largest entry ID for which this Server shares the same
-     * entries up to and including this entry with our log.
-     *
-     * As leader, the next entry to send to the follower is lastAgreeId + 1.
-     * This is also used for advancing the leader's committedId.
+     * Return the largest entry ID for which this Server is known to share the
+     * same entries up to and including this entry with our log.
+     * This is used for advancing the leader's committedId.
+     * Monotonically increases within a term.
      *
      * \warning
      *      Only valid when we're leader.
@@ -153,6 +158,16 @@ class Server {
     virtual void scheduleHeartbeat() = 0;
 
     /**
+     * Print out a Server for debugging purposes.
+     */
+    friend std::ostream& operator<<(std::ostream& os, const Server& server);
+
+    /**
+     * Virtual method for operator<<.
+     */
+    virtual std::ostream& dumpToStream(std::ostream& os) const = 0;
+
+    /**
      * The ID of this server.
      */
     const uint64_t serverId;
@@ -179,12 +194,14 @@ class LocalServer : public Server {
     ~LocalServer();
     void exit();
     void beginRequestVote();
+    void beginLeadership();
     uint64_t getLastAgreeId() const;
     bool haveVote() const;
     uint64_t getLastAckEpoch() const;
     void interrupt();
     bool isCaughtUp() const;
     void scheduleHeartbeat();
+    std::ostream& dumpToStream(std::ostream& os) const;
     RaftConsensus& consensus;
 };
 
@@ -211,6 +228,7 @@ class Peer : public Server {
 
     // Methods implemented from Server interface.
     void beginRequestVote();
+    void beginLeadership();
     void exit();
     uint64_t getLastAckEpoch() const;
     uint64_t getLastAgreeId() const;
@@ -250,6 +268,7 @@ class Peer : public Server {
      *      sure this object doesn't go away.
      */
     void startThread(std::shared_ptr<Peer> self);
+    std::ostream& dumpToStream(std::ostream& os) const;
 
   private:
 
@@ -290,6 +309,19 @@ class Peer : public Server {
      * See #haveVote().
      */
     bool haveVote_;
+
+    /**
+     * Indicates that nextSendId is still a (poor) guess: the leader should
+     * send heartbeats to save bandwidth until it finds where the follower's
+     * log diverges from its own. Only used when leader.
+     */
+    bool forceHeartbeat;
+
+    /**
+     * The index of the next entry to send to the follower. Only used when
+     * leader.
+     */
+    uint64_t nextSendId;
 
     /**
      * See #getLastAgreeId().
@@ -497,6 +529,12 @@ class Configuration {
      */
     friend std::ostream& operator<<(std::ostream& os, State state);
 
+    /**
+     * Print out a Configuration for debugging purposes.
+     */
+    friend std::ostream& operator<<(std::ostream& os,
+                                    const Configuration& configuration);
+
   private:
     /**
      * If no server by the given ID is known, construct a new one.
@@ -558,15 +596,13 @@ class Configuration {
 };
 
 /**
- * An implementation of the Raft consensus algorithm. An earlier version of the
- * protocol is described at
- * https://ramcloud.stanford.edu/wiki/display/ramcloud/The+ALPO+consensus+protocol
+ * An implementation of the Raft consensus algorithm. The algorithm is
+ * described at https://ramcloud.stanford.edu/raft.pdf
  * . In brief, Raft divides time into terms and elects a leader at the
  * beginning of each term. This election mechanism guarantees that the emerging
- * leader has at least all committed log entries -- those that have reached a
- * quorum of servers. Once a candidate has received votes from a quorum, it
- * replicates its own log entries in order to the followers. The leader is the
- * only machine that clients of LogCabin may productively communicate with.
+ * leader has at least all committed log entries. Once a candidate has received
+ * votes from a quorum, it replicates its own log entries in order to the
+ * followers. The leader is the only machine that serves client requests.
  */
 class RaftConsensus : public Consensus {
   public:
@@ -746,8 +782,6 @@ class RaftConsensus : public Consensus {
      * advanceCommittedId(), in case this server forms a quorum by itself. The
      * append calls should all come before advanceCommittedId(), since
      * advanceCommittedId() will itself call append in some cases.
-     * \pre
-     *      This should be preceded by an isLeaderReady() check on leaders.
      */
     uint64_t append(const Log::Entry& entry);
 
@@ -772,19 +806,9 @@ class RaftConsensus : public Consensus {
     /**
      * Notify the #stateChanged condition variable and cancel all current RPCs.
      * This should be called when stepping down, starting a new election,
-     * or exiting.
+     * becoming leader, or exiting.
      */
     void interruptAll();
-
-    /**
-     * Return true if the leader has committed all entries from prior terms,
-     * false otherwise. Used to defer log appends until the leader may service
-     * them. It waits until it has committed all entries from prior terms so
-     * that every log ends in at most one term of uncommitted entries.
-     * \pre
-     *      state is LEADER.
-     */
-    bool isLeaderReady() const;
 
     /**
      * Append an entry to the log and wait for it to be committed.
@@ -845,8 +869,10 @@ class RaftConsensus : public Consensus {
     void updateLogMetadata();
 
     /**
-     * Return true if the server has confirmed its leadership during this call,
-     * false otherwise. This is used to provide non-stale read operations to
+     * Return true if every entry that might have already been marked committed
+     * on any leader is marked committed on this leader by the time this call
+     * returns.
+     * This is used to provide non-stale read operations to
      * clients. It gives up after ELECTION_TIMEOUT_MS, since stepDownThread
      * will return to the follower state after that time.
      */

@@ -55,6 +55,12 @@ Server::~Server()
 {
 }
 
+std::ostream&
+operator<<(std::ostream& os, const Server& server)
+{
+    return server.dumpToStream(os);
+}
+
 ////////// LocalServer //////////
 
 LocalServer::LocalServer(uint64_t serverId, RaftConsensus& consensus)
@@ -69,6 +75,11 @@ LocalServer::~LocalServer()
 
 void
 LocalServer::beginRequestVote()
+{
+}
+
+void
+LocalServer::beginLeadership()
 {
 }
 
@@ -111,6 +122,13 @@ LocalServer::scheduleHeartbeat()
 {
 }
 
+std::ostream&
+LocalServer::dumpToStream(std::ostream& os) const
+{
+    // Nothing interesting to dump.
+    return os;
+}
+
 ////////// Peer //////////
 
 Peer::Peer(uint64_t serverId, RaftConsensus& consensus)
@@ -120,6 +138,13 @@ Peer::Peer(uint64_t serverId, RaftConsensus& consensus)
     , exiting(false)
     , requestVoteDone(false)
     , haveVote_(false)
+    , forceHeartbeat(true)
+      // It's somewhat important to set nextSendId correctly here, since peers
+      // that are added to the configuration won't go through beginLeadership()
+      // on the current leader. I say somewhat important because, if nextSendId
+      // is set incorrectly, it's self-correcting, so it's just a potential
+      // performance issue.
+    , nextSendId(consensus.log->getLastLogId() + 1)
     , lastAgreeId(0)
     , lastAckEpoch(0)
     , nextHeartbeatTime(TimePoint::min())
@@ -143,7 +168,14 @@ Peer::beginRequestVote()
 {
     requestVoteDone = false;
     haveVote_ = false;
+}
+
+void
+Peer::beginLeadership()
+{
+    nextSendId = consensus.log->getLastLogId() + 1;
     lastAgreeId = 0;
+    forceHeartbeat = true;
 }
 
 void
@@ -236,6 +268,36 @@ Peer::getSession(std::unique_lock<Mutex>& lockGuard)
             Protocol::Common::MAX_MESSAGE_LENGTH);
     }
     return session;
+}
+
+std::ostream&
+Peer::dumpToStream(std::ostream& os) const
+{
+    os << "Peer " << serverId << std::endl;
+    os << "address: " << address << std::endl;
+    switch (consensus.state) {
+        case RaftConsensus::State::FOLLOWER:
+            break;
+        case RaftConsensus::State::CANDIDATE:
+            os << "vote: ";
+            if (requestVoteDone) {
+                if (haveVote_)
+                    os << "granted";
+                else
+                    os << "not granted";
+            } else {
+                os << "no response";
+            }
+            os << std::endl;
+            break;
+        case RaftConsensus::State::LEADER:
+            os << "forceHeartbeat: " << forceHeartbeat << std::endl;
+            os << "nextSendId: " << nextSendId << std::endl;
+            os << "lastAgreeId: " << lastAgreeId << std::endl;
+            break;
+    }
+    os << "address: " << address << std::endl;
+    return os;
 }
 
 ////////// Configuration::SimpleConfiguration //////////
@@ -495,6 +557,23 @@ operator<<(std::ostream& os, Configuration::State state)
     return os;
 }
 
+std::ostream&
+operator<<(std::ostream& os, const Configuration& configuration)
+{
+    os << "Configuration: {" << std::endl;
+    os << "  state: " << configuration.state << std::endl;
+    os << "  id: " << configuration.id << std::endl;
+    os << "  description: " << std::endl;
+    os << Core::ProtoBuf::dumpString(configuration.description, false);
+    os << "}" << std::endl;
+    for (auto it = configuration.knownServers.begin();
+         it != configuration.knownServers.end();
+         ++it) {
+        os << *it->second;
+    }
+    return os;
+}
+
 
 ////////// Configuration private methods //////////
 
@@ -660,17 +739,29 @@ RaftConsensus::handleAppendEntry(
     std::unique_lock<Mutex> lockGuard(mutex);
     assert(!exiting);
 
+    // Set response to a rejection. We'll overwrite these later if we end up
+    // accepting the request.
+    response.set_term(currentTerm);
+    response.set_success(false);
+
     // If the caller's term is stale, just return our term to it.
     if (request.term() < currentTerm) {
         VERBOSE("Caller(%lu) is stale. Our term is %lu, theirs is %lu",
                  request.server_id(), currentTerm, request.term());
-        response.set_term(currentTerm);
-        return;
+        return; // response was set to a rejection above
     }
-
-    // A new leader should always calls requestVote on this server before
-    // calling appendEntry; thus, we should not see a new term here.
-    assert(request.term() == currentTerm);
+    if (request.term() > currentTerm) {
+        VERBOSE("Caller(%lu) has newer term, updating. "
+                "Ours was %lu, theirs is %lu",
+                request.server_id(), currentTerm, request.term());
+        // We're about to bump our term in the stepDown below: update
+        // 'response' accordingly.
+        response.set_term(request.term());
+    }
+    // This request is a sign of life from the current leader. Update our term
+    // and convert to follower if necessary; reset the election timer.
+    stepDown(request.term());
+    setElectionTimer();
 
     // Record the leader ID as a hint for clients.
     if (leaderId == 0) {
@@ -680,15 +771,21 @@ RaftConsensus::handleAppendEntry(
         assert(leaderId == request.server_id());
     }
 
-    // This request is a sign of life from the current leader.
-    stepDown(currentTerm);
-    setElectionTimer();
-
     // For an entry to fit into our log, it must not leave a gap.
-    assert(request.prev_log_id() <= log->getLastLogId());
+    if (request.prev_log_id() > log->getLastLogId()) {
+        VERBOSE("Rejecting AppendEntry RPC: would leave gap");
+        return; // response was set to a rejection above
+    }
     // It must also agree with the previous entry in the log (and, inductively
-    // all prior entries).
-    assert(log->getTerm(request.prev_log_id()) == request.prev_log_term());
+    // all prior entries). We could truncate the log here, but there's no real
+    // advantage to doing that.
+    if (log->getTerm(request.prev_log_id()) != request.prev_log_term()) {
+        VERBOSE("Rejecting AppendEntry RPC: terms don't agree");
+        return; // response was set to a rejection above
+    }
+
+    // If we got this far, we're accepting the request.
+    response.set_success(true);
 
     // This needs to be able to handle duplicated RPC requests. We compare the
     // entries' terms to know if we need to do the operation; otherwise,
@@ -715,6 +812,7 @@ RaftConsensus::handleAppendEntry(
         if (log->getTerm(entryId) == entry.term())
             continue;
         if (log->getLastLogId() >= entryId) {
+            // should never truncate committed entries:
             assert(committedId < entryId);
             // TODO(ongaro): assertion: what I'm truncating better belong to
             // only 1 term
@@ -730,19 +828,17 @@ RaftConsensus::handleAppendEntry(
         assert(e == entryId);
     }
 
-    // The request's committed ID may be lower than ours: the protocol
-    // guarantees that a server with all committed entries becomes the new
-    // leader, but it does not guarantee that the new leader has the largest
-    // committed ID. We want our committed ID to monotonically increase over
-    // time, so we only update it if the request's is larger.
+    // Set our committed ID from the request's. In rare cases, this would make
+    // our committed ID decrease. For example, this could happen with a new
+    // leader who has not yet replicated one of its own entries. While that'd
+    // be perfectly safe, guarding against it with an if statement lets us
+    // make stronger assertions.
     if (committedId < request.committed_id()) {
         committedId = request.committed_id();
         assert(committedId <= log->getLastLogId());
         stateChanged.notify_all();
         VERBOSE("New committedId: %lu", committedId);
     }
-
-    response.set_term(currentTerm);
 }
 
 void
@@ -751,6 +847,7 @@ RaftConsensus::handleRequestVote(
                     Protocol::Raft::RequestVote::Response& response)
 {
     std::unique_lock<Mutex> lockGuard(mutex);
+    assert(!exiting);
 
     if (request.term() > currentTerm) {
         VERBOSE("Caller(%lu) has newer term, updating. "
@@ -785,9 +882,6 @@ RaftConsensus::handleRequestVote(
     // don't strictly need the first condition
     response.set_granted(request.term() == currentTerm &&
                          votedFor == request.server_id());
-    response.set_last_log_term(lastLogTerm);
-    response.set_last_log_id(lastLogId);
-    response.set_begin_last_term_id(log->getBeginLastTermId());
 }
 
 std::pair<RaftConsensus::ClientResult, uint64_t>
@@ -888,6 +982,7 @@ operator<<(std::ostream& os, const RaftConsensus& raft)
     os << "term: " << raft.currentTerm << std::endl;
     os << "state: " << raft.state << std::endl;
     os << "leader: " << raft.leaderId << std::endl;
+    os << "committedId: " << raft.committedId << std::endl;
     switch (raft.state) {
         case State::FOLLOWER:
             os << "vote: ";
@@ -899,10 +994,11 @@ operator<<(std::ostream& os, const RaftConsensus& raft)
             break;
         case State::CANDIDATE:
             break;
-        case State::LEADER: {
+        case State::LEADER:
             break;
-        }
     }
+    os << *raft.log;
+    os << *raft.configuration;
     return os;
 }
 
@@ -951,18 +1047,13 @@ RaftConsensus::followerThreadMain(std::shared_ptr<Peer> peer)
                         waitUntil = TimePoint::max();
                     break;
 
-                // Leaders use requestVote to get the follower's log info,
-                // then replicate data and periodically send heartbeats.
+                // Leaders replicate entries and periodically send heartbeats.
                 case State::LEADER:
-                    if (!peer->requestVoteDone) {
-                        requestVote(lockGuard, *peer);
+                    if (peer->getLastAgreeId() < log->getLastLogId() ||
+                        peer->nextHeartbeatTime < now) {
+                        appendEntry(lockGuard, *peer);
                     } else {
-                        if (peer->lastAgreeId == log->getLastLogId() &&
-                            now < peer->nextHeartbeatTime) {
-                            waitUntil = peer->nextHeartbeatTime;
-                        } else {
-                            appendEntry(lockGuard, *peer);
-                        }
+                        waitUntil = peer->nextHeartbeatTime;
                     }
                     break;
             }
@@ -1039,6 +1130,10 @@ RaftConsensus::advanceCommittedId()
     // calculate the largest entry ID stored on a quorum of servers
     uint64_t newCommittedId =
         configuration->quorumMin(&Server::getLastAgreeId);
+    // At least one of these entries must also be from the current term to
+    // guarantee that no server without them can be elected.
+    if (log->getTerm(newCommittedId) != currentTerm)
+        return;
     if (committedId >= newCommittedId)
         return;
     committedId = newCommittedId;
@@ -1056,8 +1151,7 @@ RaftConsensus::advanceCommittedId()
 
         // Upon committing a reconfiguration (Cold,new) entry, the leader
         // creates the next configuration (Cnew) entry.
-        if (configuration->state == Configuration::State::TRANSITIONAL &&
-            isLeaderReady()) {
+        if (configuration->state == Configuration::State::TRANSITIONAL) {
             Log::Entry entry;
             entry.set_term(currentTerm);
             entry.set_type(Protocol::Raft::EntryType::CONFIGURATION);
@@ -1091,23 +1185,32 @@ RaftConsensus::appendEntry(std::unique_lock<Mutex>& lockGuard,
     request.set_recipient_id(peer.serverId);
     request.set_term(currentTerm);
     uint64_t lastLogId = log->getLastLogId();
-    uint64_t prevLogId = peer.lastAgreeId;
+    uint64_t prevLogId = peer.nextSendId - 1;
+    assert(prevLogId <= lastLogId);
     request.set_prev_log_term(log->getTerm(prevLogId));
     request.set_prev_log_id(prevLogId);
-    // Add entries
+
+    // Add as many as entries as will fit comfortably in the request. It's
+    // easiest to add one entry at a time until the RPC gets too big, then back
+    // the last one out.
     uint64_t numEntries = 0;
-    for (uint64_t entryId = prevLogId + 1; entryId <= lastLogId; ++entryId) {
-        const Log::Entry& entry = log->getEntry(entryId);
-        *request.add_entries() = entry;
-        uint64_t requestSize =
-            Core::Util::downCast<uint64_t>(request.ByteSize());
-        if (requestSize < SOFT_RPC_SIZE_LIMIT || numEntries == 0) {
-            // this entry fits, send it
-            VERBOSE("sending entry <id=%lu,term=%lu>", entryId, entry.term());
-            ++numEntries;
-        } else {
-            // this entry doesn't fit, discard it
-            request.mutable_entries()->RemoveLast();
+    if (!peer.forceHeartbeat) {
+        for (uint64_t entryId = prevLogId + 1;
+             entryId <= lastLogId;
+             ++entryId) {
+            const Log::Entry& entry = log->getEntry(entryId);
+            *request.add_entries() = entry;
+            uint64_t requestSize =
+                Core::Util::downCast<uint64_t>(request.ByteSize());
+            if (requestSize < SOFT_RPC_SIZE_LIMIT || numEntries == 0) {
+                // this entry fits, send it
+                VERBOSE("sending entry <id=%lu,term=%lu>",
+                        entryId, entry.term());
+                ++numEntries;
+            } else {
+                // this entry doesn't fit, discard it
+                request.mutable_entries()->RemoveLast();
+            }
         }
     }
     request.set_committed_id(std::min(committedId, prevLogId + numEntries));
@@ -1142,25 +1245,41 @@ RaftConsensus::appendEntry(std::unique_lock<Mutex>& lockGuard,
         stateChanged.notify_all();
         peer.nextHeartbeatTime = start +
             std::chrono::milliseconds(HEARTBEAT_PERIOD_MS);
-        peer.lastAgreeId += numEntries;
-        advanceCommittedId();
-
-        if (!peer.isCaughtUp_ &&
-            peer.thisCatchUpIterationGoalId <= peer.lastAgreeId) {
-            Clock::duration duration =
-                Clock::now() - peer.thisCatchUpIterationStart;
-            uint64_t thisCatchUpIterationMs =
-                uint64_t(std::chrono::duration_cast<std::chrono::milliseconds>(
-                    duration).count());
-            if (uint64_t(labs(int64_t(peer.lastCatchUpIterationMs -
-                              thisCatchUpIterationMs))) < ELECTION_TIMEOUT_MS) {
-                peer.isCaughtUp_ = true;
-                stateChanged.notify_all();
+        if (response.success()) {
+            if (peer.lastAgreeId > prevLogId + numEntries) {
+                // Revisit this warning if we pipeline AppendEntry RPCs for
+                // performance.
+                WARNING("lastAgreeId should monotonically increase within a "
+                        "term, since servers don't forget entries. But it "
+                        "didn't.");
             } else {
-                peer.lastCatchUpIterationMs = thisCatchUpIterationMs;
-                peer.thisCatchUpIterationStart = Clock::now();
-                peer.thisCatchUpIterationGoalId = log->getLastLogId();
+                peer.lastAgreeId = prevLogId + numEntries;
+                advanceCommittedId();
             }
+            peer.nextSendId = peer.lastAgreeId + 1;
+            peer.forceHeartbeat = false;
+
+            if (!peer.isCaughtUp_ &&
+                peer.thisCatchUpIterationGoalId <= peer.lastAgreeId) {
+                Clock::duration duration =
+                    Clock::now() - peer.thisCatchUpIterationStart;
+                uint64_t thisCatchUpIterationMs =
+                    uint64_t(std::chrono::duration_cast<
+                                 std::chrono::milliseconds>(duration).count());
+                if (uint64_t(labs(int64_t(peer.lastCatchUpIterationMs -
+                                          thisCatchUpIterationMs))) <
+                    ELECTION_TIMEOUT_MS) {
+                    peer.isCaughtUp_ = true;
+                    stateChanged.notify_all();
+                } else {
+                    peer.lastCatchUpIterationMs = thisCatchUpIterationMs;
+                    peer.thisCatchUpIterationStart = Clock::now();
+                    peer.thisCatchUpIterationGoalId = log->getLastLogId();
+                }
+            }
+        } else {
+            if (peer.nextSendId > 1)
+                --peer.nextSendId;
         }
     }
 }
@@ -1173,8 +1292,25 @@ RaftConsensus::becomeLeader()
     state = State::LEADER;
     leaderId = serverId;
     startElectionAt = TimePoint::max();
-    advanceCommittedId();
-    stateChanged.notify_all();
+
+    // Append a new entry so that commitment is not delayed indefinitely.
+    // Otherwise, if the leader never gets anything to append, it will never
+    // return to read-only operations (it can't prove that its committed index
+    // is up-to-date).
+    Log::Entry entry;
+    entry.set_term(currentTerm);
+    entry.set_type(Protocol::Raft::EntryType::NOOP);
+    append(entry);
+
+    // The ordering is pretty important here: First set nextIndex and
+    // lastAgreeIndex for each follower, then advance the committed ID.
+    // Otherwise we might advance the committed ID based on bogus values of
+    // nextIndex and lastAgreeIndex.
+    configuration->forEach(&Server::beginLeadership);
+    advanceCommittedId(); // in case localhost forms a quorum
+
+    // Outstanding RequestVote RPCs are no longer needed.
+    interruptAll();
 }
 
 void
@@ -1186,21 +1322,11 @@ RaftConsensus::interruptAll()
         configuration->forEach(&Server::interrupt);
 }
 
-bool
-RaftConsensus::isLeaderReady() const
-{
-    assert(state == State::LEADER);
-    uint64_t firstUncommittedTerm = log->getTerm(committedId + 1);
-    return (firstUncommittedTerm == 0 || firstUncommittedTerm == currentTerm);
-}
-
 std::pair<RaftConsensus::ClientResult, uint64_t>
 RaftConsensus::replicateEntry(Log::Entry& entry,
                               std::unique_lock<Mutex>& lockGuard)
 {
     if (state == State::LEADER) {
-        if (!isLeaderReady())
-            return {ClientResult::RETRY, 0};
         entry.set_term(currentTerm);
         uint64_t entryId = append(entry);
         advanceCommittedId();
@@ -1238,7 +1364,7 @@ RaftConsensus::requestVote(std::unique_lock<Mutex>& lockGuard, Peer& peer)
         return;
     }
 
-    if (currentTerm != request.term() || state == State::FOLLOWER ||
+    if (currentTerm != request.term() || state != State::CANDIDATE ||
         peer.exiting) {
         VERBOSE("ignore RPC result");
         // we don't care about result of RPC
@@ -1252,33 +1378,13 @@ RaftConsensus::requestVote(std::unique_lock<Mutex>& lockGuard, Peer& peer)
         peer.lastAckEpoch = epoch;
         stateChanged.notify_all();
 
-        // The peer's response.begin_last_term_id() - 1 is committed, since
-        // only entries in the peer's last term might be uncommitted. If we
-        // successfully become leader, we also have it. If not, lastAgreeId is
-        // undefined anyway.
-        peer.lastAgreeId = response.begin_last_term_id() - 1;
-        // Beyond that, we agree with the peer on any entries that match terms
-        // with ours.
-        for (uint64_t entryId = response.begin_last_term_id();
-             entryId <= response.last_log_id();
-             ++entryId) {
-            if (log->getTerm(entryId) != response.last_log_term())
-                break;
-            peer.lastAgreeId = entryId;
-        }
-
-        if (state == State::LEADER) {
-            advanceCommittedId();
+        if (response.granted()) {
+            peer.haveVote_ = true;
+            VERBOSE("Got vote for term %lu", currentTerm);
+            if (configuration->quorumAll(&Server::haveVote))
+                becomeLeader();
         } else {
-            assert(state == State::CANDIDATE);
-            if (response.granted()) {
-                peer.haveVote_ = true;
-                VERBOSE("Got vote for term %lu", currentTerm);
-                if (configuration->quorumAll(&Server::haveVote))
-                    becomeLeader();
-            } else {
-                VERBOSE("vote not granted");
-            }
+            VERBOSE("vote not granted");
         }
     }
 }
@@ -1371,8 +1477,10 @@ RaftConsensus::upToDateLeader(std::unique_lock<Mutex>& lockGuard) const
     while (true) {
         if (exiting || state != State::LEADER)
             return false;
-        if (configuration->quorumMin(&Server::getLastAckEpoch) >=
-            epoch) {
+        // If we're the current leader and some entry from our term is
+        // committed, then our committedId is as up-to-date as any.
+        if (configuration->quorumMin(&Server::getLastAckEpoch) >= epoch &&
+            log->getTerm(committedId) == currentTerm) {
             return true;
         }
         stateChanged.wait(lockGuard);

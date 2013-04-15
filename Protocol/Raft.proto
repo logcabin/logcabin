@@ -89,6 +89,10 @@ enum EntryType {
      * Stores a command to be processed by the state machine.
      */
     DATA = 2;
+    /**
+     * No op.
+     */
+    NOOP = 3;
 };
 
 /**
@@ -154,20 +158,6 @@ message RequestVote {
          * otherwise.
          */
         required bool granted = 2;
-        /**
-         * For new leader to determine where it and the follower's logs
-         * diverge.
-         * Term of last log entry.
-         */
-        required uint64 last_log_term = 3;
-        /**
-         * ID of last log entry.
-         */
-        required uint64 last_log_id = 4;
-        /**
-         * First entry ID in last log term.
-         */
-        required uint64 begin_last_term_id = 5;
     }
 }
 
@@ -195,7 +185,7 @@ message AppendEntry {
          */
         required uint64 prev_log_id = 3;
         /**
-         * Term of prev_log_id. Used for an assertion.
+         * Term of prev_log_id.
          */
         required uint64 prev_log_term = 4;
         /**
@@ -213,5 +203,9 @@ message AppendEntry {
          * Callee's term, for the caller to update itself.
          */
         required uint64 term = 1;
+        /**
+         * True if new entries were added to the log.
+         */
+        required bool success = 2;
     }
 }

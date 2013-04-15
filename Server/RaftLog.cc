@@ -50,20 +50,6 @@ Log::append(const Entry& entry)
     return entryId;
 }
 
-uint64_t
-Log::getBeginLastTermId() const
-{
-    uint64_t entryId = getLastLogId();
-    uint64_t lastLogTerm = getTerm(entryId);
-    if (entryId == 0)
-        return 0;
-    while (true) {
-        --entryId;
-        if (getTerm(entryId) != lastLogTerm)
-            return entryId + 1;
-    }
-}
-
 const Log::Entry&
 Log::getEntry(uint64_t entryId) const
 {
@@ -97,6 +83,19 @@ Log::truncate(uint64_t lastEntryId)
 void
 Log::updateMetadata()
 {
+}
+
+std::ostream&
+operator<<(std::ostream& os, const Log& log)
+{
+    os << "Log:" << std::endl;
+    os << "metadata: " << Core::ProtoBuf::dumpString(log.metadata, false);
+    for (uint64_t i = 0; i < log.entries.size(); ++i) {
+        os << "Entry " << (i + 1) << ": "
+           << Core::ProtoBuf::dumpString(log.entries[i], false);
+    }
+    os << std::endl;
+    return os;
 }
 
 } // namespace LogCabin::Server::RaftConsensusInternal

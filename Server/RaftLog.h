@@ -49,14 +49,6 @@ class Log {
     virtual uint64_t append(const Entry& entry);
 
     /**
-     * Get the entry ID of the earliest entry with the same term as the last
-     * log entry.
-     *      The entry ID of the first entry in the log's last term, or 0 if the
-     *      log is empty.
-     */
-    virtual uint64_t getBeginLastTermId() const;
-
-    /**
      * Look up an entry by ID.
      * \param entryId
      *      Must be in the range [1, getLastLogId()].
@@ -101,6 +93,11 @@ class Log {
      * Opaque metadata that the log keeps track of.
      */
     RaftLogMetadata::Metadata metadata;
+
+    /**
+     * Print out a Log for debugging purposes.
+     */
+    friend std::ostream& operator<<(std::ostream& os, const Log& log);
 
   protected:
 
