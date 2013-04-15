@@ -27,7 +27,7 @@ enum OpCode {
     // Keep these numbers dense.
     GET_SUPPORTED_RPC_VERSIONS = 0;
     REQUEST_VOTE = 1;
-    APPEND_ENTRY = 2;
+    APPEND_ENTRIES = 2;
 };
 
 /**
@@ -146,7 +146,7 @@ message RequestVote {
          * ID of last entry in caller's log.
          * Used to compare log completeness.
          */
-        required uint64 last_log_id = 4;
+        required uint64 last_log_index = 4;
     }
     message Response {
         /**
@@ -162,10 +162,10 @@ message RequestVote {
 }
 
 /**
- * AppendEntry RPC: replicate log entries to a follower.
+ * AppendEntries RPC: replicate log entries to a follower.
  */
 // TODO(ongaro): rename to AppendEntries
-message AppendEntry {
+message AppendEntries {
     message Request {
         /**
          * ID of leader (caller), so the follower can redirect clients.
@@ -183,9 +183,9 @@ message AppendEntry {
          * ID of entry preceding entries, or ID of last log entry for
          * heartbeat.
          */
-        required uint64 prev_log_id = 3;
+        required uint64 prev_log_index = 3;
         /**
-         * Term of prev_log_id.
+         * Term of prev_log_index.
          */
         required uint64 prev_log_term = 4;
         /**
@@ -196,7 +196,7 @@ message AppendEntry {
          * Last committed entry that the follower has, so the follower can
          * advance its state machine.
          */
-        required uint64 committed_id = 6;
+        required uint64 commit_index = 6;
     }
     message Response {
         /**

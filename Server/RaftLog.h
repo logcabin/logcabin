@@ -51,7 +51,7 @@ class Log {
     /**
      * Look up an entry by ID.
      * \param entryId
-     *      Must be in the range [1, getLastLogId()].
+     *      Must be in the range [1, getLastLogIndex()].
      * \return
      *      The entry corresponding to that entry ID.
      */
@@ -63,7 +63,7 @@ class Log {
      *      The entry ID of the most recent entry in the log,
      *      or 0 if the log is empty.
      */
-    virtual uint64_t getLastLogId() const;
+    virtual uint64_t getLastLogIndex() const;
 
     /**
      * Get the term of an entry in the log.

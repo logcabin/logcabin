@@ -41,8 +41,8 @@ RaftService::handleRPC(RPC::ServerRPC rpc)
 
     // Call the appropriate RPC handler based on the request's opCode.
     switch (rpc.getOpCode()) {
-        case OpCode::APPEND_ENTRY:
-            appendEntry(std::move(rpc));
+        case OpCode::APPEND_ENTRIES:
+            appendEntries(std::move(rpc));
             break;
         case OpCode::REQUEST_VOTE:
             requestVote(std::move(rpc));
@@ -79,12 +79,12 @@ RaftService::getName() const
 ////////// RPC handlers //////////
 
 void
-RaftService::appendEntry(RPC::ServerRPC rpc)
+RaftService::appendEntries(RPC::ServerRPC rpc)
 {
-    PRELUDE(AppendEntry);
-    //VERBOSE("AppendEntry:\n%s",
+    PRELUDE(AppendEntries);
+    //VERBOSE("AppendEntries:\n%s",
     //        Core::ProtoBuf::dumpString(request, false).c_str());
-    globals.raft->handleAppendEntry(request, response);
+    globals.raft->handleAppendEntries(request, response);
     rpc.reply(response);
 }
 

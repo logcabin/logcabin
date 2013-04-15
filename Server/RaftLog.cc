@@ -58,7 +58,7 @@ Log::getEntry(uint64_t entryId) const
 }
 
 uint64_t
-Log::getLastLogId() const
+Log::getLastLogIndex() const
 {
     return entries.size();
 }

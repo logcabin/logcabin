@@ -32,13 +32,13 @@ struct Invariants::ConsensusSnapshot {
         : stateChangedCount(consensus.stateChanged.notificationCount)
         , exiting(consensus.exiting)
         , numPeerThreads(consensus.numPeerThreads)
-        , lastLogId(consensus.log->getLastLogId())
-        , lastLogTerm(consensus.log->getTerm(consensus.log->getLastLogId()))
+        , lastLogIndex(consensus.log->getLastLogIndex())
+        , lastLogTerm(consensus.log->getTerm(consensus.log->getLastLogIndex()))
         , configurationId(consensus.configuration->id)
         , configurationState(consensus.configuration->state)
         , currentTerm(consensus.currentTerm)
         , state(consensus.state)
-        , committedId(consensus.committedId)
+        , commitIndex(consensus.commitIndex)
         , leaderId(consensus.leaderId)
         , votedFor(consensus.votedFor)
         , currentEpoch(consensus.currentEpoch)
@@ -49,13 +49,13 @@ struct Invariants::ConsensusSnapshot {
     uint64_t stateChangedCount;
     bool exiting;
     uint32_t numPeerThreads;
-    uint64_t lastLogId;
+    uint64_t lastLogIndex;
     uint64_t lastLogTerm;
     uint64_t configurationId;
     Configuration::State configurationState;
     uint64_t currentTerm;
     RaftConsensus::State state;
-    uint64_t committedId;
+    uint64_t commitIndex;
     uint64_t leaderId;
     uint64_t votedFor;
     uint64_t currentEpoch;
@@ -89,7 +89,7 @@ Invariants::checkBasic()
     // Log terms monotonically increase
     uint64_t lastTerm = 0;
     for (uint64_t entryId = 1;
-         entryId <= consensus.log->getLastLogId();
+         entryId <= consensus.log->getLastLogIndex();
          ++entryId) {
         const Log::Entry& entry = consensus.log->getEntry(entryId);
         expect(entry.term() >= lastTerm);
@@ -100,7 +100,7 @@ Invariants::checkBasic()
 
     // The current configuration should be the last one found in the log
     bool found = false;
-    for (uint64_t entryId = consensus.log->getLastLogId();
+    for (uint64_t entryId = consensus.log->getLastLogIndex();
          entryId > 0;
          --entryId) {
         const Log::Entry& entry = consensus.log->getEntry(entryId);
@@ -121,7 +121,7 @@ Invariants::checkBasic()
     // entry in every log is a configuration, they should also have empty logs.
     if (consensus.configuration->state == Configuration::State::BLANK) {
         expect(consensus.state == RaftConsensus::State::FOLLOWER);
-        expect(consensus.log->getLastLogId() == 0);
+        expect(consensus.log->getLastLogIndex() == 0);
     }
 
     // A server should not try to become candidate in a configuration it does
@@ -130,19 +130,19 @@ Invariants::checkBasic()
     if (!consensus.configuration->hasVote(
                                 consensus.configuration->localServer)) {
         expect(consensus.state != RaftConsensus::State::CANDIDATE);
-        if (consensus.configuration->id <= consensus.committedId)
+        if (consensus.configuration->id <= consensus.commitIndex)
             expect(consensus.state != RaftConsensus::State::LEADER);
     }
 
-    // The committedId doesn't exceed the length of the log.
-    expect(consensus.committedId <= consensus.log->getLastLogId());
+    // The commitIndex doesn't exceed the length of the log.
+    expect(consensus.commitIndex <= consensus.log->getLastLogIndex());
 
     // advanceCommittedId is called everywhere it needs to be.
     if (consensus.state == RaftConsensus::State::LEADER) {
         uint64_t majorityEntry =
-            consensus.configuration->quorumMin(&Server::getLastAgreeId);
+            consensus.configuration->quorumMin(&Server::getLastAgreeIndex);
         expect(consensus.log->getTerm(majorityEntry) != consensus.currentTerm
-               || consensus.committedId >= majorityEntry);
+               || consensus.commitIndex >= majorityEntry);
     }
 
     // A leader always points its leaderId at itself.
@@ -199,16 +199,16 @@ Invariants::checkDelta()
 
     // These variables monotonically increase.
     expect(previous->currentTerm <= current->currentTerm);
-    expect(previous->committedId <= current->committedId);
+    expect(previous->commitIndex <= current->commitIndex);
     expect(previous->currentEpoch <= current->currentEpoch);
 
     // Change requires condition variable notification:
     if (previous->stateChangedCount == current->stateChangedCount) {
         expect(previous->currentTerm == current->currentTerm);
         expect(previous->state == current->state);
-        expect(previous->lastLogId == current->lastLogId);
+        expect(previous->lastLogIndex == current->lastLogIndex);
         expect(previous->lastLogTerm == current->lastLogTerm);
-        expect(previous->committedId == current->committedId);
+        expect(previous->commitIndex == current->commitIndex);
         expect(previous->exiting == current->exiting);
         expect(previous->numPeerThreads <= current->numPeerThreads);
         expect(previous->configurationId == current->configurationId);
@@ -236,7 +236,7 @@ Invariants::checkPeerBasic()
         if (!peer->requestVoteDone) {
             expect(!peer->haveVote_);
         }
-        expect(peer->lastAgreeId <= consensus.log->getLastLogId());
+        expect(peer->lastAgreeIndex <= consensus.log->getLastLogIndex());
         expect(peer->lastAckEpoch <= consensus.currentEpoch);
         expect(peer->nextHeartbeatTime <= Clock::now() +
                std::chrono::milliseconds(consensus.HEARTBEAT_PERIOD_MS));

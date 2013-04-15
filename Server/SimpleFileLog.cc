@@ -226,7 +226,7 @@ SimpleFileLog::truncate(uint64_t lastEntryId)
     // update metadata before removing files in case of interruption
     Log::truncate(lastEntryId);
     updateMetadata();
-    for (auto entryId = getLastLogId(); entryId > lastEntryId; --entryId)
+    for (auto entryId = getLastLogIndex(); entryId > lastEntryId; --entryId)
         FilesystemUtil::removeFile(dir, format("%016lx", entryId));
     // fsync(dir) not needed because of metadata
 }

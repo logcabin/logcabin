@@ -52,12 +52,12 @@ TEST_F(ServerRaftLogTest, getEntry)
     EXPECT_THROW(log.getEntry(2), std::out_of_range);
 }
 
-TEST_F(ServerRaftLogTest, getLastLogId)
+TEST_F(ServerRaftLogTest, getLastLogIndex)
 {
-    EXPECT_EQ(0U, log.getLastLogId());
+    EXPECT_EQ(0U, log.getLastLogIndex());
     log.append(sampleEntry);
     log.append(sampleEntry);
-    EXPECT_EQ(2U, log.getLastLogId());
+    EXPECT_EQ(2U, log.getLastLogIndex());
 }
 
 TEST_F(ServerRaftLogTest, getTerm)
@@ -74,17 +74,17 @@ TEST_F(ServerRaftLogTest, truncate)
 {
     log.truncate(0);
     log.truncate(10);
-    EXPECT_EQ(0U, log.getLastLogId());
+    EXPECT_EQ(0U, log.getLastLogIndex());
     log.append(sampleEntry);
     log.append(sampleEntry);
     log.truncate(10);
-    EXPECT_EQ(2U, log.getLastLogId());
+    EXPECT_EQ(2U, log.getLastLogIndex());
     log.truncate(2);
-    EXPECT_EQ(2U, log.getLastLogId());
+    EXPECT_EQ(2U, log.getLastLogIndex());
     log.truncate(1);
-    EXPECT_EQ(1U, log.getLastLogId());
+    EXPECT_EQ(1U, log.getLastLogIndex());
     log.truncate(0);
-    EXPECT_EQ(0U, log.getLastLogId());
+    EXPECT_EQ(0U, log.getLastLogIndex());
 }
 
 #if 0

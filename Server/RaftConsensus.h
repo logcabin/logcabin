@@ -128,13 +128,13 @@ class Server {
     /**
      * Return the largest entry ID for which this Server is known to share the
      * same entries up to and including this entry with our log.
-     * This is used for advancing the leader's committedId.
+     * This is used for advancing the leader's commitIndex.
      * Monotonically increases within a term.
      *
      * \warning
      *      Only valid when we're leader.
      */
-    virtual uint64_t getLastAgreeId() const = 0;
+    virtual uint64_t getLastAgreeIndex() const = 0;
     /**
      * Return true if this Server has awarded us its vote for this term.
      */
@@ -195,7 +195,7 @@ class LocalServer : public Server {
     void exit();
     void beginRequestVote();
     void beginLeadership();
-    uint64_t getLastAgreeId() const;
+    uint64_t getLastAgreeIndex() const;
     bool haveVote() const;
     uint64_t getLastAckEpoch() const;
     void interrupt();
@@ -208,7 +208,7 @@ class LocalServer : public Server {
 /**
  * Represents another server in the cluster. One of these exists for each other
  * server. In addition to tracking state for each other server, this class
- * provides a thread that executes RaftConsensus::followerThreadMain().
+ * provides a thread that executes RaftConsensus::peerThreadMain().
  *
  * This class has no internal locking: in general, the RaftConsensus lock
  * should be held when accessing this class, but there are some exceptions
@@ -231,7 +231,7 @@ class Peer : public Server {
     void beginLeadership();
     void exit();
     uint64_t getLastAckEpoch() const;
-    uint64_t getLastAgreeId() const;
+    uint64_t getLastAgreeIndex() const;
     bool haveVote() const;
     bool isCaughtUp() const;
     void interrupt();
@@ -262,7 +262,7 @@ class Peer : public Server {
 
     /**
      * Launch this Peer's thread, which should run
-     * RaftConsensus::followerThreadMain.
+     * RaftConsensus::peerThreadMain.
      * \param self
      *      A shared_ptr to this object, which the detached thread uses to make
      *      sure this object doesn't go away.
@@ -311,7 +311,7 @@ class Peer : public Server {
     bool haveVote_;
 
     /**
-     * Indicates that nextSendId is still a (poor) guess: the leader should
+     * Indicates that nextIndex is still a (poor) guess: the leader should
      * send heartbeats to save bandwidth until it finds where the follower's
      * log diverges from its own. Only used when leader.
      */
@@ -321,12 +321,12 @@ class Peer : public Server {
      * The index of the next entry to send to the follower. Only used when
      * leader.
      */
-    uint64_t nextSendId;
+    uint64_t nextIndex;
 
     /**
-     * See #getLastAgreeId().
+     * See #getLastAgreeIndex().
      */
-    uint64_t lastAgreeId;
+    uint64_t lastAgreeIndex;
 
     /**
      * See #getLastAckEpoch().
@@ -650,14 +650,15 @@ class RaftConsensus : public Consensus {
     Consensus::Entry getNextEntry(uint64_t lastEntryId) const;
 
     /**
-     * Process an AppendEntry RPC from another server. Called by RaftService.
+     * Process an AppendEntries RPC from another server. Called by RaftService.
      * \param[in] request
      *      The request that was received from the other server.
      * \param[out] response
      *      Where the reply should be placed.
      */
-    void handleAppendEntry(const Protocol::Raft::AppendEntry::Request& request,
-                           Protocol::Raft::AppendEntry::Response& response);
+    void handleAppendEntries(
+                const Protocol::Raft::AppendEntries::Request& request,
+                Protocol::Raft::AppendEntries::Response& response);
 
     /**
      * Process a RequestVote RPC from another server. Called by RaftService.
@@ -718,7 +719,7 @@ class RaftConsensus : public Consensus {
         CANDIDATE,
 
         /**
-         * A leader sends AppendEntry RPCs to replicate its log onto followers.
+         * A leader sends AppendEntries RPCs to replicate its log onto followers.
          * It also sends heartbeats periodically during periods of inactivity
          * to delay its followers from becoming candidates. It steps down to be
          * a follower if it discovers a server with a higher term, if it can't
@@ -733,17 +734,15 @@ class RaftConsensus : public Consensus {
 
     /**
      * Start new elections when it's time to do so. This is the method that
-     * #candidacyThread executes.
-     * TODO(ongaro): rename to timerThreadMain?
+     * #timerThread executes.
      */
-    void candidacyThreadMain();
+    void timerThreadMain();
 
     /**
      * Initiate RPCs to a specific server as necessary.
      * One thread for each remote server calls this method (see Peer::thread).
-     * TODO(ongaro): rename to peerThreadMain.
      */
-    void followerThreadMain(std::shared_ptr<Peer> peer);
+    void peerThreadMain(std::shared_ptr<Peer> peer);
 
     /**
      * Return to follower state when, as leader, this server is not able to
@@ -761,13 +760,13 @@ class RaftConsensus : public Consensus {
 
 
     /**
-     * Move forward #committedId if possible. Called only on leaders after
-     * receiving RPC responses. If committedId changes, this will notify
+     * Move forward #commitIndex if possible. Called only on leaders after
+     * receiving RPC responses. If commitIndex changes, this will notify
      * #stateChanged. It will also change the configuration or step down due to
      * a configuration change when appropriate.
      *
-     * #committedId can jump by more than 1 on new leaders, since their
-     * #committedId may be well out of date until they figure out which log
+     * #commitIndex can jump by more than 1 on new leaders, since their
+     * #commitIndex may be well out of date until they figure out which log
      * entries their followers have.
      *
      * \pre
@@ -786,7 +785,7 @@ class RaftConsensus : public Consensus {
     uint64_t append(const Log::Entry& entry);
 
     /**
-     * Send an AppendEntry RPC to the server (either a heartbeat or containing
+     * Send an AppendEntries RPC to the server (either a heartbeat or containing
      * an entry to replicate).
      * \param lockGuard
      *      Used to temporarily release the lock while invoking the RPC, so as
@@ -795,7 +794,7 @@ class RaftConsensus : public Consensus {
      *      State used in communicating with the follower, building the RPC
      *      request, and processing its result.
      */
-    void appendEntry(std::unique_lock<Mutex>& lockGuard, Peer& peer);
+    void appendEntries(std::unique_lock<Mutex>& lockGuard, Peer& peer);
 
     /**
      * Transition to being a leader. This is called when a candidate has
@@ -932,7 +931,7 @@ class RaftConsensus : public Consensus {
      *  - term changes.
      *  - state changes.
      *  - log changes.
-     *  - committedId changes.
+     *  - commitIndex changes.
      *  - exiting is set.
      *  - numPeerThreads is decremented.
      *  - configuration changes.
@@ -987,11 +986,11 @@ class RaftConsensus : public Consensus {
 
     /**
      * The largest entry ID for which a quorum is known to have stored the same
-     * entry as this server has. Entries 1 through committedId as stored in
+     * entry as this server has. Entries 1 through commitIndex as stored in
      * this server's log are guaranteed to never change. This value will
      * monotonically increase over time.
      */
-    uint64_t committedId;
+    uint64_t commitIndex;
 
     /**
      * The server ID of the leader for this term. This is used to help point
@@ -1017,12 +1016,12 @@ class RaftConsensus : public Consensus {
     mutable uint64_t currentEpoch;
 
     /**
-     * The earliest time at which #candidacyThread should begin a new election
+     * The earliest time at which #timerThread should begin a new election
      * with startNewElection().
      *
      * It is safe for increases to startElectionAt to not notify the condition
      * variable. Decreases to this value, however, must notify the condition
-     * variable to make sure the candidacyThread gets woken in a timely manner.
+     * variable to make sure the timerThread gets woken in a timely manner.
      * Unfortunately, startElectionAt does not monotonically increase because
      * of the random jitter that is applied to the follower timeout, and it
      * would reduce the jitter's effectiveness for the thread to wait as long
@@ -1031,10 +1030,10 @@ class RaftConsensus : public Consensus {
     TimePoint startElectionAt;
 
     /**
-     * The thread that executes candidacyThreadMain() to begin new elections
+     * The thread that executes timerThreadMain() to begin new elections
      * after periods of inactivity.
      */
-    std::thread candidacyThread;
+    std::thread timerThread;
 
     /**
      * The thread that executes stepDownThreadMain() to return to the follower
