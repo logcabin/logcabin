@@ -120,12 +120,17 @@ TEST(RPCAddressTest, refresh) {
         << "any address";
 
     // IPv6
+    const char* disclaimer = "Failure of this test is normal if no external "
+                             "network interface has an IPv6 address set.";
     EXPECT_EQ("[1:2:3:4:5:6:7:8]:80",
-              Address("[1:2:3:4:5:6:7:8]", 80).getResolvedString());
+              Address("[1:2:3:4:5:6:7:8]", 80).getResolvedString())
+              << "random IPv6 address. " << disclaimer;
     EXPECT_EQ("[::1]:80",
-              Address("[::1]", 80).getResolvedString()) << "localhost";
+              Address("[::1]", 80).getResolvedString())
+              << "localhost. " << disclaimer;
     EXPECT_EQ("[::]:80",
-              Address("[::]", 80).getResolvedString()) << "any address";
+              Address("[::]", 80).getResolvedString())
+              << "any address. " << disclaimer;
 }
 
 } // namespace LogCabin::RPC::<anonymous>
