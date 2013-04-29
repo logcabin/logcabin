@@ -9,6 +9,7 @@ src = [
     "Consensus.cc",
     "Globals.cc",
     "SimpleFileLog.cc",
+    "SnapshotFile.cc",
     "StateMachine.cc",
 ]
 object_files['Server'] = (env.StaticObject(src) +
