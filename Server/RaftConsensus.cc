@@ -457,7 +457,7 @@ Configuration::setConfiguration(
         const Protocol::Raft::Configuration& newDescription)
 {
     NOTICE("Activating configuration %lu:\n%s", newId,
-           Core::ProtoBuf::dumpString(newDescription, false).c_str());
+           Core::ProtoBuf::dumpString(newDescription).c_str());
 
     if (newDescription.next_configuration().servers().size() == 0)
         state = State::STABLE;
@@ -564,7 +564,7 @@ operator<<(std::ostream& os, const Configuration& configuration)
     os << "  state: " << configuration.state << std::endl;
     os << "  id: " << configuration.id << std::endl;
     os << "  description: " << std::endl;
-    os << Core::ProtoBuf::dumpString(configuration.description, false);
+    os << Core::ProtoBuf::dumpString(configuration.description);
     os << "}" << std::endl;
     for (auto it = configuration.knownServers.begin();
          it != configuration.knownServers.end();

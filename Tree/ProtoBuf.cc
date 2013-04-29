@@ -47,7 +47,7 @@ readOnlyTreeRPC(const Tree& tree,
         response.mutable_read()->set_contents(contents);
     } else {
         PANIC("Unexpected request: %s",
-              Core::ProtoBuf::dumpString(request, false).c_str());
+              Core::ProtoBuf::dumpString(request).c_str());
     }
     response.set_status(static_cast<PC::Status>(result.status));
     if (result.status != Status::OK)
@@ -77,7 +77,7 @@ readWriteTreeRPC(Tree& tree,
         result = tree.removeFile(request.remove_file().path());
     } else {
         PANIC("Unexpected request: %s",
-              Core::ProtoBuf::dumpString(request, false).c_str());
+              Core::ProtoBuf::dumpString(request).c_str());
     }
     response.set_status(static_cast<PC::Status>(result.status));
     if (result.status != Status::OK)

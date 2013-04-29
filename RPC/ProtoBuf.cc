@@ -55,7 +55,7 @@ parse(const RPC::Buffer& from,
     }
     VERBOSE("%s:\n%s",
             to.GetTypeName().c_str(),
-            truncateEnd(Core::ProtoBuf::dumpString(to)).c_str());
+            truncateEnd(Core::ProtoBuf::dumpString(to, true)).c_str());
     return true;
 }
 

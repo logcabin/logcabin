@@ -60,7 +60,7 @@ LeaderRPCMock::call(OpCode opCode,
     ASSERT_LT(0U, responseQueue.size())
         << "The client sent an unexpected RPC:\n"
         << request.GetTypeName() << ":\n"
-        << Core::ProtoBuf::dumpString(request, false);
+        << Core::ProtoBuf::dumpString(request);
     auto& opCodeMsgPair = responseQueue.front();
     EXPECT_EQ(opCode, opCodeMsgPair.first);
     response.CopyFrom(*opCodeMsgPair.second);

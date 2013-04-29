@@ -89,7 +89,7 @@ protoToFile(const google::protobuf::Message& in,
     data = contents.getData();
     len = contents.getLenhgt();
 #else
-    std::string contents(Core::ProtoBuf::dumpString(in, false));
+    std::string contents(Core::ProtoBuf::dumpString(in));
     contents = "\n" + contents;
     data = contents.data();
     len = uint32_t(contents.length());

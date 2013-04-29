@@ -92,18 +92,18 @@ fromString(const std::string& str)
  *      if you haven't filled in all required fields, but the generated string
  *      will not be directly parse-able.
  * \param forCopyingIntoTest
- *      If set to true (default), this will return a string in a format most
- *      useful for writing unit tests. You can basically copy and paste this
- *      from your terminal into your test file without manual processing. If
- *      set to false, the output will be nicer to read but harder to copy into
- *      a test file.
+ *      If set to true, this will return a string in a format most useful for
+ *      writing unit tests. You can basically copy and paste this from your
+ *      terminal into your test file without manual processing. If set to false
+ *      (default), the output will be nicer to read but harder to copy into a
+ *      test file.
  * \return
  *      Textual representation. This will be printable ASCII; binary will be
  *      escaped.
  */
 std::string
 dumpString(const google::protobuf::Message& protoBuf,
-           bool forCopyingIntoTest = true);
+           bool forCopyingIntoTest = false);
 
 /**
  * Copy the contents of a protocol buffer into a new one.

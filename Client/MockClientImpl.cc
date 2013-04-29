@@ -56,7 +56,7 @@ class TreeLeaderRPC : public LeaderRPCBase {
         } else {
             PANIC("Unexpected request: %d %s",
                   opCode,
-                  Core::ProtoBuf::dumpString(request, false).c_str());
+                  Core::ProtoBuf::dumpString(request).c_str());
         }
     }
     std::mutex mutex; ///< prevents concurrent access to 'tree'

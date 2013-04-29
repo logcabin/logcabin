@@ -128,7 +128,7 @@ std::pair<Result, uint64_t>
 ClientService::submit(RPC::ServerRPC& rpc,
                       const google::protobuf::Message& command)
 {
-    std::string cmdStr = Core::ProtoBuf::dumpString(command, false);
+    std::string cmdStr = Core::ProtoBuf::dumpString(command);
     std::pair<Result, uint64_t> result = globals.raft->replicate(cmdStr);
     if (result.first == Result::RETRY || result.first == Result::NOT_LEADER) {
         Protocol::Client::Error error;

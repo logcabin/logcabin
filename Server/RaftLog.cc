@@ -89,10 +89,10 @@ std::ostream&
 operator<<(std::ostream& os, const Log& log)
 {
     os << "Log:" << std::endl;
-    os << "metadata: " << Core::ProtoBuf::dumpString(log.metadata, false);
+    os << "metadata: " << Core::ProtoBuf::dumpString(log.metadata);
     for (uint64_t i = 0; i < log.entries.size(); ++i) {
         os << "Entry " << (i + 1) << ": "
-           << Core::ProtoBuf::dumpString(log.entries[i], false);
+           << Core::ProtoBuf::dumpString(log.entries[i]);
     }
     os << std::endl;
     return os;

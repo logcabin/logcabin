@@ -83,7 +83,7 @@ RaftService::appendEntries(RPC::ServerRPC rpc)
 {
     PRELUDE(AppendEntries);
     //VERBOSE("AppendEntries:\n%s",
-    //        Core::ProtoBuf::dumpString(request, false).c_str());
+    //        Core::ProtoBuf::dumpString(request).c_str());
     globals.raft->handleAppendEntries(request, response);
     rpc.reply(response);
 }
@@ -93,7 +93,7 @@ RaftService::requestVote(RPC::ServerRPC rpc)
 {
     PRELUDE(RequestVote);
     //VERBOSE("RequestVote:\n%s",
-    //        Core::ProtoBuf::dumpString(request, false).c_str());
+    //        Core::ProtoBuf::dumpString(request).c_str());
     globals.raft->handleRequestVote(request, response);
     rpc.reply(response);
 }
