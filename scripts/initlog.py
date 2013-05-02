@@ -66,7 +66,8 @@ if __name__ == '__main__':
 
     metadata = """
 version: 1
-entries: 1
+entries_start: 1
+entries_end: 1
 raft_metadata: {
     current_term: 1
     voted_for: 1

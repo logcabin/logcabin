@@ -24,5 +24,6 @@ import "build/Server/RaftLogMetadata.proto";
 message Metadata {
     required uint64 version = 1;
     required RaftLogMetadata.Metadata raft_metadata = 2;
-    repeated uint64 entries = 3;
+    required uint64 entries_start = 3; // inclusive
+    required uint64 entries_end = 4; // inclusive
 }

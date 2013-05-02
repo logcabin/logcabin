@@ -818,7 +818,7 @@ RaftConsensus::handleAppendEntries(
             // only 1 term
             NOTICE("Truncating %lu entries",
                    log->getLastLogIndex() - entryId + 1);
-            log->truncate(entryId - 1);
+            log->truncateSuffix(entryId - 1);
             if (configuration->id >= entryId) {
                 // truncate can affect current configuration
                 scanForConfiguration();

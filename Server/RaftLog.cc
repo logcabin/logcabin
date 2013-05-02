@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 Stanford University
+/* Copyright (c) 2012-2013 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -34,6 +34,7 @@ namespace RaftConsensusInternal {
 
 Log::Log()
     : metadata()
+    , startId(1)
     , entries()
 {
 }
@@ -45,39 +46,64 @@ Log::~Log()
 uint64_t
 Log::append(const Entry& entry)
 {
+    uint64_t entryId = startId + entries.size();
     entries.push_back(entry);
-    uint64_t entryId = entries.size();
     return entryId;
 }
 
 const Log::Entry&
 Log::getEntry(uint64_t entryId) const
 {
-    uint64_t index = entryId - 1;
+    uint64_t index = entryId - startId;
     return entries.at(index);
 }
 
 uint64_t
+Log::getLogStartIndex() const
+{
+    return startId;
+}
+
+
+uint64_t
 Log::getLastLogIndex() const
 {
-    return entries.size();
+    return startId + entries.size() - 1;
 }
 
 
 uint64_t
 Log::getTerm(uint64_t entryId) const
 {
-    uint64_t index = entryId - 1; // may roll over to ~0UL
+    if (entryId < startId)
+        return 0;
+    uint64_t index = entryId - startId;
     if (index >= entries.size())
         return 0;
     return entries.at(index).term();
 }
 
 void
-Log::truncate(uint64_t lastEntryId)
+Log::truncatePrefix(uint64_t firstEntryId)
 {
-    if (lastEntryId < entries.size())
-        entries.resize(lastEntryId);
+    if (firstEntryId > startId) {
+        // Erase log IDs in range [startId, firstEntryId), so deque indexes in
+        // range [0, firstEntryId - startId). Be careful not to erase past the
+        // end of the deque (STL doesn't check for this).
+        entries.erase(entries.begin(),
+                      entries.begin() + std::min(firstEntryId - startId,
+                                                 entries.size()));
+        startId = firstEntryId;
+    }
+}
+
+void
+Log::truncateSuffix(uint64_t lastEntryId)
+{
+    if (lastEntryId < startId)
+        entries.clear();
+    else if (lastEntryId < startId - 1 + entries.size())
+        entries.resize(lastEntryId - startId + 1);
 }
 
 void
@@ -90,9 +116,10 @@ operator<<(std::ostream& os, const Log& log)
 {
     os << "Log:" << std::endl;
     os << "metadata: " << Core::ProtoBuf::dumpString(log.metadata);
+    os << "startIndex: " << log.startId << std::endl;
     for (uint64_t i = 0; i < log.entries.size(); ++i) {
-        os << "Entry " << (i + 1) << ": "
-           << Core::ProtoBuf::dumpString(log.entries[i]);
+        os << "Entry " << (log.startId + i) << ": "
+           << Core::ProtoBuf::dumpString(log.entries.at(i));
     }
     os << std::endl;
     return os;

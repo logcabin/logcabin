@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 Stanford University
+/* Copyright (c) 2012-2013 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -125,10 +125,9 @@ SimpleFileLog::readMetadata(const std::string& filename,
     std::string error = fileToProto(dir, filename, metadata);
     if (!error.empty())
         return error;
-    for (auto it = metadata.entries().begin();
-         it != metadata.entries().end();
-         ++it) {
-        uint64_t entryId = *it;
+    for (uint64_t entryId = metadata.entries_start();
+         entryId <= metadata.entries_end();
+         ++entryId) {
         Protocol::Raft::Entry entry;
         error = fileToProto(dir, format("%016lx", entryId), entry);
         if (!error.empty()) {
@@ -167,15 +166,15 @@ SimpleFileLog::SimpleFileLog(const std::string& path)
             PANIC("No readable metadata file but found entries in %s",
                   dir.path.c_str());
         }
+        metadata.set_entries_start(1);
+        metadata.set_entries_end(0);
     }
-    std::vector<uint64_t> entryIds(metadata.entries().begin(),
-                                   metadata.entries().end());
-    std::sort(fsEntryIds.begin(), fsEntryIds.end());
-    std::sort(entryIds.begin(), entryIds.end());
+
     std::vector<uint64_t> found;
-    std::set_difference(fsEntryIds.begin(), fsEntryIds.end(),
-                        entryIds.begin(), entryIds.end(),
-                        std::inserter(found, found.begin()));
+    for (auto it = fsEntryIds.begin(); it != fsEntryIds.end(); ++it) {
+        if (*it < metadata.entries_start() || *it > metadata.entries_end())
+            found.push_back(*it);
+    }
 
     std::string time;
     {
@@ -196,9 +195,12 @@ SimpleFileLog::SimpleFileLog(const std::string& path)
         FilesystemUtil::fsync(dir);
     }
 
-    for (auto it = entryIds.begin(); it != entryIds.end(); ++it) {
-        uint64_t entryId = Log::append(read(format("%016lx", *it)));
-        assert(entryId == *it);
+    Log::truncatePrefix(metadata.entries_start());
+    for (uint64_t id = metadata.entries_start();
+         id <= metadata.entries_end();
+         ++id) {
+        uint64_t entryId = Log::append(read(format("%016lx", id)));
+        assert(entryId == id);
     }
 
     Log::metadata = metadata.raft_metadata();
@@ -221,12 +223,25 @@ SimpleFileLog::append(const Entry& entry)
 }
 
 void
-SimpleFileLog::truncate(uint64_t lastEntryId)
+SimpleFileLog::truncatePrefix(uint64_t firstEntryId)
 {
+    uint64_t old = getLogStartIndex();
+    Log::truncatePrefix(firstEntryId);
     // update metadata before removing files in case of interruption
-    Log::truncate(lastEntryId);
     updateMetadata();
-    for (auto entryId = getLastLogIndex(); entryId > lastEntryId; --entryId)
+    for (uint64_t entryId = old; entryId < getLogStartIndex(); ++entryId)
+        FilesystemUtil::removeFile(dir, format("%016lx", entryId));
+    // fsync(dir) not needed because of metadata
+}
+
+void
+SimpleFileLog::truncateSuffix(uint64_t lastEntryId)
+{
+    uint64_t old = getLastLogIndex();
+    Log::truncateSuffix(lastEntryId);
+    // update metadata before removing files in case of interruption
+    updateMetadata();
+    for (uint64_t entryId = old; entryId > getLastLogIndex(); --entryId)
         FilesystemUtil::removeFile(dir, format("%016lx", entryId));
     // fsync(dir) not needed because of metadata
 }
@@ -236,9 +251,8 @@ SimpleFileLog::updateMetadata()
 {
     Log::updateMetadata();
     *metadata.mutable_raft_metadata() = Log::metadata;
-    metadata.mutable_entries()->Clear();
-    for (uint64_t entryId = 1; entryId <= Log::entries.size(); ++entryId)
-        metadata.add_entries(entryId);
+    metadata.set_entries_start(Log::getLogStartIndex());
+    metadata.set_entries_end(Log::getLastLogIndex());
     metadata.set_version(metadata.version() + 1);
     if (metadata.version() % 2 == 1) {
         protoToFile(metadata, dir, "metadata1");

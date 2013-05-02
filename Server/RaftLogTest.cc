@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 Stanford University
+/* Copyright (c) 2012-2013 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -23,6 +23,10 @@ namespace {
 
 using namespace RaftConsensusInternal; // NOLINT
 
+// One thing to keep in mind for these tests is truncatePrefix. Calling that
+// basically affects every other method, so every test should include
+// a call to truncatePrefix.
+
 class ServerRaftLogTest : public ::testing::Test {
     ServerRaftLogTest()
         : log()
@@ -43,6 +47,13 @@ TEST_F(ServerRaftLogTest, basic)
     EXPECT_EQ("foo", entry.data());
 }
 
+TEST_F(ServerRaftLogTest, append)
+{
+    EXPECT_EQ(1U, log.append(sampleEntry));
+    log.truncatePrefix(10);
+    EXPECT_EQ(10U, log.append(sampleEntry));
+}
+
 TEST_F(ServerRaftLogTest, getEntry)
 {
     Log::Entry entry = log.getEntry(log.append(sampleEntry));
@@ -50,6 +61,21 @@ TEST_F(ServerRaftLogTest, getEntry)
     EXPECT_EQ("foo", entry.data());
     EXPECT_THROW(log.getEntry(0), std::out_of_range);
     EXPECT_THROW(log.getEntry(2), std::out_of_range);
+
+    sampleEntry.set_data("bar");
+    log.append(sampleEntry);
+    log.truncatePrefix(2);
+    EXPECT_THROW(log.getEntry(1), std::out_of_range);
+    Log::Entry entry2 = log.getEntry(log.append(sampleEntry));
+    EXPECT_EQ("bar", entry2.data());
+}
+
+TEST_F(ServerRaftLogTest, getLogStartIndex)
+{
+    EXPECT_EQ(1U, log.getLogStartIndex());
+    log.truncatePrefix(200);
+    log.truncatePrefix(100);
+    EXPECT_EQ(200U, log.getLogStartIndex());
 }
 
 TEST_F(ServerRaftLogTest, getLastLogIndex)
@@ -57,6 +83,9 @@ TEST_F(ServerRaftLogTest, getLastLogIndex)
     EXPECT_EQ(0U, log.getLastLogIndex());
     log.append(sampleEntry);
     log.append(sampleEntry);
+    EXPECT_EQ(2U, log.getLastLogIndex());
+
+    log.truncatePrefix(2);
     EXPECT_EQ(2U, log.getLastLogIndex());
 }
 
@@ -67,40 +96,84 @@ TEST_F(ServerRaftLogTest, getTerm)
     EXPECT_EQ(0U, log.getTerm(1000));
     log.append(sampleEntry);
     EXPECT_EQ(40U, log.getTerm(1));
+
+    log.append(sampleEntry);
+    log.truncatePrefix(2);
+    EXPECT_EQ(0U, log.getTerm(0));
+    EXPECT_EQ(0U, log.getTerm(1));
+    EXPECT_EQ(40U, log.getTerm(2));
+    EXPECT_EQ(0U, log.getTerm(3));
 }
 
-
-TEST_F(ServerRaftLogTest, truncate)
+TEST_F(ServerRaftLogTest, truncatePrefix)
 {
-    log.truncate(0);
-    log.truncate(10);
+    EXPECT_EQ(1U, log.startId);
+    log.truncatePrefix(0);
+    EXPECT_EQ(1U, log.startId);
+    log.truncatePrefix(1);
+    EXPECT_EQ(1U, log.startId);
+
+    // case 1: entries is empty
+    log.truncatePrefix(500);
+    EXPECT_EQ(500U, log.startId);
+    EXPECT_EQ(0U, log.entries.size());
+
+    // case 2: entries has fewer elements than truncated
+    log.append(sampleEntry);
+    log.truncatePrefix(502);
+    EXPECT_EQ(502U, log.startId);
+    EXPECT_EQ(0U, log.entries.size());
+
+    // case 3: entries has exactly the elements truncated
+    log.append(sampleEntry);
+    log.append(sampleEntry);
+    log.truncatePrefix(504);
+    EXPECT_EQ(504U, log.startId);
+    EXPECT_EQ(0U, log.entries.size());
+
+    // case 4: entries has more elements than truncated
+    log.append(sampleEntry);
+    log.append(sampleEntry);
+    sampleEntry.set_data("bar");
+    log.append(sampleEntry);
+    log.truncatePrefix(506);
+    EXPECT_EQ(506U, log.startId);
+    EXPECT_EQ(1U, log.entries.size());
+    EXPECT_EQ("bar", log.entries.at(0).data());
+
+    // make sure truncating to an earlier id has no effect
+    EXPECT_EQ(1U, log.entries.size());
+    log.truncatePrefix(400);
+    EXPECT_EQ(506U, log.startId);
+}
+
+TEST_F(ServerRaftLogTest, truncateSuffix)
+{
+    log.truncateSuffix(0);
+    log.truncateSuffix(10);
     EXPECT_EQ(0U, log.getLastLogIndex());
     log.append(sampleEntry);
     log.append(sampleEntry);
-    log.truncate(10);
+    log.truncateSuffix(10);
     EXPECT_EQ(2U, log.getLastLogIndex());
-    log.truncate(2);
+    log.truncateSuffix(2);
     EXPECT_EQ(2U, log.getLastLogIndex());
-    log.truncate(1);
+    log.truncateSuffix(1);
     EXPECT_EQ(1U, log.getLastLogIndex());
-    log.truncate(0);
+    log.truncateSuffix(0);
     EXPECT_EQ(0U, log.getLastLogIndex());
-}
 
-#if 0
-TEST_F(ServerRaftLogTest, init)
-{
-    Log::Entry c;
-    c.term = 0;
-    c.type = Protocol::Raft::EntryType::CONFIGURATION;
-    auto* s = c.configuration.mutable_prev_configuration()->add_servers();
-    s->set_server_id(1);
-    s->set_address("localhost:61023");
-    log.path = "/tmp/c";
-    log.append(c);
-    log.read("/tmp/c/00000001");
+
+    log.truncatePrefix(10);
+    log.append(sampleEntry);
+    EXPECT_EQ(10U, log.getLastLogIndex());
+    log.truncateSuffix(10);
+    EXPECT_EQ(10U, log.getLastLogIndex());
+    log.truncateSuffix(8);
+    EXPECT_EQ(9U, log.getLastLogIndex());
+    log.append(sampleEntry);
+    EXPECT_EQ(10U, log.getLastLogIndex());
 }
-#endif
 
 } // namespace LogCabin::Server::<anonymous>
 } // namespace LogCabin::Server
