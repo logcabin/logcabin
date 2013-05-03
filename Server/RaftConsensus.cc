@@ -33,6 +33,7 @@
 #include "Server/RaftConsensus.h"
 #include "Server/Globals.h"
 #include "Server/SimpleFileLog.h"
+#include "Server/SnapshotFile.h"
 #include "Server/StateMachine.h"
 
 namespace LogCabin {
@@ -971,6 +972,25 @@ RaftConsensus::setConfiguration(
             return ClientResult::NOT_LEADER;
         stateChanged.wait(lockGuard);
     }
+}
+
+// TODO(ongaro): add unit test once this gets some meat to it
+std::unique_ptr<SnapshotFile::Writer>
+RaftConsensus::beginSnapshot(uint64_t lastIncludedIndex)
+{
+    std::unique_lock<Mutex> lockGuard(mutex);
+    std::unique_ptr<SnapshotFile::Writer> writer(
+                new SnapshotFile::Writer(
+                        Core::StringUtil::format("snapshot.%lu", serverId)));
+    // TODO(ongaro): need to write the configuration as of lastIncludedIndex
+    // before returning
+    return writer;
+}
+
+void
+RaftConsensus::snapshotDone(uint64_t lastIncludedIndex)
+{
+    // TODO(ongaro): reclaim space from log here once it's safe to do so
 }
 
 std::ostream&

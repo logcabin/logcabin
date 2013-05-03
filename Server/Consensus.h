@@ -14,15 +14,21 @@
  */
 
 #include <cinttypes>
+#include <memory>
 #include <stdexcept>
 #include <string>
-#include <vector>
 
 #ifndef LOGCABIN_SERVER_CONSENSUS_H
 #define LOGCABIN_SERVER_CONSENSUS_H
 
 namespace LogCabin {
 namespace Server {
+
+// forward declaration
+namespace SnapshotFile {
+class Writer;
+}
+
 
 // TODO(ongaro): move this
 class ThreadInterruptedException : std::runtime_error {
@@ -60,6 +66,29 @@ class Consensus {
      * \throw ThreadInterruptedException
      */
     virtual Entry getNextEntry(uint64_t lastEntryId) const = 0;
+
+    /**
+     * Start taking a snapshot. Called by the state machine when it wants to
+     * take a snapshot.
+     * \param lastIncludedIndex
+     *      The snapshot will cover log entries in the range
+     *      [1, lastIncludedIndex].
+     * \return
+     *      A file the state machine can dump its snapshot into.
+     */
+    virtual std::unique_ptr<SnapshotFile::Writer>
+    beginSnapshot(uint64_t lastIncludedIndex) = 0;
+
+    /**
+     * Complete taking a snapshot for the log entries in range [1,
+     * lastIncludedIndex]. Called by the state machine when it is done taking a
+     * snapshot.
+     * \param lastIncludedIndex
+     *      The snapshot will cover log entries in the range
+     *      [1, lastIncludedIndex].
+     */
+    virtual void
+    snapshotDone(uint64_t lastIncludedIndex) = 0;
 
     uint64_t serverId;
 };

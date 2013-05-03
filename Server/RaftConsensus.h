@@ -45,6 +45,7 @@ namespace Server {
 // forward declaration
 class Globals;
 
+
 namespace RaftConsensusInternal {
 
 // forward declaration
@@ -691,6 +692,13 @@ class RaftConsensus : public Consensus {
     setConfiguration(
             uint64_t id,
             const Protocol::Raft::SimpleConfiguration& newConfiguration);
+
+    // See Consensus::beginSnapshot().
+    std::unique_ptr<SnapshotFile::Writer>
+    beginSnapshot(uint64_t lastIncludedIndex);
+
+    // See Consensus::snapshotDone().
+    void snapshotDone(uint64_t lastIncludedIndex);
 
     /**
      * Print out the contents of this class for debugging purposes.

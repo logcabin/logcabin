@@ -18,6 +18,7 @@
 #include "Core/ThreadId.h"
 #include "RPC/ProtoBuf.h"
 #include "Server/Consensus.h"
+#include "Server/SnapshotFile.h"
 #include "Server/StateMachine.h"
 #include "Tree/ProtoBuf.h"
 
@@ -143,6 +144,14 @@ StateMachine::threadMain()
                 advance(entry.entryId, entry.data);
             lastEntryId = entry.entryId;
             cond.notify_all();
+
+            // Take a snapshot.
+            // TODO(ongaro): snapshotting after every log entry is unreasonable
+            // TODO(ongaro): snapshotting synchronously is unreasonable
+            std::unique_ptr<SnapshotFile::Writer> writer =
+                consensus->beginSnapshot(lastEntryId);
+            tree.dumpSnapshot(writer->getStream());
+            consensus->snapshotDone(lastEntryId);
         }
     } catch (const ThreadInterruptedException& e) {
         VERBOSE("exiting");
