@@ -16,6 +16,7 @@
 #include <google/protobuf/io/coded_stream.h>
 #include <google/protobuf/io/zero_copy_stream_impl.h>
 #include <memory>
+#include <stdexcept>
 #include <string>
 
 #include "Storage/FilesystemUtil.h"
@@ -36,7 +37,8 @@ class Reader {
      * Constructor.
      * \param filename
      *      The name of the snapshot file to read.
-     * TODO(ongaro): what if filename can't be read?
+     * \throw std::runtime_error
+     *      If the file can't be found.
      */
     explicit Reader(const std::string& filename);
     /// Destructor.

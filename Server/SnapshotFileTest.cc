@@ -37,6 +37,12 @@ TEST(ServerSnapshotFile, basic)
     }
 }
 
+TEST(ServerSnapshotFile, reader_fileNotFound)
+{
+    EXPECT_THROW(Reader("ireallyhopeyoudonthaveafilebythisname"),
+                 std::runtime_error);
+}
+
 } // namespace LogCabin::Server::SnapshotFile::<anonymous>
 } // namespace LogCabin::Server::SnapshotFile
 } // namespace LogCabin::Server

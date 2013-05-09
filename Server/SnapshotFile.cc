@@ -16,6 +16,9 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+
+#include "Core/Debug.h"
+#include "Core/StringUtil.h"
 #include "Server/SnapshotFile.h"
 
 namespace LogCabin {
@@ -30,7 +33,12 @@ Reader::Reader(const std::string& filename)
     , codedStream()
 {
     FilesystemUtil::File parentDir = FilesystemUtil::openDir(".");
-    file = FilesystemUtil::openFile(parentDir, filename, O_RDONLY);
+    file = FilesystemUtil::tryOpenFile(parentDir, filename, O_RDONLY);
+    if (file.fd < 0) {
+        throw std::runtime_error(
+                Core::StringUtil::format("Snapshot file '%s' not found",
+                                         filename.c_str()));
+    }
     fileStream.reset(new google::protobuf::io::FileInputStream(file.fd));
     codedStream.reset(
             new google::protobuf::io::CodedInputStream(fileStream.get()));
