@@ -22,6 +22,7 @@ to the desired size.
 
 from __future__ import print_function
 from optparse import OptionParser
+import glob
 import os
 import sha
 import sys
@@ -53,6 +54,10 @@ if __name__ == '__main__':
     address = options.address
     if address is None:
         options_error('address not specified')
+
+    if (glob.glob('log/*/*') or glob.glob('snapshot.*')):
+        print('Error: log or snapshot found, exiting', file=sys.stderr)
+        sys.exit(1)
 
     print('Creating directory: log/%d' % server_id)
     os.mkdir('log')

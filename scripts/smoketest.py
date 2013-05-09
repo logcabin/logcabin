@@ -32,6 +32,7 @@ def run(num_servers = None, # default 5
 
     with Sandbox() as sandbox:
         sh('rm -rf log')
+        sh('rm -f snapshot.*')
         sh('rm -f debug/*')
         sh('scripts/initlog.py --serverid 1 --address %s' % smokehosts[0][0])
 
