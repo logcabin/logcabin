@@ -1,7 +1,3 @@
 #!/bin/sh
-scripts/smoketest.py >/dev/null
-status=$?
-if [ $status -ne 0 ]; then
-    echo "Smoke test with real servers exited with status $status"
-fi
-exit $status
+set -e
+scripts/smoketest.py

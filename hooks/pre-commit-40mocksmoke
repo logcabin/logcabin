@@ -1,7 +1,3 @@
 #!/bin/sh
-build/Examples/SmokeTest --mock >/dev/null
-status=$?
-if [ $status -ne 0 ]; then
-    echo "Smoke test with mock client library exited with status $status"
-fi
-exit $status
+set -e
+build/Examples/SmokeTest --mock

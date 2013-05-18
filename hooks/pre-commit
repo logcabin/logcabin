@@ -1,9 +1,17 @@
 #!/bin/sh
 fail=0
+
+# 'chronic' only displays output in case of a non-zero exit status. It comes
+# from the 'moreutils' package, so it's not always available.
+chronic=$( which chronic )
+if [ $? -ne 0 ]; then
+    chronic=
+fi
+
 for hook in hooks/pre-commit-*; do
     if [ -x $hook ]; then
         echo "Running $hook..."
-        $hook
+        $chronic $hook
         status=$?
         if [ $status -ne 0 ]; then
             echo "$hook failed with status $status"
