@@ -26,6 +26,7 @@
 #include "RPC/ClientRPC.h"
 #include "Server/RaftLog.h"
 #include "Server/Consensus.h"
+#include "Server/SnapshotFile.h"
 
 #ifndef LOGCABIN_SERVER_RAFTCONSENSUS_H
 #define LOGCABIN_SERVER_RAFTCONSENSUS_H
@@ -818,6 +819,17 @@ class RaftConsensus : public Consensus {
     void interruptAll();
 
     /**
+     * Try to read the latest good snapshot from disk. Loads the header of the
+     * snapshot file, which is used internally by the consensus module. The
+     * rest of the file reader is kept in #snapshotReader for the state machine
+     * to process upon a future getNextEntry().
+     *
+     * If the snapshot file on disk is no good, #snapshotReader will remain
+     * NULL.
+     */
+    void readSnapshot();
+
+    /**
      * Append an entry to the log and wait for it to be committed.
      */
     std::pair<ClientResult, uint64_t>
@@ -991,6 +1003,23 @@ class RaftConsensus : public Consensus {
      * leader). See #State.
      */
     State state;
+
+    /**
+     * The latest good snapshot covers entries 1 through 'lastSnapshotIndex'
+     * (inclusive). It is known that these are committed. They are safe to
+     * remove from the log, but it may be advantageous to keep them around for
+     * a little while (to avoid shipping snapshots to straggling followers).
+     * Thus, the log may or may not have some of the entries in this range.
+     */
+    uint64_t lastSnapshotIndex;
+
+    /**
+     * If not NULL, this is a SnapshotFile::Reader that covers up through
+     * lastSnapshotIndex. This is ready for the state machine to process and is
+     * returned to the state machine in getNextEntry(). It's just a cache which
+     * can be repopulated with readSnapshot().
+     */
+    mutable std::unique_ptr<SnapshotFile::Reader> snapshotReader;
 
     /**
      * The largest entry ID for which a quorum is known to have stored the same

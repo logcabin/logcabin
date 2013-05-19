@@ -26,6 +26,7 @@ namespace Server {
 
 // forward declaration
 namespace SnapshotFile {
+class Reader;
 class Writer;
 }
 
@@ -39,20 +40,85 @@ class ThreadInterruptedException : std::runtime_error {
     }
 };
 
+/**
+ * This is the interface to the consensus module used by state machines.
+ * Currently, the only implementation is RaftConsensus.
+ */
 class Consensus {
   public:
 
+    /**
+     * This is returned by getNextEntry().
+     */
     struct Entry {
+        /// Default constructor.
         Entry();
-        // TODO(ongaro): client serial number
+        /// Move constructor.
+        Entry(Entry&& other);
+        /// Destructor.
+        ~Entry();
+
+        /**
+         * The entry ID for this entry (or the last one a snapshot covers).
+         * Pass this as the lastEntryId argument to the next call to
+         * getNextEntry().
+         */
         uint64_t entryId;
-        bool hasData;
+
+        /**
+         * The type of the entry.
+         */
+        enum {
+            /**
+             * This is a normal entry containing a client request for the state
+             * machine. The 'data' field contains that request, and
+             * 'snapshotReader' is not set.
+             */
+            DATA,
+            /**
+             * This is a snapshot: the state machine should clear its state and
+             * load in the snapshot. The 'data' field is not set, and the
+             * 'snapshotReader' should be used to read the snapshot contents
+             * from.
+             */
+            SNAPSHOT,
+            /**
+             * Some entries should be ignored by the state machine (they are
+             * consumed internally by the consensus module). For client service
+             * threads to know when a state machine is up-to-date, it's easiest
+             * for the state machine to get empty entries back for these, and
+             * simply call back into getNextEntry() again with the next ID,
+             * Entries of type 'SKIP' will have neither 'data' nor
+             * 'snapshotReader' set.
+             */
+            SKIP,
+        } type;
+
+        /**
+         * The client request for entries of type 'DATA'.
+         */
         std::string data;
+
+        /**
+         * A handle to the snapshot file for entries of type 'SNAPSHOT'.
+         */
+        std::unique_ptr<SnapshotFile::Reader> snapshotReader;
+
+        // copy and assign not allowed
+        Entry(const Entry&) = delete;
+        Entry& operator=(const Entry&) = delete;
     };
 
+    /// Constructor.
     Consensus();
+
+    /// Destructor.
     virtual ~Consensus();
+
+    /// Initialize. Must be called before any other method.
     virtual void init() = 0;
+
+    /// Signal the consensus module to exit (shut down threads, etc).
     virtual void exit() = 0;
 
     /**

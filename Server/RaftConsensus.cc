@@ -18,6 +18,7 @@
 #include <time.h>
 
 #include "build/Protocol/Raft.pb.h"
+#include "build/Server/SnapshotMetadata.pb.h"
 #include "Core/Debug.h"
 #include "Core/ProtoBuf.h"
 #include "Core/Random.h"
@@ -615,6 +616,8 @@ RaftConsensus::RaftConsensus(Globals& globals)
     , configuration()
     , currentTerm(0)
     , state(State::FOLLOWER)
+    , lastSnapshotIndex(0)
+    , snapshotReader()
     , commitIndex(0)
     , leaderId(0)
     , votedFor(0)
@@ -650,7 +653,11 @@ RaftConsensus::init()
         log.reset(new SimpleFileLog(
                         Core::StringUtil::format("log/%lu", serverId)));
     }
-    NOTICE("Last log ID: %lu", log->getLastLogIndex());
+
+    NOTICE("The log contains indexes %lu through %lu (inclusive)",
+           log->getLogStartIndex(), log->getLastLogIndex());
+    readSnapshot();
+
     if (log->metadata.has_current_term())
         currentTerm = log->metadata.current_term();
     if (log->metadata.has_voted_for())
@@ -719,12 +726,39 @@ RaftConsensus::getNextEntry(uint64_t lastEntryId) const
         if (exiting)
             throw ThreadInterruptedException();
         if (commitIndex >= nextEntryId) {
-            const Log::Entry& logEntry = log->getEntry(nextEntryId);
             Consensus::Entry entry;
-            entry.entryId = nextEntryId;
-            if (logEntry.type() == Protocol::Raft::EntryType::DATA) {
-                entry.hasData = true;
-                entry.data = logEntry.data();
+
+            // Make the state machine load a snapshot if we don't have the next
+            // entry it needs in the log.
+            if (log->getLogStartIndex() > nextEntryId) {
+                entry.type = Consensus::Entry::SNAPSHOT;
+                // For well-behaved state machines, we expect 'snapshotReader'
+                // to contain a SnapshotFile::Reader that we can return
+                // directly to the state machine. In the case that a State
+                // Machine asks for the snapshot again, we have to build a new
+                // SnapshotFile::Reader again.
+                entry.snapshotReader = std::move(snapshotReader);
+                if (!entry.snapshotReader) {
+                    WARNING("State machine asked for same snapshot twice; "
+                            "this shouldn't happen in normal operation. "
+                            "Having to re-read it from disk.");
+                    // readSnapshot() shouldn't have any side effects since the
+                    // snapshot should have already been read, so const_cast
+                    // should be ok (though ugly).
+                    const_cast<RaftConsensus*>(this)->readSnapshot();
+                    entry.snapshotReader = std::move(snapshotReader);
+                }
+                entry.entryId = lastSnapshotIndex;
+            } else {
+                // not a snapshot
+                const Log::Entry& logEntry = log->getEntry(nextEntryId);
+                entry.entryId = nextEntryId;
+                if (logEntry.type() == Protocol::Raft::EntryType::DATA) {
+                    entry.type = Consensus::Entry::DATA;
+                    entry.data = logEntry.data();
+                } else {
+                    entry.type = Consensus::Entry::SKIP;
+                }
             }
             return entry;
         }
@@ -974,23 +1008,40 @@ RaftConsensus::setConfiguration(
     }
 }
 
-// TODO(ongaro): add unit test once this gets some meat to it
 std::unique_ptr<SnapshotFile::Writer>
 RaftConsensus::beginSnapshot(uint64_t lastIncludedIndex)
 {
     std::unique_lock<Mutex> lockGuard(mutex);
+
+    NOTICE("Creating new snapshot through log index %lu (inclusive)",
+           lastIncludedIndex);
     std::unique_ptr<SnapshotFile::Writer> writer(
                 new SnapshotFile::Writer(
                         Core::StringUtil::format("snapshot.%lu", serverId)));
+
+    // set header fields
+    SnapshotMetadata::Header header;
+    header.set_last_included_index(lastIncludedIndex);
     // TODO(ongaro): need to write the configuration as of lastIncludedIndex
-    // before returning
+    // into header
+
+    // write header to file
+    google::protobuf::io::CodedOutputStream& stream = writer->getStream();
+    int size = header.ByteSize();
+    stream.WriteLittleEndian32(size);
+    header.SerializeWithCachedSizes(&stream);
+
     return writer;
 }
 
 void
 RaftConsensus::snapshotDone(uint64_t lastIncludedIndex)
 {
+    std::unique_lock<Mutex> lockGuard(mutex);
+    lastSnapshotIndex = lastIncludedIndex;
     // TODO(ongaro): reclaim space from log here once it's safe to do so
+    NOTICE("Completed snapshot through log index %lu (inclusive)",
+           lastSnapshotIndex);
 }
 
 std::ostream&
@@ -1002,6 +1053,7 @@ operator<<(std::ostream& os, const RaftConsensus& raft)
     os << "term: " << raft.currentTerm << std::endl;
     os << "state: " << raft.state << std::endl;
     os << "leader: " << raft.leaderId << std::endl;
+    os << "lastSnapshotIndex: " << raft.lastSnapshotIndex << std::endl;
     os << "commitIndex: " << raft.commitIndex << std::endl;
     switch (raft.state) {
         case State::FOLLOWER:
@@ -1340,6 +1392,60 @@ RaftConsensus::interruptAll()
     // A configuration is sometimes missing for unit tests.
     if (configuration)
         configuration->forEach(&Server::interrupt);
+}
+
+void
+RaftConsensus::readSnapshot()
+{
+    std::unique_ptr<SnapshotFile::Reader> reader;
+    try {
+        reader.reset(new SnapshotFile::Reader(
+                          Core::StringUtil::format("snapshot.%lu", serverId)));
+    } catch (const std::runtime_error& e) { // file not found
+        NOTICE("%s", e.what());
+    }
+    if (reader) {
+        google::protobuf::io::CodedInputStream& stream = reader->getStream();
+
+        // read header protobuf from stream
+        bool ok = true;
+        uint32_t numBytes = 0;
+        ok = stream.ReadLittleEndian32(&numBytes);
+        if (!ok)
+            PANIC("couldn't read snapshot");
+        SnapshotMetadata::Header header;
+        auto limit = stream.PushLimit(numBytes);
+        ok = header.MergePartialFromCodedStream(&stream);
+        stream.PopLimit(limit);
+        if (!ok)
+            PANIC("couldn't read snapshot");
+
+        // load header contents
+        if (header.last_included_index() < lastSnapshotIndex) {
+            PANIC("Trying to load a snapshot that is more stale than one this "
+                  "server loaded earlier. The earlier snapshot covers through "
+                  "log index %lu (inclusive); this one covers through log "
+                  "index %lu (inclusive)",
+                  lastSnapshotIndex,
+                  header.last_included_index());
+
+        }
+        lastSnapshotIndex = header.last_included_index();
+        commitIndex = std::max(lastSnapshotIndex, commitIndex);
+        NOTICE("Reading snapshot which covers log entries 1 through %lu "
+               "(inclusive)", lastSnapshotIndex);
+        // TODO(ongaro): load configuration
+    }
+    if (log->getLogStartIndex() > lastSnapshotIndex + 1) {
+        PANIC("The newest snapshot on this server covers up through log index "
+              "%lu (inclusive), but its log starts at index %lu. This "
+              "should never happen and indicates a corrupt disk state. If you "
+              "want this server to participate in your cluster, you should "
+              "back up all of its state, delete it, and add the server back "
+              "as a new cluster member using the reconfiguration mechanism.",
+              lastSnapshotIndex, log->getLogStartIndex());
+    }
+    snapshotReader = std::move(reader);
 }
 
 std::pair<RaftConsensus::ClientResult, uint64_t>

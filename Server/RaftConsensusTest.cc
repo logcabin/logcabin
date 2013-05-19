@@ -327,6 +327,11 @@ class ServerRaftConsensusTest : public ::testing::Test {
         entry5.set_term(5);
         entry5.set_type(Protocol::Raft::EntryType::CONFIGURATION);
         *entry5.mutable_configuration() = desc(d3);
+
+        // TODO(ongaro): This is pretty dangerous if people have legitimate
+        // snapshots here. Should set the snapshot dir to some tmp dir instead.
+        Storage::FilesystemUtil::remove(
+            Core::StringUtil::format("snapshot.%lu", consensus->serverId));
     }
     void init() {
         consensus->log.reset(new Log());
@@ -518,20 +523,49 @@ TEST_F(ServerRaftConsensusTest, getNextEntry)
                                                  consensus.get());
     Consensus::Entry e1 = consensus->getNextEntry(0);
     EXPECT_EQ(1U, e1.entryId);
-    EXPECT_FALSE(e1.hasData);
+    EXPECT_EQ(Consensus::Entry::SKIP, e1.type);
     Consensus::Entry e2 = consensus->getNextEntry(e1.entryId);
     EXPECT_EQ(2U, e2.entryId);
-    EXPECT_TRUE(e2.hasData);
+    EXPECT_EQ(Consensus::Entry::DATA, e2.type);
     EXPECT_EQ("hello", e2.data);
     Consensus::Entry e3 = consensus->getNextEntry(e2.entryId);
     EXPECT_EQ(3U, e3.entryId);
-    EXPECT_FALSE(e3.hasData);
+    EXPECT_EQ(Consensus::Entry::SKIP, e3.type);
     Consensus::Entry e4 = consensus->getNextEntry(e3.entryId);
     EXPECT_EQ(4U, e4.entryId);
-    EXPECT_TRUE(e4.hasData);
+    EXPECT_EQ(Consensus::Entry::DATA, e4.type);
     EXPECT_EQ("goodbye", e4.data);
     EXPECT_THROW(consensus->getNextEntry(e4.entryId),
                  ThreadInterruptedException);
+}
+
+TEST_F(ServerRaftConsensusTest, getNextEntry_snapshot)
+{
+    init();
+    consensus->append(entry1);
+    consensus->startNewElection();
+    consensus->append(entry1);
+    consensus->advanceCommittedId();
+    EXPECT_EQ(3U, consensus->commitIndex);
+
+    std::unique_ptr<SnapshotFile::Writer> writer = consensus->beginSnapshot(2);
+    writer->getStream().WriteLittleEndian32(0xdeadbeef);
+    writer->close();
+    consensus->snapshotDone(2);
+    consensus->log->truncatePrefix(2);
+
+    // expect warning
+    LogCabin::Core::Debug::setLogPolicy({
+        {"Server/RaftConsensus.cc", "ERROR"}
+    });
+    Consensus::Entry e1 = consensus->getNextEntry(0);
+    EXPECT_EQ(2U, e1.entryId);
+    EXPECT_EQ(Consensus::Entry::SNAPSHOT, e1.type);
+    uint32_t x;
+    EXPECT_TRUE(e1.snapshotReader->getStream().ReadLittleEndian32(&x));
+    EXPECT_EQ(0xdeadbeef, x);
+
+    EXPECT_EQ(3U, consensus->getNextEntry(2).entryId);
 }
 
 TEST_F(ServerRaftConsensusTest, handleAppendEntries_callerStale)
@@ -948,6 +982,48 @@ TEST_F(ServerRaftConsensusTest, setConfiguration_replicateOkNontrivial)
         SetConfigurationHelper3(consensus.get());
     EXPECT_EQ(ClientResult::SUCCESS, consensus->setConfiguration(1, c));
     EXPECT_EQ(4U, consensus->log->getLastLogIndex());
+}
+
+TEST_F(ServerRaftConsensusTest, beginSnapshot)
+{
+    init();
+
+    // satisfy commitIndex >= lastSnapshotIndex invariant
+    consensus->currentTerm = 1;
+    consensus->append(entry1);
+    consensus->startNewElection();
+    consensus->append(entry2);
+    consensus->advanceCommittedId();
+    EXPECT_EQ(3U, consensus->commitIndex);
+
+    // call beginSnapshot
+    std::unique_ptr<SnapshotFile::Writer> writer = consensus->beginSnapshot(3);
+    writer->getStream().WriteLittleEndian32(0xdeadbeef);
+    writer->close();
+
+    // make sure it had the right side-effects
+    EXPECT_EQ(0U, consensus->lastSnapshotIndex);
+    consensus->readSnapshot();
+    EXPECT_EQ(3U, consensus->lastSnapshotIndex);
+    uint32_t x = 0;
+    EXPECT_TRUE(consensus->snapshotReader->getStream().ReadLittleEndian32(&x));
+    EXPECT_EQ(0xdeadbeef, x);
+}
+
+TEST_F(ServerRaftConsensusTest, snapshotDone)
+{
+    init();
+
+    // satisfy commitIndex >= lastSnapshotIndex invariant
+    consensus->currentTerm = 1;
+    consensus->append(entry1);
+    consensus->startNewElection();
+    consensus->append(entry2);
+    consensus->advanceCommittedId();
+    EXPECT_EQ(3U, consensus->commitIndex);
+
+    consensus->snapshotDone(3);
+    EXPECT_EQ(3U, consensus->lastSnapshotIndex);
 }
 
 class CandidacyThreadMainHelper {
@@ -1433,6 +1509,46 @@ TEST_F(ServerRaftConsensusTest, interruptAll)
     Peer& peer = *getPeer(2);
     EXPECT_EQ("RPC canceled by user", peer.rpc.getErrorMessage());
     EXPECT_EQ(1U, consensus->stateChanged.notificationCount);
+}
+
+TEST_F(ServerRaftConsensusTest, readSnapshot)
+{
+    init();
+
+    // snapshot not found
+    consensus->readSnapshot();
+    EXPECT_EQ(0U, consensus->lastSnapshotIndex);
+    EXPECT_FALSE(consensus->snapshotReader);
+
+    // snapshot found
+    consensus->append(entry1);
+    consensus->currentTerm = 1;
+    consensus->startNewElection();
+    EXPECT_EQ(2U, consensus->commitIndex);
+    consensus->beginSnapshot(2);
+    consensus->commitIndex = 0;
+    consensus->readSnapshot();
+    EXPECT_EQ(2U, consensus->lastSnapshotIndex);
+    EXPECT_EQ(2U, consensus->commitIndex);
+    EXPECT_TRUE(consensus->snapshotReader);
+
+    // does not affect commitIndex if done again
+    consensus->append(entry2);
+    consensus->advanceCommittedId();
+    EXPECT_EQ(3U, consensus->commitIndex);
+    consensus->readSnapshot();
+    EXPECT_EQ(2U, consensus->lastSnapshotIndex);
+    EXPECT_EQ(3U, consensus->commitIndex);
+    EXPECT_TRUE(consensus->snapshotReader);
+}
+
+TEST_F(ServerRaftConsensusTest, readSnapshot_incompleteLogPrefix)
+{
+    // snapshot not found, needed to have complete log
+    init();
+    EXPECT_DEATH({ consensus->log->truncatePrefix(2);
+                   consensus->readSnapshot(); },
+                 "corrupt disk state");
 }
 
 TEST_F(ServerRaftConsensusTest, replicateEntry_notLeader)

@@ -88,7 +88,7 @@ Invariants::checkBasic()
 {
     // Log terms monotonically increase
     uint64_t lastTerm = 0;
-    for (uint64_t entryId = 1;
+    for (uint64_t entryId = consensus.log->getLogStartIndex();
          entryId <= consensus.log->getLastLogIndex();
          ++entryId) {
         const Log::Entry& entry = consensus.log->getEntry(entryId);
@@ -101,7 +101,7 @@ Invariants::checkBasic()
     // The current configuration should be the last one found in the log
     bool found = false;
     for (uint64_t entryId = consensus.log->getLastLogIndex();
-         entryId > 0;
+         entryId >= consensus.log->getLogStartIndex();
          --entryId) {
         const Log::Entry& entry = consensus.log->getEntry(entryId);
         if (entry.type() == Protocol::Raft::EntryType::CONFIGURATION) {
@@ -134,8 +134,10 @@ Invariants::checkBasic()
             expect(consensus.state != RaftConsensus::State::LEADER);
     }
 
-    // The commitIndex doesn't exceed the length of the log.
-    expect(consensus.commitIndex <= consensus.log->getLastLogIndex());
+    // The commitIndex doesn't exceed the length of the log or snapshot.
+    expect(consensus.commitIndex >= consensus.lastSnapshotIndex);
+    expect(consensus.commitIndex <= std::max(consensus.log->getLastLogIndex(),
+                                             consensus.lastSnapshotIndex));
 
     // advanceCommittedId is called everywhere it needs to be.
     if (consensus.state == RaftConsensus::State::LEADER) {

@@ -140,8 +140,18 @@ StateMachine::threadMain()
         while (true) {
             Consensus::Entry entry = consensus->getNextEntry(lastEntryId);
             std::unique_lock<std::mutex> lockGuard(mutex);
-            if (entry.hasData)
-                advance(entry.entryId, entry.data);
+            switch (entry.type) {
+                case Consensus::Entry::SKIP:
+                    break;
+                case Consensus::Entry::DATA:
+                    advance(entry.entryId, entry.data);
+                    break;
+                case Consensus::Entry::SNAPSHOT:
+                    NOTICE("Loading snapshot through entry %lu into "
+                           "state machine", entry.entryId);
+                    tree.loadSnapshot(entry.snapshotReader->getStream());
+                    break;
+            }
             lastEntryId = entry.entryId;
             cond.notify_all();
 
