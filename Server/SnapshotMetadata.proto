@@ -14,6 +14,8 @@
 
 package LogCabin.Server.SnapshotMetadata;
 
+import "build/Protocol/Raft.proto";
+
 /**
  * Header for a snapshot file.
  */
@@ -22,4 +24,21 @@ message Header {
      * The snapshot covers log entries in the range [1, lastIncludedIndex].
      */
     required uint64 last_included_index = 1;
+
+    /**
+     * This contains the latest configuration in the prefix of the log ending
+     * with lastIncludedIndex. It'll be present in practice (logs start with
+     * configurations in practice) but is marked optional so as to not to bake
+     * that assumption in here.
+     */
+    optional Protocol.Raft.Configuration configuration = 2;
+
+    /**
+     * The log index where 'configuration' came from. This is required iff
+     * 'configuration' is set.
+     * (It shouldn't be strictly necessary to persist this, as the
+     * configuration could be re-assigned lastIncludedIndex instead; however,
+     * this way makes things more obvious.)
+     */
+    optional uint64 configuration_index = 3;
 }

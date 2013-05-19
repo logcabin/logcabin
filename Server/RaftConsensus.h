@@ -849,13 +849,6 @@ class RaftConsensus : public Consensus {
     void requestVote(std::unique_lock<Mutex>& lockGuard, Peer& peer);
 
     /**
-     * Search backwards in the log for the latest configuration and apply it.
-     * This is called on followers that have truncated their logs and on newly
-     * booted servers.
-     */
-    void scanForConfiguration();
-
-    /**
      * Set the timer to start a new election and notify #stateChanged.
      * The timer is set for ELECTION_TIMEOUT_MS plus some random jitter from
      * now.
@@ -980,8 +973,27 @@ class RaftConsensus : public Consensus {
     /**
      * Provides all storage for this server. Keeps track of all log entries and
      * some additional metadata.
+     *
+     * If you modify this, be sure to keep #configurationDescriptions
+     * consistent.
      */
     std::unique_ptr<Log> log;
+
+    /**
+     * This contains all the cluster configurations found in the log, plus one
+     * additional configuration from the latest snapshot.
+     *
+     * It is used to find the right configuration when taking a snapshot and
+     * truncating the end of the log. It must be kept consistent with the log
+     * when it is loaded, as the log grows, as it gets truncated from the
+     * beginning for snapshots, and as it gets truncated from the end upon
+     * conflicts with the leader.
+     *
+     * The key is the entry ID where the configuration belongs in the log; the
+     * value is the configuration itself.
+     */
+    std::map<uint64_t, Protocol::Raft::Configuration>
+        configurationDescriptions;
 
     /**
      * Defines the servers that are part of the cluster. See Configuration.

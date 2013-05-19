@@ -17,6 +17,7 @@
 
 #include "build/Protocol/Raft.pb.h"
 #include "Core/ProtoBuf.h"
+#include "Core/STLUtil.h"
 #include "Core/StringUtil.h"
 #include "Core/Time.h"
 #include "Protocol/Common.h"
@@ -430,16 +431,21 @@ TEST_F(ServerRaftConsensusTest, init_nonblanklog)
     entry2.set_data("hello, world");
     log.append(entry2);
 
+    entry.set_term(2);
+    log.append(entry); // append configuration entry again
+
     consensus->init();
-    EXPECT_EQ(2U, consensus->log->getLastLogIndex());
+    EXPECT_EQ(3U, consensus->log->getLastLogIndex());
     EXPECT_EQ(30U, consensus->currentTerm);
     EXPECT_EQ(63U, consensus->votedFor);
     EXPECT_EQ(1U, consensus->configuration->localServer->serverId);
     EXPECT_EQ("127.0.0.1:61023",
               consensus->configuration->localServer->address);
     EXPECT_EQ(Configuration::State::STABLE, consensus->configuration->state);
-    EXPECT_EQ(1U, consensus->configuration->id);
+    EXPECT_EQ(3U, consensus->configuration->id);
     EXPECT_EQ(State::FOLLOWER, consensus->state);
+    EXPECT_EQ((std::vector<uint64_t>{1, 3}),
+              Core::STLUtil::getKeys(consensus->configurationDescriptions));
 }
 
 // TODO(ongaro): low-priority test: exit
@@ -699,7 +705,7 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntries_truncate)
     // Log:
     // 1,t1: config { s1 }
     // 2,t2: no op
-    // 3,t2: "hello"
+    // 3,t2: config { s1 }
     // 4,t2: config { s1, s2 }
     // later replaced with
     // 4,t3: "bar"
@@ -707,7 +713,8 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntries_truncate)
     consensus->stepDown(1);
     consensus->append(entry1);
     consensus->startNewElection();
-    consensus->append(entry2);
+    entry1.set_term(2);
+    consensus->append(entry1);
     consensus->advanceCommittedId();
     entry5.set_term(2);
     consensus->append(entry5);
@@ -723,12 +730,14 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntries_truncate)
     request.set_commit_index(0);
     Protocol::Raft::Entry* e1 = request.add_entries();
     e1->set_term(2);
-    e1->set_type(Protocol::Raft::EntryType::DATA);
-    e1->set_data("hello");
+    e1->set_type(Protocol::Raft::EntryType::CONFIGURATION);
+    *e1->mutable_configuration() = entry1.configuration();
     Protocol::Raft::Entry* e2 = request.add_entries();
     e2->set_term(3);
     e2->set_type(Protocol::Raft::EntryType::DATA);
     e2->set_data("bar");
+    EXPECT_EQ((std::vector<uint64_t>{1, 3, 4}),
+              Core::STLUtil::getKeys(consensus->configurationDescriptions));
 
     consensus->handleAppendEntries(request, response);
     EXPECT_EQ("term: 3 "
@@ -736,16 +745,18 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntries_truncate)
               response);
     EXPECT_EQ(3U, consensus->commitIndex);
     EXPECT_EQ(4U, consensus->log->getLastLogIndex());
-    EXPECT_EQ(1U, consensus->configuration->id);
+    EXPECT_EQ(3U, consensus->configuration->id);
     const Log::Entry& l1 = consensus->log->getEntry(1);
     EXPECT_EQ(Protocol::Raft::EntryType::CONFIGURATION, l1.type());
     EXPECT_EQ(d, l1.configuration());
     const Log::Entry& l2 = consensus->log->getEntry(2);
     EXPECT_EQ(Protocol::Raft::EntryType::NOOP, l2.type());
     const Log::Entry& l3 = consensus->log->getEntry(3);
-    EXPECT_EQ("hello", l3.data());
+    EXPECT_EQ(d, l3.configuration());
     const Log::Entry& l4 = consensus->log->getEntry(4);
     EXPECT_EQ("bar", l4.data());
+    EXPECT_EQ((std::vector<uint64_t>{1, 3}),
+              Core::STLUtil::getKeys(consensus->configurationDescriptions));
 }
 
 TEST_F(ServerRaftConsensusTest, handleAppendEntries_duplicate)
@@ -986,6 +997,12 @@ TEST_F(ServerRaftConsensusTest, setConfiguration_replicateOkNontrivial)
 
 TEST_F(ServerRaftConsensusTest, beginSnapshot)
 {
+    // Log:
+    // 1,t1: cfg { server 1 }
+    // 2,t2: no op
+    // 3,t2: entry2
+    // 4,t2: entry5
+
     init();
 
     // satisfy commitIndex >= lastSnapshotIndex invariant
@@ -993,6 +1010,9 @@ TEST_F(ServerRaftConsensusTest, beginSnapshot)
     consensus->append(entry1);
     consensus->startNewElection();
     consensus->append(entry2);
+    consensus->advanceCommittedId();
+    entry5.set_term(2);
+    consensus->append(entry5);
     consensus->advanceCommittedId();
     EXPECT_EQ(3U, consensus->commitIndex);
 
@@ -1003,11 +1023,16 @@ TEST_F(ServerRaftConsensusTest, beginSnapshot)
 
     // make sure it had the right side-effects
     EXPECT_EQ(0U, consensus->lastSnapshotIndex);
+    consensus->configurationDescriptions.erase(1);
+    EXPECT_EQ((std::vector<uint64_t>{4}),
+              Core::STLUtil::getKeys(consensus->configurationDescriptions));
     consensus->readSnapshot();
     EXPECT_EQ(3U, consensus->lastSnapshotIndex);
     uint32_t x = 0;
     EXPECT_TRUE(consensus->snapshotReader->getStream().ReadLittleEndian32(&x));
     EXPECT_EQ(0xdeadbeef, x);
+    EXPECT_EQ((std::vector<uint64_t>{1, 4}),
+              Core::STLUtil::getKeys(consensus->configurationDescriptions));
 }
 
 TEST_F(ServerRaftConsensusTest, snapshotDone)
@@ -1350,6 +1375,9 @@ TEST_F(ServerRaftConsensusTest, append)
     consensus->append(entry2);
     EXPECT_EQ(1U, consensus->configuration->id);
     EXPECT_EQ(2U, consensus->log->getLastLogIndex());
+    EXPECT_EQ((std::vector<uint64_t>{1}),
+              Core::STLUtil::getKeys(consensus->configurationDescriptions));
+    EXPECT_EQ(d, consensus->configurationDescriptions.at(1));
 }
 
 // used in AppendEntries tests
@@ -1527,10 +1555,14 @@ TEST_F(ServerRaftConsensusTest, readSnapshot)
     EXPECT_EQ(2U, consensus->commitIndex);
     consensus->beginSnapshot(2);
     consensus->commitIndex = 0;
+    consensus->configurationDescriptions.clear();
     consensus->readSnapshot();
     EXPECT_EQ(2U, consensus->lastSnapshotIndex);
     EXPECT_EQ(2U, consensus->commitIndex);
     EXPECT_TRUE(consensus->snapshotReader);
+    EXPECT_EQ((std::vector<uint64_t>{1}),
+              Core::STLUtil::getKeys(consensus->configurationDescriptions));
+    EXPECT_EQ(d, consensus->configurationDescriptions.at(1));
 
     // does not affect commitIndex if done again
     consensus->append(entry2);
@@ -1748,20 +1780,6 @@ TEST_F(ServerRaftConsensusPTest, requestVote_termOkAsLeader)
     EXPECT_TRUE(peer4.requestVoteDone);
     EXPECT_EQ(1000U, peer4.lastAckEpoch);
     EXPECT_EQ(State::LEADER, consensus->state);
-}
-
-TEST_F(ServerRaftConsensusTest, scanForConfiguration)
-{
-    init();
-    consensus->stepDown(5);
-    consensus->scanForConfiguration();
-    EXPECT_EQ(0U, consensus->configuration->id);
-    consensus->append(entry1);
-    consensus->scanForConfiguration();
-    EXPECT_EQ(1U, consensus->configuration->id);
-    consensus->append(entry3);
-    consensus->scanForConfiguration();
-    EXPECT_EQ(2U, consensus->configuration->id);
 }
 
 TEST_F(ServerRaftConsensusTest, setElectionTimer)

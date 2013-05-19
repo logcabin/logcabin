@@ -613,6 +613,7 @@ RaftConsensus::RaftConsensus(Globals& globals)
     , exiting(false)
     , numPeerThreads(0)
     , log()
+    , configurationDescriptions()
     , configuration()
     , currentTerm(0)
     , state(State::FOLLOWER)
@@ -653,6 +654,13 @@ RaftConsensus::init()
         log.reset(new SimpleFileLog(
                         Core::StringUtil::format("log/%lu", serverId)));
     }
+    for (uint64_t entryId = log->getLogStartIndex();
+         entryId <= log->getLastLogIndex();
+         ++entryId) {
+        const Log::Entry& entry = log->getEntry(entryId);
+        if (entry.type() == Protocol::Raft::EntryType::CONFIGURATION)
+            configurationDescriptions[entryId] = entry.configuration();
+    }
 
     NOTICE("The log contains indexes %lu through %lu (inclusive)",
            log->getLogStartIndex(), log->getLastLogIndex());
@@ -664,9 +672,12 @@ RaftConsensus::init()
         votedFor = log->metadata.voted_for();
     updateLogMetadata();
 
+    // apply last configuration found
     configuration.reset(new Configuration(serverId, *this));
-    scanForConfiguration();
-    if (configuration->state == Configuration::State::BLANK)
+    auto it = configurationDescriptions.rbegin();
+    if (it != configurationDescriptions.rend())
+        configuration->setConfiguration(it->first, it->second);
+    else
         NOTICE("No configuration, waiting to receive one");
 
     stepDown(currentTerm);
@@ -851,12 +862,19 @@ RaftConsensus::handleAppendEntries(
             assert(commitIndex < entryId);
             // TODO(ongaro): assertion: what I'm truncating better belong to
             // only 1 term
-            NOTICE("Truncating %lu entries",
-                   log->getLastLogIndex() - entryId + 1);
+            NOTICE("Truncating %lu entries after %lu from the log",
+                   log->getLastLogIndex() - entryId + 1, entryId);
             log->truncateSuffix(entryId - 1);
+            configurationDescriptions.erase(
+                    configurationDescriptions.lower_bound(entryId),
+                    configurationDescriptions.end());
             if (configuration->id >= entryId) {
-                // truncate can affect current configuration
-                scanForConfiguration();
+                // Truncation removed current configuration, so fall back to
+                // the prior one. We're never asked to truncate our only
+                // configuration.
+                auto it = configurationDescriptions.rbegin();
+                assert(it != configurationDescriptions.rend());
+                configuration->setConfiguration(it->first, it->second);
             }
         }
         uint64_t e = append(entry);
@@ -1022,8 +1040,18 @@ RaftConsensus::beginSnapshot(uint64_t lastIncludedIndex)
     // set header fields
     SnapshotMetadata::Header header;
     header.set_last_included_index(lastIncludedIndex);
-    // TODO(ongaro): need to write the configuration as of lastIncludedIndex
-    // into header
+    // Find the configuration as of lastIncludedIndex. (This could potentially
+    // be more efficient with more advanced use of the STL, but I'd rather do
+    // the obvious backward scan through configurationDescriptions.)
+    for (auto it = configurationDescriptions.rbegin();
+         it != configurationDescriptions.rend();
+         ++it) {
+        if (it->first <= lastIncludedIndex) {
+            header.set_configuration_index(it->first);
+            *header.mutable_configuration() = it->second;
+            break;
+        }
+    }
 
     // write header to file
     google::protobuf::io::CodedOutputStream& stream = writer->getStream();
@@ -1241,8 +1269,10 @@ RaftConsensus::append(const Log::Entry& entry)
 {
     assert(entry.term() != 0);
     uint64_t entryId = log->append(entry);
-    if (entry.type() == Protocol::Raft::EntryType::CONFIGURATION)
+    if (entry.type() == Protocol::Raft::EntryType::CONFIGURATION) {
+        configurationDescriptions[entryId] = entry.configuration();
         configuration->setConfiguration(entryId, entry.configuration());
+    }
     stateChanged.notify_all();
     return entryId;
 }
@@ -1434,7 +1464,10 @@ RaftConsensus::readSnapshot()
         commitIndex = std::max(lastSnapshotIndex, commitIndex);
         NOTICE("Reading snapshot which covers log entries 1 through %lu "
                "(inclusive)", lastSnapshotIndex);
-        // TODO(ongaro): load configuration
+        if (header.has_configuration_index() && header.has_configuration()) {
+            configurationDescriptions[header.configuration_index()] =
+                header.configuration();
+        }
     }
     if (log->getLogStartIndex() > lastSnapshotIndex + 1) {
         PANIC("The newest snapshot on this server covers up through log index "
@@ -1513,20 +1546,6 @@ RaftConsensus::requestVote(std::unique_lock<Mutex>& lockGuard, Peer& peer)
             VERBOSE("vote not granted");
         }
     }
-}
-
-void
-RaftConsensus::scanForConfiguration()
-{
-    for (uint64_t entryId = log->getLastLogIndex(); entryId > 0; --entryId) {
-        const Log::Entry& entry = log->getEntry(entryId);
-        if (entry.type() == Protocol::Raft::EntryType::CONFIGURATION) {
-            configuration->setConfiguration(entryId, entry.configuration());
-            return;
-        }
-    }
-    // the configuration is never cleared out
-    assert(configuration->state == Configuration::State::BLANK);
 }
 
 void

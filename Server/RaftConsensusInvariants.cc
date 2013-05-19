@@ -14,6 +14,7 @@
  */
 
 #include "Core/Debug.h"
+#include "Core/ProtoBuf.h"
 #include "Server/RaftConsensus.h"
 
 namespace LogCabin {
@@ -113,9 +114,34 @@ Invariants::checkBasic()
         }
     }
     if (!found) {
-        expect(consensus.configuration->id == 0);
-        expect(consensus.configuration->state == Configuration::State::BLANK);
+        if (consensus.log->getLogStartIndex() == 1) {
+            expect(consensus.configuration->id == 0);
+            expect(consensus.configuration->state ==
+                   Configuration::State::BLANK);
+        } else {
+            expect(consensus.configuration->id <= consensus.lastSnapshotIndex);
+        }
     }
+
+    // Every configuration present in the log should also be present in the
+    // configurationDescriptions map.
+    for (uint64_t entryId = consensus.log->getLogStartIndex();
+         entryId <= consensus.log->getLastLogIndex();
+         ++entryId) {
+        const Log::Entry& entry = consensus.log->getEntry(entryId);
+        if (entry.type() == Protocol::Raft::EntryType::CONFIGURATION) {
+            auto it = consensus.configurationDescriptions.find(entryId);
+            expect(it != consensus.configurationDescriptions.end());
+            if (it != consensus.configurationDescriptions.end())
+                expect(it->second == entry.configuration());
+        }
+    }
+    // The configuration descriptions map shouldn't have anything past the
+    // snapshot and the log.
+    expect(consensus.configurationDescriptions.upper_bound(
+                std::max(consensus.log->getLastLogIndex(),
+                         consensus.lastSnapshotIndex)) ==
+           consensus.configurationDescriptions.end());
 
     // Servers with blank configurations should remain passive. Since the first
     // entry in every log is a configuration, they should also have empty logs.
