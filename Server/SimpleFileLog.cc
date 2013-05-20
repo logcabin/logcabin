@@ -138,9 +138,9 @@ SimpleFileLog::readMetadata(const std::string& filename,
     return "";
 }
 
-SimpleFileLog::SimpleFileLog(const std::string& path)
+SimpleFileLog::SimpleFileLog(const FilesystemUtil::File& parentDir)
     : metadata()
-    , dir(FilesystemUtil::openDir(path))
+    , dir(FilesystemUtil::openDir(parentDir, "log"))
     , lostAndFound(FilesystemUtil::openDir(dir, "unknown"))
 {
     std::vector<uint64_t> fsEntryIds = getEntryIds();

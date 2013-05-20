@@ -13,7 +13,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <fcntl.h>
 #include <gtest/gtest.h>
+#include <sys/stat.h>
 
 #include "Server/SnapshotFile.h"
 
@@ -22,25 +24,43 @@ namespace Server {
 namespace SnapshotFile {
 namespace {
 
-TEST(ServerSnapshotFile, basic)
+namespace FilesystemUtil = Storage::FilesystemUtil;
+
+class ServerSnapshotFileTest : public ::testing::Test {
+  public:
+    ServerSnapshotFileTest()
+        : tmpdir()
+    {
+        std::string path = FilesystemUtil::mkdtemp();
+        tmpdir = FilesystemUtil::File(open(path.c_str(), O_RDONLY|O_DIRECTORY),
+                                      path);
+    }
+    ~ServerSnapshotFileTest() {
+        tmpdir.close();
+        FilesystemUtil::remove(tmpdir.path);
+    }
+    FilesystemUtil::File tmpdir;
+};
+
+
+TEST_F(ServerSnapshotFileTest, basic)
 {
     {
-        Writer writer("testsnapshot");
+        Writer writer(tmpdir);
         writer.getStream().WriteVarint32(482);
         writer.close();
     }
     {
-        Reader reader("testsnapshot");
+        Reader reader(tmpdir);
         uint32_t x = 0;
         reader.getStream().ReadVarint32(&x);
         EXPECT_EQ(482U, x);
     }
 }
 
-TEST(ServerSnapshotFile, reader_fileNotFound)
+TEST_F(ServerSnapshotFileTest, reader_fileNotFound)
 {
-    EXPECT_THROW(Reader("ireallyhopeyoudonthaveafilebythisname"),
-                 std::runtime_error);
+    EXPECT_THROW(Reader reader(tmpdir), std::runtime_error);
 }
 
 } // namespace LogCabin::Server::SnapshotFile::<anonymous>

@@ -38,6 +38,11 @@ if __name__ == '__main__':
             dest='address',
             help='Network address at which other servers will be able to '
                  'contact this server, e.g., 192.168.0.1:61023. (required)')
+    parser.add_option('--storage', metavar='PATH',
+            dest='storagePath',
+            help='Filesystem path at which the log and snapshots will be '
+                 'stored. Set this the same as in your config file. '
+                 '(required)')
     (options, args) = parser.parse_args()
 
     def options_error(msg):
@@ -54,17 +59,22 @@ if __name__ == '__main__':
     address = options.address
     if address is None:
         options_error('address not specified')
+    storagePath = options.storagePath
+    if storagePath is None:
+        options_error('storagePath not specified')
 
-    if (glob.glob('log/*/*') or glob.glob('snapshot.*')):
-        print('Error: log or snapshot found, exiting', file=sys.stderr)
+    if (glob.glob('%s/*' % storagePath)):
+        print('Error: files found in storagePath, exiting', file=sys.stderr)
         sys.exit(1)
 
-    print('Creating directory: log/%d' % server_id)
-    os.mkdir('log')
-    os.mkdir('log/%d' % server_id)
+    logPath = '%s/server%d/log' % (storagePath, server_id)
+    print('Creating directory: %s' % logPath)
+    os.mkdir(storagePath)
+    os.mkdir('%s/server%d' % (storagePath, server_id))
+    os.mkdir(logPath)
 
     def write(filename, contents):
-        filename = 'log/%d/%s' % (server_id, filename)
+        filename = '%s/%s' % (logPath, filename)
         print('Writing: %s' % filename)
         checksum = 'SHA-1:%s\0' % sha.sha(contents).hexdigest()
         open(filename, 'w').write(checksum + contents)

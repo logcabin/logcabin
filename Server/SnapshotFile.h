@@ -35,12 +35,13 @@ class Reader {
   public:
     /**
      * Constructor.
-     * \param filename
-     *      The name of the snapshot file to read.
+     * \param parentDir
+     *      The directory in which to find the snapshot (in a file called
+     *      "snapshot").
      * \throw std::runtime_error
      *      If the file can't be found.
      */
-    explicit Reader(const std::string& filename);
+    explicit Reader(const Storage::FilesystemUtil::File& parentDir);
     /// Destructor.
     ~Reader();
     /// Returns the input stream to read from.
@@ -61,11 +62,12 @@ class Writer {
   public:
     /**
      * Constructor.
-     * \param filename
-     *      The name of the snapshot file to write.
-     * TODO(ongaro): what if filename can't be written?
+     * \param parentDir
+     *      The directory in which to find the snapshot (in a file called
+     *      "snapshot").
+     * TODO(ongaro): what if it can't be written?
      */
-    explicit Writer(const std::string& filename);
+    explicit Writer(const Storage::FilesystemUtil::File& parentDir);
     /// Destructor.
     ~Writer();
     /// Flush and close the file.

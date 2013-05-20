@@ -33,7 +33,7 @@ class SimpleFileLog : public Log {
 
     typedef Protocol::Raft::Entry Entry;
 
-    explicit SimpleFileLog(const std::string& path);
+    explicit SimpleFileLog(const Storage::FilesystemUtil::File& parentDir);
     ~SimpleFileLog();
     uint64_t append(const Entry& entry);
     void truncatePrefix(uint64_t firstEntryId);

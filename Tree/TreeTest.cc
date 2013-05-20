@@ -13,12 +13,15 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <fcntl.h>
 #include <gtest/gtest.h>
 #include <stdexcept>
+#include <sys/stat.h>
 
 #include "Core/StringUtil.h"
 #include "Tree/Tree.h"
 #include "Server/SnapshotFile.h"
+#include "Storage/FilesystemUtil.h"
 
 namespace LogCabin {
 namespace Tree {
@@ -67,18 +70,25 @@ dumpTree(const Tree& tree)
 
 TEST(TreeFileTest, dumpSnapshot)
 {
+    std::string path = Storage::FilesystemUtil::mkdtemp();
+    Storage::FilesystemUtil::File tmpdir =
+        Storage::FilesystemUtil::File(
+           open(path.c_str(), O_RDONLY|O_DIRECTORY),
+           path);
     {
-        Server::SnapshotFile::Writer writer("testsnapshot");
+        Server::SnapshotFile::Writer writer(tmpdir);
         File f;
         f.contents = "hello, world!";
         f.dumpSnapshot(writer.getStream());
     }
     {
-        Server::SnapshotFile::Reader reader("testsnapshot");
+        Server::SnapshotFile::Reader reader(tmpdir);
         File f;
         f.loadSnapshot(reader.getStream());
         EXPECT_EQ("hello, world!", f.contents);
     }
+    tmpdir.close();
+    Storage::FilesystemUtil::remove(tmpdir.path);
 }
 
 TEST(TreeDirectoryTest, getChildren)
@@ -205,16 +215,24 @@ TEST(TreeDirectoryTest, dumpSnapshot)
     tree.makeDirectory("/f");
     tree.makeDirectory("/f/h");
     tree.write("/f/g", "rawr");
+
+    std::string path = Storage::FilesystemUtil::mkdtemp();
+    Storage::FilesystemUtil::File tmpdir =
+        Storage::FilesystemUtil::File(
+           open(path.c_str(), O_RDONLY|O_DIRECTORY),
+           path);
     {
-        Server::SnapshotFile::Writer writer("testsnapshot");
+        Server::SnapshotFile::Writer writer(tmpdir);
         tree.superRoot.dumpSnapshot(writer.getStream());
     }
     {
-        Server::SnapshotFile::Reader reader("testsnapshot");
+        Server::SnapshotFile::Reader reader(tmpdir);
         Tree t2;
         t2.superRoot.loadSnapshot(reader.getStream());
         EXPECT_EQ(dumpTree(tree), dumpTree(t2));
     }
+    tmpdir.close();
+    Storage::FilesystemUtil::remove(tmpdir.path);
 }
 
 TEST(TreePathTest, constructor)
@@ -271,20 +289,27 @@ class TreeTreeTest : public ::testing::Test {
 
 TEST_F(TreeTreeTest, dumpSnapshot)
 {
+    std::string path = Storage::FilesystemUtil::mkdtemp();
+    Storage::FilesystemUtil::File tmpdir =
+        Storage::FilesystemUtil::File(
+           open(path.c_str(), O_RDONLY|O_DIRECTORY),
+           path);
     {
-        Server::SnapshotFile::Writer writer("testsnapshot");
+        Server::SnapshotFile::Writer writer(tmpdir);
         tree.write("/c", "foo");
         tree.dumpSnapshot(writer.getStream());
     }
     tree.removeFile("/c");
     tree.write("/d", "bar");
     {
-        Server::SnapshotFile::Reader reader("testsnapshot");
+        Server::SnapshotFile::Reader reader(tmpdir);
         tree.loadSnapshot(reader.getStream());
     }
     std::vector<std::string> children;
     EXPECT_OK(tree.listDirectory("/", children));
     EXPECT_EQ((std::vector<std::string>{ "c" }), children);
+    tmpdir.close();
+    Storage::FilesystemUtil::remove(tmpdir.path);
 }
 
 

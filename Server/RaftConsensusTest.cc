@@ -13,7 +13,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <fcntl.h>
 #include <gtest/gtest.h>
+#include <sys/stat.h>
 
 #include "build/Protocol/Raft.pb.h"
 #include "Core/ProtoBuf.h"
@@ -329,10 +331,11 @@ class ServerRaftConsensusTest : public ::testing::Test {
         entry5.set_type(Protocol::Raft::EntryType::CONFIGURATION);
         *entry5.mutable_configuration() = desc(d3);
 
-        // TODO(ongaro): This is pretty dangerous if people have legitimate
-        // snapshots here. Should set the snapshot dir to some tmp dir instead.
-        Storage::FilesystemUtil::remove(
-            Core::StringUtil::format("snapshot.%lu", consensus->serverId));
+        std::string path = Storage::FilesystemUtil::mkdtemp();
+        consensus->storageDirectory =
+            Storage::FilesystemUtil::File(open(path.c_str(),
+                                               O_RDONLY|O_DIRECTORY),
+                                          path);
     }
     void init() {
         consensus->log.reset(new Log());
@@ -344,6 +347,7 @@ class ServerRaftConsensusTest : public ::testing::Test {
         EXPECT_EQ(0U, consensus->invariants.errors);
         startThreads = true;
         Clock::useMockValue = false;
+        Storage::FilesystemUtil::remove(consensus->storageDirectory.path);
     }
 
     Peer* getPeer(uint64_t serverId) {

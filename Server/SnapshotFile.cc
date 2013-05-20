@@ -27,17 +27,16 @@ namespace SnapshotFile {
 
 namespace FilesystemUtil = Storage::FilesystemUtil;
 
-Reader::Reader(const std::string& filename)
+Reader::Reader(const FilesystemUtil::File& parentDir)
     : file()
     , fileStream()
     , codedStream()
 {
-    FilesystemUtil::File parentDir = FilesystemUtil::openDir(".");
-    file = FilesystemUtil::tryOpenFile(parentDir, filename, O_RDONLY);
+    file = FilesystemUtil::tryOpenFile(parentDir, "snapshot", O_RDONLY);
     if (file.fd < 0) {
         throw std::runtime_error(
-                Core::StringUtil::format("Snapshot file '%s' not found",
-                                         filename.c_str()));
+                Core::StringUtil::format("Snapshot file not found in %s",
+                                         parentDir.path.c_str()));
     }
     fileStream.reset(new google::protobuf::io::FileInputStream(file.fd));
     codedStream.reset(
@@ -54,13 +53,12 @@ Reader::getStream()
      return *codedStream;
 }
 
-Writer::Writer(const std::string& filename)
+Writer::Writer(const FilesystemUtil::File& parentDir)
     : file()
     , fileStream()
     , codedStream()
 {
-    FilesystemUtil::File parentDir = FilesystemUtil::openDir(".");
-    file = FilesystemUtil::openFile(parentDir, filename, O_WRONLY|O_CREAT);
+    file = FilesystemUtil::openFile(parentDir, "snapshot", O_WRONLY|O_CREAT);
     fileStream.reset(new google::protobuf::io::FileOutputStream(file.fd));
     codedStream.reset(
             new google::protobuf::io::CodedOutputStream(fileStream.get()));

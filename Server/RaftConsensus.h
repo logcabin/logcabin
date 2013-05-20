@@ -932,6 +932,11 @@ class RaftConsensus : public Consensus {
     Globals& globals;
 
     /**
+     * Where the files for the log and snapshots are stored.
+     */
+    Storage::FilesystemUtil::File storageDirectory;
+
+    /**
      * This class behaves mostly like a monitor. This protects all the state in
      * this class and almost all of the Peer class (with some
      * documented exceptions).

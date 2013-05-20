@@ -31,10 +31,12 @@ def run(num_servers = None, # default 5
     server_ids = range(1, num_servers + 1)
 
     with Sandbox() as sandbox:
-        sh('rm -rf log')
-        sh('rm -f snapshot.*')
+        sh('rm -rf smoketeststorage/')
         sh('rm -f debug/*')
-        sh('scripts/initlog.py --serverid 1 --address %s' % smokehosts[0][0])
+        sh('scripts/initlog.py '
+             '--serverid 1 '
+             '--address %s '
+             '--storage smoketeststorage' % smokehosts[0][0])
 
         for server_id in server_ids:
             host = smokehosts[server_id - 1]

@@ -608,6 +608,7 @@ uint64_t RaftConsensus::SOFT_RPC_SIZE_LIMIT =
 
 RaftConsensus::RaftConsensus(Globals& globals)
     : globals(globals)
+    , storageDirectory()
     , mutex()
     , stateChanged()
     , exiting(false)
@@ -649,10 +650,16 @@ RaftConsensus::init()
     mutex.callback = std::bind(&Invariants::checkAll, &invariants);
     NOTICE("My server ID is %lu", serverId);
 
+    if (storageDirectory.fd == -1) { // unit tests set this
+        Storage::FilesystemUtil::File parentDir =
+            Storage::FilesystemUtil::openDir(
+                globals.config.read<std::string>("storagePath", "storage"));
+        storageDirectory = Storage::FilesystemUtil::openDir(parentDir,
+                              Core::StringUtil::format("server%lu", serverId));
+    }
+
     if (!log) { // some unit tests pre-set the log; don't overwrite it
-        // TODO(ongaro): use configuration option instead of hard-coded string
-        log.reset(new SimpleFileLog(
-                        Core::StringUtil::format("log/%lu", serverId)));
+        log.reset(new SimpleFileLog(storageDirectory));
     }
     for (uint64_t entryId = log->getLogStartIndex();
          entryId <= log->getLastLogIndex();
@@ -1034,8 +1041,7 @@ RaftConsensus::beginSnapshot(uint64_t lastIncludedIndex)
     NOTICE("Creating new snapshot through log index %lu (inclusive)",
            lastIncludedIndex);
     std::unique_ptr<SnapshotFile::Writer> writer(
-                new SnapshotFile::Writer(
-                        Core::StringUtil::format("snapshot.%lu", serverId)));
+                new SnapshotFile::Writer(storageDirectory));
 
     // set header fields
     SnapshotMetadata::Header header;
@@ -1429,8 +1435,7 @@ RaftConsensus::readSnapshot()
 {
     std::unique_ptr<SnapshotFile::Reader> reader;
     try {
-        reader.reset(new SnapshotFile::Reader(
-                          Core::StringUtil::format("snapshot.%lu", serverId)));
+        reader.reset(new SnapshotFile::Reader(storageDirectory));
     } catch (const std::runtime_error& e) { // file not found
         NOTICE("%s", e.what());
     }
