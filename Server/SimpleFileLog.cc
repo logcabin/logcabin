@@ -51,12 +51,13 @@ fileToProto(const File& dir, const std::string& path,
     FilesystemUtil::FileContents reader(file);
 
     char checksum[Core::Checksum::MAX_LENGTH];
-    uint32_t bytesRead = reader.copyPartial(0, checksum, sizeof32(checksum));
-    uint32_t checksumBytes = Core::Checksum::length(checksum, bytesRead);
+    uint64_t bytesRead = reader.copyPartial(0, checksum, sizeof(checksum));
+    uint32_t checksumBytes = Core::Checksum::length(checksum,
+                                                    uint32_t(bytesRead));
     if (checksumBytes == 0)
         return format("File %s missing checksum", file.path.c_str());
 
-    uint32_t dataLen = reader.getFileLength() - checksumBytes;
+    uint64_t dataLen = reader.getFileLength() - checksumBytes;
     const void* data = reader.get(checksumBytes, dataLen);
     std::string error = Core::Checksum::verify(checksum, data, dataLen);
     if (!error.empty()) {
@@ -82,7 +83,7 @@ protoToFile(const google::protobuf::Message& in,
     FilesystemUtil::File file =
         FilesystemUtil::openFile(dir, path, O_CREAT|O_WRONLY|O_TRUNC);
     const void* data = NULL;
-    uint32_t len = 0;
+    uint64_t len = 0;
 #if BINARY_FORMAT
     RPC::Buffer contents;
     RPC::ProtoBuf::serialize(in, contents);
@@ -92,7 +93,7 @@ protoToFile(const google::protobuf::Message& in,
     std::string contents(Core::ProtoBuf::dumpString(in));
     contents = "\n" + contents;
     data = contents.data();
-    len = uint32_t(contents.length());
+    len = uint64_t(contents.length());
 #endif
     char checksum[Core::Checksum::MAX_LENGTH];
     uint32_t checksumLen = Core::Checksum::calculate("SHA-1",

@@ -201,7 +201,7 @@ std::string mkdtemp();
  *      This wrapper will never return -1 with errno set to EINTR.
  */
 ssize_t
-write(int fildes, const void* data, uint32_t dataLen);
+write(int fildes, const void* data, uint64_t dataLen);
 
 /**
  * A wrapper around write that retries interrupted calls.
@@ -215,7 +215,7 @@ write(int fildes, const void* data, uint32_t dataLen);
  */
 ssize_t
 write(int fildes,
-      std::initializer_list<std::pair<const void*, uint32_t>> data);
+      std::initializer_list<std::pair<const void*, uint64_t>> data);
 
 /**
  * Provides random access to a file.
@@ -235,7 +235,7 @@ class FileContents {
     /**
      * Return the length of the file.
      */
-    uint32_t getFileLength() { return fileLen; }
+    uint64_t getFileLength() { return fileLen; }
 
     /**
      * Copy some number of bytes of the file into a user-supplied buffer.
@@ -250,7 +250,7 @@ class FileContents {
      * \param length
      *      The number of bytes to copy.
      */
-    void copy(uint32_t offset, void* buf, uint32_t length);
+    void copy(uint64_t offset, void* buf, uint64_t length);
 
     /**
      * Copy up to some number of bytes of the file into a user-supplied buffer.
@@ -265,7 +265,7 @@ class FileContents {
      *      The number of bytes copied. This can be fewer than maxLength if the
      *      file ended first.
      */
-    uint32_t copyPartial(uint32_t offset, void* buf, uint32_t maxLength);
+    uint64_t copyPartial(uint64_t offset, void* buf, uint64_t maxLength);
 
     /**
      * Get a pointer to a region of the file.
@@ -285,17 +285,17 @@ class FileContents {
      */
     template<typename T = void>
     const T*
-    get(uint32_t offset, uint32_t length) {
+    get(uint64_t offset, uint64_t length) {
         return reinterpret_cast<const T*>(getHelper(offset, length));
     }
 
   private:
     /// Used internally by get().
-    const void* getHelper(uint32_t offset, uint32_t length);
+    const void* getHelper(uint64_t offset, uint64_t length);
     /// An open file descriptor for the file to read.
     File file;
     /// The number of bytes in the file.
-    uint32_t fileLen;
+    uint64_t fileLen;
     /// The value returned by mmap(), or NULL for empty files.
     const void* map;
     FileContents(const FileContents&) = delete;
