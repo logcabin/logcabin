@@ -28,6 +28,10 @@ namespace LogCabin {
 namespace Server {
 namespace SnapshotFile {
 
+// TODO(ongaro): protobuf::io uses 32-bit integer file offsets, but snapshots
+// can be larger than that. A lot of this is going to break for files larger
+// than 2 or 4GB.
+
 /**
  * Assists in reading snapshot files from the local filesystem.
  */

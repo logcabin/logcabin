@@ -14,7 +14,9 @@
  */
 
 #include <algorithm>
+#include <fcntl.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <time.h>
 
 #include "build/Protocol/Raft.pb.h"
@@ -155,6 +157,9 @@ Peer::Peer(uint64_t serverId, RaftConsensus& consensus)
     , thisCatchUpIterationStart(Clock::now())
     , thisCatchUpIterationGoalId(~0UL)
     , isCaughtUp_(false)
+    , snapshotFile()
+    , snapshotFileOffset(0)
+    , lastSnapshotIndex(0)
     , session()
     , rpc()
     , thread()
@@ -178,6 +183,9 @@ Peer::beginLeadership()
     nextIndex = consensus.log->getLastLogIndex() + 1;
     lastAgreeIndex = 0;
     forceHeartbeat = true;
+    snapshotFile.reset();
+    snapshotFileOffset = 0;
+    lastSnapshotIndex = 0;
 }
 
 void
@@ -620,6 +628,7 @@ RaftConsensus::RaftConsensus(Globals& globals)
     , state(State::FOLLOWER)
     , lastSnapshotIndex(0)
     , snapshotReader()
+    , snapshotWriter()
     , commitIndex(0)
     , leaderId(0)
     , votedFor(0)
@@ -902,6 +911,90 @@ RaftConsensus::handleAppendEntries(
 }
 
 void
+RaftConsensus::handleAppendSnapshotChunk(
+        const Protocol::Raft::AppendSnapshotChunk::Request& request,
+        Protocol::Raft::AppendSnapshotChunk::Response& response)
+{
+    std::unique_lock<Mutex> lockGuard(mutex);
+    assert(!exiting);
+
+    response.set_term(currentTerm);
+
+    // If the caller's term is stale, just return our term to it.
+    if (request.term() < currentTerm) {
+        VERBOSE("Caller(%lu) is stale. Our term is %lu, theirs is %lu",
+                 request.server_id(), currentTerm, request.term());
+        return;
+    }
+    if (request.term() > currentTerm) {
+        VERBOSE("Caller(%lu) has newer term, updating. "
+                "Ours was %lu, theirs is %lu",
+                request.server_id(), currentTerm, request.term());
+        // We're about to bump our term in the stepDown below: update
+        // 'response' accordingly.
+        response.set_term(request.term());
+    }
+    // This request is a sign of life from the current leader. Update our term
+    // and convert to follower if necessary; reset the election timer.
+    stepDown(request.term());
+    setElectionTimer();
+
+    // Record the leader ID as a hint for clients.
+    if (leaderId == 0) {
+        leaderId = request.server_id();
+        NOTICE("All hail leader %lu for term %lu", leaderId, currentTerm);
+    } else {
+        assert(leaderId == request.server_id());
+    }
+
+    if (!snapshotWriter)
+        snapshotWriter.reset(new SnapshotFile::Writer(storageDirectory));
+    if (request.byte_offset() <
+        uint64_t(snapshotWriter->getStream().ByteCount())) {
+        WARNING("Ignoring stale snapshot chunk for byte offset %lu when the "
+                "next byte needed is %lu",
+                request.byte_offset(),
+                uint64_t(snapshotWriter->getStream().ByteCount()));
+        return;
+    }
+    if (request.byte_offset() >
+        uint64_t(snapshotWriter->getStream().ByteCount())) {
+        PANIC("Leader tried to send snapshot chunk at byte offset %lu but the "
+              "next byte needed is %lu. It's supposed to send these in order.",
+              request.byte_offset(),
+              uint64_t(snapshotWriter->getStream().ByteCount()));
+    }
+    snapshotWriter->getStream().WriteString(request.data());
+
+    if (request.done()) {
+        if (request.last_snapshot_index() < lastSnapshotIndex) {
+            WARNING("The leader sent us a snapshot, but it's stale: it only "
+                    "covers up through index %lu and we already have one "
+                    "through %lu. A well-behaved leader shouldn't do that. "
+                    "Discarding the snapshot.",
+                    request.last_snapshot_index(),
+                    lastSnapshotIndex);
+            snapshotWriter->discard();
+            snapshotWriter.reset();
+            return;
+        }
+        NOTICE("Loading in new snapshot from leader");
+        // TODO(ongaro): need to truncate our log before saving
+        snapshotWriter->save();
+        snapshotWriter.reset();
+        readSnapshot();
+
+        // The snapshot could change our latest configuration.
+        auto it = configurationDescriptions.rbegin();
+        // We'll never truncate our only configuration.
+        assert(it != configurationDescriptions.rend());
+        configuration->setConfiguration(it->first, it->second);
+
+        stateChanged.notify_all();
+    }
+}
+
+void
 RaftConsensus::handleRequestVote(
                     const Protocol::Raft::RequestVote::Request& request,
                     Protocol::Raft::RequestVote::Response& response)
@@ -1073,6 +1166,13 @@ RaftConsensus::snapshotDone(uint64_t lastIncludedIndex,
                             std::unique_ptr<SnapshotFile::Writer> writer)
 {
     std::unique_lock<Mutex> lockGuard(mutex);
+    if (lastIncludedIndex < lastSnapshotIndex) {
+        NOTICE("Discarding snapshot through %lu since we already got a newer "
+               "one (presumably from another server) through %lu",
+               lastIncludedIndex, lastSnapshotIndex);
+        writer->discard();
+        return;
+    }
     writer->save();
     lastSnapshotIndex = lastIncludedIndex;
     // TODO(ongaro): reclaim space from log here once it's safe to do so
@@ -1159,6 +1259,8 @@ RaftConsensus::peerThreadMain(std::shared_ptr<Peer> peer)
                 case State::LEADER:
                     if (peer->getLastAgreeIndex() < log->getLastLogIndex() ||
                         peer->nextHeartbeatTime < now) {
+                        // appendEntries delegates to appendSnapshotChunk if we
+                        // need to send a snapshot instead
                         appendEntries(lockGuard, *peer);
                     } else {
                         waitUntil = peer->nextHeartbeatTime;
@@ -1287,16 +1389,22 @@ RaftConsensus::append(const Log::Entry& entry)
 
 void
 RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
-                           Peer& peer)
+                             Peer& peer)
 {
+    uint64_t lastLogIndex = log->getLastLogIndex();
+    uint64_t prevLogIndex = peer.nextIndex - 1;
+    assert(prevLogIndex <= lastLogIndex);
+    if (0 < prevLogIndex && prevLogIndex < log->getLogStartIndex()) {
+        // need to send follower a snapshot, not an entry
+        appendSnapshotChunk(lockGuard, peer);
+        return;
+    }
+
     // Build up request
     Protocol::Raft::AppendEntries::Request request;
     request.set_server_id(serverId);
     request.set_recipient_id(peer.serverId);
     request.set_term(currentTerm);
-    uint64_t lastLogIndex = log->getLastLogIndex();
-    uint64_t prevLogIndex = peer.nextIndex - 1;
-    assert(prevLogIndex <= lastLogIndex);
     request.set_prev_log_term(log->getTerm(prevLogIndex));
     request.set_prev_log_index(prevLogIndex);
 
@@ -1390,6 +1498,87 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
         } else {
             if (peer.nextIndex > 1)
                 --peer.nextIndex;
+        }
+    }
+}
+
+void
+RaftConsensus::appendSnapshotChunk(std::unique_lock<Mutex>& lockGuard,
+                                   Peer& peer)
+{
+    // Build up request
+    Protocol::Raft::AppendSnapshotChunk::Request request;
+    request.set_server_id(serverId);
+    request.set_recipient_id(peer.serverId);
+    request.set_term(currentTerm);
+
+    // Open the latest snapshot if we haven't already. Stash a copy of the
+    // lastSnapshotIndex that goes along with the file, since it's possible
+    // that this will change while we're transferring chunks).
+    if (!peer.snapshotFile) {
+        namespace FilesystemUtil = Storage::FilesystemUtil;
+        peer.snapshotFile.reset(new FilesystemUtil::FileContents(
+            FilesystemUtil::openFile(storageDirectory, "snapshot", O_RDONLY)));
+        peer.snapshotFileOffset = 0;
+        peer.lastSnapshotIndex = lastSnapshotIndex;
+    }
+    request.set_last_snapshot_index(peer.lastSnapshotIndex);
+    request.set_byte_offset(peer.snapshotFileOffset);
+    // The amount of data we can send is bounded by the remaining bytes in the
+    // file and the maximum length for RPCs.
+    uint64_t numDataBytes = std::min(
+        peer.snapshotFile->getFileLength() - peer.snapshotFileOffset,
+        SOFT_RPC_SIZE_LIMIT);
+    request.set_data(peer.snapshotFile->get<char>(peer.snapshotFileOffset,
+                                                  numDataBytes),
+                     numDataBytes);
+    request.set_done(peer.snapshotFileOffset + numDataBytes ==
+                     peer.snapshotFile->getFileLength());
+
+    // Execute RPC
+    Protocol::Raft::AppendSnapshotChunk::Response response;
+    TimePoint start = Clock::now();
+    uint64_t epoch = currentEpoch;
+    bool ok = peer.callRPC(Protocol::Raft::OpCode::APPEND_SNAPSHOT_CHUNK,
+                           request, response,
+                           lockGuard);
+    if (!ok) {
+        peer.backoffUntil = start +
+            std::chrono::milliseconds(RPC_FAILURE_BACKOFF_MS);
+        return;
+    }
+
+    // Process response
+
+    if (currentTerm != request.term() || peer.exiting) {
+        // we don't care about result of RPC
+        return;
+    }
+    // Since we were leader in this term before, we must still be leader in
+    // this term.
+    assert(state == State::LEADER);
+    if (response.term() > currentTerm) {
+        stepDown(response.term());
+    } else {
+        assert(response.term() == currentTerm);
+        peer.lastAckEpoch = epoch;
+        stateChanged.notify_all();
+        peer.nextHeartbeatTime = start +
+            std::chrono::milliseconds(HEARTBEAT_PERIOD_MS);
+        peer.snapshotFileOffset += numDataBytes;
+        if (request.done()) {
+            // We set this to 1 below lastSnapshotIndex since we still want to
+            // send the follower one entry that overlaps the snapshot.
+            peer.lastAgreeIndex = peer.lastSnapshotIndex - 1;
+            peer.nextIndex = peer.lastSnapshotIndex;
+            // These entries are already committed if they're in a snapshot, so
+            // the commitIndex shouldn't advance, but let's just follow the
+            // simple rule that bumping lastAgreeIndex should always be
+            // followed by a call to advanceCommittedId():
+            advanceCommittedId();
+            peer.snapshotFile.reset();
+            peer.snapshotFileOffset = 0;
+            peer.lastSnapshotIndex = 0;
         }
     }
 }
@@ -1583,6 +1772,10 @@ RaftConsensus::startNewElection()
     votedFor = serverId;
     setElectionTimer();
     configuration->forEach(&Server::beginRequestVote);
+    if (snapshotWriter) {
+        snapshotWriter->discard();
+        snapshotWriter.reset();
+    }
     updateLogMetadata();
     interruptAll();
 
@@ -1602,6 +1795,10 @@ RaftConsensus::stepDown(uint64_t newTerm)
         votedFor = 0;
         updateLogMetadata();
         configuration->resetStagingServers();
+        if (snapshotWriter) {
+            snapshotWriter->discard();
+            snapshotWriter.reset();
+        }
     }
     state = State::FOLLOWER;
     if (startElectionAt == TimePoint::max())

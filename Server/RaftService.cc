@@ -44,6 +44,9 @@ RaftService::handleRPC(RPC::ServerRPC rpc)
         case OpCode::APPEND_ENTRIES:
             appendEntries(std::move(rpc));
             break;
+        case OpCode::APPEND_SNAPSHOT_CHUNK:
+            appendSnapshotChunk(std::move(rpc));
+            break;
         case OpCode::REQUEST_VOTE:
             requestVote(std::move(rpc));
             break;
@@ -85,6 +88,16 @@ RaftService::appendEntries(RPC::ServerRPC rpc)
     //VERBOSE("AppendEntries:\n%s",
     //        Core::ProtoBuf::dumpString(request).c_str());
     globals.raft->handleAppendEntries(request, response);
+    rpc.reply(response);
+}
+
+void
+RaftService::appendSnapshotChunk(RPC::ServerRPC rpc)
+{
+    PRELUDE(AppendSnapshotChunk);
+    //VERBOSE("AppendSnapshotChunk:\n%s",
+    //        Core::ProtoBuf::dumpString(request).c_str());
+    globals.raft->handleAppendSnapshotChunk(request, response);
     rpc.reply(response);
 }
 

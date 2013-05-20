@@ -36,7 +36,6 @@ class ServiceMock : public RPC::Service {
   public:
     typedef google::protobuf::Message Message;
 
-  private:
     /**
      * The base class for RPC handlers. These are called when the matching
      * request arrives and act on the request, for example, by replying to it.
@@ -46,6 +45,7 @@ class ServiceMock : public RPC::Service {
         virtual void handleRPC(ServerRPC serverRPC) = 0;
     };
 
+  private:
     /// See closeSession().
     class CloseSession : public Handler {
         void handleRPC(ServerRPC serverRPC) {
@@ -139,6 +139,15 @@ class ServiceMock : public RPC::Service {
      */
     void rejectInvalidRequest(uint16_t opCode, const Message& request) {
         expect(opCode, request, std::make_shared<RejectInvalidRequest>());
+    }
+
+    /**
+     * Call a custom handler when the request arrives.
+     */
+    void runArbitraryCode(uint16_t opCode,
+                          const Message& request,
+                          std::shared_ptr<Handler> response) {
+        expect(opCode, request, response);
     }
 
     /**

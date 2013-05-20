@@ -365,6 +365,24 @@ class Peer : public Server {
      */
     bool isCaughtUp_;
 
+    /**
+     * A snapshot file to be sent to the follower, or NULL.
+     * TODO(ongaro): It'd be better to destroy this as soon as this server
+     * steps down, but peers don't have a hook for that right now.
+     */
+    std::unique_ptr<Storage::FilesystemUtil::FileContents> snapshotFile;
+    /**
+     * The number of bytes of 'snapshotFile' that have been acknowledged by the
+     * follower already. Send starting here next time.
+     */
+    uint64_t snapshotFileOffset;
+    /**
+     * The last log index that 'snapshotFile' corresponds to. This is used to
+     * set the follower's #nextIndex accordingly after we're done sending it
+     * the snapshot.
+     */
+    uint64_t lastSnapshotIndex;
+
   private:
 
     /**
@@ -663,6 +681,18 @@ class RaftConsensus : public Consensus {
                 Protocol::Raft::AppendEntries::Response& response);
 
     /**
+     * Process an AppendSnapshotChunk RPC from another server. Called by
+     * RaftService.
+     * \param[in] request
+     *      The request that was received from the other server.
+     * \param[out] response
+     *      Where the reply should be placed.
+     */
+    void handleAppendSnapshotChunk(
+                const Protocol::Raft::AppendSnapshotChunk::Request& request,
+                Protocol::Raft::AppendSnapshotChunk::Response& response);
+
+    /**
      * Process a RequestVote RPC from another server. Called by RaftService.
      * \param[in] request
      *      The request that was received from the other server.
@@ -805,6 +835,18 @@ class RaftConsensus : public Consensus {
      *      request, and processing its result.
      */
     void appendEntries(std::unique_lock<Mutex>& lockGuard, Peer& peer);
+
+    /**
+     * Send an AppendSnapshotChunk RPC to the server (containing part of a
+     * snapshot file to replicate).
+     * \param lockGuard
+     *      Used to temporarily release the lock while invoking the RPC, so as
+     *      to allow for some concurrency.
+     * \param peer
+     *      State used in communicating with the follower, building the RPC
+     *      request, and processing its result.
+     */
+    void appendSnapshotChunk(std::unique_lock<Mutex>& lockGuard, Peer& peer);
 
     /**
      * Transition to being a leader. This is called when a candidate has
@@ -1038,6 +1080,14 @@ class RaftConsensus : public Consensus {
      * can be repopulated with readSnapshot().
      */
     mutable std::unique_ptr<SnapshotFile::Reader> snapshotReader;
+
+    /**
+     * This is used in handleAppendSnapshotChunk when receiving a snapshot from
+     * the current leader. The leader is assumed to send at most one snapshot
+     * at a time, and any partial snapshots here are discarded when the term
+     * changes.
+     */
+    std::unique_ptr<SnapshotFile::Writer> snapshotWriter;
 
     /**
      * The largest entry ID for which a quorum is known to have stored the same

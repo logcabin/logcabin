@@ -81,6 +81,33 @@ TimePoint round(TimePoint x) {
     return TimePoint(msSinceEpoch);
 }
 
+/**
+ * Custom ServiceMock handler that increases Raft's currentTerm before
+ * responding to a request.
+ */
+class BumpTermAndReply : public RPC::ServiceMock::Handler {
+    explicit BumpTermAndReply(RaftConsensus& consensus,
+                              const google::protobuf::Message& response)
+        : consensus(consensus)
+        , response(Core::ProtoBuf::copy(response)) {
+    }
+    void handleRPC(RPC::ServerRPC serverRPC) {
+        // Avoid using stepDown() since it calls interruptAll() which cancels
+        // this RPC!
+        ++consensus.currentTerm;
+        consensus.leaderId = 0;
+        consensus.votedFor = 0;
+        consensus.updateLogMetadata();
+        consensus.state = State::FOLLOWER;
+        consensus.setElectionTimer();
+        consensus.stateChanged.notify_all();
+        serverRPC.reply(*response);
+    }
+    RaftConsensus& consensus;
+    std::unique_ptr<google::protobuf::Message> response;
+};
+
+
 class ServerRaftConsensusSimpleConfigurationTest : public ::testing::Test {
     ServerRaftConsensusSimpleConfigurationTest()
         : globals()
@@ -594,7 +621,8 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntries_callerStale)
               response);
 }
 
-// this tests the leaderId == 0 branch, setElectionTimer(), and heartbeat
+// this tests the callee stale and leaderId == 0 branches, setElectionTimer(),
+// and heartbeat
 TEST_F(ServerRaftConsensusTest, handleAppendEntries_newLeaderAndCommittedId)
 {
     init();
@@ -787,6 +815,122 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntries_duplicate)
     EXPECT_EQ(Protocol::Raft::EntryType::CONFIGURATION, l1.type());
     EXPECT_EQ(d, l1.configuration());
     EXPECT_EQ("", l1.data());
+}
+
+std::string
+readEntireFileAsString(const Storage::FilesystemUtil::File& parentDir,
+                       const std::string& name)
+{
+    Storage::FilesystemUtil::FileContents f(
+        Storage::FilesystemUtil::openFile(parentDir, name, O_RDONLY));
+    return std::string(f.get<char>(0, f.getFileLength()),
+                       f.getFileLength());
+}
+
+TEST_F(ServerRaftConsensusTest, handleAppendSnapshotChunk_callerStale)
+{
+    init();
+    Protocol::Raft::AppendSnapshotChunk::Request request;
+    Protocol::Raft::AppendSnapshotChunk::Response response;
+    request.set_server_id(3);
+    request.set_term(10);
+    request.set_last_snapshot_index(1);
+    request.set_byte_offset(0);
+    request.set_data("hello");
+    request.set_done(false);
+    consensus->stepDown(11);
+    consensus->handleAppendSnapshotChunk(request, response);
+    EXPECT_EQ("term: 11 ", response);
+}
+
+// this tests the callee stale and leaderId == 0 branches and
+// setElectionTimer()
+TEST_F(ServerRaftConsensusTest, handleSnapshotChunk_newLeader)
+{
+    init();
+    Protocol::Raft::AppendSnapshotChunk::Request request;
+    Protocol::Raft::AppendSnapshotChunk::Response response;
+    request.set_server_id(3);
+    request.set_term(10);
+    request.set_last_snapshot_index(1);
+    request.set_byte_offset(0);
+    request.set_data("hello");
+    request.set_done(false);
+    consensus->stepDown(8);
+    consensus->append(entry5);
+    consensus->startNewElection();
+    EXPECT_EQ(State::CANDIDATE, consensus->state);
+    EXPECT_EQ(9U, consensus->currentTerm);
+    Clock::mockValue += milliseconds(10000);
+    consensus->handleAppendSnapshotChunk(request, response);
+    EXPECT_EQ(3U, consensus->leaderId);
+    EXPECT_EQ(State::FOLLOWER, consensus->state);
+    EXPECT_EQ(0U, consensus->votedFor);
+    EXPECT_EQ(10U, consensus->currentTerm);
+    EXPECT_LT(Clock::mockValue, consensus->startElectionAt);
+    EXPECT_GT(Clock::mockValue +
+              milliseconds(RaftConsensus::ELECTION_TIMEOUT_MS * 2),
+              consensus->startElectionAt);
+    EXPECT_EQ("term: 10 ", response);
+    consensus->snapshotWriter->discard();
+}
+
+TEST_F(ServerRaftConsensusTest, handleAppendSnapshotChunk)
+{
+    init();
+    consensus->stepDown(10);
+    consensus->append(entry1);
+    consensus->commitIndex = 1;
+
+    // Take a snapshot, saving it directly instead of calling snapshotDone().
+    // This way, the consensus module does not know about the snapshot file.
+    std::unique_ptr<SnapshotFile::Writer> writer = consensus->beginSnapshot(1);
+    writer->save();
+    std::string snapshotContents =
+        readEntireFileAsString(consensus->storageDirectory, "snapshot");
+
+    Protocol::Raft::AppendSnapshotChunk::Request request;
+    Protocol::Raft::AppendSnapshotChunk::Response response;
+    request.set_server_id(3);
+    request.set_term(10);
+    request.set_last_snapshot_index(1);
+    request.set_byte_offset(0);
+    request.set_data(snapshotContents);
+    request.set_done(false);
+
+    // useful data, but not done yet
+    consensus->handleAppendSnapshotChunk(request, response);
+    EXPECT_EQ("term: 10 ", response);
+    EXPECT_EQ(0U, consensus->lastSnapshotIndex);
+    EXPECT_TRUE(consensus->snapshotWriter);
+
+    // stale packet: expect warning
+    LogCabin::Core::Debug::setLogPolicy({
+        {"Server/RaftConsensus.cc", "ERROR"}
+    });
+    consensus->handleAppendSnapshotChunk(request, response);
+    LogCabin::Core::Debug::setLogPolicy({
+        {"Server/RaftConsensus.cc", "WARNING"}
+    });
+    EXPECT_EQ("term: 10 ", response);
+    EXPECT_EQ(0U, consensus->lastSnapshotIndex);
+    EXPECT_TRUE(consensus->snapshotWriter);
+
+    // done now
+    request.set_byte_offset(snapshotContents.size());
+    request.set_data("hello world!");
+    request.set_done(true);
+    consensus->handleAppendSnapshotChunk(request, response);
+    EXPECT_EQ("term: 10 ", response);
+    EXPECT_EQ(1U, consensus->lastSnapshotIndex);
+    EXPECT_FALSE(consensus->snapshotWriter);
+    std::string helloWorld;
+    EXPECT_TRUE(consensus->snapshotReader->getStream()
+                  .ReadString(&helloWorld,
+                              int(strlen("hello world!"))));
+    EXPECT_EQ("hello world!", helloWorld);
+
+    // TODO(ongaro): Test that the configuration is update accordingly
 }
 
 TEST_F(ServerRaftConsensusTest, handleRequestVote)
@@ -1050,8 +1194,17 @@ TEST_F(ServerRaftConsensusTest, snapshotDone)
     consensus->advanceCommittedId();
     EXPECT_EQ(3U, consensus->commitIndex);
 
-    std::unique_ptr<SnapshotFile::Writer> writer = consensus->beginSnapshot(3);
-    consensus->snapshotDone(3, std::move(writer));
+    // this one will get discarded
+    std::unique_ptr<SnapshotFile::Writer> discardWriter =
+        consensus->beginSnapshot(2);
+    // this one will get saved
+    std::unique_ptr<SnapshotFile::Writer> saveWriter =
+        consensus->beginSnapshot(3);
+
+    consensus->snapshotDone(3, std::move(saveWriter));
+    EXPECT_EQ(3U, consensus->lastSnapshotIndex);
+
+    consensus->snapshotDone(2, std::move(discardWriter));
     EXPECT_EQ(3U, consensus->lastSnapshotIndex);
 }
 
@@ -1485,6 +1638,20 @@ TEST_F(ServerRaftConsensusPATest, appendEntries_forceHeartbeat)
     EXPECT_FALSE(peer->forceHeartbeat);
 }
 
+TEST_F(ServerRaftConsensusPATest, appendEntries_termChanged)
+{
+    peerService->runArbitraryCode(
+            Protocol::Raft::OpCode::APPEND_ENTRIES,
+            request,
+            std::make_shared<BumpTermAndReply>(*consensus, response));
+    std::unique_lock<Mutex> lockGuard(consensus->mutex);
+    consensus->appendEntries(lockGuard, *peer);
+    EXPECT_EQ(TimePoint::min(), peer->backoffUntil);
+    EXPECT_EQ(0U, peer->lastAgreeIndex);
+    EXPECT_EQ(State::FOLLOWER, consensus->state);
+}
+
+
 TEST_F(ServerRaftConsensusPATest, appendEntries_termStale)
 {
     response.set_term(10);
@@ -1510,6 +1677,124 @@ TEST_F(ServerRaftConsensusPATest, appendEntries_ok)
               peer->nextHeartbeatTime);
 
     // TODO(ongaro): test catchup code
+}
+
+// test that appendSnapshotChunk gets called
+TEST_F(ServerRaftConsensusPATest, appendEntries_snapshot)
+{
+    consensus->log->truncatePrefix(2);
+    EXPECT_EQ(2U, consensus->log->getLogStartIndex());
+    peer->nextIndex = 2;
+    std::unique_lock<Mutex> lockGuard(consensus->mutex);
+    EXPECT_DEATH(consensus->appendEntries(lockGuard, *peer),
+                 "Could not open .*snapshot");
+}
+
+// used in AppendSnapshotChunk tests
+class ServerRaftConsensusPSTest : public ServerRaftConsensusPTest {
+    ServerRaftConsensusPSTest()
+        : peer()
+        , request()
+        , response()
+    {
+        init();
+        consensus->append(entry1);
+        consensus->stepDown(4);
+        consensus->startNewElection();
+        consensus->append(entry5);
+        consensus->advanceCommittedId();
+        EXPECT_EQ(State::LEADER, consensus->state);
+        EXPECT_EQ(5U, consensus->currentTerm);
+        peer = getPeerRef(2);
+
+        // First create a snapshot file on disk.
+        // Note that this one doesn't have a Raft header.
+        SnapshotFile::Writer w(consensus->storageDirectory);
+        w.getStream().WriteString("hello, world!");
+        w.save();
+        consensus->lastSnapshotIndex = 2;
+
+        request.set_server_id(1);
+        request.set_recipient_id(2);
+        request.set_term(5);
+        request.set_last_snapshot_index(2);
+        request.set_byte_offset(0);
+        request.set_data("hello, world!");
+        request.set_done(true);
+
+        response.set_term(5);
+    }
+
+    std::shared_ptr<Peer> peer;
+    Protocol::Raft::AppendSnapshotChunk::Request request;
+    Protocol::Raft::AppendSnapshotChunk::Response response;
+};
+
+TEST_F(ServerRaftConsensusPSTest, appendSnapshotChunk_rpcFailed)
+{
+    peerService->closeSession(Protocol::Raft::OpCode::APPEND_SNAPSHOT_CHUNK,
+                              request);
+    // expect warning
+    LogCabin::Core::Debug::setLogPolicy({
+        {"Server/RaftConsensus.cc", "ERROR"}
+    });
+    std::unique_lock<Mutex> lockGuard(consensus->mutex);
+    consensus->appendSnapshotChunk(lockGuard, *peer);
+    EXPECT_LT(Clock::now(), peer->backoffUntil);
+    EXPECT_EQ(0U, peer->snapshotFileOffset);
+}
+
+
+TEST_F(ServerRaftConsensusPSTest, appendSnapshotChunk_termChanged)
+{
+    peerService->runArbitraryCode(
+            Protocol::Raft::OpCode::APPEND_SNAPSHOT_CHUNK,
+            request,
+            std::make_shared<BumpTermAndReply>(*consensus, response));
+    std::unique_lock<Mutex> lockGuard(consensus->mutex);
+    consensus->appendSnapshotChunk(lockGuard, *peer);
+    EXPECT_EQ(TimePoint::min(), peer->backoffUntil);
+    EXPECT_EQ(0U, peer->snapshotFileOffset);
+}
+
+TEST_F(ServerRaftConsensusPSTest, appendSnapshotChunk_termStale)
+{
+    response.set_term(10);
+    peerService->reply(Protocol::Raft::OpCode::APPEND_SNAPSHOT_CHUNK,
+                       request, response);
+    std::unique_lock<Mutex> lockGuard(consensus->mutex);
+    consensus->appendSnapshotChunk(lockGuard, *peer);
+    EXPECT_EQ(0U, peer->snapshotFileOffset);
+    EXPECT_EQ(State::FOLLOWER, consensus->state);
+    EXPECT_EQ(10U, consensus->currentTerm);
+}
+
+TEST_F(ServerRaftConsensusPSTest, appendSnapshotChunk_ok)
+{
+    RaftConsensus::SOFT_RPC_SIZE_LIMIT = 7;
+    request.set_data("hello, ");
+    request.set_done(false);
+    peerService->reply(Protocol::Raft::OpCode::APPEND_SNAPSHOT_CHUNK,
+                       request, response);
+    request.set_byte_offset(7);
+    request.set_data("world!");
+    request.set_done(true);
+    peerService->reply(Protocol::Raft::OpCode::APPEND_SNAPSHOT_CHUNK,
+                       request, response);
+    std::unique_lock<Mutex> lockGuard(consensus->mutex);
+    consensus->appendSnapshotChunk(lockGuard, *peer);
+    // make sure we don't use an updated lastSnapshotIndex value
+    consensus->lastSnapshotIndex = 1;
+    consensus->appendSnapshotChunk(lockGuard, *peer);
+    EXPECT_EQ(1U, peer->lastAgreeIndex);
+    EXPECT_EQ(2U, peer->nextIndex);
+    EXPECT_FALSE(peer->snapshotFile);
+    EXPECT_EQ(0U, peer->snapshotFileOffset);
+    EXPECT_EQ(0U, peer->lastSnapshotIndex);
+    EXPECT_EQ(consensus->currentEpoch, peer->lastAckEpoch);
+    EXPECT_EQ(Clock::mockValue +
+              milliseconds(RaftConsensus::HEARTBEAT_PERIOD_MS),
+              peer->nextHeartbeatTime);
 }
 
 TEST_F(ServerRaftConsensusTest, becomeLeader)
@@ -1819,6 +2104,9 @@ TEST_F(ServerRaftConsensusTest, startNewElection)
     consensus->stepDown(5);
     consensus->append(entry1);
     consensus->append(entry5);
+
+    consensus->snapshotWriter.reset(
+                    new SnapshotFile::Writer(consensus->storageDirectory));
     consensus->startNewElection();
     EXPECT_EQ(State::CANDIDATE, consensus->state);
     EXPECT_EQ(6U, consensus->currentTerm);
@@ -1828,6 +2116,7 @@ TEST_F(ServerRaftConsensusTest, startNewElection)
     EXPECT_GT(Clock::now() +
               milliseconds(RaftConsensus::ELECTION_TIMEOUT_MS) * 2,
               consensus->startElectionAt);
+    EXPECT_FALSE(consensus->snapshotWriter);
 
     // already won
     consensus->stepDown(7);
@@ -1886,8 +2175,11 @@ TEST_F(ServerRaftConsensusTest, stepDown)
     EXPECT_EQ(oldStartElectionAt, consensus->startElectionAt);
 
     // from follower to new term
+    consensus->snapshotWriter.reset(
+                    new SnapshotFile::Writer(consensus->storageDirectory));
     consensus->stepDown(consensus->currentTerm + 1);
     EXPECT_EQ(oldStartElectionAt, consensus->startElectionAt);
+    EXPECT_FALSE(consensus->snapshotWriter);
 }
 
 TEST_F(ServerRaftConsensusTest, updateLogMetadata)
