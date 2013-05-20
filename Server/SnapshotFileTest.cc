@@ -17,6 +17,8 @@
 #include <gtest/gtest.h>
 #include <sys/stat.h>
 
+#include "Core/Debug.h"
+#include "Core/StringUtil.h"
 #include "Server/SnapshotFile.h"
 
 namespace LogCabin {
@@ -48,7 +50,8 @@ TEST_F(ServerSnapshotFileTest, basic)
     {
         Writer writer(tmpdir);
         writer.getStream().WriteVarint32(482);
-        writer.close();
+        writer.save();
+        writer.save(); // calling save twice is safe
     }
     {
         Reader reader(tmpdir);
@@ -61,6 +64,34 @@ TEST_F(ServerSnapshotFileTest, basic)
 TEST_F(ServerSnapshotFileTest, reader_fileNotFound)
 {
     EXPECT_THROW(Reader reader(tmpdir), std::runtime_error);
+}
+
+TEST_F(ServerSnapshotFileTest, writer_orphan)
+{
+    // expect warning
+    Core::Debug::setLogPolicy({
+        {"Server/SnapshotFile.cc", "ERROR"}
+    });
+    {
+        Writer writer(tmpdir);
+        writer.getStream().WriteVarint32(482);
+    }
+    std::vector<std::string> files = FilesystemUtil::ls(tmpdir);
+    EXPECT_EQ(1U, files.size());
+    std::string file = files.at(0);
+    EXPECT_TRUE(Core::StringUtil::startsWith(file, "partial")) << file;
+}
+
+TEST_F(ServerSnapshotFileTest, writer_discard)
+{
+    {
+        Writer writer(tmpdir);
+        writer.getStream().WriteVarint32(482);
+        writer.discard();
+        writer.discard();
+        writer.save();
+    }
+    EXPECT_EQ(0U, FilesystemUtil::ls(tmpdir).size());
 }
 
 } // namespace LogCabin::Server::SnapshotFile::<anonymous>

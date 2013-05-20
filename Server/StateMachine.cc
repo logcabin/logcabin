@@ -161,7 +161,7 @@ StateMachine::threadMain()
             std::unique_ptr<SnapshotFile::Writer> writer =
                 consensus->beginSnapshot(lastEntryId);
             tree.dumpSnapshot(writer->getStream());
-            consensus->snapshotDone(lastEntryId);
+            consensus->snapshotDone(lastEntryId, std::move(writer));
         }
     } catch (const ThreadInterruptedException& e) {
         VERBOSE("exiting");

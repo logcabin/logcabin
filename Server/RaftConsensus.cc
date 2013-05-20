@@ -1069,9 +1069,11 @@ RaftConsensus::beginSnapshot(uint64_t lastIncludedIndex)
 }
 
 void
-RaftConsensus::snapshotDone(uint64_t lastIncludedIndex)
+RaftConsensus::snapshotDone(uint64_t lastIncludedIndex,
+                            std::unique_ptr<SnapshotFile::Writer> writer)
 {
     std::unique_lock<Mutex> lockGuard(mutex);
+    writer->save();
     lastSnapshotIndex = lastIncludedIndex;
     // TODO(ongaro): reclaim space from log here once it's safe to do so
     NOTICE("Completed snapshot through log index %lu (inclusive)",

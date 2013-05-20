@@ -152,9 +152,15 @@ class Consensus {
      * \param lastIncludedIndex
      *      The snapshot will cover log entries in the range
      *      [1, lastIncludedIndex].
+     * \param writer
+     *      A writer that has not yet been saved: the consensus module may
+     *      have to discard the snapshot in case it's gotten a better snapshot
+     *      from another server. If this snapshot is to be saved (normal case),
+     *      the consensus module will call save() on it.
      */
     virtual void
-    snapshotDone(uint64_t lastIncludedIndex) = 0;
+    snapshotDone(uint64_t lastIncludedIndex,
+                 std::unique_ptr<SnapshotFile::Writer> writer) = 0;
 
     uint64_t serverId;
 };

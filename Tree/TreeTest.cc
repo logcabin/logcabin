@@ -80,6 +80,7 @@ TEST(TreeFileTest, dumpSnapshot)
         File f;
         f.contents = "hello, world!";
         f.dumpSnapshot(writer.getStream());
+        writer.save();
     }
     {
         Server::SnapshotFile::Reader reader(tmpdir);
@@ -224,6 +225,7 @@ TEST(TreeDirectoryTest, dumpSnapshot)
     {
         Server::SnapshotFile::Writer writer(tmpdir);
         tree.superRoot.dumpSnapshot(writer.getStream());
+        writer.save();
     }
     {
         Server::SnapshotFile::Reader reader(tmpdir);
@@ -298,6 +300,7 @@ TEST_F(TreeTreeTest, dumpSnapshot)
         Server::SnapshotFile::Writer writer(tmpdir);
         tree.write("/c", "foo");
         tree.dumpSnapshot(writer.getStream());
+        writer.save();
     }
     tree.removeFile("/c");
     tree.write("/d", "bar");

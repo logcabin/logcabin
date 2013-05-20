@@ -699,7 +699,8 @@ class RaftConsensus : public Consensus {
     beginSnapshot(uint64_t lastIncludedIndex);
 
     // See Consensus::snapshotDone().
-    void snapshotDone(uint64_t lastIncludedIndex);
+    void snapshotDone(uint64_t lastIncludedIndex,
+                      std::unique_ptr<SnapshotFile::Writer> writer);
 
     /**
      * Print out the contents of this class for debugging purposes.

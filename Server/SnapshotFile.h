@@ -63,18 +63,29 @@ class Writer {
     /**
      * Constructor.
      * \param parentDir
-     *      The directory in which to find the snapshot (in a file called
+     *      The directory in which to create the snapshot (in a file called
      *      "snapshot").
      * TODO(ongaro): what if it can't be written?
      */
     explicit Writer(const Storage::FilesystemUtil::File& parentDir);
-    /// Destructor.
+    /**
+     * Destructor.
+     * If the file hasn't been explicitly saved or discarded, prints a warning
+     * and leaves the file around for manual inspection.
+     */
     ~Writer();
+    /// Throw away the file.
+    void discard();
     /// Flush and close the file.
-    void close();
+    void save();
     /// Returns the output stream to write into.
     google::protobuf::io::CodedOutputStream& getStream();
   private:
+    /// A handle to the directory containing the snapshot. Used for renameat on
+    /// close.
+    Storage::FilesystemUtil::File parentDir;
+    /// The temporary name of 'file' before it is closed.
+    std::string stagingName;
     /// Wraps the raw file descriptor; in charge of closing it when done.
     Storage::FilesystemUtil::File file;
     /// Actually writes the file to disk.

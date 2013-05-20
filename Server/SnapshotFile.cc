@@ -54,11 +54,18 @@ Reader::getStream()
 }
 
 Writer::Writer(const FilesystemUtil::File& parentDir)
-    : file()
+    : parentDir(FilesystemUtil::dup(parentDir))
+    , stagingName()
+    , file()
     , fileStream()
     , codedStream()
 {
-    file = FilesystemUtil::openFile(parentDir, "snapshot", O_WRONLY|O_CREAT);
+    struct timespec now;
+    clock_gettime(CLOCK_REALTIME, &now);
+    stagingName = Core::StringUtil::format("partial.%010lu.%06lu",
+                                           now.tv_sec, now.tv_nsec / 1000);
+    file = FilesystemUtil::openFile(parentDir, stagingName,
+                                    O_WRONLY|O_CREAT|O_EXCL);
     fileStream.reset(new google::protobuf::io::FileOutputStream(file.fd));
     codedStream.reset(
             new google::protobuf::io::CodedOutputStream(fileStream.get()));
@@ -66,17 +73,34 @@ Writer::Writer(const FilesystemUtil::File& parentDir)
 
 Writer::~Writer()
 {
-    // TODO(ongaro): sprinkle some fsyncs in here
+    if (file.fd >= 0)
+        WARNING("Leaving behind partial snapshot %s", file.path.c_str());
 }
 
 void
-Writer::close()
+Writer::discard()
 {
-    // TODO(ongaro): sprinkle some fsyncs in here
+    if (file.fd < 0) // close already called
+        return;
+    FilesystemUtil::removeFile(parentDir, stagingName);
+    codedStream.reset();
+    fileStream.reset();
+    file.close();
+}
+
+void
+Writer::save()
+{
+    if (file.fd < 0) // close already called
+        return;
     codedStream.reset();
     fileStream->Flush();
     fileStream.reset();
+    FilesystemUtil::fsync(file);
     file.close();
+    FilesystemUtil::rename(parentDir, stagingName,
+                           parentDir, "snapshot");
+    FilesystemUtil::fsync(parentDir);
 }
 
 google::protobuf::io::CodedOutputStream&

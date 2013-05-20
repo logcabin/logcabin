@@ -560,8 +560,7 @@ TEST_F(ServerRaftConsensusTest, getNextEntry_snapshot)
 
     std::unique_ptr<SnapshotFile::Writer> writer = consensus->beginSnapshot(2);
     writer->getStream().WriteLittleEndian32(0xdeadbeef);
-    writer->close();
-    consensus->snapshotDone(2);
+    consensus->snapshotDone(2, std::move(writer));
     consensus->log->truncatePrefix(2);
 
     // expect warning
@@ -1023,7 +1022,7 @@ TEST_F(ServerRaftConsensusTest, beginSnapshot)
     // call beginSnapshot
     std::unique_ptr<SnapshotFile::Writer> writer = consensus->beginSnapshot(3);
     writer->getStream().WriteLittleEndian32(0xdeadbeef);
-    writer->close();
+    writer->save();
 
     // make sure it had the right side-effects
     EXPECT_EQ(0U, consensus->lastSnapshotIndex);
@@ -1051,7 +1050,8 @@ TEST_F(ServerRaftConsensusTest, snapshotDone)
     consensus->advanceCommittedId();
     EXPECT_EQ(3U, consensus->commitIndex);
 
-    consensus->snapshotDone(3);
+    std::unique_ptr<SnapshotFile::Writer> writer = consensus->beginSnapshot(3);
+    consensus->snapshotDone(3, std::move(writer));
     EXPECT_EQ(3U, consensus->lastSnapshotIndex);
 }
 
@@ -1557,7 +1557,7 @@ TEST_F(ServerRaftConsensusTest, readSnapshot)
     consensus->currentTerm = 1;
     consensus->startNewElection();
     EXPECT_EQ(2U, consensus->commitIndex);
-    consensus->beginSnapshot(2);
+    consensus->beginSnapshot(2)->save();
     consensus->commitIndex = 0;
     consensus->configurationDescriptions.clear();
     consensus->readSnapshot();
