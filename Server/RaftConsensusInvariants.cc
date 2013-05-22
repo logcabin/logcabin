@@ -34,7 +34,7 @@ struct Invariants::ConsensusSnapshot {
         , exiting(consensus.exiting)
         , numPeerThreads(consensus.numPeerThreads)
         , lastLogIndex(consensus.log->getLastLogIndex())
-        , lastLogTerm(consensus.log->getTerm(consensus.log->getLastLogIndex()))
+        , lastLogTerm(0)
         , configurationId(consensus.configuration->id)
         , configurationState(consensus.configuration->state)
         , currentTerm(consensus.currentTerm)
@@ -45,6 +45,12 @@ struct Invariants::ConsensusSnapshot {
         , currentEpoch(consensus.currentEpoch)
         , startElectionAt(consensus.startElectionAt)
     {
+        if (consensus.log->getLastLogIndex() >=
+            consensus.log->getLogStartIndex()) {
+            lastLogTerm = consensus.log->getEntry(
+                                    consensus.log->getLastLogIndex()).term();
+        }
+
     }
 
     uint64_t stateChangedCount;
@@ -162,15 +168,29 @@ Invariants::checkBasic()
 
     // The commitIndex doesn't exceed the length of the log or snapshot.
     expect(consensus.commitIndex >= consensus.lastSnapshotIndex);
-    expect(consensus.commitIndex <= std::max(consensus.log->getLastLogIndex(),
-                                             consensus.lastSnapshotIndex));
+    expect(consensus.commitIndex <= consensus.log->getLastLogIndex());
+    if (consensus.commitIndex > 0)
+        expect(consensus.commitIndex >= consensus.log->getLogStartIndex());
+
+    expect(consensus.log->getLastLogIndex() >= consensus.lastSnapshotIndex);
+    // If there is a snapshot, the log overlaps with it in the last entry.
+    if (consensus.lastSnapshotIndex > 0) {
+        expect(consensus.log->getLogStartIndex() <=
+               consensus.lastSnapshotIndex);
+    }
+    if (consensus.log->getLastLogIndex() > 0) {
+        expect(consensus.log->getLastLogIndex() >=
+               consensus.log->getLogStartIndex());
+    }
 
     // advanceCommittedId is called everywhere it needs to be.
     if (consensus.state == RaftConsensus::State::LEADER) {
         uint64_t majorityEntry =
             consensus.configuration->quorumMin(&Server::getLastAgreeIndex);
-        expect(consensus.log->getTerm(majorityEntry) != consensus.currentTerm
-               || consensus.commitIndex >= majorityEntry);
+        expect(consensus.commitIndex >= majorityEntry ||
+               majorityEntry < consensus.log->getLogStartIndex() ||
+               consensus.log->getEntry(majorityEntry).term() !=
+                    consensus.currentTerm);
     }
 
     // A leader always points its leaderId at itself.

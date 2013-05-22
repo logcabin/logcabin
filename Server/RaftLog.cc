@@ -71,18 +71,6 @@ Log::getLastLogIndex() const
     return startId + entries.size() - 1;
 }
 
-
-uint64_t
-Log::getTerm(uint64_t entryId) const
-{
-    if (entryId < startId)
-        return 0;
-    uint64_t index = entryId - startId;
-    if (index >= entries.size())
-        return 0;
-    return entries.at(index).term();
-}
-
 void
 Log::truncatePrefix(uint64_t firstEntryId)
 {

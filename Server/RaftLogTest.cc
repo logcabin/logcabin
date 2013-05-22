@@ -89,22 +89,6 @@ TEST_F(ServerRaftLogTest, getLastLogIndex)
     EXPECT_EQ(2U, log.getLastLogIndex());
 }
 
-TEST_F(ServerRaftLogTest, getTerm)
-{
-    EXPECT_EQ(0U, log.getTerm(0));
-    EXPECT_EQ(0U, log.getTerm(1));
-    EXPECT_EQ(0U, log.getTerm(1000));
-    log.append(sampleEntry);
-    EXPECT_EQ(40U, log.getTerm(1));
-
-    log.append(sampleEntry);
-    log.truncatePrefix(2);
-    EXPECT_EQ(0U, log.getTerm(0));
-    EXPECT_EQ(0U, log.getTerm(1));
-    EXPECT_EQ(40U, log.getTerm(2));
-    EXPECT_EQ(0U, log.getTerm(3));
-}
-
 TEST_F(ServerRaftLogTest, truncatePrefix)
 {
     EXPECT_EQ(1U, log.startId);

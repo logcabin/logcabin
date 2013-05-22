@@ -839,9 +839,14 @@ RaftConsensus::handleAppendEntries(
         return; // response was set to a rejection above
     }
     // It must also agree with the previous entry in the log (and, inductively
-    // all prior entries). We could truncate the log here, but there's no real
-    // advantage to doing that.
-    if (log->getTerm(request.prev_log_index()) != request.prev_log_term()) {
+    // all prior entries).
+    // Always match on index 0, and always match on any discarded indexes:
+    // since we know those were committed, the leader must agree with them.
+    // We could truncate the log here, but there's no real advantage to doing
+    // that.
+    if (request.prev_log_index() >= log->getLogStartIndex() &&
+        log->getEntry(request.prev_log_index()).term() !=
+            request.prev_log_term()) {
         VERBOSE("Rejecting AppendEntries RPC: terms don't agree");
         return; // response was set to a rejection above
     }
@@ -871,9 +876,14 @@ RaftConsensus::handleAppendEntries(
          ++it) {
         ++entryId;
         const Protocol::Raft::Entry& entry = *it;
-        if (log->getTerm(entryId) == entry.term())
+        if (entryId < log->getLogStartIndex()) {
+            // We already snapshotted and discarded this index, so presumably
+            // we've received a committed entry we once already had.
             continue;
+        }
         if (log->getLastLogIndex() >= entryId) {
+            if (log->getEntry(entryId).term() == entry.term())
+                continue;
             // should never truncate committed entries:
             assert(commitIndex < entryId);
             // TODO(ongaro): assertion: what I'm truncating better belong to
@@ -1015,7 +1025,12 @@ RaftConsensus::handleRequestVote(
 
     // If the caller has a less complete log, we can't give it our vote.
     uint64_t lastLogIndex = log->getLastLogIndex();
-    uint64_t lastLogTerm = log->getTerm(lastLogIndex);
+    uint64_t lastLogTerm = 0;
+    if (lastLogIndex > 0) {
+        // This entry must be present in the log since we always leave one
+        // entry that overlaps with any snapshot.
+        lastLogTerm = log->getEntry(lastLogIndex).term();
+    }
     bool logIsOk = (request.last_log_term() > lastLogTerm ||
                     (request.last_log_term() == lastLogTerm &&
                      request.last_log_index() >= lastLogIndex));
@@ -1340,11 +1355,14 @@ RaftConsensus::advanceCommittedId()
     // calculate the largest entry ID stored on a quorum of servers
     uint64_t newCommittedId =
         configuration->quorumMin(&Server::getLastAgreeIndex);
+    if (commitIndex >= newCommittedId)
+        return;
+    // If we have discarded the entry, it's because we already knew it was
+    // committed.
+    assert(newCommittedId >= log->getLogStartIndex());
     // At least one of these entries must also be from the current term to
     // guarantee that no server without them can be elected.
-    if (log->getTerm(newCommittedId) != currentTerm)
-        return;
-    if (commitIndex >= newCommittedId)
+    if (log->getEntry(newCommittedId).term() != currentTerm)
         return;
     commitIndex = newCommittedId;
     VERBOSE("New commitIndex: %lu", commitIndex);
@@ -1405,7 +1423,10 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
     request.set_server_id(serverId);
     request.set_recipient_id(peer.serverId);
     request.set_term(currentTerm);
-    request.set_prev_log_term(log->getTerm(prevLogIndex));
+    if (prevLogIndex == 0)
+        request.set_prev_log_term(0);
+    else
+        request.set_prev_log_term(log->getEntry(prevLogIndex).term());
     request.set_prev_log_index(prevLogIndex);
 
     // Add as many as entries as will fit comfortably in the request. It's
@@ -1703,8 +1724,15 @@ RaftConsensus::requestVote(std::unique_lock<Mutex>& lockGuard, Peer& peer)
     request.set_server_id(serverId);
     request.set_recipient_id(peer.serverId);
     request.set_term(currentTerm);
-    request.set_last_log_term(log->getTerm(log->getLastLogIndex()));
-    request.set_last_log_index(log->getLastLogIndex());
+    uint64_t lastLogIndex = log->getLastLogIndex();
+    if (lastLogIndex > 0) {
+        // This entry must be present in the log since we always leave one
+        // entry that overlaps with any snapshot.
+        request.set_last_log_term(log->getEntry(lastLogIndex).term());
+    } else {
+        request.set_last_log_term(0);
+    }
+    request.set_last_log_index(lastLogIndex);
 
     Protocol::Raft::RequestVote::Response response;
     VERBOSE("requestVote start");
@@ -1829,7 +1857,8 @@ RaftConsensus::upToDateLeader(std::unique_lock<Mutex>& lockGuard) const
         // If we're the current leader and some entry from our term is
         // committed, then our commitIndex is as up-to-date as any.
         if (configuration->quorumMin(&Server::getLastAckEpoch) >= epoch &&
-            log->getTerm(commitIndex) == currentTerm) {
+            commitIndex >= log->getLogStartIndex() &&
+            log->getEntry(commitIndex).term() == currentTerm) {
             return true;
         }
         stateChanged.wait(lockGuard);

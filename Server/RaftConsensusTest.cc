@@ -692,7 +692,7 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntries_rejectPrevLogTerm)
               response);
     EXPECT_EQ(0U, consensus->commitIndex);
     EXPECT_EQ(1U, consensus->log->getLastLogIndex());
-    EXPECT_EQ(1U, consensus->log->getTerm(1));
+    EXPECT_EQ(1U, consensus->log->getEntry(1).term());
 }
 
 TEST_F(ServerRaftConsensusTest, handleAppendEntries_append)
@@ -815,6 +815,34 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntries_duplicate)
     EXPECT_EQ(Protocol::Raft::EntryType::CONFIGURATION, l1.type());
     EXPECT_EQ(d, l1.configuration());
     EXPECT_EQ("", l1.data());
+}
+
+TEST_F(ServerRaftConsensusTest, handleAppendEntries_appendSnapshotOk)
+{
+    init();
+    consensus->stepDown(10);
+    Protocol::Raft::AppendEntries::Request request;
+    Protocol::Raft::AppendEntries::Response response;
+    request.set_server_id(3);
+    request.set_term(10);
+    request.set_prev_log_term(1);
+    request.set_prev_log_index(1);
+    request.set_commit_index(0);
+    Protocol::Raft::Entry* e1 = request.add_entries();
+    e1->set_term(1);
+    e1->set_type(Protocol::Raft::EntryType::DATA);
+    e1->set_data("hello");
+
+    consensus->log->truncatePrefix(5);
+    consensus->append(entry1);
+    consensus->lastSnapshotIndex = 5;
+    consensus->commitIndex = 5;
+
+    consensus->handleAppendEntries(request, response);
+    EXPECT_EQ("term: 10 "
+              "success: true ",
+              response);
+    EXPECT_EQ(5U, consensus->log->getLastLogIndex());
 }
 
 std::string

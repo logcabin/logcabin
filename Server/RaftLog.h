@@ -77,16 +77,6 @@ class Log {
     virtual uint64_t getLastLogIndex() const;
 
     /**
-     * Get the term of an entry in the log.
-     * \param entryId
-     *      Any entry ID, including 0 and those past the end of the log.
-     * \return
-     *      The term of the given entry in the log if it exists,
-     *      or 0 otherwise.
-     */
-    virtual uint64_t getTerm(uint64_t entryId) const;
-
-    /**
      * Delete the log entries before the given entry ID.
      * Once you truncate a prefix from the log, there's no way to undo this.
      * \param firstEntryId
