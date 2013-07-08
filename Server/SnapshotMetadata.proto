@@ -26,6 +26,11 @@ message Header {
     required uint64 last_included_index = 1;
 
     /**
+     * The term of the lastIncludedIndex entry.
+     */
+    required uint64 last_included_term = 4;
+
+    /**
      * This contains the latest configuration in the prefix of the log ending
      * with lastIncludedIndex. It'll be present in practice (logs start with
      * configurations in practice) but is marked optional so as to not to bake

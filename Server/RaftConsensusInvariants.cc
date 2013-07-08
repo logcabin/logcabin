@@ -166,22 +166,19 @@ Invariants::checkBasic()
             expect(consensus.state != RaftConsensus::State::LEADER);
     }
 
-    // The commitIndex doesn't exceed the length of the log or snapshot.
+    // The last snapshot covers a committed range.
     expect(consensus.commitIndex >= consensus.lastSnapshotIndex);
-    expect(consensus.commitIndex <= consensus.log->getLastLogIndex());
-    if (consensus.commitIndex > 0)
-        expect(consensus.commitIndex >= consensus.log->getLogStartIndex());
 
+    // The commitIndex doesn't exceed the length of the log/snapshot.
+    expect(consensus.commitIndex <= consensus.log->getLastLogIndex());
+
+    // The last log index points at least through the end of the last snapshot.
     expect(consensus.log->getLastLogIndex() >= consensus.lastSnapshotIndex);
-    // If there is a snapshot, the log overlaps with it in the last entry.
-    if (consensus.lastSnapshotIndex > 0) {
-        expect(consensus.log->getLogStartIndex() <=
-               consensus.lastSnapshotIndex);
-    }
-    if (consensus.log->getLastLogIndex() > 0) {
-        expect(consensus.log->getLastLogIndex() >=
-               consensus.log->getLogStartIndex());
-    }
+
+    // lastLogIndex is either just below the log start (for empty logs) or
+    // larger (for non-empty logs)
+    assert(consensus.log->getLastLogIndex() >=
+           consensus.log->getLogStartIndex() - 1);
 
     // advanceCommittedId is called everywhere it needs to be.
     if (consensus.state == RaftConsensus::State::LEADER) {

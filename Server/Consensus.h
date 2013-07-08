@@ -139,6 +139,8 @@ class Consensus {
      * \param lastIncludedIndex
      *      The snapshot will cover log entries in the range
      *      [1, lastIncludedIndex].
+     *      lastIncludedIndex must be committed (must have been previously
+     *      returned by #getNextEntry()).
      * \return
      *      A file the state machine can dump its snapshot into.
      */

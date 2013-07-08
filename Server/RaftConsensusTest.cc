@@ -479,6 +479,40 @@ TEST_F(ServerRaftConsensusTest, init_nonblanklog)
               Core::STLUtil::getKeys(consensus->configurationDescriptions));
 }
 
+TEST_F(ServerRaftConsensusTest, init_withsnapshot)
+{
+    { // write snapshot
+        RaftConsensus c1(globals);
+        c1.storageDirectory =
+            Storage::FilesystemUtil::dup(consensus->storageDirectory);
+        c1.log.reset(new Log());
+        c1.serverId = 1;
+        c1.init();
+        c1.currentTerm = 1;
+        c1.append(entry1);
+        c1.startNewElection();
+        entry1.set_term(2);
+        c1.append(entry1);
+        c1.advanceCommittedId();
+        EXPECT_EQ(3U, c1.commitIndex);
+
+        std::unique_ptr<SnapshotFile::Writer> writer = c1.beginSnapshot(2);
+        writer->getStream().WriteLittleEndian32(0xdeadbeef);
+        c1.snapshotDone(2, std::move(writer));
+    }
+
+    consensus->log.reset(new Log());
+    // the log should be discarded when the snapshot is read
+    consensus->log->append(entry3);
+    consensus->init();
+    EXPECT_EQ(2U, consensus->lastSnapshotIndex);
+    EXPECT_EQ(2U, consensus->lastSnapshotTerm);
+    EXPECT_EQ(3U, consensus->log->getLogStartIndex());
+    EXPECT_EQ(2U, consensus->log->getLastLogIndex());
+    EXPECT_EQ(1U, consensus->configuration->id);
+    EXPECT_EQ(d, consensus->configuration->description);
+}
+
 // TODO(ongaro): low-priority test: exit
 
 TEST_F(ServerRaftConsensusTest, getConfiguration_notleader)
@@ -1203,6 +1237,7 @@ TEST_F(ServerRaftConsensusTest, beginSnapshot)
               Core::STLUtil::getKeys(consensus->configurationDescriptions));
     consensus->readSnapshot();
     EXPECT_EQ(3U, consensus->lastSnapshotIndex);
+    EXPECT_EQ(2U, consensus->lastSnapshotTerm);
     uint32_t x = 0;
     EXPECT_TRUE(consensus->snapshotReader->getStream().ReadLittleEndian32(&x));
     EXPECT_EQ(0xdeadbeef, x);
@@ -1231,9 +1266,11 @@ TEST_F(ServerRaftConsensusTest, snapshotDone)
 
     consensus->snapshotDone(3, std::move(saveWriter));
     EXPECT_EQ(3U, consensus->lastSnapshotIndex);
+    EXPECT_EQ(2U, consensus->lastSnapshotTerm);
 
     consensus->snapshotDone(2, std::move(discardWriter));
     EXPECT_EQ(3U, consensus->lastSnapshotIndex);
+    EXPECT_EQ(2U, consensus->lastSnapshotTerm);
 }
 
 class CandidacyThreadMainHelper {
@@ -1710,12 +1747,22 @@ TEST_F(ServerRaftConsensusPATest, appendEntries_ok)
 // test that appendSnapshotChunk gets called
 TEST_F(ServerRaftConsensusPATest, appendEntries_snapshot)
 {
+    std::unique_lock<Mutex> lockGuard(consensus->mutex);
+
+    // nextIndex < log start
     consensus->log->truncatePrefix(2);
     EXPECT_EQ(2U, consensus->log->getLogStartIndex());
-    peer->nextIndex = 2;
-    std::unique_lock<Mutex> lockGuard(consensus->mutex);
+    peer->nextIndex = 1;
     EXPECT_DEATH(consensus->appendEntries(lockGuard, *peer),
                  "Could not open .*snapshot");
+
+    // nextIndex >= log start but prev needed for term
+    peer->nextIndex = 2;
+    EXPECT_DEATH(consensus->appendEntries(lockGuard, *peer),
+                 "Could not open .*snapshot");
+
+    // TODO(ongaro): should also test the various ways prevLogTerm can be set,
+    // but it's not easily testable
 }
 
 // used in AppendSnapshotChunk tests
@@ -1814,8 +1861,8 @@ TEST_F(ServerRaftConsensusPSTest, appendSnapshotChunk_ok)
     // make sure we don't use an updated lastSnapshotIndex value
     consensus->lastSnapshotIndex = 1;
     consensus->appendSnapshotChunk(lockGuard, *peer);
-    EXPECT_EQ(1U, peer->lastAgreeIndex);
-    EXPECT_EQ(2U, peer->nextIndex);
+    EXPECT_EQ(2U, peer->lastAgreeIndex);
+    EXPECT_EQ(3U, peer->nextIndex);
     EXPECT_FALSE(peer->snapshotFile);
     EXPECT_EQ(0U, peer->snapshotFileOffset);
     EXPECT_EQ(0U, peer->lastSnapshotIndex);
@@ -1843,6 +1890,27 @@ TEST_F(ServerRaftConsensusTest, becomeLeader)
     EXPECT_EQ(TimePoint::max(), consensus->startElectionAt);
 }
 
+TEST_F(ServerRaftConsensusTest, getLastLogTerm)
+{
+    init();
+    // empty log, no snapshot
+    EXPECT_EQ(0U, consensus->getLastLogTerm());
+    // log
+    consensus->append(entry1);
+    consensus->startNewElection();
+    consensus->advanceCommittedId();
+    EXPECT_EQ(1U, consensus->getLastLogTerm());
+    // snapshot only
+    std::unique_ptr<SnapshotFile::Writer> writer = consensus->beginSnapshot(2);
+    writer->getStream().WriteLittleEndian32(0xdeadbeef);
+    consensus->snapshotDone(2, std::move(writer));
+    consensus->log->truncatePrefix(3);
+    consensus->stateChanged.notify_all();
+    EXPECT_LT(consensus->log->getLastLogIndex(),
+              consensus->log->getLogStartIndex());
+    EXPECT_EQ(1U, consensus->getLastLogTerm());
+}
+
 TEST_F(ServerRaftConsensusTest, interruptAll)
 {
     init();
@@ -1863,6 +1931,7 @@ TEST_F(ServerRaftConsensusTest, readSnapshot)
     // snapshot not found
     consensus->readSnapshot();
     EXPECT_EQ(0U, consensus->lastSnapshotIndex);
+    EXPECT_EQ(0U, consensus->lastSnapshotTerm);
     EXPECT_FALSE(consensus->snapshotReader);
 
     // snapshot found
@@ -1875,6 +1944,7 @@ TEST_F(ServerRaftConsensusTest, readSnapshot)
     consensus->configurationDescriptions.clear();
     consensus->readSnapshot();
     EXPECT_EQ(2U, consensus->lastSnapshotIndex);
+    EXPECT_EQ(2U, consensus->lastSnapshotTerm);
     EXPECT_EQ(2U, consensus->commitIndex);
     EXPECT_TRUE(consensus->snapshotReader);
     EXPECT_EQ((std::vector<uint64_t>{1}),
@@ -1887,8 +1957,18 @@ TEST_F(ServerRaftConsensusTest, readSnapshot)
     EXPECT_EQ(3U, consensus->commitIndex);
     consensus->readSnapshot();
     EXPECT_EQ(2U, consensus->lastSnapshotIndex);
+    EXPECT_EQ(2U, consensus->lastSnapshotTerm);
     EXPECT_EQ(3U, consensus->commitIndex);
     EXPECT_TRUE(consensus->snapshotReader);
+
+    // truncates the log if it does not agree with the snapshot
+    EXPECT_EQ(1U, consensus->log->getLogStartIndex());
+    EXPECT_EQ(3U, consensus->log->getLastLogIndex());
+    consensus->commitIndex = 0;
+    consensus->log->truncateSuffix(1);
+    consensus->readSnapshot();
+    EXPECT_EQ(3U, consensus->log->getLogStartIndex());
+    EXPECT_EQ(2U, consensus->commitIndex);
 }
 
 TEST_F(ServerRaftConsensusTest, readSnapshot_incompleteLogPrefix)

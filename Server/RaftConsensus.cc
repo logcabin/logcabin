@@ -627,6 +627,7 @@ RaftConsensus::RaftConsensus(Globals& globals)
     , currentTerm(0)
     , state(State::FOLLOWER)
     , lastSnapshotIndex(0)
+    , lastSnapshotTerm(0)
     , snapshotReader()
     , snapshotWriter()
     , commitIndex(0)
@@ -667,6 +668,8 @@ RaftConsensus::init()
                               Core::StringUtil::format("server%lu", serverId));
     }
 
+    configuration.reset(new Configuration(serverId, *this));
+
     if (!log) { // some unit tests pre-set the log; don't overwrite it
         log.reset(new SimpleFileLog(storageDirectory));
     }
@@ -674,13 +677,14 @@ RaftConsensus::init()
          entryId <= log->getLastLogIndex();
          ++entryId) {
         const Log::Entry& entry = log->getEntry(entryId);
-        if (entry.type() == Protocol::Raft::EntryType::CONFIGURATION)
+        if (entry.type() == Protocol::Raft::EntryType::CONFIGURATION) {
             configurationDescriptions[entryId] = entry.configuration();
+            configuration->setConfiguration(entryId, entry.configuration());
+        }
     }
 
     NOTICE("The log contains indexes %lu through %lu (inclusive)",
            log->getLogStartIndex(), log->getLastLogIndex());
-    readSnapshot();
 
     if (log->metadata.has_current_term())
         currentTerm = log->metadata.current_term();
@@ -688,13 +692,12 @@ RaftConsensus::init()
         votedFor = log->metadata.voted_for();
     updateLogMetadata();
 
-    // apply last configuration found
-    configuration.reset(new Configuration(serverId, *this));
-    auto it = configurationDescriptions.rbegin();
-    if (it != configurationDescriptions.rend())
-        configuration->setConfiguration(it->first, it->second);
-    else
-        NOTICE("No configuration, waiting to receive one");
+    // Read snapshot after reading log, since readSnapshot() will get rid of
+    // conflicting log entries
+    readSnapshot();
+
+    if (configuration->id == 0)
+        NOTICE("No configuration, waiting to receive one.");
 
     stepDown(currentTerm);
     if (startThreads) {
@@ -903,6 +906,7 @@ RaftConsensus::handleAppendEntries(
                 configuration->setConfiguration(it->first, it->second);
             }
         }
+        // TODO(ongaro): rewrite this to allow batching to disk
         uint64_t e = append(entry);
         assert(e == entryId);
     }
@@ -989,17 +993,9 @@ RaftConsensus::handleAppendSnapshotChunk(
             return;
         }
         NOTICE("Loading in new snapshot from leader");
-        // TODO(ongaro): need to truncate our log before saving
         snapshotWriter->save();
         snapshotWriter.reset();
         readSnapshot();
-
-        // The snapshot could change our latest configuration.
-        auto it = configurationDescriptions.rbegin();
-        // We'll never truncate our only configuration.
-        assert(it != configurationDescriptions.rend());
-        configuration->setConfiguration(it->first, it->second);
-
         stateChanged.notify_all();
     }
 }
@@ -1025,12 +1021,7 @@ RaftConsensus::handleRequestVote(
 
     // If the caller has a less complete log, we can't give it our vote.
     uint64_t lastLogIndex = log->getLastLogIndex();
-    uint64_t lastLogTerm = 0;
-    if (lastLogIndex > 0) {
-        // This entry must be present in the log since we always leave one
-        // entry that overlaps with any snapshot.
-        lastLogTerm = log->getEntry(lastLogIndex).term();
-    }
+    uint64_t lastLogTerm = getLastLogTerm();
     bool logIsOk = (request.last_log_term() > lastLogTerm ||
                     (request.last_log_term() == lastLogTerm &&
                      request.last_log_index() >= lastLogIndex));
@@ -1151,9 +1142,38 @@ RaftConsensus::beginSnapshot(uint64_t lastIncludedIndex)
     std::unique_ptr<SnapshotFile::Writer> writer(
                 new SnapshotFile::Writer(storageDirectory));
 
+    // Only committed entries may be snapshotted.
+    // (This check relies on commitIndex monotonically increasing.)
+    if (lastIncludedIndex > commitIndex) {
+        PANIC("Attempted to snapshot uncommitted entries (%lu requested but "
+              "%lu is last committed entry)", lastIncludedIndex, commitIndex);
+    }
+
     // set header fields
     SnapshotMetadata::Header header;
     header.set_last_included_index(lastIncludedIndex);
+    // Set last_included_term:
+    if (lastIncludedIndex >= log->getLogStartIndex() &&
+        lastIncludedIndex <= log->getLastLogIndex()) {
+        header.set_last_included_term(log->getEntry(lastIncludedIndex).term());
+    } else if (lastIncludedIndex == 0) {
+        WARNING("Taking a snapshot covering no log entries");
+        header.set_last_included_term(0);
+    } else if (lastIncludedIndex == lastSnapshotIndex) {
+        WARNING("Taking a snapshot where we already have one, covering "
+                "entries 1 through %lu (inclusive)", lastIncludedIndex);
+        header.set_last_included_term(lastSnapshotTerm);
+    } else {
+        WARNING("We've already discarded the entries that the state machine "
+                "wants to snapshot. This can happen in rare cases if the "
+                "leader already sent us a newer snapshot. We'll go ahead and "
+                "compute the snapshot, but it'll be discarded later in "
+                "snapshotDone(). Setting the last included term in the "
+                "snapshot header to 0 (a bogus value).");
+        // If this turns out to be common, we should return NULL instead and
+        // change the state machines to deal with that.
+        header.set_last_included_term(0);
+    }
     // Find the configuration as of lastIncludedIndex. (This could potentially
     // be more efficient with more advanced use of the STL, but I'd rather do
     // the obvious backward scan through configurationDescriptions.)
@@ -1181,15 +1201,27 @@ RaftConsensus::snapshotDone(uint64_t lastIncludedIndex,
                             std::unique_ptr<SnapshotFile::Writer> writer)
 {
     std::unique_lock<Mutex> lockGuard(mutex);
-    if (lastIncludedIndex < lastSnapshotIndex) {
-        NOTICE("Discarding snapshot through %lu since we already got a newer "
-               "one (presumably from another server) through %lu",
+    if (lastIncludedIndex <= lastSnapshotIndex) {
+        NOTICE("Discarding snapshot through %lu since we already have one "
+               "(presumably from another server) through %lu",
                lastIncludedIndex, lastSnapshotIndex);
         writer->discard();
         return;
     }
+
+    // log->getEntry(lastIncludedIndex) is safe:
+    // If the log prefix for this snapshot was truncated, that means we have a
+    // newer snapshot (handled above).
+    assert(lastIncludedIndex >= log->getLogStartIndex());
+    // We never truncate committed entries from the end of our log, and
+    // beginSnapshot() made sure that lastIncludedIndex covers only committed
+    // entries.
+    assert(lastIncludedIndex <= log->getLastLogIndex());
+
     writer->save();
     lastSnapshotIndex = lastIncludedIndex;
+    lastSnapshotTerm = log->getEntry(lastIncludedIndex).term();
+
     // TODO(ongaro): reclaim space from log here once it's safe to do so
     NOTICE("Completed snapshot through log index %lu (inclusive)",
            lastSnapshotIndex);
@@ -1205,6 +1237,7 @@ operator<<(std::ostream& os, const RaftConsensus& raft)
     os << "state: " << raft.state << std::endl;
     os << "leader: " << raft.leaderId << std::endl;
     os << "lastSnapshotIndex: " << raft.lastSnapshotIndex << std::endl;
+    os << "lastSnapshotTerm: " << raft.lastSnapshotTerm << std::endl;
     os << "commitIndex: " << raft.commitIndex << std::endl;
     switch (raft.state) {
         case State::FOLLOWER:
@@ -1412,8 +1445,23 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
     uint64_t lastLogIndex = log->getLastLogIndex();
     uint64_t prevLogIndex = peer.nextIndex - 1;
     assert(prevLogIndex <= lastLogIndex);
-    if (0 < prevLogIndex && prevLogIndex < log->getLogStartIndex()) {
-        // need to send follower a snapshot, not an entry
+
+    // Don't have needed entry: send a snapshot instead.
+    if (peer.nextIndex < log->getLogStartIndex()) {
+        appendSnapshotChunk(lockGuard, peer);
+        return;
+    }
+
+    // Find prevLogTerm or fall back to sending a snapshot.
+    uint64_t prevLogTerm;
+    if (prevLogIndex >= log->getLogStartIndex()) {
+        prevLogTerm = log->getEntry(prevLogIndex).term();
+    } else if (prevLogIndex == 0) {
+        prevLogTerm = 0;
+    } else if (prevLogIndex == lastSnapshotIndex) {
+        prevLogTerm = lastSnapshotTerm;
+    } else {
+        // Don't have needed entry for prevLogTerm: send snapshot instead.
         appendSnapshotChunk(lockGuard, peer);
         return;
     }
@@ -1423,10 +1471,7 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
     request.set_server_id(serverId);
     request.set_recipient_id(peer.serverId);
     request.set_term(currentTerm);
-    if (prevLogIndex == 0)
-        request.set_prev_log_term(0);
-    else
-        request.set_prev_log_term(log->getEntry(prevLogIndex).term());
+    request.set_prev_log_term(prevLogTerm);
     request.set_prev_log_index(prevLogIndex);
 
     // Add as many as entries as will fit comfortably in the request. It's
@@ -1434,7 +1479,7 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
     // the last one out.
     uint64_t numEntries = 0;
     if (!peer.forceHeartbeat) {
-        for (uint64_t entryId = prevLogIndex + 1;
+        for (uint64_t entryId = peer.nextIndex;
              entryId <= lastLogIndex;
              ++entryId) {
             const Log::Entry& entry = log->getEntry(entryId);
@@ -1588,10 +1633,8 @@ RaftConsensus::appendSnapshotChunk(std::unique_lock<Mutex>& lockGuard,
             std::chrono::milliseconds(HEARTBEAT_PERIOD_MS);
         peer.snapshotFileOffset += numDataBytes;
         if (request.done()) {
-            // We set this to 1 below lastSnapshotIndex since we still want to
-            // send the follower one entry that overlaps the snapshot.
-            peer.lastAgreeIndex = peer.lastSnapshotIndex - 1;
-            peer.nextIndex = peer.lastSnapshotIndex;
+            peer.lastAgreeIndex = peer.lastSnapshotIndex;
+            peer.nextIndex = peer.lastSnapshotIndex + 1;
             // These entries are already committed if they're in a snapshot, so
             // the commitIndex shouldn't advance, but let's just follow the
             // simple rule that bumping lastAgreeIndex should always be
@@ -1631,6 +1674,18 @@ RaftConsensus::becomeLeader()
 
     // Outstanding RequestVote RPCs are no longer needed.
     interruptAll();
+}
+
+uint64_t
+RaftConsensus::getLastLogTerm() const
+{
+    uint64_t lastLogIndex = log->getLastLogIndex();
+    if (lastLogIndex >= log->getLogStartIndex()) {
+        return log->getEntry(lastLogIndex).term();
+    } else {
+        assert(lastLogIndex == lastSnapshotIndex); // potentially 0
+        return lastSnapshotTerm;
+    }
 }
 
 void
@@ -1678,13 +1733,41 @@ RaftConsensus::readSnapshot()
 
         }
         lastSnapshotIndex = header.last_included_index();
+        lastSnapshotTerm = header.last_included_term();
         commitIndex = std::max(lastSnapshotIndex, commitIndex);
+
         NOTICE("Reading snapshot which covers log entries 1 through %lu "
                "(inclusive)", lastSnapshotIndex);
+
+        // We should keep log entries if they might be needed for a quorum. So:
+        // 1. Discard log if it is shorter than the snapshot.
+        // 2. Discard log if its lastSnapshotIndex entry disagrees with the
+        //    lastSnapshotTerm.
+        if (log->getLastLogIndex() < lastSnapshotIndex ||
+            (log->getLogStartIndex() <= lastSnapshotIndex &&
+             log->getEntry(lastSnapshotIndex).term() != lastSnapshotTerm)) {
+            // Discard the entire log, setting the log start to point to the
+            // right place.
+            log->truncatePrefix(lastSnapshotIndex + 1);
+            log->truncateSuffix(lastSnapshotIndex);
+            configurationDescriptions.clear();
+            configuration.reset(new Configuration(serverId, *this));
+        }
+
         if (header.has_configuration_index() && header.has_configuration()) {
             configurationDescriptions[header.configuration_index()] =
                 header.configuration();
+            if (header.configuration_index() > configuration->id) {
+                configuration->setConfiguration(header.configuration_index(),
+                                                header.configuration());
+            }
+        } else {
+            WARNING("No configuration. This is unexpected, since any snapshot "
+                    "should contain a configuration (they're the first thing "
+                    "found in any log).");
         }
+
+        stateChanged.notify_all();
     }
     if (log->getLogStartIndex() > lastSnapshotIndex + 1) {
         PANIC("The newest snapshot on this server covers up through log index "
@@ -1695,6 +1778,7 @@ RaftConsensus::readSnapshot()
               "as a new cluster member using the reconfiguration mechanism.",
               lastSnapshotIndex, log->getLogStartIndex());
     }
+
     snapshotReader = std::move(reader);
 }
 
@@ -1724,15 +1808,8 @@ RaftConsensus::requestVote(std::unique_lock<Mutex>& lockGuard, Peer& peer)
     request.set_server_id(serverId);
     request.set_recipient_id(peer.serverId);
     request.set_term(currentTerm);
-    uint64_t lastLogIndex = log->getLastLogIndex();
-    if (lastLogIndex > 0) {
-        // This entry must be present in the log since we always leave one
-        // entry that overlaps with any snapshot.
-        request.set_last_log_term(log->getEntry(lastLogIndex).term());
-    } else {
-        request.set_last_log_term(0);
-    }
-    request.set_last_log_index(lastLogIndex);
+    request.set_last_log_term(getLastLogTerm());
+    request.set_last_log_index(log->getLastLogIndex());
 
     Protocol::Raft::RequestVote::Response response;
     VERBOSE("requestVote start");

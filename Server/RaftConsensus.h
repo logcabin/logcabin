@@ -855,6 +855,12 @@ class RaftConsensus : public Consensus {
     void becomeLeader();
 
     /**
+     * Return the term corresponding to log->getLastLogIndex(). This may come
+     * from the log, from the snapshot, or it may be 0.
+     */
+    uint64_t getLastLogTerm() const;
+
+    /**
      * Notify the #stateChanged condition variable and cancel all current RPCs.
      * This should be called when stepping down, starting a new election,
      * becoming leader, or exiting.
@@ -1072,6 +1078,12 @@ class RaftConsensus : public Consensus {
      * Thus, the log may or may not have some of the entries in this range.
      */
     uint64_t lastSnapshotIndex;
+
+    /**
+     * The term of the last entry covered by the latest good snapshot, or 0 if
+     * we have no snapshot.
+     */
+    uint64_t lastSnapshotTerm;
 
     /**
      * If not NULL, this is a SnapshotFile::Reader that covers up through
