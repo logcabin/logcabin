@@ -2443,6 +2443,16 @@ TEST_F(ServerRaftConsensusTest, upToDateLeader)
     // leader of just self -> true
     EXPECT_EQ(State::LEADER, consensus->state);
     EXPECT_TRUE(consensus->upToDateLeader(lockGuard));
+    // snapshot and discard log -> true
+    lockGuard.unlock();
+    std::unique_ptr<SnapshotFile::Writer> writer = consensus->beginSnapshot(2);
+    writer->getStream().WriteLittleEndian32(0xdeadbeef);
+    consensus->snapshotDone(2, std::move(writer));
+    consensus->log->truncatePrefix(3);
+    consensus->configurationManager->truncatePrefix(3);
+    consensus->stateChanged.notify_all();
+    lockGuard.lock();
+    EXPECT_TRUE(consensus->upToDateLeader(lockGuard));
     // leader of non-trivial cluster -> wait, then true
     entry5.set_term(6);
     consensus->append(entry5);

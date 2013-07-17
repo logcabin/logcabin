@@ -2018,12 +2018,23 @@ RaftConsensus::upToDateLeader(std::unique_lock<Mutex>& lockGuard) const
     while (true) {
         if (exiting || state != State::LEADER)
             return false;
-        // If we're the current leader and some entry from our term is
-        // committed, then our commitIndex is as up-to-date as any.
-        if (configuration->quorumMin(&Server::getLastAckEpoch) >= epoch &&
-            commitIndex >= log->getLogStartIndex() &&
-            log->getEntry(commitIndex).term() == currentTerm) {
-            return true;
+        if (configuration->quorumMin(&Server::getLastAckEpoch) >= epoch) {
+            // So we know we're the current leader, but do we have an
+            // up-to-date commitIndex yet? What we'd like to check is whether
+            // the entry's term at commitIndex matches our currentTerm, but
+            // snapshots mean that we may not have the entry in our log. Since
+            // commitIndex >= lastSnapshotIndex, we split into two cases:
+            uint64_t commitTerm;
+            if (commitIndex == lastSnapshotIndex) {
+                commitTerm = lastSnapshotTerm;
+            } else {
+                assert(commitIndex > lastSnapshotIndex);
+                assert(commitIndex >= log->getLogStartIndex());
+                assert(commitIndex <= log->getLastLogIndex());
+                commitTerm = log->getEntry(commitIndex).term();
+            }
+            if (commitTerm == currentTerm)
+                return true;
         }
         stateChanged.wait(lockGuard);
     }
