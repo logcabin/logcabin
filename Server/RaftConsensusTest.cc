@@ -257,6 +257,15 @@ const char* d4 =
         "servers { server_id: 2, address: '127.0.0.1:61024' }"
     "}";
 
+TEST_F(ServerRaftConsensusConfigurationTest, reset) {
+    std::string expected = Core::StringUtil::toString(cfg);
+    cfg.setConfiguration(1, desc(d2));
+    cfg.reset();
+    EXPECT_EQ(expected, Core::StringUtil::toString(cfg));
+    EXPECT_EQ(0U, cfg.oldServers.servers.size());
+    EXPECT_EQ(0U, cfg.newServers.servers.size());
+}
+
 TEST_F(ServerRaftConsensusConfigurationTest, setConfiguration) {
     cfg.setConfiguration(1, desc(d));
     EXPECT_EQ(Configuration::State::STABLE, cfg.state);
@@ -316,6 +325,88 @@ TEST_F(ServerRaftConsensusConfigurationTest, getServer) {
     auto s = cfg.getServer(2);
     EXPECT_EQ(2U, s->serverId);
     EXPECT_EQ(s, cfg.getServer(2));
+}
+
+class ServerRaftConsensusConfigurationManagerTest
+                        : public ServerRaftConsensusConfigurationTest {
+    ServerRaftConsensusConfigurationManagerTest()
+        : mgr(cfg)
+    {
+    }
+    ConfigurationManager mgr;
+};
+
+TEST_F(ServerRaftConsensusConfigurationManagerTest, add) {
+    mgr.add(2, desc(d));
+    EXPECT_EQ(2U, cfg.id);
+    EXPECT_EQ(d, cfg.description);
+    EXPECT_EQ((std::vector<uint64_t>{2}),
+              Core::STLUtil::getKeys(mgr.descriptions));
+    EXPECT_EQ(d, mgr.descriptions.at(2));
+}
+
+TEST_F(ServerRaftConsensusConfigurationManagerTest, truncatePrefix) {
+    mgr.add(2, desc(d));
+    mgr.add(3, desc(d));
+    mgr.add(4, desc(d));
+    mgr.truncatePrefix(3);
+    EXPECT_EQ(4U, cfg.id);
+    EXPECT_EQ((std::vector<uint64_t>{3, 4}),
+              Core::STLUtil::getKeys(mgr.descriptions));
+}
+
+TEST_F(ServerRaftConsensusConfigurationManagerTest, truncateSuffix) {
+    mgr.add(2, desc(d));
+    mgr.add(3, desc(d));
+    mgr.add(4, desc(d));
+    mgr.truncateSuffix(3);
+    EXPECT_EQ(3U, cfg.id);
+    EXPECT_EQ((std::vector<uint64_t>{2, 3}),
+              Core::STLUtil::getKeys(mgr.descriptions));
+}
+
+TEST_F(ServerRaftConsensusConfigurationManagerTest, setSnapshot) {
+    mgr.setSnapshot(2, desc(d));
+    mgr.setSnapshot(3, desc(d));
+    mgr.truncatePrefix(4);
+    EXPECT_EQ(3U, cfg.id);
+    EXPECT_EQ((std::vector<uint64_t>{3}),
+              Core::STLUtil::getKeys(mgr.descriptions));
+}
+
+TEST_F(ServerRaftConsensusConfigurationManagerTest,
+                                            getLatestConfigurationAsOf) {
+    std::pair<uint64_t, Protocol::Raft::Configuration> p;
+    p = mgr.getLatestConfigurationAsOf(10);
+    EXPECT_EQ(0U, p.first);
+    mgr.add(2, desc(d));
+    mgr.add(3, desc(d));
+    mgr.add(4, desc(d));
+    p = mgr.getLatestConfigurationAsOf(0);
+    EXPECT_EQ(0U, p.first);
+    p = mgr.getLatestConfigurationAsOf(2);
+    EXPECT_EQ(2U, p.first);
+    p = mgr.getLatestConfigurationAsOf(3);
+    EXPECT_EQ(3U, p.first);
+    p = mgr.getLatestConfigurationAsOf(4);
+    EXPECT_EQ(4U, p.first);
+    p = mgr.getLatestConfigurationAsOf(5);
+    EXPECT_EQ(4U, p.first);
+}
+
+TEST_F(ServerRaftConsensusConfigurationManagerTest, restoreInvariants) {
+    mgr.add(2, desc(d));
+    EXPECT_EQ(2U, cfg.id);
+    mgr.descriptions.clear();
+    mgr.restoreInvariants();
+    EXPECT_EQ(0U, cfg.id);
+
+    mgr.add(2, desc(d));
+    mgr.setSnapshot(3, desc(d));
+    mgr.restoreInvariants();
+    EXPECT_EQ(3U, cfg.id);
+    EXPECT_EQ((std::vector<uint64_t>{2, 3}),
+              Core::STLUtil::getKeys(mgr.descriptions));
 }
 
 class ServerRaftConsensusTest : public ::testing::Test {
@@ -476,7 +567,8 @@ TEST_F(ServerRaftConsensusTest, init_nonblanklog)
     EXPECT_EQ(3U, consensus->configuration->id);
     EXPECT_EQ(State::FOLLOWER, consensus->state);
     EXPECT_EQ((std::vector<uint64_t>{1, 3}),
-              Core::STLUtil::getKeys(consensus->configurationDescriptions));
+              Core::STLUtil::getKeys(consensus->configurationManager->
+                                                    descriptions));
 }
 
 TEST_F(ServerRaftConsensusTest, init_withsnapshot)
@@ -802,7 +894,8 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntries_truncate)
     e2->set_type(Protocol::Raft::EntryType::DATA);
     e2->set_data("bar");
     EXPECT_EQ((std::vector<uint64_t>{1, 3, 4}),
-              Core::STLUtil::getKeys(consensus->configurationDescriptions));
+              Core::STLUtil::getKeys(consensus->configurationManager->
+                                                            descriptions));
 
     consensus->handleAppendEntries(request, response);
     EXPECT_EQ("term: 3 "
@@ -821,7 +914,8 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntries_truncate)
     const Log::Entry& l4 = consensus->log->getEntry(4);
     EXPECT_EQ("bar", l4.data());
     EXPECT_EQ((std::vector<uint64_t>{1, 3}),
-              Core::STLUtil::getKeys(consensus->configurationDescriptions));
+              Core::STLUtil::getKeys(consensus->configurationManager->
+                                                            descriptions));
 }
 
 TEST_F(ServerRaftConsensusTest, handleAppendEntries_duplicate)
@@ -1232,9 +1326,10 @@ TEST_F(ServerRaftConsensusTest, beginSnapshot)
 
     // make sure it had the right side-effects
     EXPECT_EQ(0U, consensus->lastSnapshotIndex);
-    consensus->configurationDescriptions.erase(1);
+    consensus->configurationManager->descriptions.erase(1);
     EXPECT_EQ((std::vector<uint64_t>{4}),
-              Core::STLUtil::getKeys(consensus->configurationDescriptions));
+              Core::STLUtil::getKeys(consensus->configurationManager->
+                                                                descriptions));
     consensus->readSnapshot();
     EXPECT_EQ(3U, consensus->lastSnapshotIndex);
     EXPECT_EQ(2U, consensus->lastSnapshotTerm);
@@ -1242,7 +1337,8 @@ TEST_F(ServerRaftConsensusTest, beginSnapshot)
     EXPECT_TRUE(consensus->snapshotReader->getStream().ReadLittleEndian32(&x));
     EXPECT_EQ(0xdeadbeef, x);
     EXPECT_EQ((std::vector<uint64_t>{1, 4}),
-              Core::STLUtil::getKeys(consensus->configurationDescriptions));
+              Core::STLUtil::getKeys(consensus->configurationManager->
+                                                                descriptions));
 }
 
 TEST_F(ServerRaftConsensusTest, snapshotDone)
@@ -1267,10 +1363,12 @@ TEST_F(ServerRaftConsensusTest, snapshotDone)
     consensus->snapshotDone(3, std::move(saveWriter));
     EXPECT_EQ(3U, consensus->lastSnapshotIndex);
     EXPECT_EQ(2U, consensus->lastSnapshotTerm);
+    EXPECT_EQ(1U, consensus->configuration->id);
 
     consensus->snapshotDone(2, std::move(discardWriter));
     EXPECT_EQ(3U, consensus->lastSnapshotIndex);
     EXPECT_EQ(2U, consensus->lastSnapshotTerm);
+    EXPECT_EQ(1U, consensus->configuration->id);
 }
 
 class CandidacyThreadMainHelper {
@@ -1598,8 +1696,9 @@ TEST_F(ServerRaftConsensusTest, append)
     EXPECT_EQ(1U, consensus->configuration->id);
     EXPECT_EQ(2U, consensus->log->getLastLogIndex());
     EXPECT_EQ((std::vector<uint64_t>{1}),
-              Core::STLUtil::getKeys(consensus->configurationDescriptions));
-    EXPECT_EQ(d, consensus->configurationDescriptions.at(1));
+              Core::STLUtil::getKeys(consensus->configurationManager->
+                                                                descriptions));
+    EXPECT_EQ(d, consensus->configurationManager->descriptions.at(1));
 }
 
 // used in AppendEntries tests
@@ -1941,15 +2040,16 @@ TEST_F(ServerRaftConsensusTest, readSnapshot)
     EXPECT_EQ(2U, consensus->commitIndex);
     consensus->beginSnapshot(2)->save();
     consensus->commitIndex = 0;
-    consensus->configurationDescriptions.clear();
+    consensus->configurationManager->descriptions.clear();
     consensus->readSnapshot();
     EXPECT_EQ(2U, consensus->lastSnapshotIndex);
     EXPECT_EQ(2U, consensus->lastSnapshotTerm);
     EXPECT_EQ(2U, consensus->commitIndex);
     EXPECT_TRUE(consensus->snapshotReader);
     EXPECT_EQ((std::vector<uint64_t>{1}),
-              Core::STLUtil::getKeys(consensus->configurationDescriptions));
-    EXPECT_EQ(d, consensus->configurationDescriptions.at(1));
+              Core::STLUtil::getKeys(consensus->configurationManager->
+                                                            descriptions));
+    EXPECT_EQ(d, consensus->configurationManager->descriptions.at(1));
 
     // does not affect commitIndex if done again
     consensus->append(entry2);

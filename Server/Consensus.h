@@ -164,6 +164,9 @@ class Consensus {
     snapshotDone(uint64_t lastIncludedIndex,
                  std::unique_ptr<SnapshotFile::Writer> writer) = 0;
 
+    /**
+     * This server's unique ID. Not available until init() is called.
+     */
     uint64_t serverId;
 };
 

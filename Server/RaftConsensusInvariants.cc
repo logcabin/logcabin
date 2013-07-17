@@ -136,18 +136,19 @@ Invariants::checkBasic()
          ++entryId) {
         const Log::Entry& entry = consensus.log->getEntry(entryId);
         if (entry.type() == Protocol::Raft::EntryType::CONFIGURATION) {
-            auto it = consensus.configurationDescriptions.find(entryId);
-            expect(it != consensus.configurationDescriptions.end());
-            if (it != consensus.configurationDescriptions.end())
+            auto it = consensus.configurationManager->
+                                        descriptions.find(entryId);
+            expect(it != consensus.configurationManager->descriptions.end());
+            if (it != consensus.configurationManager->descriptions.end())
                 expect(it->second == entry.configuration());
         }
     }
     // The configuration descriptions map shouldn't have anything past the
     // snapshot and the log.
-    expect(consensus.configurationDescriptions.upper_bound(
+    expect(consensus.configurationManager->descriptions.upper_bound(
                 std::max(consensus.log->getLastLogIndex(),
                          consensus.lastSnapshotIndex)) ==
-           consensus.configurationDescriptions.end());
+           consensus.configurationManager->descriptions.end());
 
     // Servers with blank configurations should remain passive. Since the first
     // entry in every log is a configuration, they should also have empty logs.

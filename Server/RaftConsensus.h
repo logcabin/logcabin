@@ -508,6 +508,11 @@ class Configuration {
     void resetStagingServers();
 
     /**
+     * Set the state of this object as if it had just been constructed.
+     */
+    void reset();
+
+    /**
      * Set the configuration. Any existing staging servers are dropped.
      * \param newId
      *      The log entry ID of the configuration.
@@ -611,6 +616,110 @@ class Configuration {
      * receive log entries but do not participate in elections.
      */
     SimpleConfiguration newServers;
+
+    friend class Invariants;
+};
+
+/**
+ * Ensures the current configuration reflects the latest state of the log and
+ * snapshot.
+ */
+class ConfigurationManager {
+  public:
+    /**
+     * Constructor.
+     * \param configuration
+     *      The configuration that this object is in charge of setting.
+     */
+    explicit ConfigurationManager(Configuration& configuration);
+
+    /**
+     * Destructor.
+     */
+    ~ConfigurationManager();
+
+    /**
+     * Called when a new configuration is added to the log.
+     * \param index
+     *      The log index of this configuration (equivalently, its ID).
+     * \param description
+     *      The serializable representation of the configuration.
+     */
+    void add(uint64_t index,
+             const Protocol::Raft::Configuration& description);
+    /**
+     * Called when a log prefix is truncated (after saving a snapshot that
+     * covers this prefix).
+     * \param firstIndexKept
+     *      The log entries in range [1, firstIndexKept) are being discarded.
+     */
+    void truncatePrefix(uint64_t firstIndexKept);
+    /**
+     * Called when a log suffix is truncated (when the leader doesn't agree
+     * with this server's log).
+     * \param lastIndexKept
+     *      The log entries in range (lastIndexKept, infinity) are being
+     *      discarded.
+     */
+    void truncateSuffix(uint64_t lastIndexKept);
+    /**
+     * Called when a new snapshot is saved.
+     * Only the latest such configuration is kept.
+     * \param index
+     *      The log index of this configuration (equivalently, its ID).
+     * \param description
+     *      The serializable representation of the configuration.
+     */
+    void setSnapshot(uint64_t index,
+                     const Protocol::Raft::Configuration& description);
+
+    /**
+     * Return the configuration as of a particular log index.
+     * This is useful when taking snapshots.
+     * \param lastIncludedIndex
+     *      Configurations greater than this index will be ignored.
+     * \return
+     *      The index and description of the configuration with the largest
+     *      index in the range [1, lastIncludedIndex].
+     */
+    std::pair<uint64_t, Protocol::Raft::Configuration>
+    getLatestConfigurationAsOf(uint64_t lastIncludedIndex) const;
+
+  private:
+
+    /**
+     * Helper function called after changing this object's state.
+     * - Make sure the snapshot configuration is in the descriptions map.
+     * - Set configuration to the configuration with the largest index in the
+     *   descriptions map, or reset it the map is empty.
+     */
+    void restoreInvariants();
+
+    /**
+     * Defines the servers that are part of the cluster. See Configuration.
+     */
+    Configuration& configuration;
+
+    /**
+     * This contains all the cluster configurations found in the log, plus one
+     * additional configuration from the latest snapshot.
+     *
+     * It is used to find the right configuration when taking a snapshot and
+     * truncating the end of the log. It must be kept consistent with the log
+     * when it is loaded, as the log grows, as it gets truncated from the
+     * beginning for snapshots, and as it gets truncated from the end upon
+     * conflicts with the leader.
+     *
+     * The key is the entry ID where the configuration belongs in the log; the
+     * value is the serializable form of the configuration.
+     */
+    std::map<uint64_t, Protocol::Raft::Configuration> descriptions;
+
+    /**
+     * This reflects the configuration found in this server's latest snapshot,
+     * or {0, {}} if this server has no snapshot.
+     */
+    std::pair<uint64_t, Protocol::Raft::Configuration> snapshot;
 
     friend class Invariants;
 };
@@ -1028,31 +1137,20 @@ class RaftConsensus : public Consensus {
      * Provides all storage for this server. Keeps track of all log entries and
      * some additional metadata.
      *
-     * If you modify this, be sure to keep #configurationDescriptions
-     * consistent.
+     * If you modify this, be sure to keep #configurationManager consistent.
      */
     std::unique_ptr<Log> log;
-
-    /**
-     * This contains all the cluster configurations found in the log, plus one
-     * additional configuration from the latest snapshot.
-     *
-     * It is used to find the right configuration when taking a snapshot and
-     * truncating the end of the log. It must be kept consistent with the log
-     * when it is loaded, as the log grows, as it gets truncated from the
-     * beginning for snapshots, and as it gets truncated from the end upon
-     * conflicts with the leader.
-     *
-     * The key is the entry ID where the configuration belongs in the log; the
-     * value is the configuration itself.
-     */
-    std::map<uint64_t, Protocol::Raft::Configuration>
-        configurationDescriptions;
 
     /**
      * Defines the servers that are part of the cluster. See Configuration.
      */
     std::unique_ptr<Configuration> configuration;
+
+    /**
+     * Ensures that 'configuration' reflects the latest state of the log and
+     * snapshot.
+     */
+    std::unique_ptr<ConfigurationManager> configurationManager;
 
     /**
      * The latest term this server has seen. This value monotonically increases

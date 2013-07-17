@@ -462,6 +462,18 @@ void setGCFlag(Server& server)
 } // anonymous namespace
 
 void
+Configuration::reset()
+{
+    state = State::BLANK;
+    id = 0;
+    description = {};
+    oldServers.servers.clear();
+    newServers.servers.clear();
+    knownServers.clear();
+    knownServers[localServer->serverId] = localServer;
+}
+
+void
 Configuration::setConfiguration(
         uint64_t newId,
         const Protocol::Raft::Configuration& newDescription)
@@ -602,6 +614,85 @@ Configuration::getServer(uint64_t newServerId)
     }
 }
 
+////////// ConfigurationManager //////////
+
+ConfigurationManager::ConfigurationManager(Configuration& configuration)
+    : configuration(configuration)
+    , descriptions()
+    , snapshot(0, {})
+{
+}
+
+ConfigurationManager::~ConfigurationManager()
+{
+}
+
+void
+ConfigurationManager::add(
+    uint64_t index,
+    const Protocol::Raft::Configuration& description)
+{
+    descriptions[index] = description;
+    restoreInvariants();
+}
+
+void
+ConfigurationManager::truncatePrefix(uint64_t firstIndexKept)
+{
+    descriptions.erase(descriptions.begin(),
+                       descriptions.lower_bound(firstIndexKept));
+    restoreInvariants();
+}
+
+void
+ConfigurationManager::truncateSuffix(uint64_t lastIndexKept)
+{
+    descriptions.erase(descriptions.upper_bound(lastIndexKept),
+                       descriptions.end());
+    restoreInvariants();
+}
+
+void
+ConfigurationManager::setSnapshot(
+    uint64_t index,
+    const Protocol::Raft::Configuration& description)
+{
+    assert(index >= snapshot.first);
+    snapshot = {index, description};
+    restoreInvariants();
+}
+
+std::pair<uint64_t, Protocol::Raft::Configuration>
+ConfigurationManager::getLatestConfigurationAsOf(
+                                        uint64_t lastIncludedIndex) const
+{
+    if (descriptions.empty())
+        return {0, {}};
+    auto it = descriptions.upper_bound(lastIncludedIndex);
+    // 'it' is either an element or end()
+    if (it == descriptions.begin())
+        return {0, {}};
+    --it;
+    return *it;
+}
+
+////////// ConfigurationManager private methods //////////
+
+void
+ConfigurationManager::restoreInvariants()
+{
+    if (snapshot.first != 0)
+        descriptions.insert(snapshot);
+    if (descriptions.empty()) {
+        configuration.reset();
+    } else {
+        auto it = descriptions.rbegin();
+        if (configuration.id != it->first)
+            configuration.setConfiguration(it->first, it->second);
+    }
+}
+
+
 ////////// RaftConsensus //////////
 
 uint64_t RaftConsensus::ELECTION_TIMEOUT_MS = 150;
@@ -622,8 +713,8 @@ RaftConsensus::RaftConsensus(Globals& globals)
     , exiting(false)
     , numPeerThreads(0)
     , log()
-    , configurationDescriptions()
     , configuration()
+    , configurationManager()
     , currentTerm(0)
     , state(State::FOLLOWER)
     , lastSnapshotIndex(0)
@@ -658,6 +749,8 @@ RaftConsensus::init()
 {
     std::unique_lock<Mutex> lockGuard(mutex);
     mutex.callback = std::bind(&Invariants::checkAll, &invariants);
+    // TODO(ongaro): uhh, how are server ID's assigned? I don't think this
+    // makes sense with reconfiguration.
     NOTICE("My server ID is %lu", serverId);
 
     if (storageDirectory.fd == -1) { // unit tests set this
@@ -669,6 +762,7 @@ RaftConsensus::init()
     }
 
     configuration.reset(new Configuration(serverId, *this));
+    configurationManager.reset(new ConfigurationManager(*configuration));
 
     if (!log) { // some unit tests pre-set the log; don't overwrite it
         log.reset(new SimpleFileLog(storageDirectory));
@@ -678,8 +772,7 @@ RaftConsensus::init()
          ++entryId) {
         const Log::Entry& entry = log->getEntry(entryId);
         if (entry.type() == Protocol::Raft::EntryType::CONFIGURATION) {
-            configurationDescriptions[entryId] = entry.configuration();
-            configuration->setConfiguration(entryId, entry.configuration());
+            configurationManager->add(entryId, entry.configuration());
         }
     }
 
@@ -889,22 +982,11 @@ RaftConsensus::handleAppendEntries(
                 continue;
             // should never truncate committed entries:
             assert(commitIndex < entryId);
-            // TODO(ongaro): assertion: what I'm truncating better belong to
-            // only 1 term
             NOTICE("Truncating %lu entries after %lu from the log",
-                   log->getLastLogIndex() - entryId + 1, entryId);
+                   log->getLastLogIndex() - entryId + 1,
+                   entryId - 1);
             log->truncateSuffix(entryId - 1);
-            configurationDescriptions.erase(
-                    configurationDescriptions.lower_bound(entryId),
-                    configurationDescriptions.end());
-            if (configuration->id >= entryId) {
-                // Truncation removed current configuration, so fall back to
-                // the prior one. We're never asked to truncate our only
-                // configuration.
-                auto it = configurationDescriptions.rbegin();
-                assert(it != configurationDescriptions.rend());
-                configuration->setConfiguration(it->first, it->second);
-            }
+            configurationManager->truncateSuffix(entryId - 1);
         }
         // TODO(ongaro): rewrite this to allow batching to disk
         uint64_t e = append(entry);
@@ -1174,17 +1256,15 @@ RaftConsensus::beginSnapshot(uint64_t lastIncludedIndex)
         // change the state machines to deal with that.
         header.set_last_included_term(0);
     }
-    // Find the configuration as of lastIncludedIndex. (This could potentially
-    // be more efficient with more advanced use of the STL, but I'd rather do
-    // the obvious backward scan through configurationDescriptions.)
-    for (auto it = configurationDescriptions.rbegin();
-         it != configurationDescriptions.rend();
-         ++it) {
-        if (it->first <= lastIncludedIndex) {
-            header.set_configuration_index(it->first);
-            *header.mutable_configuration() = it->second;
-            break;
-        }
+    // Copy the configuration as of lastIncludedIndex to the header.
+    std::pair<uint64_t, Protocol::Raft::Configuration> c =
+        configurationManager->getLatestConfigurationAsOf(lastIncludedIndex);
+    if (c.first == 0) {
+        WARNING("Taking snapshot with no configuration. "
+                "This should have been the first thing in the log.");
+    } else {
+        header.set_configuration_index(c.first);
+        *header.mutable_configuration() = c.second;
     }
 
     // write header to file
@@ -1221,6 +1301,19 @@ RaftConsensus::snapshotDone(uint64_t lastIncludedIndex,
     writer->save();
     lastSnapshotIndex = lastIncludedIndex;
     lastSnapshotTerm = log->getEntry(lastIncludedIndex).term();
+
+    // It's easier to grab this configuration out of the manager again than to
+    // carry it around after writing the header.
+    std::pair<uint64_t, Protocol::Raft::Configuration> c =
+        configurationManager->getLatestConfigurationAsOf(lastIncludedIndex);
+    if (c.first == 0) {
+        WARNING("Could not find the latest configuration as of index %lu "
+                "(inclusive). This shouldn't happen if the snapshot was "
+                "created with a configuration, as they should be.",
+                lastIncludedIndex);
+    } else {
+        configurationManager->setSnapshot(c.first, c.second);
+    }
 
     // TODO(ongaro): reclaim space from log here once it's safe to do so
     NOTICE("Completed snapshot through log index %lu (inclusive)",
@@ -1430,10 +1523,8 @@ RaftConsensus::append(const Log::Entry& entry)
 {
     assert(entry.term() != 0);
     uint64_t entryId = log->append(entry);
-    if (entry.type() == Protocol::Raft::EntryType::CONFIGURATION) {
-        configurationDescriptions[entryId] = entry.configuration();
-        configuration->setConfiguration(entryId, entry.configuration());
-    }
+    if (entry.type() == Protocol::Raft::EntryType::CONFIGURATION)
+        configurationManager->add(entryId, entry.configuration());
     stateChanged.notify_all();
     return entryId;
 }
@@ -1750,17 +1841,13 @@ RaftConsensus::readSnapshot()
             // right place.
             log->truncatePrefix(lastSnapshotIndex + 1);
             log->truncateSuffix(lastSnapshotIndex);
-            configurationDescriptions.clear();
-            configuration.reset(new Configuration(serverId, *this));
+            configurationManager->truncatePrefix(lastSnapshotIndex + 1);
+            configurationManager->truncateSuffix(lastSnapshotIndex);
         }
 
         if (header.has_configuration_index() && header.has_configuration()) {
-            configurationDescriptions[header.configuration_index()] =
-                header.configuration();
-            if (header.configuration_index() > configuration->id) {
-                configuration->setConfiguration(header.configuration_index(),
-                                                header.configuration());
-            }
+            configurationManager->setSnapshot(header.configuration_index(),
+                                              header.configuration());
         } else {
             WARNING("No configuration. This is unexpected, since any snapshot "
                     "should contain a configuration (they're the first thing "
