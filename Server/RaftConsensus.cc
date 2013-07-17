@@ -1315,9 +1315,13 @@ RaftConsensus::snapshotDone(uint64_t lastIncludedIndex,
         configurationManager->setSnapshot(c.first, c.second);
     }
 
-    // TODO(ongaro): reclaim space from log here once it's safe to do so
     NOTICE("Completed snapshot through log index %lu (inclusive)",
            lastSnapshotIndex);
+
+    // It may be beneficial to defer discarding entries if some followers are
+    // a little bit slow, to avoid having to send them a snapshot when a few
+    // entries would do the trick. Best to avoid premature optimization though.
+    discardUnneededEntries();
 }
 
 std::ostream&
@@ -1767,6 +1771,18 @@ RaftConsensus::becomeLeader()
     interruptAll();
 }
 
+void
+RaftConsensus::discardUnneededEntries()
+{
+    if (log->getLogStartIndex() <= lastSnapshotIndex) {
+        NOTICE("Removing log entries through %lu (inclusive) since "
+               "they're no longer needed", lastSnapshotIndex);
+        log->truncatePrefix(lastSnapshotIndex + 1);
+        configurationManager->truncatePrefix(lastSnapshotIndex + 1);
+        stateChanged.notify_all();
+    }
+}
+
 uint64_t
 RaftConsensus::getLastLogTerm() const
 {
@@ -1837,6 +1853,13 @@ RaftConsensus::readSnapshot()
         if (log->getLastLogIndex() < lastSnapshotIndex ||
             (log->getLogStartIndex() <= lastSnapshotIndex &&
              log->getEntry(lastSnapshotIndex).term() != lastSnapshotTerm)) {
+            // The NOTICE message can be confusing if the log is empty, so
+            // don't print it in that case. We still want to shift the log
+            // start index, though.
+            if (log->getLogStartIndex() <= log->getLastLogIndex()) {
+                NOTICE("Discarding the entire log, since it's not known to be "
+                       "consistent with the snapshot that is being read");
+            }
             // Discard the entire log, setting the log start to point to the
             // right place.
             log->truncatePrefix(lastSnapshotIndex + 1);
@@ -1844,6 +1867,8 @@ RaftConsensus::readSnapshot()
             configurationManager->truncatePrefix(lastSnapshotIndex + 1);
             configurationManager->truncateSuffix(lastSnapshotIndex);
         }
+
+        discardUnneededEntries();
 
         if (header.has_configuration_index() && header.has_configuration()) {
             configurationManager->setSnapshot(header.configuration_index(),

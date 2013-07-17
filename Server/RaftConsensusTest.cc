@@ -1364,6 +1364,7 @@ TEST_F(ServerRaftConsensusTest, snapshotDone)
     EXPECT_EQ(3U, consensus->lastSnapshotIndex);
     EXPECT_EQ(2U, consensus->lastSnapshotTerm);
     EXPECT_EQ(1U, consensus->configuration->id);
+    EXPECT_EQ(4U, consensus->log->getLogStartIndex());
 
     consensus->snapshotDone(2, std::move(discardWriter));
     EXPECT_EQ(3U, consensus->lastSnapshotIndex);
@@ -1989,6 +1990,21 @@ TEST_F(ServerRaftConsensusTest, becomeLeader)
     EXPECT_EQ(TimePoint::max(), consensus->startElectionAt);
 }
 
+TEST_F(ServerRaftConsensusTest, discardUnneededEntries)
+{
+    init();
+    consensus->discardUnneededEntries();
+    EXPECT_EQ(1U, consensus->log->getLogStartIndex());
+    consensus->append(entry1);
+    consensus->startNewElection();
+    consensus->advanceCommittedId();
+    std::unique_ptr<SnapshotFile::Writer> writer = consensus->beginSnapshot(2);
+    writer->getStream().WriteLittleEndian32(0xdeadbeef);
+    consensus->snapshotDone(2, std::move(writer));
+    consensus->discardUnneededEntries();
+    EXPECT_EQ(3U, consensus->log->getLogStartIndex());
+}
+
 TEST_F(ServerRaftConsensusTest, getLastLogTerm)
 {
     init();
@@ -2003,8 +2019,6 @@ TEST_F(ServerRaftConsensusTest, getLastLogTerm)
     std::unique_ptr<SnapshotFile::Writer> writer = consensus->beginSnapshot(2);
     writer->getStream().WriteLittleEndian32(0xdeadbeef);
     consensus->snapshotDone(2, std::move(writer));
-    consensus->log->truncatePrefix(3);
-    consensus->stateChanged.notify_all();
     EXPECT_LT(consensus->log->getLastLogIndex(),
               consensus->log->getLogStartIndex());
     EXPECT_EQ(1U, consensus->getLastLogTerm());
@@ -2050,6 +2064,7 @@ TEST_F(ServerRaftConsensusTest, readSnapshot)
               Core::STLUtil::getKeys(consensus->configurationManager->
                                                             descriptions));
     EXPECT_EQ(d, consensus->configurationManager->descriptions.at(1));
+    EXPECT_EQ(3U, consensus->log->getLogStartIndex());
 
     // does not affect commitIndex if done again
     consensus->append(entry2);
@@ -2062,12 +2077,13 @@ TEST_F(ServerRaftConsensusTest, readSnapshot)
     EXPECT_TRUE(consensus->snapshotReader);
 
     // truncates the log if it does not agree with the snapshot
-    EXPECT_EQ(1U, consensus->log->getLogStartIndex());
+    EXPECT_EQ(3U, consensus->log->getLogStartIndex());
     EXPECT_EQ(3U, consensus->log->getLastLogIndex());
     consensus->commitIndex = 0;
     consensus->log->truncateSuffix(1);
     consensus->readSnapshot();
     EXPECT_EQ(3U, consensus->log->getLogStartIndex());
+    EXPECT_EQ(2U, consensus->log->getLastLogIndex());
     EXPECT_EQ(2U, consensus->commitIndex);
 }
 

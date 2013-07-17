@@ -964,6 +964,12 @@ class RaftConsensus : public Consensus {
     void becomeLeader();
 
     /**
+     * Remove the prefix of the log that is redundant with this server's
+     * snapshot.
+     */
+    void discardUnneededEntries();
+
+    /**
      * Return the term corresponding to log->getLastLogIndex(). This may come
      * from the log, from the snapshot, or it may be 0.
      */
