@@ -719,6 +719,7 @@ RaftConsensus::RaftConsensus(Globals& globals)
     , state(State::FOLLOWER)
     , lastSnapshotIndex(0)
     , lastSnapshotTerm(0)
+    , lastSnapshotBytes(0)
     , snapshotReader()
     , snapshotWriter()
     , commitIndex(0)
@@ -887,6 +888,21 @@ RaftConsensus::getNextEntry(uint64_t lastEntryId) const
         }
         stateChanged.wait(lockGuard);
     }
+}
+
+SnapshotStats::SnapshotStats
+RaftConsensus::getSnapshotStats() const
+{
+    std::unique_lock<Mutex> lockGuard(mutex);
+
+    SnapshotStats::SnapshotStats s;
+    s.set_last_snapshot_index(lastSnapshotIndex);
+    s.set_last_snapshot_bytes(lastSnapshotBytes);
+    s.set_log_start_index(log->getLogStartIndex());
+    s.set_last_log_index(log->getLastLogIndex());
+    s.set_log_bytes(log->getSizeBytes());
+    s.set_is_leader(state == State::LEADER);
+    return s;
 }
 
 void
@@ -1298,7 +1314,7 @@ RaftConsensus::snapshotDone(uint64_t lastIncludedIndex,
     // entries.
     assert(lastIncludedIndex <= log->getLastLogIndex());
 
-    writer->save();
+    lastSnapshotBytes = writer->save();
     lastSnapshotIndex = lastIncludedIndex;
     lastSnapshotTerm = log->getEntry(lastIncludedIndex).term();
 
@@ -1841,6 +1857,7 @@ RaftConsensus::readSnapshot()
         }
         lastSnapshotIndex = header.last_included_index();
         lastSnapshotTerm = header.last_included_term();
+        lastSnapshotBytes = reader->getSizeBytes();
         commitIndex = std::max(lastSnapshotIndex, commitIndex);
 
         NOTICE("Reading snapshot which covers log entries 1 through %lu "

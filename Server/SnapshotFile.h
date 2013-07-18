@@ -48,6 +48,8 @@ class Reader {
     explicit Reader(const Storage::FilesystemUtil::File& parentDir);
     /// Destructor.
     ~Reader();
+    /// Return the size in bytes for the file.
+    uint64_t getSizeBytes();
     /// Returns the input stream to read from.
     google::protobuf::io::CodedInputStream& getStream();
   private:
@@ -79,9 +81,12 @@ class Writer {
      */
     ~Writer();
     /// Throw away the file.
+    /// If you call this after the file has been closed, it will PANIC.
     void discard();
     /// Flush and close the file.
-    void save();
+    /// If you call this after the file has been closed, it will PANIC.
+    /// \return size in bytes of the file
+    uint64_t save();
     /// Returns the output stream to write into.
     google::protobuf::io::CodedOutputStream& getStream();
   private:

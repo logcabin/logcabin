@@ -15,4 +15,5 @@ src = [
 object_files['Server'] = (env.StaticObject(src) +
                           env.Protobuf("RaftLogMetadata.proto") +
                           env.Protobuf("SimpleFileLog.proto") +
-                          env.Protobuf("SnapshotMetadata.proto"))
+                          env.Protobuf("SnapshotMetadata.proto") +
+                          env.Protobuf("SnapshotStats.proto"))

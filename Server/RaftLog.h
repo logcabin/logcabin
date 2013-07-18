@@ -72,9 +72,14 @@ class Log {
      * Get the entry ID of the most recent entry in the log.
      * \return
      *      The entry ID of the most recent entry in the log,
-     *      or 0 if the log is empty.
+     *      or startIndex - 1 if the log is empty.
      */
     virtual uint64_t getLastLogIndex() const;
+
+    /**
+     * Get the size of the entire log in bytes.
+     */
+    virtual uint64_t getSizeBytes() const;
 
     /**
      * Delete the log entries before the given entry ID.

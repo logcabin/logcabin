@@ -51,7 +51,6 @@ TEST_F(ServerSnapshotFileTest, basic)
         Writer writer(tmpdir);
         writer.getStream().WriteVarint32(482);
         writer.save();
-        writer.save(); // calling save twice is safe
     }
     {
         Reader reader(tmpdir);
@@ -88,8 +87,6 @@ TEST_F(ServerSnapshotFileTest, writer_discard)
         Writer writer(tmpdir);
         writer.getStream().WriteVarint32(482);
         writer.discard();
-        writer.discard();
-        writer.save();
     }
     EXPECT_EQ(0U, FilesystemUtil::ls(tmpdir).size());
 }

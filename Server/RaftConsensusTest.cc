@@ -730,6 +730,35 @@ TEST_F(ServerRaftConsensusTest, getNextEntry_snapshot)
     EXPECT_EQ(3U, consensus->getNextEntry(2).entryId);
 }
 
+TEST_F(ServerRaftConsensusTest, getSnapshotStats)
+{
+    init();
+    EXPECT_EQ("last_snapshot_index: 0 "
+              "last_snapshot_bytes: 0 "
+              "log_start_index: 1 "
+              "last_log_index: 0 "
+              "log_bytes: 0 "
+              "is_leader: false ",
+              consensus->getSnapshotStats());
+    // Now try to jiggle each field and make sure it moves.
+    // Can't use string comparisons since byte values are unknown.
+
+    consensus->stepDown(1);
+    consensus->append(entry1);
+    consensus->startNewElection();
+    EXPECT_EQ(2U, consensus->getSnapshotStats().last_log_index());
+    EXPECT_LT(10U, consensus->getSnapshotStats().log_bytes());
+    EXPECT_GT(1024U, consensus->getSnapshotStats().log_bytes());
+    EXPECT_TRUE(consensus->getSnapshotStats().is_leader());
+
+    std::unique_ptr<SnapshotFile::Writer> writer = consensus->beginSnapshot(2);
+    consensus->snapshotDone(2, std::move(writer));
+    EXPECT_EQ(3U, consensus->getSnapshotStats().log_start_index());
+    EXPECT_LT(10U, consensus->getSnapshotStats().last_snapshot_bytes());
+    EXPECT_GT(1024U, consensus->getSnapshotStats().last_snapshot_bytes());
+    EXPECT_EQ(2U, consensus->getSnapshotStats().last_snapshot_index());
+}
+
 TEST_F(ServerRaftConsensusTest, handleAppendEntries_callerStale)
 {
     init();
@@ -1363,6 +1392,10 @@ TEST_F(ServerRaftConsensusTest, snapshotDone)
     consensus->snapshotDone(3, std::move(saveWriter));
     EXPECT_EQ(3U, consensus->lastSnapshotIndex);
     EXPECT_EQ(2U, consensus->lastSnapshotTerm);
+    // Don't really know exactly how big the snapshot will be in bytes, but
+    // between 10 and 1K seems reasonable.
+    EXPECT_LT(10U, consensus->lastSnapshotBytes);
+    EXPECT_GT(1024U, consensus->lastSnapshotBytes);
     EXPECT_EQ(1U, consensus->configuration->id);
     EXPECT_EQ(4U, consensus->log->getLogStartIndex());
 
@@ -2059,6 +2092,10 @@ TEST_F(ServerRaftConsensusTest, readSnapshot)
     EXPECT_EQ(2U, consensus->lastSnapshotIndex);
     EXPECT_EQ(2U, consensus->lastSnapshotTerm);
     EXPECT_EQ(2U, consensus->commitIndex);
+    // Don't really know exactly how big the snapshot will be in bytes, but
+    // between 10 and 1K seems reasonable.
+    EXPECT_LT(10U, consensus->lastSnapshotBytes);
+    EXPECT_GT(1024U, consensus->lastSnapshotBytes);
     EXPECT_TRUE(consensus->snapshotReader);
     EXPECT_EQ((std::vector<uint64_t>{1}),
               Core::STLUtil::getKeys(consensus->configurationManager->

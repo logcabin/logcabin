@@ -89,6 +89,16 @@ TEST_F(ServerRaftLogTest, getLastLogIndex)
     EXPECT_EQ(2U, log.getLastLogIndex());
 }
 
+TEST_F(ServerRaftLogTest, getSizeBytes)
+{
+    EXPECT_EQ(0U, log.getSizeBytes());
+    log.append(sampleEntry);
+    uint64_t s = log.getSizeBytes();
+    EXPECT_LT(0U, s);
+    log.append(sampleEntry);
+    EXPECT_EQ(2 * s, log.getSizeBytes());
+}
+
 TEST_F(ServerRaftLogTest, truncatePrefix)
 {
     EXPECT_EQ(1U, log.startId);

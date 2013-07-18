@@ -155,13 +155,19 @@ StateMachine::threadMain()
             lastEntryId = entry.entryId;
             cond.notify_all();
 
-            // Take a snapshot.
-            // TODO(ongaro): snapshotting after every log entry is unreasonable
-            // TODO(ongaro): snapshotting synchronously is unreasonable
-            std::unique_ptr<SnapshotFile::Writer> writer =
-                consensus->beginSnapshot(lastEntryId);
-            tree.dumpSnapshot(writer->getStream());
-            consensus->snapshotDone(lastEntryId, std::move(writer));
+            SnapshotStats::SnapshotStats stats = consensus->getSnapshotStats();
+            // TODO(ongaro): these constants should be configurable
+            if (stats.log_bytes() >
+                    std::min(1024ul, stats.last_snapshot_bytes() * 10) &&
+                lastEntryId > stats.last_snapshot_index() &&
+                lastEntryId >= stats.last_log_index() * 3 / 4) {
+                // Take a snapshot
+                // TODO(ongaro): snapshotting synchronously is unreasonable
+                std::unique_ptr<SnapshotFile::Writer> writer =
+                    consensus->beginSnapshot(lastEntryId);
+                tree.dumpSnapshot(writer->getStream());
+                consensus->snapshotDone(lastEntryId, std::move(writer));
+            }
         }
     } catch (const ThreadInterruptedException& e) {
         VERBOSE("exiting");

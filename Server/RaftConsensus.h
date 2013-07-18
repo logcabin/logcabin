@@ -778,6 +778,9 @@ class RaftConsensus : public Consensus {
     // See Consensus::getNextEntry().
     Consensus::Entry getNextEntry(uint64_t lastEntryId) const;
 
+    // See Consensus::getSnapshotStats().
+    SnapshotStats::SnapshotStats getSnapshotStats() const;
+
     /**
      * Process an AppendEntries RPC from another server. Called by RaftService.
      * \param[in] request
@@ -1188,6 +1191,12 @@ class RaftConsensus : public Consensus {
      * we have no snapshot.
      */
     uint64_t lastSnapshotTerm;
+
+    /**
+     * The size of the latest good snapshot in bytes, or 0 if we have no
+     * snapshot.
+     */
+    uint64_t lastSnapshotBytes;
 
     /**
      * If not NULL, this is a SnapshotFile::Reader that covers up through

@@ -47,6 +47,12 @@ Reader::~Reader()
 {
 }
 
+uint64_t
+Reader::getSizeBytes()
+{
+    return FilesystemUtil::getSize(file);
+}
+
 google::protobuf::io::CodedInputStream&
 Reader::getStream()
 {
@@ -80,27 +86,29 @@ Writer::~Writer()
 void
 Writer::discard()
 {
-    if (file.fd < 0) // close already called
-        return;
+    if (file.fd < 0)
+        PANIC("File already closed");
     FilesystemUtil::removeFile(parentDir, stagingName);
     codedStream.reset();
     fileStream.reset();
     file.close();
 }
 
-void
+uint64_t
 Writer::save()
 {
-    if (file.fd < 0) // close already called
-        return;
+    if (file.fd < 0)
+        PANIC("File already closed");
     codedStream.reset();
     fileStream->Flush();
     fileStream.reset();
     FilesystemUtil::fsync(file);
+    uint64_t fileSize = FilesystemUtil::getSize(file);
     file.close();
     FilesystemUtil::rename(parentDir, stagingName,
                            parentDir, "snapshot");
     FilesystemUtil::fsync(parentDir);
+    return fileSize;
 }
 
 google::protobuf::io::CodedOutputStream&

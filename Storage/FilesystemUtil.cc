@@ -107,6 +107,17 @@ fsync(const File& file)
     }
 }
 
+uint64_t
+getSize(const File& file)
+{
+    struct stat stat;
+    if (fstat(file.fd, &stat) != 0) {
+        PANIC("Could not stat %s: %s",
+              file.path.c_str(), strerror(errno));
+    }
+    return stat.st_size;
+}
+
 std::vector<std::string>
 lsHelper(DIR* dir, const std::string& path)
 {
@@ -363,20 +374,9 @@ write(int fildes,
 
 FileContents::FileContents(const File& origFile)
     : file(dup(origFile))
-    , fileLen(0)
+    , fileLen(getSize(file))
     , map(NULL)
 {
-    struct stat stat;
-    if (fstat(file.fd, &stat) != 0) {
-        PANIC("Could not stat %s: %s",
-              file.path.c_str(), strerror(errno));
-    }
-    if (stat.st_size > ~0U) {
-        PANIC("File %s too big",
-              file.path.c_str());
-    }
-    fileLen = stat.st_size;
-
     // len of 0 for empty files results in invalid argument
     if (fileLen > 0) {
         map = mmap(NULL, fileLen, PROT_READ, MAP_SHARED, file.fd, 0);

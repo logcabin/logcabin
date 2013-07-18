@@ -71,6 +71,16 @@ Log::getLastLogIndex() const
     return startId + entries.size() - 1;
 }
 
+uint64_t
+Log::getSizeBytes() const
+{
+    // TODO(ongaro): keep this pre-calculated for efficiency
+    uint64_t size = 0;
+    for (auto it = entries.begin(); it < entries.end(); ++it)
+        size += it->ByteSize();
+    return size;
+}
+
 void
 Log::truncatePrefix(uint64_t firstEntryId)
 {

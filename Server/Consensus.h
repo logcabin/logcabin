@@ -18,6 +18,8 @@
 #include <stdexcept>
 #include <string>
 
+#include "build/Server/SnapshotStats.pb.h"
+
 #ifndef LOGCABIN_SERVER_CONSENSUS_H
 #define LOGCABIN_SERVER_CONSENSUS_H
 
@@ -132,6 +134,11 @@ class Consensus {
      * \throw ThreadInterruptedException
      */
     virtual Entry getNextEntry(uint64_t lastEntryId) const = 0;
+
+    /**
+     * Return statistics that may be useful in deciding when to snapshot.
+     */
+    virtual SnapshotStats::SnapshotStats getSnapshotStats() const = 0;
 
     /**
      * Start taking a snapshot. Called by the state machine when it wants to

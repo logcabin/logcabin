@@ -101,6 +101,11 @@ File dup(const File& file);
 void fsync(const File& file);
 
 /**
+ * Returns the size of the file in bytes.
+ */
+uint64_t getSize(const File& file);
+
+/**
  * List the contents of a directory by path.
  * Panics if the 'path' is not a directory.
  * \param path
