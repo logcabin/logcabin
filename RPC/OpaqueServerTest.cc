@@ -103,9 +103,14 @@ TEST_F(RPCOpaqueServerTest, MessageSocket_onDisconnect) {
     server.listener.handleNewConnection(fd2);
     fd2 = -1;
     EXPECT_EQ(2U, server.sockets.size());
-    server.sockets.at(0)->onDisconnect();
+    std::shared_ptr<OpaqueServer::ServerMessageSocket> socket =
+        server.sockets.at(0);
+    socket->onDisconnect();
     EXPECT_EQ(1U, server.sockets.size());
     EXPECT_EQ(0U, server.sockets.at(0)->socketsIndex);
+    EXPECT_TRUE(socket->server == NULL);
+    socket->close();
+    EXPECT_EQ(1U, server.sockets.size());
 }
 
 TEST_F(RPCOpaqueServerTest, MessageSocket_close) {

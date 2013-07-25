@@ -61,6 +61,7 @@ OpaqueServer::ServerMessageSocket::ServerMessageSocket(
         int fd,
         size_t socketsIndex)
     : MessageSocket(server->eventLoop, fd, server->maxMessageLength)
+    , eventLoop(server->eventLoop)
     , server(server)
     , socketsIndex(socketsIndex)
     , self()
@@ -95,12 +96,13 @@ OpaqueServer::ServerMessageSocket::onDisconnect()
 void
 OpaqueServer::ServerMessageSocket::close()
 {
+    Event::Loop::Lock lock(eventLoop);
     if (server != NULL) {
-        Event::Loop::Lock lock(server->eventLoop);
         auto& sockets = server->sockets;
+        server = NULL;
         std::swap(sockets[socketsIndex], sockets[sockets.size() - 1]);
         sockets[socketsIndex]->socketsIndex = socketsIndex;
-        sockets.pop_back();
+        sockets.pop_back(); // may destroy this object, so do it last
     }
 }
 

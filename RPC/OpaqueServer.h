@@ -130,14 +130,22 @@ class OpaqueServer {
          * This may be called from any thread.
          */
         void close();
+
+        /**
+         * The event loop that is used for non-blocking I/O.
+         */
+        Event::Loop& eventLoop;
+
         /**
          * The OpaqueServer which keeps a strong reference to this object, or
          * NULL if the server has gone away.
+         * May only be accessed with an Event Loop Lock or from the event loop.
          */
         OpaqueServer* server;
         /**
          * The index into OpaqueServer::sockets at which this object can be
          * found.
+         * May only be accessed with an Event Loop Lock or from the event loop.
          */
         size_t socketsIndex;
         /**
