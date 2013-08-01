@@ -13,6 +13,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <cassert>
 #include <errno.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -68,13 +69,17 @@ MessageSocket::RawSocket::setNotifyWritable(bool shouldNotify)
 void
 MessageSocket::RawSocket::handleFileEvent(uint32_t events)
 {
-    if (events & Events::READABLE)
+    assert(!closed);
+    if (events & Events::READABLE) {
         messageSocket.readable();
-    // It's important to not call writable if closed is false:
-    // readable may close the socket, but writable assumes the socket is still
-    // open (so that it may be written to).
-    if (!closed && events & Events::WRITABLE)
+        // return immediately in case readable() destroyed this object
+        return;
+    }
+    if (events & Events::WRITABLE) {
         messageSocket.writable();
+        // return immediately in case writable() destroyed this object
+        return;
+    }
 }
 
 ////////// MessageSocket::Header //////////
