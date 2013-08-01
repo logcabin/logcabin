@@ -87,7 +87,6 @@ class StateMachine {
     std::shared_ptr<Consensus> consensus;
     mutable std::mutex mutex;
     mutable std::condition_variable cond;
-    std::thread thread;
     uint64_t lastEntryId; // only written to by thread
 
     /**
@@ -138,6 +137,11 @@ class StateMachine {
      * readWriteTreeRPC.
      */
     Tree::Tree tree;
+
+    /**
+     * Repeatedly calls into the consensus module to get commands to process.
+     */
+    std::thread thread;
 };
 
 } // namespace LogCabin::Server

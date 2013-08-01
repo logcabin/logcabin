@@ -32,13 +32,13 @@ StateMachine::StateMachine(std::shared_ptr<Consensus> consensus)
     : consensus(consensus)
     , mutex()
     , cond()
-    , thread(&StateMachine::threadMain, this)
     , lastEntryId(0)
     , sessions()
     , nextLogId(1)
     , logNames()
     , logs()
     , tree()
+    , thread(&StateMachine::threadMain, this)
 {
 }
 
