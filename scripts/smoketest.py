@@ -15,10 +15,14 @@
 
 """
 This runs some basic tests against a LogCabin cluster.
+
+To run the servers through wrapper programs like valgrind or eatmydata, set the
+SMOKETEST_WRAPPER environment variable accordingly.
 """
 
 from __future__ import print_function, division
 from common import sh, captureSh, Sandbox, smokehosts
+import os
 import subprocess
 import time
 
@@ -41,6 +45,8 @@ def run(num_servers = None, # default 5
         for server_id in server_ids:
             host = smokehosts[server_id - 1]
             command = 'build/LogCabin --id %d --config smoketest.conf' % server_id
+            if 'SMOKETEST_WRAPPER' in os.environ:
+                command = '%s %s' % (os.environ['SMOKETEST_WRAPPER'], command)
             print('Starting %s on %s' % (command, smokehosts[server_id - 1][0]))
             sandbox.rsh(smokehosts[server_id - 1][0], command, bg=True,
                         stderr=open('debug/%d' % server_id, 'w'))
