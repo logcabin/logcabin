@@ -13,6 +13,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <google/protobuf/io/coded_stream.h>
 #include <map>
 #include <string>
 #include <vector>
@@ -92,6 +93,14 @@ class File {
   public:
     /// Default constructor.
     File();
+    /**
+     * Write the file to the stream.
+     */
+    void dumpSnapshot(google::protobuf::io::CodedOutputStream& stream) const;
+    /**
+     * Load the file from the stream.
+     */
+    void loadSnapshot(google::protobuf::io::CodedInputStream& stream);
     /**
      * Opaque data stored in the File.
      */
@@ -180,6 +189,15 @@ class Directory {
      */
     void removeFile(const std::string& name);
 
+    /**
+     * Write the directory and its children to the stream.
+     */
+    void dumpSnapshot(google::protobuf::io::CodedOutputStream& stream) const;
+    /**
+     * Load the directory and its children from the stream.
+     */
+    void loadSnapshot(google::protobuf::io::CodedInputStream& stream);
+
   private:
     /**
      * Map from names of child directories (without trailing slashes) to the
@@ -261,6 +279,18 @@ class Tree {
      * Constructor.
      */
     Tree();
+
+    /**
+     * Write the tree to the given stream.
+     */
+    void dumpSnapshot(google::protobuf::io::CodedOutputStream& stream) const;
+
+    /**
+     * Load the tree from the given stream.
+     * \warning
+     *      This will blow away any existing files and directories.
+     */
+    void loadSnapshot(google::protobuf::io::CodedInputStream& stream);
 
     /**
      * Verify that the file at path has the given contents.

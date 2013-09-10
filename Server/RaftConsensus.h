@@ -26,6 +26,7 @@
 #include "RPC/ClientRPC.h"
 #include "Server/RaftLog.h"
 #include "Server/Consensus.h"
+#include "Server/SnapshotFile.h"
 
 #ifndef LOGCABIN_SERVER_RAFTCONSENSUS_H
 #define LOGCABIN_SERVER_RAFTCONSENSUS_H
@@ -44,6 +45,7 @@ namespace Server {
 
 // forward declaration
 class Globals;
+
 
 namespace RaftConsensusInternal {
 
@@ -363,6 +365,24 @@ class Peer : public Server {
      */
     bool isCaughtUp_;
 
+    /**
+     * A snapshot file to be sent to the follower, or NULL.
+     * TODO(ongaro): It'd be better to destroy this as soon as this server
+     * steps down, but peers don't have a hook for that right now.
+     */
+    std::unique_ptr<Storage::FilesystemUtil::FileContents> snapshotFile;
+    /**
+     * The number of bytes of 'snapshotFile' that have been acknowledged by the
+     * follower already. Send starting here next time.
+     */
+    uint64_t snapshotFileOffset;
+    /**
+     * The last log index that 'snapshotFile' corresponds to. This is used to
+     * set the follower's #nextIndex accordingly after we're done sending it
+     * the snapshot.
+     */
+    uint64_t lastSnapshotIndex;
+
   private:
 
     /**
@@ -488,6 +508,11 @@ class Configuration {
     void resetStagingServers();
 
     /**
+     * Set the state of this object as if it had just been constructed.
+     */
+    void reset();
+
+    /**
      * Set the configuration. Any existing staging servers are dropped.
      * \param newId
      *      The log entry ID of the configuration.
@@ -596,6 +621,110 @@ class Configuration {
 };
 
 /**
+ * Ensures the current configuration reflects the latest state of the log and
+ * snapshot.
+ */
+class ConfigurationManager {
+  public:
+    /**
+     * Constructor.
+     * \param configuration
+     *      The configuration that this object is in charge of setting.
+     */
+    explicit ConfigurationManager(Configuration& configuration);
+
+    /**
+     * Destructor.
+     */
+    ~ConfigurationManager();
+
+    /**
+     * Called when a new configuration is added to the log.
+     * \param index
+     *      The log index of this configuration (equivalently, its ID).
+     * \param description
+     *      The serializable representation of the configuration.
+     */
+    void add(uint64_t index,
+             const Protocol::Raft::Configuration& description);
+    /**
+     * Called when a log prefix is truncated (after saving a snapshot that
+     * covers this prefix).
+     * \param firstIndexKept
+     *      The log entries in range [1, firstIndexKept) are being discarded.
+     */
+    void truncatePrefix(uint64_t firstIndexKept);
+    /**
+     * Called when a log suffix is truncated (when the leader doesn't agree
+     * with this server's log).
+     * \param lastIndexKept
+     *      The log entries in range (lastIndexKept, infinity) are being
+     *      discarded.
+     */
+    void truncateSuffix(uint64_t lastIndexKept);
+    /**
+     * Called when a new snapshot is saved.
+     * Only the latest such configuration is kept.
+     * \param index
+     *      The log index of this configuration (equivalently, its ID).
+     * \param description
+     *      The serializable representation of the configuration.
+     */
+    void setSnapshot(uint64_t index,
+                     const Protocol::Raft::Configuration& description);
+
+    /**
+     * Return the configuration as of a particular log index.
+     * This is useful when taking snapshots.
+     * \param lastIncludedIndex
+     *      Configurations greater than this index will be ignored.
+     * \return
+     *      The index and description of the configuration with the largest
+     *      index in the range [1, lastIncludedIndex].
+     */
+    std::pair<uint64_t, Protocol::Raft::Configuration>
+    getLatestConfigurationAsOf(uint64_t lastIncludedIndex) const;
+
+  private:
+
+    /**
+     * Helper function called after changing this object's state.
+     * - Make sure the snapshot configuration is in the descriptions map.
+     * - Set configuration to the configuration with the largest index in the
+     *   descriptions map, or reset it the map is empty.
+     */
+    void restoreInvariants();
+
+    /**
+     * Defines the servers that are part of the cluster. See Configuration.
+     */
+    Configuration& configuration;
+
+    /**
+     * This contains all the cluster configurations found in the log, plus one
+     * additional configuration from the latest snapshot.
+     *
+     * It is used to find the right configuration when taking a snapshot and
+     * truncating the end of the log. It must be kept consistent with the log
+     * when it is loaded, as the log grows, as it gets truncated from the
+     * beginning for snapshots, and as it gets truncated from the end upon
+     * conflicts with the leader.
+     *
+     * The key is the entry ID where the configuration belongs in the log; the
+     * value is the serializable form of the configuration.
+     */
+    std::map<uint64_t, Protocol::Raft::Configuration> descriptions;
+
+    /**
+     * This reflects the configuration found in this server's latest snapshot,
+     * or {0, {}} if this server has no snapshot.
+     */
+    std::pair<uint64_t, Protocol::Raft::Configuration> snapshot;
+
+    friend class Invariants;
+};
+
+/**
  * An implementation of the Raft consensus algorithm. The algorithm is
  * described at https://ramcloud.stanford.edu/raft.pdf
  * . In brief, Raft divides time into terms and elects a leader at the
@@ -649,6 +778,9 @@ class RaftConsensus : public Consensus {
     // See Consensus::getNextEntry().
     Consensus::Entry getNextEntry(uint64_t lastEntryId) const;
 
+    // See Consensus::getSnapshotStats().
+    SnapshotStats::SnapshotStats getSnapshotStats() const;
+
     /**
      * Process an AppendEntries RPC from another server. Called by RaftService.
      * \param[in] request
@@ -659,6 +791,18 @@ class RaftConsensus : public Consensus {
     void handleAppendEntries(
                 const Protocol::Raft::AppendEntries::Request& request,
                 Protocol::Raft::AppendEntries::Response& response);
+
+    /**
+     * Process an AppendSnapshotChunk RPC from another server. Called by
+     * RaftService.
+     * \param[in] request
+     *      The request that was received from the other server.
+     * \param[out] response
+     *      Where the reply should be placed.
+     */
+    void handleAppendSnapshotChunk(
+                const Protocol::Raft::AppendSnapshotChunk::Request& request,
+                Protocol::Raft::AppendSnapshotChunk::Response& response);
 
     /**
      * Process a RequestVote RPC from another server. Called by RaftService.
@@ -691,6 +835,14 @@ class RaftConsensus : public Consensus {
     setConfiguration(
             uint64_t id,
             const Protocol::Raft::SimpleConfiguration& newConfiguration);
+
+    // See Consensus::beginSnapshot().
+    std::unique_ptr<SnapshotFile::Writer>
+    beginSnapshot(uint64_t lastIncludedIndex);
+
+    // See Consensus::snapshotDone().
+    void snapshotDone(uint64_t lastIncludedIndex,
+                      std::unique_ptr<SnapshotFile::Writer> writer);
 
     /**
      * Print out the contents of this class for debugging purposes.
@@ -797,10 +949,34 @@ class RaftConsensus : public Consensus {
     void appendEntries(std::unique_lock<Mutex>& lockGuard, Peer& peer);
 
     /**
+     * Send an AppendSnapshotChunk RPC to the server (containing part of a
+     * snapshot file to replicate).
+     * \param lockGuard
+     *      Used to temporarily release the lock while invoking the RPC, so as
+     *      to allow for some concurrency.
+     * \param peer
+     *      State used in communicating with the follower, building the RPC
+     *      request, and processing its result.
+     */
+    void appendSnapshotChunk(std::unique_lock<Mutex>& lockGuard, Peer& peer);
+
+    /**
      * Transition to being a leader. This is called when a candidate has
      * received votes from a quorum.
      */
     void becomeLeader();
+
+    /**
+     * Remove the prefix of the log that is redundant with this server's
+     * snapshot.
+     */
+    void discardUnneededEntries();
+
+    /**
+     * Return the term corresponding to log->getLastLogIndex(). This may come
+     * from the log, from the snapshot, or it may be 0.
+     */
+    uint64_t getLastLogTerm() const;
 
     /**
      * Notify the #stateChanged condition variable and cancel all current RPCs.
@@ -808,6 +984,17 @@ class RaftConsensus : public Consensus {
      * becoming leader, or exiting.
      */
     void interruptAll();
+
+    /**
+     * Try to read the latest good snapshot from disk. Loads the header of the
+     * snapshot file, which is used internally by the consensus module. The
+     * rest of the file reader is kept in #snapshotReader for the state machine
+     * to process upon a future getNextEntry().
+     *
+     * If the snapshot file on disk is no good, #snapshotReader will remain
+     * NULL.
+     */
+    void readSnapshot();
 
     /**
      * Append an entry to the log and wait for it to be committed.
@@ -827,13 +1014,6 @@ class RaftConsensus : public Consensus {
      *      request, and processing its result.
      */
     void requestVote(std::unique_lock<Mutex>& lockGuard, Peer& peer);
-
-    /**
-     * Search backwards in the log for the latest configuration and apply it.
-     * This is called on followers that have truncated their logs and on newly
-     * booted servers.
-     */
-    void scanForConfiguration();
 
     /**
      * Set the timer to start a new election and notify #stateChanged.
@@ -919,6 +1099,11 @@ class RaftConsensus : public Consensus {
     Globals& globals;
 
     /**
+     * Where the files for the log and snapshots are stored.
+     */
+    Storage::FilesystemUtil::File storageDirectory;
+
+    /**
      * This class behaves mostly like a monitor. This protects all the state in
      * this class and almost all of the Peer class (with some
      * documented exceptions).
@@ -960,6 +1145,8 @@ class RaftConsensus : public Consensus {
     /**
      * Provides all storage for this server. Keeps track of all log entries and
      * some additional metadata.
+     *
+     * If you modify this, be sure to keep #configurationManager consistent.
      */
     std::unique_ptr<Log> log;
 
@@ -967,6 +1154,12 @@ class RaftConsensus : public Consensus {
      * Defines the servers that are part of the cluster. See Configuration.
      */
     std::unique_ptr<Configuration> configuration;
+
+    /**
+     * Ensures that 'configuration' reflects the latest state of the log and
+     * snapshot.
+     */
+    std::unique_ptr<ConfigurationManager> configurationManager;
 
     /**
      * The latest term this server has seen. This value monotonically increases
@@ -983,6 +1176,43 @@ class RaftConsensus : public Consensus {
      * leader). See #State.
      */
     State state;
+
+    /**
+     * The latest good snapshot covers entries 1 through 'lastSnapshotIndex'
+     * (inclusive). It is known that these are committed. They are safe to
+     * remove from the log, but it may be advantageous to keep them around for
+     * a little while (to avoid shipping snapshots to straggling followers).
+     * Thus, the log may or may not have some of the entries in this range.
+     */
+    uint64_t lastSnapshotIndex;
+
+    /**
+     * The term of the last entry covered by the latest good snapshot, or 0 if
+     * we have no snapshot.
+     */
+    uint64_t lastSnapshotTerm;
+
+    /**
+     * The size of the latest good snapshot in bytes, or 0 if we have no
+     * snapshot.
+     */
+    uint64_t lastSnapshotBytes;
+
+    /**
+     * If not NULL, this is a SnapshotFile::Reader that covers up through
+     * lastSnapshotIndex. This is ready for the state machine to process and is
+     * returned to the state machine in getNextEntry(). It's just a cache which
+     * can be repopulated with readSnapshot().
+     */
+    mutable std::unique_ptr<SnapshotFile::Reader> snapshotReader;
+
+    /**
+     * This is used in handleAppendSnapshotChunk when receiving a snapshot from
+     * the current leader. The leader is assumed to send at most one snapshot
+     * at a time, and any partial snapshots here are discarded when the term
+     * changes.
+     */
+    std::unique_ptr<SnapshotFile::Writer> snapshotWriter;
 
     /**
      * The largest entry ID for which a quorum is known to have stored the same

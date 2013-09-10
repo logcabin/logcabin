@@ -22,6 +22,7 @@ to the desired size.
 
 from __future__ import print_function
 from optparse import OptionParser
+import glob
 import os
 import sha
 import sys
@@ -37,6 +38,11 @@ if __name__ == '__main__':
             dest='address',
             help='Network address at which other servers will be able to '
                  'contact this server, e.g., 192.168.0.1:61023. (required)')
+    parser.add_option('--storage', metavar='PATH',
+            dest='storagePath',
+            help='Filesystem path at which the log and snapshots will be '
+                 'stored. Set this the same as in your config file. '
+                 '(required)')
     (options, args) = parser.parse_args()
 
     def options_error(msg):
@@ -53,20 +59,30 @@ if __name__ == '__main__':
     address = options.address
     if address is None:
         options_error('address not specified')
+    storagePath = options.storagePath
+    if storagePath is None:
+        options_error('storagePath not specified')
 
-    print('Creating directory: log/%d' % server_id)
-    os.mkdir('log')
-    os.mkdir('log/%d' % server_id)
+    if (glob.glob('%s/*' % storagePath)):
+        print('Error: files found in storagePath, exiting', file=sys.stderr)
+        sys.exit(1)
+
+    logPath = '%s/server%d/log' % (storagePath, server_id)
+    print('Creating directory: %s' % logPath)
+    os.mkdir(storagePath)
+    os.mkdir('%s/server%d' % (storagePath, server_id))
+    os.mkdir(logPath)
 
     def write(filename, contents):
-        filename = 'log/%d/%s' % (server_id, filename)
+        filename = '%s/%s' % (logPath, filename)
         print('Writing: %s' % filename)
         checksum = 'SHA-1:%s\0' % sha.sha(contents).hexdigest()
         open(filename, 'w').write(checksum + contents)
 
     metadata = """
 version: 1
-entries: 1
+entries_start: 1
+entries_end: 1
 raft_metadata: {
     current_term: 1
     voted_for: 1

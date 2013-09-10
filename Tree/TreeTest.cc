@@ -13,11 +13,15 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <fcntl.h>
 #include <gtest/gtest.h>
 #include <stdexcept>
+#include <sys/stat.h>
 
 #include "Core/StringUtil.h"
 #include "Tree/Tree.h"
+#include "Server/SnapshotFile.h"
+#include "Storage/FilesystemUtil.h"
 
 namespace LogCabin {
 namespace Tree {
@@ -29,6 +33,64 @@ using namespace Internal; // NOLINT
     Result result = (c); \
     EXPECT_EQ(Status::OK, result.status) << result.error; \
 } while (0)
+
+void
+dumpTreeHelper(const Tree& tree,
+               std::string path,
+               std::vector<std::string>& nodes)
+{
+    nodes.push_back(path);
+
+    std::vector<std::string> children;
+    EXPECT_OK(tree.listDirectory(path, children));
+    for (auto it = children.begin();
+         it != children.end();
+         ++it) {
+        if (Core::StringUtil::endsWith(*it, "/")) {
+            dumpTreeHelper(tree, path + *it, nodes);
+        } else {
+            nodes.push_back(path + *it);
+        }
+    }
+}
+
+std::string
+dumpTree(const Tree& tree)
+{
+    std::vector<std::string> nodes;
+    dumpTreeHelper(tree, "/", nodes);
+    std::string ret;
+    for (size_t i = 0; i < nodes.size(); ++i) {
+        ret += nodes.at(i);
+        if (i < nodes.size() - 1)
+            ret += " ";
+    }
+    return ret;
+}
+
+TEST(TreeFileTest, dumpSnapshot)
+{
+    std::string path = Storage::FilesystemUtil::mkdtemp();
+    Storage::FilesystemUtil::File tmpdir =
+        Storage::FilesystemUtil::File(
+           open(path.c_str(), O_RDONLY|O_DIRECTORY),
+           path);
+    {
+        Server::SnapshotFile::Writer writer(tmpdir);
+        File f;
+        f.contents = "hello, world!";
+        f.dumpSnapshot(writer.getStream());
+        writer.save();
+    }
+    {
+        Server::SnapshotFile::Reader reader(tmpdir);
+        File f;
+        f.loadSnapshot(reader.getStream());
+        EXPECT_EQ("hello, world!", f.contents);
+    }
+    tmpdir.close();
+    Storage::FilesystemUtil::remove(tmpdir.path);
+}
 
 TEST(TreeDirectoryTest, getChildren)
 {
@@ -143,6 +205,38 @@ TEST(TreeDirectoryTest, removeFile)
                }), d.getChildren());
 }
 
+TEST(TreeDirectoryTest, dumpSnapshot)
+{
+    Tree tree;
+    tree.makeDirectory("/a");
+    tree.makeDirectory("/a/b");
+    tree.makeDirectory("/a/b/c");
+    tree.makeDirectory("/a/d");
+    tree.makeDirectory("/e");
+    tree.makeDirectory("/f");
+    tree.makeDirectory("/f/h");
+    tree.write("/f/g", "rawr");
+
+    std::string path = Storage::FilesystemUtil::mkdtemp();
+    Storage::FilesystemUtil::File tmpdir =
+        Storage::FilesystemUtil::File(
+           open(path.c_str(), O_RDONLY|O_DIRECTORY),
+           path);
+    {
+        Server::SnapshotFile::Writer writer(tmpdir);
+        tree.superRoot.dumpSnapshot(writer.getStream());
+        writer.save();
+    }
+    {
+        Server::SnapshotFile::Reader reader(tmpdir);
+        Tree t2;
+        t2.superRoot.loadSnapshot(reader.getStream());
+        EXPECT_EQ(dumpTree(tree), dumpTree(t2));
+    }
+    tmpdir.close();
+    Storage::FilesystemUtil::remove(tmpdir.path);
+}
+
 TEST(TreePathTest, constructor)
 {
     Path p1("");
@@ -189,44 +283,38 @@ class TreeTreeTest : public ::testing::Test {
     TreeTreeTest()
         : tree()
     {
-        EXPECT_EQ("/", dumpTree());
-    }
-
-    void
-    dumpTreeHelper(std::string path,
-                   std::vector<std::string>& nodes)
-    {
-        nodes.push_back(path);
-
-        std::vector<std::string> children;
-        EXPECT_OK(tree.listDirectory(path, children));
-        for (auto it = children.begin();
-             it != children.end();
-             ++it) {
-            if (Core::StringUtil::endsWith(*it, "/")) {
-                dumpTreeHelper(path + *it, nodes);
-            } else {
-                nodes.push_back(path + *it);
-            }
-        }
-    }
-
-    std::string
-    dumpTree()
-    {
-        std::vector<std::string> nodes;
-        dumpTreeHelper("/", nodes);
-        std::string ret;
-        for (size_t i = 0; i < nodes.size(); ++i) {
-            ret += nodes.at(i);
-            if (i < nodes.size() - 1)
-                ret += " ";
-        }
-        return ret;
+        EXPECT_EQ("/", dumpTree(tree));
     }
 
     Tree tree;
 };
+
+TEST_F(TreeTreeTest, dumpSnapshot)
+{
+    std::string path = Storage::FilesystemUtil::mkdtemp();
+    Storage::FilesystemUtil::File tmpdir =
+        Storage::FilesystemUtil::File(
+           open(path.c_str(), O_RDONLY|O_DIRECTORY),
+           path);
+    {
+        Server::SnapshotFile::Writer writer(tmpdir);
+        tree.write("/c", "foo");
+        tree.dumpSnapshot(writer.getStream());
+        writer.save();
+    }
+    tree.removeFile("/c");
+    tree.write("/d", "bar");
+    {
+        Server::SnapshotFile::Reader reader(tmpdir);
+        tree.loadSnapshot(reader.getStream());
+    }
+    std::vector<std::string> children;
+    EXPECT_OK(tree.listDirectory("/", children));
+    EXPECT_EQ((std::vector<std::string>{ "c" }), children);
+    tmpdir.close();
+    Storage::FilesystemUtil::remove(tmpdir.path);
+}
+
 
 TEST_F(TreeTreeTest, normalLookup)
 {
@@ -286,11 +374,11 @@ TEST_F(TreeTreeTest, checkCondition)
 TEST_F(TreeTreeTest, makeDirectory)
 {
     EXPECT_OK(tree.makeDirectory("/"));
-    EXPECT_EQ("/", dumpTree());
+    EXPECT_EQ("/", dumpTree(tree));
 
     EXPECT_OK(tree.makeDirectory("/a/"));
     EXPECT_OK(tree.makeDirectory("/a/nodir/b"));
-    EXPECT_EQ("/ /a/ /a/nodir/ /a/nodir/b/", dumpTree());
+    EXPECT_EQ("/ /a/ /a/nodir/ /a/nodir/b/", dumpTree(tree));
 
     EXPECT_EQ(Status::INVALID_ARGUMENT, tree.makeDirectory("").status);
 
@@ -335,7 +423,7 @@ TEST_F(TreeTreeTest, removeDirectory)
 
     EXPECT_OK(tree.removeDirectory("/a/"));
     EXPECT_OK(tree.removeDirectory("/b"));
-    EXPECT_EQ("/", dumpTree());
+    EXPECT_EQ("/", dumpTree(tree));
 
     EXPECT_OK(tree.makeDirectory("/a/b"));
     EXPECT_OK(tree.write("/a/b/c", "foo"));
@@ -346,10 +434,10 @@ TEST_F(TreeTreeTest, removeDirectory)
     result = tree.removeDirectory("/d");
     EXPECT_EQ(Status::TYPE_ERROR, result.status);
     EXPECT_EQ("/d is a file", result.error);
-    EXPECT_EQ("/ /d", dumpTree());
+    EXPECT_EQ("/ /d", dumpTree(tree));
 
     EXPECT_OK(tree.removeDirectory("/"));
-    EXPECT_EQ("/", dumpTree());
+    EXPECT_EQ("/", dumpTree(tree));
 }
 
 TEST_F(TreeTreeTest, write)
@@ -357,7 +445,7 @@ TEST_F(TreeTreeTest, write)
     EXPECT_EQ(Status::INVALID_ARGUMENT, tree.write("", "").status);
     EXPECT_EQ(Status::TYPE_ERROR, tree.write("/", "").status);
     EXPECT_OK(tree.write("/a", "foo"));
-    EXPECT_EQ("/ /a", dumpTree());
+    EXPECT_EQ("/ /a", dumpTree(tree));
     std::string contents;
     EXPECT_OK(tree.read("/a", contents));
     EXPECT_EQ("foo", contents);

@@ -28,6 +28,7 @@ enum OpCode {
     GET_SUPPORTED_RPC_VERSIONS = 0;
     REQUEST_VOTE = 1;
     APPEND_ENTRIES = 2;
+    APPEND_SNAPSHOT_CHUNK = 3;
 };
 
 /**
@@ -207,5 +208,57 @@ message AppendEntries {
          * True if new entries were added to the log.
          */
         required bool success = 2;
+    }
+}
+
+/**
+ * AppendSnapshotChunk RPC: replicate part of a snapshot file to a follower.
+ */
+message AppendSnapshotChunk {
+    message Request {
+        /**
+         * ID of leader (caller), so the follower can redirect clients.
+         */
+        required uint64 server_id = 1;
+        /**
+         * ID of the intended callee.
+         */
+        required uint64 recipient_id = 2;
+        /**
+         * Caller's term.
+         */
+        required uint64 term = 3;
+
+        /**
+         * The snapshot covers log entries in the range [1, lastSnapshotIndex].
+         * While this information can be found in the snapshot itself, a
+         * follower may want to know sooner (for example, to name the snapshot
+         * file or to assert that it's not overwriting something more
+         * important).
+         */
+        required uint64 last_snapshot_index = 4;
+
+        /**
+         * The byte offset where 'data' belongs in the file. Followers can
+         * expect this to grow without gaps, but they should use this to drop
+         * duplicate request messages.
+         */
+        required uint64 byte_offset = 5;
+        /**
+         * Raw bytes of the snapshot file. This should be big enough to achieve
+         * reasonable throughput without having to pipeline RPCs.
+         */
+        required bytes data = 6;
+        /**
+         * Set to true if this is the last chunk of the file and the follower
+         * should now load the contents; false otherwise.
+         */
+        required bool done = 7;
+    }
+    message Response {
+        /**
+         * Callee's term, for the caller to update itself.
+         */
+        required uint64 term = 1;
     }
 }

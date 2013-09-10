@@ -62,7 +62,7 @@ listAlgorithms();
  */
 uint32_t
 calculate(const char* algorithm,
-          const void* data, uint32_t dataLength,
+          const void* data, uint64_t dataLength,
           char output[MAX_LENGTH]);
 
 /**
@@ -82,7 +82,7 @@ calculate(const char* algorithm,
  */
 uint32_t
 calculate(const char* algorithm,
-          std::initializer_list<std::pair<const void*, uint32_t>> data,
+          std::initializer_list<std::pair<const void*, uint64_t>> data,
           char output[MAX_LENGTH]);
 
 /**
@@ -118,7 +118,7 @@ length(const char* checksum,
  */
 std::string
 verify(const char* checksum,
-       const void* data, uint32_t dataLength);
+       const void* data, uint64_t dataLength);
 
 /**
  * Verify data against an existing checksum.
@@ -134,7 +134,7 @@ verify(const char* checksum,
  */
 std::string
 verify(const char* checksum,
-       std::initializer_list<std::pair<const void*, uint32_t>> data);
+       std::initializer_list<std::pair<const void*, uint64_t>> data);
 
 } // namespace LogCabin::Core::Checksum
 } // namespace LogCabin::Core

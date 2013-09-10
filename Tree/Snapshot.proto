@@ -1,4 +1,4 @@
-// Copyright (c) 2012 Stanford University
+// Copyright (c) 2013 Stanford University
 //
 // Permission to use, copy, modify, and distribute this software for any
 // purpose with or without fee is hereby granted, provided that the above
@@ -12,18 +12,22 @@
 // ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 // OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
+package LogCabin.Tree.Snapshot;
+
 /**
- * \file
- * Contains the format for SimpleFileLog's metadata files.
+ * Snapshot format for a Tree::Directory.
  */
+message Directory {
+    /// The names of child directories.
+    repeated string directories = 1;
+    /// The names of child files.
+    repeated string files = 2;
+}
 
-package LogCabin.Server.SimpleFileLogMetadata;
-
-import "build/Server/RaftLogMetadata.proto";
-
-message Metadata {
-    required uint64 version = 1;
-    required RaftLogMetadata.Metadata raft_metadata = 2;
-    required uint64 entries_start = 3; // inclusive
-    required uint64 entries_end = 4; // inclusive
+/**
+ * Snapshot format for a Tree::File.
+ */
+message File {
+    /// The contents of the file.
+    required bytes contents = 1;
 }

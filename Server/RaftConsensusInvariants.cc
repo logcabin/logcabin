@@ -14,6 +14,7 @@
  */
 
 #include "Core/Debug.h"
+#include "Core/ProtoBuf.h"
 #include "Server/RaftConsensus.h"
 
 namespace LogCabin {
@@ -33,7 +34,7 @@ struct Invariants::ConsensusSnapshot {
         , exiting(consensus.exiting)
         , numPeerThreads(consensus.numPeerThreads)
         , lastLogIndex(consensus.log->getLastLogIndex())
-        , lastLogTerm(consensus.log->getTerm(consensus.log->getLastLogIndex()))
+        , lastLogTerm(0)
         , configurationId(consensus.configuration->id)
         , configurationState(consensus.configuration->state)
         , currentTerm(consensus.currentTerm)
@@ -44,6 +45,12 @@ struct Invariants::ConsensusSnapshot {
         , currentEpoch(consensus.currentEpoch)
         , startElectionAt(consensus.startElectionAt)
     {
+        if (consensus.log->getLastLogIndex() >=
+            consensus.log->getLogStartIndex()) {
+            lastLogTerm = consensus.log->getEntry(
+                                    consensus.log->getLastLogIndex()).term();
+        }
+
     }
 
     uint64_t stateChangedCount;
@@ -88,7 +95,7 @@ Invariants::checkBasic()
 {
     // Log terms monotonically increase
     uint64_t lastTerm = 0;
-    for (uint64_t entryId = 1;
+    for (uint64_t entryId = consensus.log->getLogStartIndex();
          entryId <= consensus.log->getLastLogIndex();
          ++entryId) {
         const Log::Entry& entry = consensus.log->getEntry(entryId);
@@ -101,7 +108,7 @@ Invariants::checkBasic()
     // The current configuration should be the last one found in the log
     bool found = false;
     for (uint64_t entryId = consensus.log->getLastLogIndex();
-         entryId > 0;
+         entryId >= consensus.log->getLogStartIndex();
          --entryId) {
         const Log::Entry& entry = consensus.log->getEntry(entryId);
         if (entry.type() == Protocol::Raft::EntryType::CONFIGURATION) {
@@ -113,9 +120,35 @@ Invariants::checkBasic()
         }
     }
     if (!found) {
-        expect(consensus.configuration->id == 0);
-        expect(consensus.configuration->state == Configuration::State::BLANK);
+        if (consensus.log->getLogStartIndex() == 1) {
+            expect(consensus.configuration->id == 0);
+            expect(consensus.configuration->state ==
+                   Configuration::State::BLANK);
+        } else {
+            expect(consensus.configuration->id <= consensus.lastSnapshotIndex);
+        }
     }
+
+    // Every configuration present in the log should also be present in the
+    // configurationDescriptions map.
+    for (uint64_t entryId = consensus.log->getLogStartIndex();
+         entryId <= consensus.log->getLastLogIndex();
+         ++entryId) {
+        const Log::Entry& entry = consensus.log->getEntry(entryId);
+        if (entry.type() == Protocol::Raft::EntryType::CONFIGURATION) {
+            auto it = consensus.configurationManager->
+                                        descriptions.find(entryId);
+            expect(it != consensus.configurationManager->descriptions.end());
+            if (it != consensus.configurationManager->descriptions.end())
+                expect(it->second == entry.configuration());
+        }
+    }
+    // The configuration descriptions map shouldn't have anything past the
+    // snapshot and the log.
+    expect(consensus.configurationManager->descriptions.upper_bound(
+                std::max(consensus.log->getLastLogIndex(),
+                         consensus.lastSnapshotIndex)) ==
+           consensus.configurationManager->descriptions.end());
 
     // Servers with blank configurations should remain passive. Since the first
     // entry in every log is a configuration, they should also have empty logs.
@@ -134,15 +167,28 @@ Invariants::checkBasic()
             expect(consensus.state != RaftConsensus::State::LEADER);
     }
 
-    // The commitIndex doesn't exceed the length of the log.
+    // The last snapshot covers a committed range.
+    expect(consensus.commitIndex >= consensus.lastSnapshotIndex);
+
+    // The commitIndex doesn't exceed the length of the log/snapshot.
     expect(consensus.commitIndex <= consensus.log->getLastLogIndex());
+
+    // The last log index points at least through the end of the last snapshot.
+    expect(consensus.log->getLastLogIndex() >= consensus.lastSnapshotIndex);
+
+    // lastLogIndex is either just below the log start (for empty logs) or
+    // larger (for non-empty logs)
+    assert(consensus.log->getLastLogIndex() >=
+           consensus.log->getLogStartIndex() - 1);
 
     // advanceCommittedId is called everywhere it needs to be.
     if (consensus.state == RaftConsensus::State::LEADER) {
         uint64_t majorityEntry =
             consensus.configuration->quorumMin(&Server::getLastAgreeIndex);
-        expect(consensus.log->getTerm(majorityEntry) != consensus.currentTerm
-               || consensus.commitIndex >= majorityEntry);
+        expect(consensus.commitIndex >= majorityEntry ||
+               majorityEntry < consensus.log->getLogStartIndex() ||
+               consensus.log->getEntry(majorityEntry).term() !=
+                    consensus.currentTerm);
     }
 
     // A leader always points its leaderId at itself.

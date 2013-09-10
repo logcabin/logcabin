@@ -116,6 +116,14 @@ TEST_F(StorageFilesystemUtilTest, fsync) {
                  "Could not fsync");
 }
 
+TEST_F(StorageFilesystemUtilTest, getSize) {
+    FS::File file(FS::openFile(tmpdir, "a", O_RDWR|O_CREAT));
+    EXPECT_EQ(0U, FS::getSize(file));
+    if (FS::write(file.fd, "hello world!", 13) != 13)
+        PANIC("write failed");
+    EXPECT_EQ(13U, FS::getSize(file));
+}
+
 TEST_F(StorageFilesystemUtilTest, ls) {
     EXPECT_DEATH(FilesystemUtil::ls("/path/does/not/exist"),
                  "Could not list contents");

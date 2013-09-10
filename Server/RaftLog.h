@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 Stanford University
+/* Copyright (c) 2012-2013 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,8 +14,8 @@
  */
 
 #include <cinttypes>
+#include <deque>
 #include <string>
-#include <vector>
 
 #include "build/Protocol/Raft.pb.h"
 #include "build/Server/RaftLogMetadata.pb.h"
@@ -51,38 +51,55 @@ class Log {
     /**
      * Look up an entry by ID.
      * \param entryId
-     *      Must be in the range [1, getLastLogIndex()].
+     *      Must be in the range [startIndex, getLastLogIndex()].
      * \return
-     *      The entry corresponding to that entry ID.
+     *      The entry corresponding to that entry ID. This reference is only
+     *      guaranteed to be valid until the next time the log is modified.
      */
     virtual const Entry& getEntry(uint64_t entryId) const;
+
+    /**
+     * Get the entry ID of the first entry in the log (whether or not this
+     * entry exists).
+     * \return
+     *      1 for logs that have never had truncatePrefix called,
+     *      otherwise the largest ID passed to truncatePrefix.
+     *      See 'startIndex'.
+     */
+    virtual uint64_t getLogStartIndex() const;
 
     /**
      * Get the entry ID of the most recent entry in the log.
      * \return
      *      The entry ID of the most recent entry in the log,
-     *      or 0 if the log is empty.
+     *      or startIndex - 1 if the log is empty.
      */
     virtual uint64_t getLastLogIndex() const;
 
     /**
-     * Get the term of an entry in the log.
-     * \param entryId
-     *      Any entry ID, including 0 and those past the end of the log.
-     * \return
-     *      The term of the given entry in the log if it exists,
-     *      or 0 otherwise.
+     * Get the size of the entire log in bytes.
      */
-    virtual uint64_t getTerm(uint64_t entryId) const;
+    virtual uint64_t getSizeBytes() const;
+
+    /**
+     * Delete the log entries before the given entry ID.
+     * Once you truncate a prefix from the log, there's no way to undo this.
+     * \param firstEntryId
+     *      After this call, the log will contain no entries with ID less
+     *      than firstEntryId. This can be any entry ID, including 0 and those
+     *      past the end of the log.
+     */
+    virtual void truncatePrefix(uint64_t firstEntryId);
 
     /**
      * Delete the log entries past the given entry ID.
+     * This will not affect the log start ID.
      * \param lastEntryId
      *      After this call, the log will contain no entries with ID greater
      *      than lastEntryId. This can be any entry ID, including 0 and those
      *      past the end of the log.
      */
-    virtual void truncate(uint64_t lastEntryId);
+    virtual void truncateSuffix(uint64_t lastEntryId);
 
     /**
      * Call this after changing #metadata.
@@ -101,8 +118,19 @@ class Log {
 
   protected:
 
-    /** index is EntryId - 1 */
-    std::vector<Entry> entries;
+    /**
+     * The ID for the first entry in the log. Begins as 1 for new logs but
+     * will be larger for logs that have been snapshotted.
+     */
+    uint64_t startId;
+
+    /**
+     * Stores the entries that make up the log.
+     * The index into 'entries' is the ID of the entry minus 'startId'.
+     * This is a deque rather than a vector to support fast prefix truncation
+     * (used after snapshotting a prefix of the log).
+     */
+    std::deque<Entry> entries;
 
     // Log is not copyable
     Log(const Log&) = delete;

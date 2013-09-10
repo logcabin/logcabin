@@ -14,14 +14,28 @@
  */
 
 #include "Server/Consensus.h"
+#include "Server/SnapshotFile.h"
 
 namespace LogCabin {
 namespace Server {
 
 Consensus::Entry::Entry()
     : entryId()
-    , hasData(false)
+    , type(SKIP)
     , data()
+    , snapshotReader()
+{
+}
+
+Consensus::Entry::Entry(Entry&& other)
+    : entryId(other.entryId)
+    , type(other.type)
+    , data(std::move(other.data))
+    , snapshotReader(std::move(other.snapshotReader))
+{
+}
+
+Consensus::Entry::~Entry()
 {
 }
 

@@ -69,7 +69,7 @@ class Algorithm {
      *      terminator. This is guaranteed to be greater than 1.
      */
     uint32_t
-    writeChecksum(std::initializer_list<std::pair<const void*, uint32_t>> data,
+    writeChecksum(std::initializer_list<std::pair<const void*, uint64_t>> data,
                   char result[MAX_LENGTH]) {
         // copy name and : to result
         memcpy(result, name.c_str(), name.length());
@@ -243,7 +243,7 @@ listAlgorithms()
 
 uint32_t
 calculate(const char* algorithm,
-          const void* data, uint32_t dataLength,
+          const void* data, uint64_t dataLength,
           char output[MAX_LENGTH])
 {
     return calculate(algorithm, {{data, dataLength}}, output);
@@ -251,7 +251,7 @@ calculate(const char* algorithm,
 
 uint32_t
 calculate(const char* algorithm,
-          std::initializer_list<std::pair<const void*, uint32_t>> data,
+          std::initializer_list<std::pair<const void*, uint64_t>> data,
           char output[MAX_LENGTH])
 {
     Algorithm* algo = Algorithms::find(algorithm);
@@ -280,14 +280,14 @@ length(const char* checksum,
 
 std::string
 verify(const char* checksum,
-       const void* data, uint32_t dataLength)
+       const void* data, uint64_t dataLength)
 {
     return verify(checksum, {{data, dataLength}});
 }
 
 std::string
 verify(const char* checksum,
-       std::initializer_list<std::pair<const void*, uint32_t>> data)
+       std::initializer_list<std::pair<const void*, uint64_t>> data)
 {
     if (!Core::StringUtil::isPrintable(checksum))
         return "The given checksum value is corrupt and not printable.";

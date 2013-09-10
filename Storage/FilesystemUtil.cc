@@ -107,6 +107,17 @@ fsync(const File& file)
     }
 }
 
+uint64_t
+getSize(const File& file)
+{
+    struct stat stat;
+    if (fstat(file.fd, &stat) != 0) {
+        PANIC("Could not stat %s: %s",
+              file.path.c_str(), strerror(errno));
+    }
+    return stat.st_size;
+}
+
 std::vector<std::string>
 lsHelper(DIR* dir, const std::string& path)
 {
@@ -312,20 +323,20 @@ ssize_t (*writev)(int fildes,
 }
 
 ssize_t
-write(int fildes, const void* data, uint32_t dataLen)
+write(int fildes, const void* data, uint64_t dataLen)
 {
     return write(fildes, {{data, dataLen}});
 }
 
 ssize_t
 write(int fildes,
-       std::initializer_list<std::pair<const void*, uint32_t>> data)
+       std::initializer_list<std::pair<const void*, uint64_t>> data)
 {
     using Core::Util::downCast;
     size_t totalBytes = 0;
-    uint32_t iovcnt = downCast<uint32_t>(data.size());
+    uint64_t iovcnt = data.size();
     struct iovec iov[iovcnt];
-    uint32_t i = 0;
+    uint64_t i = 0;
     for (auto it = data.begin(); it != data.end(); ++it) {
         iov[i].iov_base = const_cast<void*>(it->first);
         iov[i].iov_len = it->second;
@@ -345,7 +356,7 @@ write(int fildes,
                                            downCast<size_t>(written));
          if (bytesRemaining == 0)
              return downCast<ssize_t>(totalBytes);
-         for (uint32_t i = 0; i < iovcnt; ++i) {
+         for (uint64_t i = 0; i < iovcnt; ++i) {
              if (iov[i].iov_len < static_cast<size_t>(written)) {
                  written -= iov[i].iov_len;
                  iov[i].iov_len = 0;
@@ -363,20 +374,9 @@ write(int fildes,
 
 FileContents::FileContents(const File& origFile)
     : file(dup(origFile))
-    , fileLen(0)
+    , fileLen(getSize(file))
     , map(NULL)
 {
-    struct stat stat;
-    if (fstat(file.fd, &stat) != 0) {
-        PANIC("Could not stat %s: %s",
-              file.path.c_str(), strerror(errno));
-    }
-    if (stat.st_size > ~0U) {
-        PANIC("File %s too big",
-              file.path.c_str());
-    }
-    fileLen = Core::Util::downCast<uint32_t>(stat.st_size);
-
     // len of 0 for empty files results in invalid argument
     if (fileLen > 0) {
         map = mmap(NULL, fileLen, PROT_READ, MAP_SHARED, file.fd, 0);
@@ -398,7 +398,7 @@ FileContents::~FileContents()
 }
 
 void
-FileContents::copy(uint32_t offset, void* buf, uint32_t length)
+FileContents::copy(uint64_t offset, void* buf, uint64_t length)
 {
     if (copyPartial(offset, buf, length) != length) {
         PANIC("File %s too short or corrupt",
@@ -406,18 +406,18 @@ FileContents::copy(uint32_t offset, void* buf, uint32_t length)
     }
 }
 
-uint32_t
-FileContents::copyPartial(uint32_t offset, void* buf, uint32_t maxLength)
+uint64_t
+FileContents::copyPartial(uint64_t offset, void* buf, uint64_t maxLength)
 {
     if (offset >= fileLen)
         return 0;
-    uint32_t length = std::min(fileLen - offset, maxLength);
+    uint64_t length = std::min(fileLen - offset, maxLength);
     memcpy(buf, static_cast<const char*>(map) + offset, length);
     return length;
 }
 
 const void*
-FileContents::getHelper(uint32_t offset, uint32_t length)
+FileContents::getHelper(uint64_t offset, uint64_t length)
 {
     if (length != 0 && offset + length > fileLen) {
         PANIC("File %s too short or corrupt",

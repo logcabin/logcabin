@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 Stanford University
+/* Copyright (c) 2012-2013 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -33,10 +33,11 @@ class SimpleFileLog : public Log {
 
     typedef Protocol::Raft::Entry Entry;
 
-    explicit SimpleFileLog(const std::string& path);
+    explicit SimpleFileLog(const Storage::FilesystemUtil::File& parentDir);
     ~SimpleFileLog();
     uint64_t append(const Entry& entry);
-    void truncate(uint64_t lastEntryId);
+    void truncatePrefix(uint64_t firstEntryId);
+    void truncateSuffix(uint64_t lastEntryId);
     void updateMetadata();
 
 

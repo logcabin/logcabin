@@ -15,6 +15,7 @@
 
 #include <cassert>
 
+#include "build/Tree/Snapshot.pb.h"
 #include "Core/Debug.h"
 #include "Core/StringUtil.h"
 #include "Tree/Tree.h"
@@ -65,6 +66,39 @@ namespace Internal {
 File::File()
     : contents()
 {
+}
+
+void
+File::dumpSnapshot(google::protobuf::io::CodedOutputStream& stream) const
+{
+    // create protobuf of this file
+    Snapshot::File file;
+    file.set_contents(contents);
+
+    // write file into stream
+    int size = file.ByteSize();
+    stream.WriteLittleEndian32(size);
+    file.SerializeWithCachedSizes(&stream);
+}
+
+void
+File::loadSnapshot(google::protobuf::io::CodedInputStream& stream)
+{
+    // read protobuf from stream
+    bool ok = true;
+    uint32_t numBytes = 0;
+    ok = stream.ReadLittleEndian32(&numBytes);
+    if (!ok)
+        PANIC("couldn't read snapshot");
+    Snapshot::File node;
+    auto limit = stream.PushLimit(numBytes);
+    ok = node.MergePartialFromCodedStream(&stream);
+    stream.PopLimit(limit);
+    if (!ok)
+        PANIC("couldn't read snapshot");
+
+    // load content
+    contents = node.contents();
 }
 
 ////////// class Directory //////////
@@ -157,6 +191,57 @@ Directory::removeFile(const std::string& name)
     assert(!name.empty());
     assert(!Core::StringUtil::endsWith(name, "/"));
     files.erase(name);
+}
+
+void
+Directory::dumpSnapshot(google::protobuf::io::CodedOutputStream& stream) const
+{
+    // create protobuf of this dir, listing all children
+    Snapshot::Directory dir;
+    for (auto it = directories.begin(); it != directories.end(); ++it)
+        dir.add_directories(it->first);
+    for (auto it = files.begin(); it != files.end(); ++it)
+        dir.add_files(it->first);
+
+    // write dir into stream
+    int size = dir.ByteSize();
+    stream.WriteLittleEndian32(size);
+    dir.SerializeWithCachedSizes(&stream);
+
+    // dump children in the same order
+    for (auto it = directories.begin(); it != directories.end(); ++it)
+        it->second.dumpSnapshot(stream);
+    for (auto it = files.begin(); it != files.end(); ++it)
+        it->second.dumpSnapshot(stream);
+}
+
+void
+Directory::loadSnapshot(google::protobuf::io::CodedInputStream& stream)
+{
+    // read protobuf from stream
+    bool ok = true;
+    uint32_t numBytes = 0;
+    ok = stream.ReadLittleEndian32(&numBytes);
+    if (!ok)
+        PANIC("couldn't read snapshot");
+    Snapshot::Directory dir;
+    auto limit = stream.PushLimit(numBytes);
+    ok = dir.MergePartialFromCodedStream(&stream);
+    stream.PopLimit(limit);
+    if (!ok)
+        PANIC("couldn't read snapshot");
+
+    // load children
+    for (auto it = dir.directories().begin();
+         it != dir.directories().end();
+         ++it) {
+        directories[*it].loadSnapshot(stream);
+    }
+    for (auto it = dir.files().begin();
+         it != dir.files().end();
+         ++it) {
+        files[*it].loadSnapshot(stream);
+    }
 }
 
 ////////// class Path //////////
@@ -278,6 +363,23 @@ Tree::mkdirLookup(const Path& path, Directory** parent)
     *parent = current;
     return result;
 }
+
+void
+Tree::dumpSnapshot(google::protobuf::io::CodedOutputStream& stream) const
+{
+    superRoot.dumpSnapshot(stream);
+}
+
+/**
+ * Load the tree from the given stream.
+ */
+void
+Tree::loadSnapshot(google::protobuf::io::CodedInputStream& stream)
+{
+    superRoot = Directory();
+    superRoot.loadSnapshot(stream);
+}
+
 
 Result
 Tree::checkCondition(const std::string& path,
