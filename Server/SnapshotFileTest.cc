@@ -91,6 +91,59 @@ TEST_F(ServerSnapshotFileTest, writer_discard)
     EXPECT_EQ(0U, FilesystemUtil::ls(tmpdir).size());
 }
 
+TEST_F(ServerSnapshotFileTest, writer_flushToOS_continue)
+{
+    {
+        Writer writer(tmpdir);
+        writer.getStream().WriteVarint32(482);
+        writer.flushToOS();
+        writer.getStream().WriteVarint32(998);
+        writer.save();
+    }
+    {
+        Reader reader(tmpdir);
+        uint32_t x = 0;
+        reader.getStream().ReadVarint32(&x);
+        EXPECT_EQ(482U, x);
+        reader.getStream().ReadVarint32(&x);
+        EXPECT_EQ(998U, x);
+    }
+}
+
+TEST_F(ServerSnapshotFileTest, writer_flushToOS_forking)
+{
+    {
+        Writer writer(tmpdir);
+        writer.getStream().WriteVarint32(482);
+        writer.flushToOS();
+        pid_t pid = fork();
+        ASSERT_LE(0, pid);
+        if (pid == 0) { // child
+            writer.getStream().WriteVarint32(127);
+            writer.flushToOS();
+            _exit(0);
+        } else { // parent
+            int status = 0;
+            pid = waitpid(pid, &status, 0);
+            EXPECT_LE(0, pid);
+            EXPECT_TRUE(WIFEXITED(status));
+            EXPECT_EQ(0, WEXITSTATUS(status));
+            writer.getStream().WriteVarint32(998);
+            writer.save();
+        }
+    }
+    {
+        Reader reader(tmpdir);
+        uint32_t x = 0;
+        reader.getStream().ReadVarint32(&x);
+        EXPECT_EQ(482U, x);
+        reader.getStream().ReadVarint32(&x);
+        EXPECT_EQ(127U, x);
+        reader.getStream().ReadVarint32(&x);
+        EXPECT_EQ(998U, x);
+    }
+}
+
 } // namespace LogCabin::Server::SnapshotFile::<anonymous>
 } // namespace LogCabin::Server::SnapshotFile
 } // namespace LogCabin::Server

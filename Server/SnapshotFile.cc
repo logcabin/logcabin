@@ -94,6 +94,20 @@ Writer::discard()
     file.close();
 }
 
+void
+Writer::flushToOS()
+{
+    if (file.fd < 0)
+        PANIC("File already closed");
+    // 1. Destroy the old CodedOutputStream.
+    codedStream.reset();
+    // 2. Flush the FileOutputStream.
+    fileStream->Flush();
+    // 3. Construct the new CodedOutputStream.
+    codedStream.reset(
+            new google::protobuf::io::CodedOutputStream(fileStream.get()));
+}
+
 uint64_t
 Writer::save()
 {

@@ -80,12 +80,34 @@ class Writer {
      * and leaves the file around for manual inspection.
      */
     ~Writer();
-    /// Throw away the file.
-    /// If you call this after the file has been closed, it will PANIC.
+    /**
+     * Throw away the file.
+     * If you call this after the file has been closed, it will PANIC.
+     */
     void discard();
-    /// Flush and close the file.
-    /// If you call this after the file has been closed, it will PANIC.
-    /// \return size in bytes of the file
+    /**
+     * Flush changes just down to the operating system's buffer cache.
+     * Leave the file open for additional writes.
+     * If you call this after the file has been closed, it will PANIC.
+     *
+     * This is useful when forking child processes to write to the file.
+     * The correct procedure for that is:
+     *  0. write stuff
+     *  1. call flushToOS()
+     *  2. fork
+     *  3. child process: write stuff
+     *  4. child process: call flushToOS()
+     *  5. child process: call _exit()
+     *  6. parent process: write stuff
+     *  7. parent process: call save()
+     */
+    void flushToOS();
+    /**
+     * Flush changes all the way down to the disk and close the file.
+     * If you call this after the file has been closed, it will PANIC.
+     * \return
+     *      Size in bytes of the file
+     */
     uint64_t save();
     /// Returns the output stream to write into.
     google::protobuf::io::CodedOutputStream& getStream();
