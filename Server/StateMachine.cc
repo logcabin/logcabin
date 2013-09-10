@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 Stanford University
+/* Copyright (c) 2012-2013 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -13,7 +13,11 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <sys/types.h>
+#include <sys/wait.h>
+
 #include "Core/Debug.h"
+#include "Core/Mutex.h"
 #include "Core/ProtoBuf.h"
 #include "Core/ThreadId.h"
 #include "RPC/ProtoBuf.h"
@@ -29,24 +33,42 @@ namespace Server {
 namespace PC = LogCabin::Protocol::Client;
 static const uint64_t NO_ENTRY_ID = ~0UL;
 
+// for testing purposes
+bool stateMachineSuppressThreads = false;
+uint32_t stateMachineChildSleepMs = 0;
+
 StateMachine::StateMachine(std::shared_ptr<Consensus> consensus)
     : consensus(consensus)
     , mutex()
-    , cond()
+    , entriesApplied()
+    , snapshotSuggested()
+    , exiting(false)
+    , childPid(0)
     , lastEntryId(0)
     , sessions()
     , nextLogId(1)
     , logNames()
     , logs()
     , tree()
-    , thread(&StateMachine::threadMain, this)
+    , applyThread()
+    , snapshotThread()
 {
+    if (!stateMachineSuppressThreads) {
+        applyThread = std::thread(&StateMachine::applyThreadMain, this);
+        snapshotThread = std::thread(&StateMachine::snapshotThreadMain, this);
+    }
 }
 
 StateMachine::~StateMachine()
 {
-    consensus->exit();
-    thread.join();
+    NOTICE("Shutting down");
+    if (consensus) // sometimes missing for testing
+        consensus->exit();
+    if (applyThread.joinable())
+        applyThread.join();
+    if (snapshotThread.joinable())
+        snapshotThread.join();
+    NOTICE("Joined with threads");
 }
 
 bool
@@ -76,7 +98,7 @@ StateMachine::wait(uint64_t entryId) const
 {
     std::unique_lock<std::mutex> lockGuard(mutex);
     while (lastEntryId < entryId)
-        cond.wait(lockGuard);
+        entriesApplied.wait(lockGuard);
 }
 
 void
@@ -132,8 +154,89 @@ StateMachine::readOnlyTreeRPC(const PC::ReadOnlyTree::Request& request,
     Tree::ProtoBuf::readOnlyTreeRPC(tree, request, response);
 }
 
+bool
+StateMachine::shouldTakeSnapshot(uint64_t lastIncludedIndex) const
+{
+    // TODO(ongaro): these constants should be configurable
+    SnapshotStats::SnapshotStats stats = consensus->getSnapshotStats();
+    if (stats.log_bytes() < 1024)
+        return false;
+    if (stats.log_bytes() < stats.last_snapshot_bytes() * 10)
+        return false;
+    if (lastIncludedIndex < stats.last_snapshot_index())
+        return false;
+    if (lastIncludedIndex < stats.last_log_index() * 3 / 4)
+        return false;
+    return true;
+}
+
 void
-StateMachine::threadMain()
+StateMachine::takeSnapshot(uint64_t lastIncludedIndex,
+                           std::unique_lock<std::mutex>& lockGuard)
+{
+    // Open a snapshot file, then fork a child to write a consistent view of
+    // the state machine to the snapshot file while this process continues
+    // accepting requests.
+    std::unique_ptr<SnapshotFile::Writer> writer =
+        consensus->beginSnapshot(lastIncludedIndex);
+    // Flush the outstanding changes to the snapshot now so that they
+    // aren't somehow double-flushed later.
+    writer->flushToOS();
+    pid_t pid = fork();
+    if (pid == -1) { // error
+        PANIC("Couldn't fork: %s", strerror(errno));
+    } else if (pid == 0) { // child
+        usleep(stateMachineChildSleepMs * 1000); // for testing purposes
+        tree.dumpSnapshot(writer->getStream());
+        // Flush the changes to the snapshot file before exiting.
+        writer->flushToOS();
+        _exit(0);
+    } else { // parent
+        assert(childPid == 0);
+        childPid = pid;
+        int status = 0;
+        {
+            // release the lock while blocking on the child to allow
+            // parallelism
+            Core::MutexUnlock<std::mutex> unlockGuard(lockGuard);
+            pid = waitpid(pid, &status, 0);
+        }
+        childPid = 0;
+        if (pid == -1)
+            PANIC("Couldn't waitpid: %s", strerror(errno));
+        if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+            NOTICE("Child completed writing state machine contents to "
+                   "snapshot staging file");
+            consensus->snapshotDone(lastIncludedIndex, std::move(writer));
+        } else if (exiting &&
+                   WIFSIGNALED(status) && WTERMSIG(status) == SIGHUP) {
+            writer->discard();
+            NOTICE("Child exited from SIGHUP since this process is "
+                   "exiting");
+        } else {
+            writer->discard();
+            PANIC("Snapshot creation failed with status %d", status);
+        }
+    }
+}
+
+void
+StateMachine::snapshotThreadMain()
+{
+    Core::ThreadId::setName("SnapshotStateMachine");
+    while (true) {
+        std::unique_lock<std::mutex> lockGuard(mutex);
+        if (exiting)
+            return;
+        if (shouldTakeSnapshot(lastEntryId))
+            takeSnapshot(lastEntryId, lockGuard);
+        else
+            snapshotSuggested.wait(lockGuard);
+    }
+}
+
+void
+StateMachine::applyThreadMain()
 {
     Core::ThreadId::setName("StateMachine");
     try {
@@ -144,7 +247,7 @@ StateMachine::threadMain()
                 case Consensus::Entry::SKIP:
                     break;
                 case Consensus::Entry::DATA:
-                    advance(entry.entryId, entry.data);
+                    apply(entry.entryId, entry.data);
                     break;
                 case Consensus::Entry::SNAPSHOT:
                     NOTICE("Loading snapshot through entry %lu into "
@@ -153,24 +256,23 @@ StateMachine::threadMain()
                     break;
             }
             lastEntryId = entry.entryId;
-            cond.notify_all();
-
-            SnapshotStats::SnapshotStats stats = consensus->getSnapshotStats();
-            // TODO(ongaro): these constants should be configurable
-            if (stats.log_bytes() >
-                    std::min(1024ul, stats.last_snapshot_bytes() * 10) &&
-                lastEntryId > stats.last_snapshot_index() &&
-                lastEntryId >= stats.last_log_index() * 3 / 4) {
-                // Take a snapshot
-                // TODO(ongaro): snapshotting synchronously is unreasonable
-                std::unique_ptr<SnapshotFile::Writer> writer =
-                    consensus->beginSnapshot(lastEntryId);
-                tree.dumpSnapshot(writer->getStream());
-                consensus->snapshotDone(lastEntryId, std::move(writer));
-            }
+            entriesApplied.notify_all();
+            if (shouldTakeSnapshot(lastEntryId))
+                snapshotSuggested.notify_all();
         }
     } catch (const ThreadInterruptedException& e) {
-        VERBOSE("exiting");
+        NOTICE("exiting");
+        std::unique_lock<std::mutex> lockGuard(mutex);
+        exiting = true;
+        entriesApplied.notify_all();
+        snapshotSuggested.notify_all();
+        if (childPid != 0) {
+            int r = kill(childPid, SIGHUP);
+            if (r != 0) {
+                WARNING("Could not send SIGHUP to child process: %s",
+                        strerror(errno));
+            }
+        }
     }
 }
 
@@ -191,7 +293,7 @@ StateMachine::ignore(const PC::ExactlyOnceRPCInfo& rpcInfo) const
 }
 
 void
-StateMachine::advance(uint64_t entryId, const std::string& data)
+StateMachine::apply(uint64_t entryId, const std::string& data)
 {
     PC::Command command = Core::ProtoBuf::fromString<PC::Command>(data);
     PC::CommandResponse commandResponse;

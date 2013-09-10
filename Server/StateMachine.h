@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 Stanford University
+/* Copyright (c) 2012-2013 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -31,6 +31,7 @@ namespace Server {
 // forward declaration
 class Consensus;
 
+// TODO(ongaro): document
 class StateMachine {
   public:
     explicit StateMachine(std::shared_ptr<Consensus> consensus);
@@ -43,6 +44,9 @@ class StateMachine {
     bool getResponse(const Protocol::Client::ExactlyOnceRPCInfo& rpcInfo,
                      Protocol::Client::CommandResponse& response) const;
 
+    /**
+     * Return once the state machine has applied at least the given entry.
+     */
     void wait(uint64_t entryId) const;
 
     void listLogs(const Protocol::Client::ListLogs::Request& request,
@@ -59,7 +63,21 @@ class StateMachine {
                 Protocol::Client::ReadOnlyTree::Response& response) const;
 
   private:
-    void threadMain();
+    void applyThreadMain();
+    void snapshotThreadMain();
+
+    /**
+     * Return true if it is time to create a new snapshot.
+     * This is called by applyThread as an optimization to avoid waking up
+     * snapshotThread upon applying every single entry.
+     */
+    bool shouldTakeSnapshot(uint64_t lastIncludedIndex) const;
+    /**
+     * Called by snapshotThreadMain to actually take the snapshot.
+     */
+    void takeSnapshot(uint64_t lastIncludedIndex,
+                      std::unique_lock<std::mutex>& lockGuard);
+
 
     typedef Protocol::Client::Read::Response::OK::Entry Entry;
     typedef std::vector<Entry> Log;
@@ -70,7 +88,7 @@ class StateMachine {
      */
     bool ignore(const Protocol::Client::ExactlyOnceRPCInfo& rpcInfo) const;
 
-    void advance(uint64_t entryId, const std::string& data);
+    void apply(uint64_t entryId, const std::string& data);
 
     void openLog(const Protocol::Client::OpenLog::Request& request,
                  Protocol::Client::OpenLog::Response& response);
@@ -84,10 +102,48 @@ class StateMachine {
     void openSession(uint64_t entryId,
                      const Protocol::Client::OpenSession::Request& request);
 
+
     std::shared_ptr<Consensus> consensus;
+
+    /**
+     * Protects against concurrent access for all members of this class (except
+     * 'consensus', which is itself a monitor.
+     */
     mutable std::mutex mutex;
-    mutable std::condition_variable cond;
-    uint64_t lastEntryId; // only written to by thread
+
+    /**
+     * Notified when lastEntryId changes after some entry got applied.
+     * Also notified upon exiting.
+     * This is used for client threads to wait; see wait().
+     */
+    mutable std::condition_variable entriesApplied;
+
+    /**
+     * Notified when shouldTakeSnapshot(lastEntryId) becomes true.
+     * Also notified upon exiting.
+     * This is used for snapshotThread to wake up only when necessary.
+     */
+    mutable std::condition_variable snapshotSuggested;
+
+    /**
+     * applyThread sets this to true to signal that the server is shutting
+     * down.
+     */
+    bool exiting;
+
+    /**
+     * The PID of snapshotThread's child process, if any. This is used by
+     * applyThread to signal exits: if applyThread is exiting, it sends SIGHUP
+     * to this child process.
+     */
+    pid_t childPid;
+
+    /**
+     * The index of the last log entry that this state machine has applied.
+     * This variable is only written to by applyThread, so applyThread is free
+     * to access this variable without holding 'mutex'.
+     */
+    uint64_t lastEntryId;
 
     /**
      * Tracks state for a particular client.
@@ -115,6 +171,7 @@ class StateMachine {
 
     /**
      * Client ID to Session map.
+     * TODO(ongaro): Will need to place this in snapshots.
      * TODO(ongaro): Will need to clean up stale sessions somehow.
      */
     std::unordered_map<uint64_t, Session> sessions;
@@ -139,9 +196,15 @@ class StateMachine {
     Tree::Tree tree;
 
     /**
-     * Repeatedly calls into the consensus module to get commands to process.
+     * Repeatedly calls into the consensus module to get commands to process
+     * and applies them.
      */
-    std::thread thread;
+    std::thread applyThread;
+
+    /**
+     * Takes snapshots with the help of a child process.
+     */
+    std::thread snapshotThread;
 };
 
 } // namespace LogCabin::Server
