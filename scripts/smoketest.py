@@ -37,6 +37,7 @@ def run(num_servers = None, # default 5
     with Sandbox() as sandbox:
         sh('rm -rf smoketeststorage/')
         sh('rm -f debug/*')
+        sh('mkdir -p debug')
         sh('scripts/initlog.py '
              '--serverid 1 '
              '--address %s '

@@ -68,6 +68,7 @@ def await_stable_leader(sandbox, server_ids, after_term=0):
 
 with Sandbox() as sandbox:
     sh('rm -f debug/*')
+    sh('mkdir -p debug')
 
     server_ids = range(1, num_servers + 1)
     servers = {}
