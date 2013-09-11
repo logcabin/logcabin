@@ -1,8 +1,10 @@
-build
+*.pyc
 .sconsign.dblite
 /docs/doxygen/
-Local.sc
-logcabin.conf
 /scripts/localconfig.py
+Local.sc
+build
+debug
+logcabin.conf
 smoketest.conf
-*.pyc
+smoketeststorage
