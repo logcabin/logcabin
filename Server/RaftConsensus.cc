@@ -754,7 +754,9 @@ RaftConsensus::init()
     // makes sense with reconfiguration.
     NOTICE("My server ID is %lu", serverId);
 
-    if (storageDirectory.fd == -1) { // unit tests set this
+    if (storageDirectory.fd == -1 && // unit tests set this
+        globals.config.read<std::string>("storageModule", "filesystem") ==
+            "filesystem") {
         Storage::FilesystemUtil::File parentDir =
             Storage::FilesystemUtil::openDir(
                 globals.config.read<std::string>("storagePath", "storage"));
@@ -766,7 +768,12 @@ RaftConsensus::init()
     configurationManager.reset(new ConfigurationManager(*configuration));
 
     if (!log) { // some unit tests pre-set the log; don't overwrite it
-        log.reset(new SimpleFileLog(storageDirectory));
+        std::string storageModule =
+            globals.config.read<std::string>("storageModule", "filesystem");
+        if (storageModule == "memory")
+            log.reset(new Log());
+        else
+            log.reset(new SimpleFileLog(storageDirectory));
     }
     for (uint64_t entryId = log->getLogStartIndex();
          entryId <= log->getLastLogIndex();
@@ -1824,10 +1831,12 @@ void
 RaftConsensus::readSnapshot()
 {
     std::unique_ptr<SnapshotFile::Reader> reader;
-    try {
-        reader.reset(new SnapshotFile::Reader(storageDirectory));
-    } catch (const std::runtime_error& e) { // file not found
-        NOTICE("%s", e.what());
+    if (storageDirectory.fd != -1) {
+        try {
+            reader.reset(new SnapshotFile::Reader(storageDirectory));
+        } catch (const std::runtime_error& e) { // file not found
+            NOTICE("%s", e.what());
+        }
     }
     if (reader) {
         google::protobuf::io::CodedInputStream& stream = reader->getStream();

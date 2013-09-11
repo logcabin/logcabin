@@ -43,6 +43,11 @@ class ServerStateMachineTest : public ::testing::Test {
         consensus.reset(new RaftConsensus(globals));
         consensus->serverId = 1;
         consensus->log.reset(new RaftConsensusInternal::Log());
+        std::string path = Storage::FilesystemUtil::mkdtemp();
+        consensus->storageDirectory =
+            Storage::FilesystemUtil::File(open(path.c_str(),
+                                               O_RDONLY|O_DIRECTORY),
+                                          path);
         RaftConsensusInternal::Log::Entry entry;
         entry.set_term(1);
         entry.set_type(Protocol::Raft::EntryType::CONFIGURATION);
