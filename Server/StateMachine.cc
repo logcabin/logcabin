@@ -13,6 +13,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 

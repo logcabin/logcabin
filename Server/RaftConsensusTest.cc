@@ -1087,7 +1087,7 @@ TEST_F(ServerRaftConsensusTest, handleAppendSnapshotChunk)
     consensus->handleAppendSnapshotChunk(request, response);
     EXPECT_EQ("term: 10 ", response);
     EXPECT_EQ(0U, consensus->lastSnapshotIndex);
-    EXPECT_TRUE(consensus->snapshotWriter);
+    EXPECT_TRUE(bool(consensus->snapshotWriter));
 
     // stale packet: expect warning
     LogCabin::Core::Debug::setLogPolicy({
@@ -1099,7 +1099,7 @@ TEST_F(ServerRaftConsensusTest, handleAppendSnapshotChunk)
     });
     EXPECT_EQ("term: 10 ", response);
     EXPECT_EQ(0U, consensus->lastSnapshotIndex);
-    EXPECT_TRUE(consensus->snapshotWriter);
+    EXPECT_TRUE(bool(consensus->snapshotWriter));
 
     // done now
     request.set_byte_offset(snapshotContents.size());
@@ -1108,7 +1108,7 @@ TEST_F(ServerRaftConsensusTest, handleAppendSnapshotChunk)
     consensus->handleAppendSnapshotChunk(request, response);
     EXPECT_EQ("term: 10 ", response);
     EXPECT_EQ(1U, consensus->lastSnapshotIndex);
-    EXPECT_FALSE(consensus->snapshotWriter);
+    EXPECT_FALSE(bool(consensus->snapshotWriter));
     std::string helloWorld;
     EXPECT_TRUE(consensus->snapshotReader->getStream()
                   .ReadString(&helloWorld,
@@ -2078,7 +2078,7 @@ TEST_F(ServerRaftConsensusTest, readSnapshot)
     consensus->readSnapshot();
     EXPECT_EQ(0U, consensus->lastSnapshotIndex);
     EXPECT_EQ(0U, consensus->lastSnapshotTerm);
-    EXPECT_FALSE(consensus->snapshotReader);
+    EXPECT_FALSE(bool(consensus->snapshotReader));
 
     // snapshot found
     consensus->append(entry1);
@@ -2096,7 +2096,7 @@ TEST_F(ServerRaftConsensusTest, readSnapshot)
     // between 10 and 1K seems reasonable.
     EXPECT_LT(10U, consensus->lastSnapshotBytes);
     EXPECT_GT(1024U, consensus->lastSnapshotBytes);
-    EXPECT_TRUE(consensus->snapshotReader);
+    EXPECT_TRUE(bool(consensus->snapshotReader));
     EXPECT_EQ((std::vector<uint64_t>{1}),
               Core::STLUtil::getKeys(consensus->configurationManager->
                                                             descriptions));
@@ -2111,7 +2111,7 @@ TEST_F(ServerRaftConsensusTest, readSnapshot)
     EXPECT_EQ(2U, consensus->lastSnapshotIndex);
     EXPECT_EQ(2U, consensus->lastSnapshotTerm);
     EXPECT_EQ(3U, consensus->commitIndex);
-    EXPECT_TRUE(consensus->snapshotReader);
+    EXPECT_TRUE(bool(consensus->snapshotReader));
 
     // truncates the log if it does not agree with the snapshot
     EXPECT_EQ(3U, consensus->log->getLogStartIndex());
@@ -2377,7 +2377,7 @@ TEST_F(ServerRaftConsensusTest, startNewElection)
     EXPECT_GT(Clock::now() +
               milliseconds(RaftConsensus::ELECTION_TIMEOUT_MS) * 2,
               consensus->startElectionAt);
-    EXPECT_FALSE(consensus->snapshotWriter);
+    EXPECT_FALSE(bool(consensus->snapshotWriter));
 
     // already won
     consensus->stepDown(7);
@@ -2440,7 +2440,7 @@ TEST_F(ServerRaftConsensusTest, stepDown)
                     new SnapshotFile::Writer(consensus->storageDirectory));
     consensus->stepDown(consensus->currentTerm + 1);
     EXPECT_EQ(oldStartElectionAt, consensus->startElectionAt);
-    EXPECT_FALSE(consensus->snapshotWriter);
+    EXPECT_FALSE(bool(consensus->snapshotWriter));
 }
 
 TEST_F(ServerRaftConsensusTest, updateLogMetadata)
