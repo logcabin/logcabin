@@ -23,8 +23,8 @@ to the desired size.
 from __future__ import print_function
 from optparse import OptionParser
 import glob
+import hashlib
 import os
-import sha
 import sys
 
 if __name__ == '__main__':
@@ -76,7 +76,7 @@ if __name__ == '__main__':
     def write(filename, contents):
         filename = '%s/%s' % (logPath, filename)
         print('Writing: %s' % filename)
-        checksum = 'SHA-1:%s\0' % sha.sha(contents).hexdigest()
+        checksum = 'SHA-1:%s\0' % hashlib.sha1(contents).hexdigest()
         open(filename, 'w').write(checksum + contents)
 
     metadata = """
