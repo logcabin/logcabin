@@ -65,10 +65,6 @@ class TreeLeaderRPC : public LeaderRPCBase {
 } // anonymous namespace
 
 MockClientImpl::MockClientImpl()
-    : mutex()
-    , nextLogId(0)
-    , logNames()
-    , logs()
 {
 }
 
@@ -80,80 +76,6 @@ void
 MockClientImpl::initDerived()
 {
     leaderRPC.reset(new TreeLeaderRPC());
-}
-
-Log
-MockClientImpl::openLog(const std::string& logName)
-{
-    std::unique_lock<std::mutex> lockGuard(mutex);
-    auto it = logNames.find(logName);
-    uint64_t logId;
-    if (it != logNames.end()) {
-        logId = it->second;
-    } else {
-        logId = nextLogId;
-        ++nextLogId;
-        logNames.insert({logName, logId});
-        logs.insert({logId, std::make_shared<std::vector<Entry>>()});
-    }
-    return Log(self.lock(), logName, logId);
-}
-
-void
-MockClientImpl::deleteLog(const std::string& logName)
-{
-    std::unique_lock<std::mutex> lockGuard(mutex);
-    auto it = logNames.find(logName);
-    if (it == logNames.end())
-        return;
-    uint64_t logId = it->second;
-    logNames.erase(it);
-    logs.erase(logId);
-}
-
-std::vector<std::string>
-MockClientImpl::listLogs()
-{
-    std::unique_lock<std::mutex> lockGuard(mutex);
-    return Core::STLUtil::getKeys(logNames);
-}
-
-EntryId
-MockClientImpl::append(uint64_t logId, const Entry& entry, EntryId expectedId)
-{
-    std::unique_lock<std::mutex> lockGuard(mutex);
-    std::vector<Entry>& log = getLog(logId);
-    EntryId newId = log.size();
-    if (expectedId != NO_ID && expectedId != newId)
-        return NO_ID;
-    log.emplace_back(entry.data.get(), entry.length, entry.invalidates);
-    log.back().id = newId;
-    return newId;
-}
-
-std::vector<Entry>
-MockClientImpl::read(uint64_t logId, EntryId from)
-{
-    std::unique_lock<std::mutex> lockGuard(mutex);
-    std::vector<Entry>& log = getLog(logId);
-    std::vector<Entry> ret;
-    for (auto it = log.begin(); it != log.end(); ++it) {
-        if (it->id < from)
-            continue;
-        ret.emplace_back(it->data.get(), it->length, it->invalidates);
-        ret.back().id = it->id;
-    }
-    return ret;
-}
-
-EntryId
-MockClientImpl::getLastId(uint64_t logId)
-{
-    std::unique_lock<std::mutex> lockGuard(mutex);
-    std::vector<Entry>& log = getLog(logId);
-    if (log.empty())
-        return NO_ID;
-    return log.back().id;
 }
 
 std::pair<uint64_t, Configuration>
@@ -170,15 +92,6 @@ MockClientImpl::setConfiguration(uint64_t oldId,
     result.status = ConfigurationResult::BAD;
     result.badServers = newConfiguration;
     return result;
-}
-
-std::vector<Entry>&
-MockClientImpl::getLog(uint64_t logId)
-{
-    auto it = logs.find(logId);
-    if (it == logs.end())
-        throw LogDisappearedException();
-    return *it->second;
 }
 
 } // namespace LogCabin::Client

@@ -25,17 +25,11 @@ package LogCabin.Protocol.Client;
 enum OpCode {
     // Keep these numbers dense.
     GET_SUPPORTED_RPC_VERSIONS = 0;
-    OPEN_SESSION = 9;
-    OPEN_LOG    = 1;
-    DELETE_LOG  = 2;
-    LIST_LOGS   = 3;
-    APPEND      = 4;
-    READ        = 5;
-    GET_LAST_ID = 6;
-    GET_CONFIGURATION = 7;
-    SET_CONFIGURATION = 8;
-    READ_ONLY_TREE = 10;
-    READ_WRITE_TREE = 11;
+    OPEN_SESSION = 1;
+    GET_CONFIGURATION = 2;
+    SET_CONFIGURATION = 3;
+    READ_ONLY_TREE = 4;
+    READ_WRITE_TREE = 5;
 };
 
 /**
@@ -115,181 +109,6 @@ message OpenSession {
          * The ID assigned to the client.
          */
         required uint64 client_id = 1;
-    }
-}
-
-/**
- * OpenLog RPC: Open or create a log by its name.
- */
-message OpenLog {
-    message Request {
-        /// See ExactlyOnceRPCInfo.
-        required ExactlyOnceRPCInfo exactly_once = 10;
-        /**
-         * The name of the log, which may or may not exist.
-         */
-        required string log_name = 1;
-    }
-    message Response {
-        /**
-         * The ID of the newly created or existing log.
-         */
-        required uint64 log_id = 1;
-    }
-}
-
-/**
- * DeleteLog RPC: Delete a log by its name.
- */
-message DeleteLog {
-    message Request {
-        /// See ExactlyOnceRPCInfo.
-        required ExactlyOnceRPCInfo exactly_once = 10;
-        /**
-         * The name of the log, which may or may not exist.
-         */
-        required string log_name = 1;
-    }
-
-    message Response {
-    }
-}
-
-/**
- * ListLogs RPC: List all available logs.
- */
-message ListLogs {
-    message Request {
-    }
-
-    message Response {
-        /**
-         * The name of every known log, in no particular order.
-         */
-        repeated string log_names = 1;
-    }
-}
-
-/**
- * Append RPC: Append data and/or invalidate a previous append.
- */
-message Append {
-    message Request {
-        /// See ExactlyOnceRPCInfo.
-        required ExactlyOnceRPCInfo exactly_once = 10;
-        /**
-         * The ID for the log to extend.
-         */
-        required uint64 log_id = 1;
-        /**
-         * If set, the operation will only proceed if the appended entry is
-         * assigned this entry ID. This may be left unset or set to NO_ENTRY_ID
-         * to unconditionally append.
-         */
-        optional uint64 expected_entry_id = 2;
-        /**
-         * A list of entry IDs that are no longer needed.
-         */
-        repeated uint64 invalidates = 3;
-        /**
-         * If set, the data stored in this entry.
-         */
-        optional bytes data = 4;
-    }
-    message Response {
-        // The following are mutually exclusive.
-        message OK {
-            /**
-             * Set to the ID of the newly appended entry, or NO_ENTRY_ID if the
-             * operation was rejected due to previous_entry_id being stale.
-             */
-            required uint64 entry_id = 1;
-        }
-        message LogDisappeared {
-        }
-        /**
-         * Set if the operation succeeded or was rejected due to
-         * previous_entry_id.
-         */
-        optional OK ok = 1;
-        /**
-         * Set if the log with the given ID does not exist.
-         */
-        optional LogDisappeared log_disappeared = 2;
-    }
-}
-
-/**
- * Read RPC: Fetch a suffix of a log.
- */
-message Read {
-    message Request {
-        required uint64 log_id = 1;
-        required uint64 from_entry_id = 2;
-    }
-
-    message Response {
-        // The following are mutually exclusive.
-        message OK {
-            message Entry {
-                /**
-                 * The ID of the entry.
-                 */
-                required uint64 entry_id = 1;
-                /**
-                 * A list of previous entries that this entry invalidates.
-                 */
-                repeated uint64 invalidates = 2;
-                /**
-                 * The data associated with this entry, if any.
-                 */
-                optional bytes data = 3;
-            }
-            /**
-             * The entries in the log starting at the given from_entry_id,
-             * inclusive.
-             */
-            repeated Entry entry = 1;
-        }
-        message LogDisappeared {
-        }
-        /**
-         * Set if the operation succeeded.
-         */
-        optional OK ok = 1;
-        /**
-         * Set if the log with the given ID does not exist.
-         */
-        optional LogDisappeared log_disappeared = 2;
-    }
-}
-
-/**
- * GetLastId RPC: Determine the ID for the most recent entry in a log.
- */
-message GetLastId {
-    message Request {
-        required uint64 log_id = 1;
-    }
-    message Response {
-        // The following are mutually exclusive.
-        message OK {
-            /**
-             * Set to the ID of the head of the log, or NO_ENTRY_ID if the
-             * log is empty.
-             */
-            required uint64 head_entry_id = 1;
-        }
-        message LogDisappeared {
-        }
-        /**
-         * Set if the operation succeeded.
-         */
-        optional OK ok = 1;
-        /**
-         * Set if the log with the given ID does not exist.
-         */
-        optional LogDisappeared log_disappeared = 2;
     }
 }
 
@@ -474,9 +293,6 @@ message ReadWriteTree {
 message Command {
     // The following are mutually exclusive.
     optional OpenSession.Request open_session = 4;
-    optional OpenLog.Request open_log = 1;
-    optional DeleteLog.Request delete_log = 2;
-    optional Append.Request append = 3;
     optional ReadWriteTree.Request tree = 5;
 }
 
@@ -486,8 +302,5 @@ message Command {
 message CommandResponse {
     // The following are mutually exclusive.
     optional OpenSession.Response open_session = 4;
-    optional OpenLog.Response open_log = 1;
-    optional DeleteLog.Response delete_log = 2;
-    optional Append.Response append = 3;
     optional ReadWriteTree.Response tree = 5;
 }

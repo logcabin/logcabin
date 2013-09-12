@@ -23,8 +23,6 @@
 #include "Server/ClientService.h"
 #include "Server/Globals.h"
 #include "Server/StateMachine.h"
-#include "Storage/Log.h"
-#include "Storage/LogEntry.h"
 
 namespace LogCabin {
 namespace Server {
@@ -50,24 +48,6 @@ ClientService::handleRPC(RPC::ServerRPC rpc)
     switch (rpc.getOpCode()) {
         case OpCode::GET_SUPPORTED_RPC_VERSIONS:
             getSupportedRPCVersions(std::move(rpc));
-            break;
-        case OpCode::OPEN_LOG:
-            openLog(std::move(rpc));
-            break;
-        case OpCode::DELETE_LOG:
-            deleteLog(std::move(rpc));
-            break;
-        case OpCode::LIST_LOGS:
-            listLogs(std::move(rpc));
-            break;
-        case OpCode::APPEND:
-            append(std::move(rpc));
-            break;
-        case OpCode::READ:
-            read(std::move(rpc));
-            break;
-        case OpCode::GET_LAST_ID:
-            getLastId(std::move(rpc));
             break;
         case OpCode::GET_CONFIGURATION:
             getConfiguration(std::move(rpc));
@@ -179,82 +159,6 @@ ClientService::openSession(RPC::ServerRPC rpc)
     if (result.first != Result::SUCCESS)
         return;
     response.set_client_id(result.second);
-    rpc.reply(response);
-}
-
-void
-ClientService::openLog(RPC::ServerRPC rpc)
-{
-    PRELUDE(OpenLog);
-    Command command;
-    *command.mutable_open_log() = request;
-    std::pair<Result, uint64_t> result = submit(rpc, command);
-    if (result.first != Result::SUCCESS)
-        return;
-    CommandResponse commandResponse;
-    if (!getResponse(rpc, result.second, request.exactly_once(),
-                     commandResponse)) {
-        return;
-    }
-    rpc.reply(commandResponse.open_log());
-}
-
-void
-ClientService::deleteLog(RPC::ServerRPC rpc)
-{
-    PRELUDE(DeleteLog);
-    Command command;
-    *command.mutable_delete_log() = request;
-    std::pair<Result, uint64_t> result = submit(rpc, command);
-    if (result.first != Result::SUCCESS)
-        return;
-    rpc.reply(response);
-}
-
-void
-ClientService::listLogs(RPC::ServerRPC rpc)
-{
-    PRELUDE(ListLogs);
-    if (catchUpStateMachine(rpc) != Result::SUCCESS)
-        return;
-    globals.stateMachine->listLogs(request, response);
-    rpc.reply(response);
-}
-
-void
-ClientService::append(RPC::ServerRPC rpc)
-{
-    PRELUDE(Append);
-    Command command;
-    *command.mutable_append() = request;
-    std::pair<Result, uint64_t> result = submit(rpc, command);
-    if (result.first != Result::SUCCESS)
-        return;
-    CommandResponse commandResponse;
-    if (!getResponse(rpc, result.second, request.exactly_once(),
-                     commandResponse)) {
-        return;
-    }
-    rpc.reply(commandResponse.append());
-}
-
-void
-ClientService::read(RPC::ServerRPC rpc)
-{
-    PRELUDE(Read);
-    if (catchUpStateMachine(rpc) != Result::SUCCESS)
-        return;
-    globals.stateMachine->read(request, response);
-    rpc.reply(response);
-}
-
-void
-ClientService::getLastId(RPC::ServerRPC rpc)
-{
-    PRELUDE(GetLastId);
-    if (catchUpStateMachine(rpc) != Result::SUCCESS)
-        return;
-    globals.stateMachine->getLastId(request, response);
     rpc.reply(response);
 }
 

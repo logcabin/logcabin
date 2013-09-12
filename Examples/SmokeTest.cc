@@ -27,8 +27,6 @@
 namespace {
 
 using LogCabin::Client::Cluster;
-using LogCabin::Client::Entry;
-using LogCabin::Client::Log;
 using LogCabin::Client::Result;
 using LogCabin::Client::Status;
 using LogCabin::Client::Tree;
@@ -96,16 +94,6 @@ main(int argc, char** argv)
     OptionParser options(argc, argv);
     Cluster cluster = options.mock ? Cluster(Cluster::FOR_TESTING)
                                    : Cluster("logcabin:61023");
-
-    Log log = cluster.openLog("smoketest");
-    std::string hello = "hello world";
-    Entry e(hello.c_str(), uint32_t(hello.length() + 1));
-    assert(log.append(e, 0) == 0);
-
-    std::vector<Entry> entries = log.read(0);
-    assert(entries.size() == 1U);
-    assert(static_cast<const char*>(entries.at(0).getData()) == hello);
-    assert(entries.at(0).getId() == 0);
 
     Tree tree = cluster.getTree();
     tree.makeDirectoryEx("/etc");

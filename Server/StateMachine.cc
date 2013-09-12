@@ -47,9 +47,6 @@ StateMachine::StateMachine(std::shared_ptr<Consensus> consensus)
     , childPid(0)
     , lastEntryId(0)
     , sessions()
-    , nextLogId(1)
-    , logNames()
-    , logs()
     , tree()
     , applyThread()
     , snapshotThread()
@@ -100,51 +97,6 @@ StateMachine::wait(uint64_t entryId) const
     std::unique_lock<std::mutex> lockGuard(mutex);
     while (lastEntryId < entryId)
         entriesApplied.wait(lockGuard);
-}
-
-void
-StateMachine::listLogs(const PC::ListLogs::Request& request,
-                       PC::ListLogs::Response& response) const
-{
-    std::unique_lock<std::mutex> lockGuard(mutex);
-    for (auto it = logNames.begin(); it != logNames.end(); ++it)
-        response.add_log_names(it->first);
-}
-
-void
-StateMachine::read(const PC::Read::Request& request,
-                   PC::Read::Response& response) const
-{
-    std::unique_lock<std::mutex> lockGuard(mutex);
-    auto logIt = logs.find(request.log_id());
-    if (logIt == logs.end()) {
-        response.mutable_log_disappeared();
-        return;
-    }
-    Log& log = *logIt->second;
-    response.mutable_ok();
-    for (auto it = log.begin(); it != log.end(); ++it) {
-        if (it->entry_id() < request.from_entry_id())
-            continue;
-        *response.mutable_ok()->add_entry() = *it;
-    }
-}
-
-void
-StateMachine::getLastId(const PC::GetLastId::Request& request,
-                        PC::GetLastId::Response& response) const
-{
-    std::unique_lock<std::mutex> lockGuard(mutex);
-    auto logIt = logs.find(request.log_id());
-    if (logIt == logs.end()) {
-        response.mutable_log_disappeared();
-        return;
-    }
-    Log& log = *logIt->second;
-    if (log.empty())
-        response.mutable_ok()->set_head_entry_id(NO_ENTRY_ID);
-    else
-        response.mutable_ok()->set_head_entry_id(log.size());
 }
 
 void
@@ -299,22 +251,7 @@ StateMachine::apply(uint64_t entryId, const std::string& data)
     PC::Command command = Core::ProtoBuf::fromString<PC::Command>(data);
     PC::CommandResponse commandResponse;
     PC::ExactlyOnceRPCInfo rpcInfo;
-    if (command.has_open_log()) {
-        rpcInfo = command.open_log().exactly_once();
-        if (ignore(rpcInfo))
-            return;
-        openLog(command.open_log(), *commandResponse.mutable_open_log());
-    } else if (command.has_delete_log()) {
-        rpcInfo = command.delete_log().exactly_once();
-        if (ignore(rpcInfo))
-            return;
-        deleteLog(command.delete_log(), *commandResponse.mutable_delete_log());
-    } else if (command.has_append()) {
-        rpcInfo = command.append().exactly_once();
-        if (ignore(rpcInfo))
-            return;
-        append(command.append(), *commandResponse.mutable_append());
-    } else if (command.has_tree()) {
+    if (command.has_tree()) {
         rpcInfo = command.tree().exactly_once();
         if (ignore(rpcInfo))
             return;
@@ -340,62 +277,6 @@ StateMachine::apply(uint64_t entryId, const std::string& data)
     }
     // Add new response to session
     session.responses[rpcInfo.rpc_number()] = commandResponse;
-}
-
-void
-StateMachine::openLog(const PC::OpenLog::Request& request,
-                      PC::OpenLog::Response& response)
-{
-    auto it = logNames.find(request.log_name());
-    uint64_t logId;
-    if (it != logNames.end()) {
-        logId = it->second;
-    } else {
-        logId = nextLogId;
-        ++nextLogId;
-        logNames.insert({request.log_name(), logId});
-        logs.insert({logId, std::make_shared<Log>()});
-    }
-    response.set_log_id(logId);
-}
-
-void
-StateMachine::deleteLog(const PC::DeleteLog::Request& request,
-                        PC::DeleteLog::Response& response)
-{
-    auto it = logNames.find(request.log_name());
-    if (it == logNames.end())
-        return;
-    uint64_t logId = it->second;
-    logNames.erase(it);
-    logs.erase(logId);
-}
-
-void
-StateMachine::append(const PC::Append::Request& request,
-                     PC::Append::Response& response)
-{
-    auto logIt = logs.find(request.log_id());
-    if (logIt == logs.end()) {
-        response.mutable_log_disappeared();
-        return;
-    }
-    Log& log = *logIt->second;
-    uint64_t newId = log.size();
-    uint64_t expectedId = NO_ENTRY_ID;
-    if (request.has_expected_entry_id())
-        expectedId = request.expected_entry_id();
-    if (expectedId != NO_ENTRY_ID && expectedId != newId) {
-        response.mutable_ok()->set_entry_id(NO_ENTRY_ID);
-        return;
-    }
-    Entry entry;
-    entry.set_entry_id(newId);
-    *entry.mutable_invalidates() = request.invalidates();
-    if (request.has_data())
-        entry.set_data(request.data());
-    log.push_back(entry);
-    response.mutable_ok()->set_entry_id(newId);
 }
 
 void

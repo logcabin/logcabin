@@ -63,20 +63,6 @@ class ClientImplBase {
      */
     virtual void initDerived();
 
-    /// See Cluster::openLog.
-    virtual Log openLog(const std::string& logName) = 0;
-    /// See Cluster::deleteLog.
-    virtual void deleteLog(const std::string& logName) = 0;
-    /// See Cluster::listLogs.
-    virtual std::vector<std::string> listLogs() = 0;
-    /// See Log::append and Log::invalidate.
-    virtual EntryId append(uint64_t logId, const Entry& entry,
-                           EntryId expectedId) = 0;
-    /// See Log::read.
-    virtual std::vector<Entry> read(uint64_t logId, EntryId from) = 0;
-    /// See Log::getLastId.
-    virtual EntryId getLastId(uint64_t logId) = 0;
-
     virtual std::pair<uint64_t, Configuration> getConfiguration() = 0;
     virtual ConfigurationResult setConfiguration(
                 uint64_t oldId,

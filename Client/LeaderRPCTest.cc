@@ -51,8 +51,10 @@ class ClientLeaderRPCTest : public ::testing::Test {
                                 service, 1);
         leaderRPC.reset(new LeaderRPC(address));
 
-        request.set_log_id(3);
-        expResponse.mutable_ok()->set_head_entry_id(4);
+
+        request.mutable_read()->set_path("foo");
+        expResponse.set_status(Protocol::Client::Status::OK);
+        expResponse.mutable_read()->set_contents("bar");
     }
     ~ClientLeaderRPCTest()
     {
@@ -70,17 +72,17 @@ class ClientLeaderRPCTest : public ::testing::Test {
     std::unique_ptr<RPC::Server> server;
     std::thread serverThread;
     std::unique_ptr<LeaderRPC> leaderRPC;
-    Protocol::Client::GetLastId::Request request;
-    Protocol::Client::GetLastId::Response response;
-    Protocol::Client::GetLastId::Response expResponse;
+    Protocol::Client::ReadOnlyTree::Request request;
+    Protocol::Client::ReadOnlyTree::Response response;
+    Protocol::Client::ReadOnlyTree::Response expResponse;
 };
 
 // constructor and destructor tested adequately in tests for call()
 
 TEST_F(ClientLeaderRPCTest, callOK) {
     init();
-    service->reply(OpCode::GET_LAST_ID, request, expResponse);
-    leaderRPC->call(OpCode::GET_LAST_ID, request, response);
+    service->reply(OpCode::READ_ONLY_TREE, request, expResponse);
+    leaderRPC->call(OpCode::READ_ONLY_TREE, request, response);
     EXPECT_EQ(expResponse, response);
 }
 
@@ -89,9 +91,9 @@ TEST_F(ClientLeaderRPCTest, callOK) {
 
 TEST_F(ClientLeaderRPCTest, callRPCFailed) {
     init();
-    service->closeSession(OpCode::GET_LAST_ID, request);
-    service->reply(OpCode::GET_LAST_ID, request, expResponse);
-    leaderRPC->call(OpCode::GET_LAST_ID, request, response);
+    service->closeSession(OpCode::READ_ONLY_TREE, request);
+    service->reply(OpCode::READ_ONLY_TREE, request, expResponse);
+    leaderRPC->call(OpCode::READ_ONLY_TREE, request, response);
     EXPECT_EQ(expResponse, response);
 }
 
@@ -101,16 +103,16 @@ TEST_F(ClientLeaderRPCTest, handleServiceSpecificErrorNotLeader) {
     error.set_error_code(Protocol::Client::Error::NOT_LEADER);
 
     // no hint
-    service->serviceSpecificError(OpCode::GET_LAST_ID, request, error);
+    service->serviceSpecificError(OpCode::READ_ONLY_TREE, request, error);
 
     // sucky hint
     error.set_leader_hint("127.0.0.1:0");
-    service->serviceSpecificError(OpCode::GET_LAST_ID, request, error);
+    service->serviceSpecificError(OpCode::READ_ONLY_TREE, request, error);
 
     // ok, fine, let it through
-    service->reply(OpCode::GET_LAST_ID, request, expResponse);
+    service->reply(OpCode::READ_ONLY_TREE, request, expResponse);
 
-    leaderRPC->call(OpCode::GET_LAST_ID, request, response);
+    leaderRPC->call(OpCode::READ_ONLY_TREE, request, response);
     EXPECT_EQ(expResponse, response);
 }
 
@@ -125,8 +127,9 @@ TEST_F(ClientLeaderRPCTest, handleServiceSpecificErrorSessionExpired) {
             leaderRPC->eventLoopThread = std::thread(&Event::Loop::runForever,
                                                      &leaderRPC->eventLoop);
             init();
-            service->serviceSpecificError(OpCode::GET_LAST_ID, request, error);
-            leaderRPC->call(OpCode::GET_LAST_ID, request, response);
+            service->serviceSpecificError(OpCode::READ_ONLY_TREE,
+                                          request, error);
+            leaderRPC->call(OpCode::READ_ONLY_TREE, request, response);
         },
         "Session expired");
 }

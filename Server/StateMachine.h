@@ -49,15 +49,6 @@ class StateMachine {
      */
     void wait(uint64_t entryId) const;
 
-    void listLogs(const Protocol::Client::ListLogs::Request& request,
-                  Protocol::Client::ListLogs::Response& response) const;
-
-    void read(const Protocol::Client::Read::Request& request,
-                  Protocol::Client::Read::Response& response) const;
-
-    void getLastId(const Protocol::Client::GetLastId::Request& request,
-                   Protocol::Client::GetLastId::Response& response) const;
-
     void readOnlyTreeRPC(
                 const Protocol::Client::ReadOnlyTree::Request& request,
                 Protocol::Client::ReadOnlyTree::Response& response) const;
@@ -78,10 +69,6 @@ class StateMachine {
     void takeSnapshot(uint64_t lastIncludedIndex,
                       std::unique_lock<std::mutex>& lockGuard);
 
-
-    typedef Protocol::Client::Read::Response::OK::Entry Entry;
-    typedef std::vector<Entry> Log;
-
     /**
      * Return true if the state machine should ignore the command (because it
      * is a duplicate of a previous command).
@@ -90,12 +77,6 @@ class StateMachine {
 
     void apply(uint64_t entryId, const std::string& data);
 
-    void openLog(const Protocol::Client::OpenLog::Request& request,
-                 Protocol::Client::OpenLog::Response& response);
-    void deleteLog(const Protocol::Client::DeleteLog::Request& request,
-                   Protocol::Client::DeleteLog::Response& response);
-    void append(const Protocol::Client::Append::Request& request,
-                Protocol::Client::Append::Response& response);
     void readWriteTreeRPC(
                 const Protocol::Client::ReadWriteTree::Request& request,
                 Protocol::Client::ReadWriteTree::Response& response);
@@ -175,19 +156,6 @@ class StateMachine {
      * TODO(ongaro): Will need to clean up stale sessions somehow.
      */
     std::unordered_map<uint64_t, Session> sessions;
-
-    /**
-     * Look up a log by ID or throw LogDisappearedException.
-     * Must be called holding #mutex.
-     */
-    std::vector<Entry>& getLog(uint64_t logId);
-
-    uint64_t nextLogId;
-    std::map<std::string, uint64_t> logNames;
-    // This shared_ptr just exists to make std::vector<Entry> copyable.
-    // This is a work-around for gcc 4.4, which can't handle move-only objects
-    // in maps.
-    std::unordered_map<uint64_t, std::shared_ptr<Log>> logs;
 
     /**
      * The hierarchical key-value store. Used in readOnlyTreeRPC and

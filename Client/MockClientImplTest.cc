@@ -28,12 +28,6 @@
 namespace LogCabin {
 namespace {
 
-std::string entryDataString(const Client::Entry& entry)
-{
-    return std::string(static_cast<const char*>(entry.getData()),
-                       entry.getLength());
-}
-
 class ClientMockClientImplTest : public ::testing::Test {
   public:
     ClientMockClientImplTest()
@@ -42,111 +36,6 @@ class ClientMockClientImplTest : public ::testing::Test {
     }
     std::unique_ptr<Client::Cluster> cluster;
 };
-
-TEST_F(ClientMockClientImplTest, openLog) {
-    Client::Log log = cluster->openLog("testLog");
-    EXPECT_EQ("testLog", log.name);
-    EXPECT_EQ(0U, log.logId);
-    Client::Log log2 = cluster->openLog("testLog2");
-    EXPECT_EQ("testLog2", log2.name);
-    EXPECT_EQ(1U, log2.logId);
-}
-
-TEST_F(ClientMockClientImplTest, deleteLog) {
-    Client::Log log = cluster->openLog("testLog");
-    cluster->deleteLog("testLog");
-    cluster->deleteLog("testLog2");
-    EXPECT_EQ((std::vector<std::string> {}),
-              cluster->listLogs());
-}
-
-TEST_F(ClientMockClientImplTest, listLogs) {
-    EXPECT_EQ((std::vector<std::string> {}),
-              cluster->listLogs());
-    cluster->openLog("testLog3");
-    cluster->openLog("testLog1");
-    cluster->openLog("testLog2");
-    EXPECT_EQ((std::vector<std::string> {
-               "testLog1",
-               "testLog2",
-               "testLog3",
-              }),
-              cluster->listLogs());
-}
-
-class ClientMockClientImplLogTest : public ClientMockClientImplTest {
-  public:
-    ClientMockClientImplLogTest()
-        : log()
-    {
-        log.reset(new Client::Log(cluster->openLog("testLog")));
-    }
-    std::unique_ptr<Client::Log> log;
-};
-
-TEST_F(ClientMockClientImplLogTest, append_normal)
-{
-    std::vector<Client::EntryId> invalidates = {10, 20, 30};
-    Client::Entry entry("hello", 5, invalidates);
-    EXPECT_EQ(0U, log->append(entry));
-    std::vector<Client::Entry> entries = log->read(0);
-    Client::Entry& readEntry = entries.at(0);
-    EXPECT_EQ(0U, readEntry.getId());
-    EXPECT_EQ(invalidates, readEntry.getInvalidates());
-    EXPECT_EQ("hello", entryDataString(readEntry));
-}
-
-TEST_F(ClientMockClientImplLogTest, append_expectedId)
-{
-    Client::Entry entry("hello", 5);
-    EXPECT_EQ(0U, log->append(entry, 0));
-    EXPECT_EQ(1U, log->append(entry, 1));
-    EXPECT_EQ(Client::NO_ID, log->append(entry, 1));
-    EXPECT_EQ(2U, log->append(entry, Client::NO_ID));
-}
-
-TEST_F(ClientMockClientImplLogTest, append_logDisappeared)
-{
-    Client::Entry entry("hello", 5);
-    cluster->deleteLog("testLog");
-    EXPECT_THROW(log->append(entry),
-                 Client::LogDisappearedException);
-}
-
-TEST_F(ClientMockClientImplLogTest, read_normal)
-{
-    log->append(Client::Entry("hello", 5));
-    log->append(Client::Entry("goodbye", 7));
-
-    EXPECT_EQ(2U, log->read(0).size());
-    EXPECT_EQ(1U, log->read(1).size());
-    EXPECT_EQ(0U, log->read(2).size());
-    EXPECT_EQ(0U, log->read(2000).size());
-
-    std::vector<Client::Entry> entries = log->read(1);
-    EXPECT_EQ("goodbye", entryDataString(entries.at(0)));
-}
-
-TEST_F(ClientMockClientImplLogTest, read_logDisappeared)
-{
-    cluster->deleteLog("testLog");
-    EXPECT_THROW(log->read(0),
-                 Client::LogDisappearedException);
-}
-
-TEST_F(ClientMockClientImplLogTest, getLastId_normal)
-{
-    EXPECT_EQ(Client::NO_ID, log->getLastId());
-    log->append(Client::Entry("hello", 5));
-    EXPECT_EQ(0U, log->getLastId());
-}
-
-TEST_F(ClientMockClientImplLogTest, getLastId_logDisappeared)
-{
-    cluster->deleteLog("testLog");
-    EXPECT_THROW(log->getLastId(),
-                 Client::LogDisappearedException);
-}
 
 // sanity check for tree operations (read-only and read-write)
 TEST_F(ClientMockClientImplTest, tree) {

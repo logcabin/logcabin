@@ -16,7 +16,6 @@
 #include <memory>
 
 #include "Core/Config.h"
-#include "Core/RWPtr.h"
 #include "Event/Loop.h"
 #include "Event/Signal.h"
 

@@ -43,36 +43,14 @@ class MockClientImpl : public ClientImpl {
 
     // Implementations of ClientImplBase methods
     void initDerived();
-    Log openLog(const std::string& logName);
-    void deleteLog(const std::string& logName);
-    std::vector<std::string> listLogs();
-    EntryId append(uint64_t logId, const Entry& entry, EntryId expectedId);
-    std::vector<Entry> read(uint64_t logId, EntryId from);
-    EntryId getLastId(uint64_t logId);
     std::pair<uint64_t, Configuration> getConfiguration();
     ConfigurationResult setConfiguration(
                 uint64_t oldId,
                 const Configuration& newConfiguration);
 
-    // Tree methods use ClientImpl with the special LeaderRPC installed by
-    // initDerived
     using ClientImpl::read;
 
   private:
-
-    /**
-     * Look up a log by ID or throw LogDisappearedException.
-     * Must be called holding #mutex.
-     */
-    std::vector<Entry>& getLog(uint64_t logId);
-
-    std::mutex mutex;
-    uint64_t nextLogId;
-    std::map<std::string, uint64_t> logNames;
-    // This shared_ptr just exists to make std::vector<Entry> copyable.
-    // This is a work-around for gcc 4.4, which can't handle move-only objects
-    // in maps.
-    std::unordered_map<uint64_t, std::shared_ptr<std::vector<Entry>>> logs;
 
     // MockClientImpl is not copyable
     MockClientImpl(const MockClientImpl&) = delete;

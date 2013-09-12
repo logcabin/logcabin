@@ -55,12 +55,6 @@ class ClientService : public RPC::Service {
 
     void getSupportedRPCVersions(RPC::ServerRPC rpc);
     void openSession(RPC::ServerRPC rpc);
-    void openLog(RPC::ServerRPC rpc);
-    void deleteLog(RPC::ServerRPC rpc);
-    void listLogs(RPC::ServerRPC rpc);
-    void append(RPC::ServerRPC rpc);
-    void read(RPC::ServerRPC rpc);
-    void getLastId(RPC::ServerRPC rpc);
     void getConfiguration(RPC::ServerRPC rpc);
     void setConfiguration(RPC::ServerRPC rpc);
     void readOnlyTreeRPC(RPC::ServerRPC rpc);

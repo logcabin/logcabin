@@ -37,12 +37,6 @@ class ClientImpl : public ClientImplBase {
 
     // Implementations of ClientImplBase methods
     void initDerived();
-    Log openLog(const std::string& logName);
-    void deleteLog(const std::string& logName);
-    std::vector<std::string> listLogs();
-    EntryId append(uint64_t logId, const Entry& entry, EntryId expectedId);
-    std::vector<Entry> read(uint64_t logId, EntryId from);
-    EntryId getLastId(uint64_t logId);
     std::pair<uint64_t, Configuration> getConfiguration();
     ConfigurationResult setConfiguration(
                             uint64_t oldId,
