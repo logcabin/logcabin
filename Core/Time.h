@@ -36,7 +36,7 @@ operator<<(std::ostream& os,
         return os << "TimePoint::min()";
     if (timePoint == TimePoint::max())
         return os << "TimePoint::max()";
-    
+
     TimePoint unixEpoch = TimePoint();
     uint64_t microsSinceUnixEpoch =
         std::chrono::duration_cast<std::chrono::microseconds>(
