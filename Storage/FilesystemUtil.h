@@ -101,6 +101,14 @@ File dup(const File& file);
 void fsync(const File& file);
 
 /**
+ * Flush changes to a File to its underlying storage device, except for
+ * atime/mtime. See fdatasync man page.
+ * \param file
+ *      An open file descriptor.
+ */
+void fdatasync(const File& file);
+
+/**
  * Returns the size of the file in bytes.
  */
 uint64_t getSize(const File& file);

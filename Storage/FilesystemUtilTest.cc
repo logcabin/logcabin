@@ -116,6 +116,12 @@ TEST_F(StorageFilesystemUtilTest, fsync) {
                  "Could not fsync");
 }
 
+TEST_F(StorageFilesystemUtilTest, fdatasync) {
+    FS::fdatasync(tmpdir);
+    EXPECT_DEATH(FS::fdatasync(File()),
+                 "Could not fdatasync");
+}
+
 TEST_F(StorageFilesystemUtilTest, getSize) {
     FS::File file(FS::openFile(tmpdir, "a", O_RDWR|O_CREAT));
     EXPECT_EQ(0U, FS::getSize(file));

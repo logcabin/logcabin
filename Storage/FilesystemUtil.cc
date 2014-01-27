@@ -107,6 +107,15 @@ fsync(const File& file)
     }
 }
 
+void
+fdatasync(const File& file)
+{
+    if (::fdatasync(file.fd) != 0) {
+        PANIC("Could not fdatasync %s: %s",
+              file.path.c_str(), strerror(errno));
+    }
+}
+
 uint64_t
 getSize(const File& file)
 {
