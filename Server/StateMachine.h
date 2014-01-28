@@ -31,15 +31,18 @@ namespace Server {
 // forward declaration
 class Consensus;
 
-// TODO(ongaro): reorder file
-
-// TODO(ongaro): document
+/**
+ * Interprets and executes operations that have been committed into the Raft
+ * log.
+ */
 class StateMachine {
   public:
     explicit StateMachine(std::shared_ptr<Consensus> consensus);
     ~StateMachine();
 
     /**
+     * Called by ClientService to get a response for a read-write operation on
+     * the Tree.
      * \warning
      *      Be sure to wait() first!
      */
@@ -47,17 +50,27 @@ class StateMachine {
                      Protocol::Client::CommandResponse& response) const;
 
     /**
-     * Return once the state machine has applied at least the given entry.
+     * Called by ClientService to execute read-only operations on the Tree.
      */
-    void wait(uint64_t entryId) const;
-
     void readOnlyTreeRPC(
                 const Protocol::Client::ReadOnlyTree::Request& request,
                 Protocol::Client::ReadOnlyTree::Response& response) const;
 
+    /**
+     * Return once the state machine has applied at least the given entry.
+     */
+    void wait(uint64_t entryId) const;
+
   private:
+    /**
+     * Invoked once per committed entry from the Raft log.
+     */
+    void apply(uint64_t entryId, const std::string& data);
+
+    /**
+     * Main function for thread that waits for new commands from Raft.
+     */
     void applyThreadMain();
-    void snapshotThreadMain();
 
     /**
      * Write the #sessions table to a snapshot file.
@@ -66,10 +79,22 @@ class StateMachine {
                 google::protobuf::io::CodedOutputStream& stream) const;
 
     /**
+     * Return true if the state machine should ignore the command (because it
+     * is a duplicate of a previous command).
+     */
+    bool ignore(const Protocol::Client::ExactlyOnceRPCInfo& rpcInfo) const;
+
+    /**
      * Read the #sessions table from a snapshot file.
      */
     void loadSessionSnapshot(
                 google::protobuf::io::CodedInputStream& stream);
+
+    /**
+     * Allocate a new Session upon a client request to do so.
+     */
+    void openSession(uint64_t entryId,
+                     const Protocol::Client::OpenSession::Request& request);
 
     /**
      * Return true if it is time to create a new snapshot.
@@ -77,28 +102,18 @@ class StateMachine {
      * snapshotThread upon applying every single entry.
      */
     bool shouldTakeSnapshot(uint64_t lastIncludedIndex) const;
+
+    /**
+     * Main function for thread that calls takeSnapshot when appropriate.
+     */
+    void snapshotThreadMain();
+
     /**
      * Called by snapshotThreadMain to actually take the snapshot.
      */
     void takeSnapshot(uint64_t lastIncludedIndex,
                       std::unique_lock<std::mutex>& lockGuard);
 
-    /**
-     * Return true if the state machine should ignore the command (because it
-     * is a duplicate of a previous command).
-     */
-    bool ignore(const Protocol::Client::ExactlyOnceRPCInfo& rpcInfo) const;
-
-    /**
-     * Invoked once per committed entry from the Raft log.
-     */
-    void apply(uint64_t entryId, const std::string& data);
-
-    void readWriteTreeRPC(
-                const Protocol::Client::ReadWriteTree::Request& request,
-                Protocol::Client::ReadWriteTree::Response& response);
-    void openSession(uint64_t entryId,
-                     const Protocol::Client::OpenSession::Request& request);
 
 
     std::shared_ptr<Consensus> consensus;

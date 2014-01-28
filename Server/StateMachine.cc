@@ -93,6 +93,14 @@ StateMachine::getResponse(const PC::ExactlyOnceRPCInfo& rpcInfo,
 }
 
 void
+StateMachine::readOnlyTreeRPC(const PC::ReadOnlyTree::Request& request,
+                              PC::ReadOnlyTree::Response& response) const
+{
+    std::unique_lock<std::mutex> lockGuard(mutex);
+    Tree::ProtoBuf::readOnlyTreeRPC(tree, request, response);
+}
+
+void
 StateMachine::wait(uint64_t entryId) const
 {
     std::unique_lock<std::mutex> lockGuard(mutex);
@@ -100,12 +108,85 @@ StateMachine::wait(uint64_t entryId) const
         entriesApplied.wait(lockGuard);
 }
 
+
+////////// StateMachine private methods //////////
+
 void
-StateMachine::readOnlyTreeRPC(const PC::ReadOnlyTree::Request& request,
-                              PC::ReadOnlyTree::Response& response) const
+StateMachine::apply(uint64_t entryId, const std::string& data)
 {
-    std::unique_lock<std::mutex> lockGuard(mutex);
-    Tree::ProtoBuf::readOnlyTreeRPC(tree, request, response);
+    PC::Command command = Core::ProtoBuf::fromString<PC::Command>(data);
+    PC::CommandResponse commandResponse;
+    PC::ExactlyOnceRPCInfo rpcInfo;
+    if (command.has_tree()) {
+        rpcInfo = command.tree().exactly_once();
+        if (ignore(rpcInfo))
+            return;
+        Tree::ProtoBuf::readWriteTreeRPC(
+            tree, command.tree(), *commandResponse.mutable_tree());
+    } else if (command.has_open_session()) {
+        openSession(entryId, command.open_session());
+        return;
+    } else {
+        PANIC("unknown command at %lu: %s", entryId, data.c_str());
+    }
+
+    Session& session = sessions[rpcInfo.client_id()];
+    if (session.firstOutstandingRPC < rpcInfo.rpc_number())
+        session.firstOutstandingRPC = rpcInfo.rpc_number();
+
+    // Discard unneeded responses in session
+    auto it = session.responses.begin();
+    while (it != session.responses.end()) {
+        if (it->first < rpcInfo.first_outstanding_rpc())
+            it = session.responses.erase(it);
+        else
+            ++it;
+    }
+    // Add new response to session
+    session.responses[rpcInfo.rpc_number()] = commandResponse;
+}
+
+
+void
+StateMachine::applyThreadMain()
+{
+    Core::ThreadId::setName("StateMachine");
+    try {
+        while (true) {
+            Consensus::Entry entry = consensus->getNextEntry(lastEntryId);
+            std::unique_lock<std::mutex> lockGuard(mutex);
+            switch (entry.type) {
+                case Consensus::Entry::SKIP:
+                    break;
+                case Consensus::Entry::DATA:
+                    apply(entry.entryId, entry.data);
+                    break;
+                case Consensus::Entry::SNAPSHOT:
+                    NOTICE("Loading snapshot through entry %lu into "
+                           "state machine", entry.entryId);
+                    loadSessionSnapshot(entry.snapshotReader->getStream());
+                    tree.loadSnapshot(entry.snapshotReader->getStream());
+                    break;
+            }
+            lastEntryId = entry.entryId;
+            entriesApplied.notify_all();
+            if (shouldTakeSnapshot(lastEntryId))
+                snapshotSuggested.notify_all();
+        }
+    } catch (const ThreadInterruptedException& e) {
+        NOTICE("exiting");
+        std::unique_lock<std::mutex> lockGuard(mutex);
+        exiting = true;
+        entriesApplied.notify_all();
+        snapshotSuggested.notify_all();
+        if (childPid != 0) {
+            int r = kill(childPid, SIGHUP);
+            if (r != 0) {
+                WARNING("Could not send SIGHUP to child process: %s",
+                        strerror(errno));
+            }
+        }
+    }
 }
 
 void
@@ -131,6 +212,22 @@ StateMachine::dumpSessionSnapshot(
     int size = sessionsProto.ByteSize();
     stream.WriteLittleEndian32(size);
     sessionsProto.SerializeWithCachedSizes(&stream);
+}
+
+bool
+StateMachine::ignore(const PC::ExactlyOnceRPCInfo& rpcInfo) const
+{
+    auto it = sessions.find(rpcInfo.client_id());
+    if (it == sessions.end())
+        return true; // no such session
+    const Session& session = it->second;
+    if (session.responses.find(rpcInfo.rpc_number()) !=
+        session.responses.end()) {
+        return true; // response exists
+    }
+    if (rpcInfo.rpc_number() < session.firstOutstandingRPC)
+        return true; // response already discarded
+    return false;
 }
 
 void
@@ -166,6 +263,14 @@ StateMachine::loadSessionSnapshot(
     }
 }
 
+void
+StateMachine::openSession(
+        uint64_t entryId,
+        const Protocol::Client::OpenSession::Request& request)
+{
+    uint64_t clientId = entryId;
+    sessions.insert({clientId, {}});
+}
 
 bool
 StateMachine::shouldTakeSnapshot(uint64_t lastIncludedIndex) const
@@ -181,6 +286,21 @@ StateMachine::shouldTakeSnapshot(uint64_t lastIncludedIndex) const
     if (lastIncludedIndex < stats.last_log_index() * 3 / 4)
         return false;
     return true;
+}
+
+void
+StateMachine::snapshotThreadMain()
+{
+    Core::ThreadId::setName("SnapshotStateMachine");
+    while (true) {
+        std::unique_lock<std::mutex> lockGuard(mutex);
+        if (exiting)
+            return;
+        if (shouldTakeSnapshot(lastEntryId))
+            takeSnapshot(lastEntryId, lockGuard);
+        else
+            snapshotSuggested.wait(lockGuard);
+    }
 }
 
 void
@@ -232,129 +352,6 @@ StateMachine::takeSnapshot(uint64_t lastIncludedIndex,
             PANIC("Snapshot creation failed with status %d", status);
         }
     }
-}
-
-void
-StateMachine::snapshotThreadMain()
-{
-    Core::ThreadId::setName("SnapshotStateMachine");
-    while (true) {
-        std::unique_lock<std::mutex> lockGuard(mutex);
-        if (exiting)
-            return;
-        if (shouldTakeSnapshot(lastEntryId))
-            takeSnapshot(lastEntryId, lockGuard);
-        else
-            snapshotSuggested.wait(lockGuard);
-    }
-}
-
-void
-StateMachine::applyThreadMain()
-{
-    Core::ThreadId::setName("StateMachine");
-    try {
-        while (true) {
-            Consensus::Entry entry = consensus->getNextEntry(lastEntryId);
-            std::unique_lock<std::mutex> lockGuard(mutex);
-            switch (entry.type) {
-                case Consensus::Entry::SKIP:
-                    break;
-                case Consensus::Entry::DATA:
-                    apply(entry.entryId, entry.data);
-                    break;
-                case Consensus::Entry::SNAPSHOT:
-                    NOTICE("Loading snapshot through entry %lu into "
-                           "state machine", entry.entryId);
-                    loadSessionSnapshot(entry.snapshotReader->getStream());
-                    tree.loadSnapshot(entry.snapshotReader->getStream());
-                    break;
-            }
-            lastEntryId = entry.entryId;
-            entriesApplied.notify_all();
-            if (shouldTakeSnapshot(lastEntryId))
-                snapshotSuggested.notify_all();
-        }
-    } catch (const ThreadInterruptedException& e) {
-        NOTICE("exiting");
-        std::unique_lock<std::mutex> lockGuard(mutex);
-        exiting = true;
-        entriesApplied.notify_all();
-        snapshotSuggested.notify_all();
-        if (childPid != 0) {
-            int r = kill(childPid, SIGHUP);
-            if (r != 0) {
-                WARNING("Could not send SIGHUP to child process: %s",
-                        strerror(errno));
-            }
-        }
-    }
-}
-
-bool
-StateMachine::ignore(const PC::ExactlyOnceRPCInfo& rpcInfo) const
-{
-    auto it = sessions.find(rpcInfo.client_id());
-    if (it == sessions.end())
-        return true; // no such session
-    const Session& session = it->second;
-    if (session.responses.find(rpcInfo.rpc_number()) !=
-        session.responses.end()) {
-        return true; // response exists
-    }
-    if (rpcInfo.rpc_number() < session.firstOutstandingRPC)
-        return true; // response already discarded
-    return false;
-}
-
-void
-StateMachine::apply(uint64_t entryId, const std::string& data)
-{
-    PC::Command command = Core::ProtoBuf::fromString<PC::Command>(data);
-    PC::CommandResponse commandResponse;
-    PC::ExactlyOnceRPCInfo rpcInfo;
-    if (command.has_tree()) {
-        rpcInfo = command.tree().exactly_once();
-        if (ignore(rpcInfo))
-            return;
-        readWriteTreeRPC(command.tree(), *commandResponse.mutable_tree());
-    } else if (command.has_open_session()) {
-        openSession(entryId, command.open_session());
-        return;
-    } else {
-        PANIC("unknown command at %lu: %s", entryId, data.c_str());
-    }
-
-    Session& session = sessions[rpcInfo.client_id()];
-    if (session.firstOutstandingRPC < rpcInfo.rpc_number())
-        session.firstOutstandingRPC = rpcInfo.rpc_number();
-
-    // Discard unneeded responses in session
-    auto it = session.responses.begin();
-    while (it != session.responses.end()) {
-        if (it->first < rpcInfo.first_outstanding_rpc())
-            it = session.responses.erase(it);
-        else
-            ++it;
-    }
-    // Add new response to session
-    session.responses[rpcInfo.rpc_number()] = commandResponse;
-}
-
-void
-StateMachine::readWriteTreeRPC(const PC::ReadWriteTree::Request& request,
-                               PC::ReadWriteTree::Response& response)
-{
-    Tree::ProtoBuf::readWriteTreeRPC(tree, request, response);
-}
-
-void
-StateMachine::openSession(
-        uint64_t entryId,
-        const Protocol::Client::OpenSession::Request& request)
-{
-    uint64_t clientId = entryId;
-    sessions.insert({clientId, {}});
 }
 
 } // namespace LogCabin::Server

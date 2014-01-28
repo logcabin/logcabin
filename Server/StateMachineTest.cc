@@ -78,6 +78,32 @@ class ServerStateMachineTest : public ::testing::Test {
     Storage::FilesystemUtil::File tmpdir;
 };
 
+// This tries to test the use of kill() to stop a snapshotting child and exit
+// quickly.
+TEST_F(ServerStateMachineTest, applyThreadMain_exiting)
+{
+    // instruct the child process to sleep for 10s
+    stateMachineChildSleepMs = 10000;
+    consensus->exit();
+    {
+        // applyThread won't be able to kill() yet due to mutex
+        std::unique_lock<std::mutex> lockGuard(stateMachine->mutex);
+        stateMachine->applyThread = std::thread(&StateMachine::applyThreadMain,
+                                                stateMachine.get());
+        struct timeval startTime;
+        EXPECT_EQ(0, gettimeofday(&startTime, NULL));
+        stateMachine->takeSnapshot(1, lockGuard);
+        struct timeval endTime;
+        EXPECT_EQ(0, gettimeofday(&endTime, NULL));
+        uint64_t elapsedMillis =
+            ((endTime.tv_sec   * 1000 * 1000 + endTime.tv_usec) -
+             (startTime.tv_sec * 1000 * 1000 + startTime.tv_usec)) / 1000;
+        EXPECT_GT(200U, elapsedMillis) <<
+            "This test depends on timing, so failures are likely under "
+            "heavy load, valgrind, etc.";
+    }
+    EXPECT_EQ(0U, consensus->lastSnapshotIndex);
+}
 
 TEST_F(ServerStateMachineTest, dumpSessionSnapshot)
 {
@@ -164,33 +190,6 @@ TEST_F(ServerStateMachineTest, takeSnapshot)
     EXPECT_EQ((std::vector<std::string>{"foo/"}), children);
     EXPECT_EQ((std::vector<std::uint64_t>{4}),
               Core::STLUtil::getKeys(stateMachine->sessions));
-}
-
-// This tries to test the use of kill() to stop a snapshotting child and exit
-// quickly.
-TEST_F(ServerStateMachineTest, applyThreadMain_exiting)
-{
-    // instruct the child process to sleep for 10s
-    stateMachineChildSleepMs = 10000;
-    consensus->exit();
-    {
-        // applyThread won't be able to kill() yet due to mutex
-        std::unique_lock<std::mutex> lockGuard(stateMachine->mutex);
-        stateMachine->applyThread = std::thread(&StateMachine::applyThreadMain,
-                                                stateMachine.get());
-        struct timeval startTime;
-        EXPECT_EQ(0, gettimeofday(&startTime, NULL));
-        stateMachine->takeSnapshot(1, lockGuard);
-        struct timeval endTime;
-        EXPECT_EQ(0, gettimeofday(&endTime, NULL));
-        uint64_t elapsedMillis =
-            ((endTime.tv_sec   * 1000 * 1000 + endTime.tv_usec) -
-             (startTime.tv_sec * 1000 * 1000 + startTime.tv_usec)) / 1000;
-        EXPECT_GT(200U, elapsedMillis) <<
-            "This test depends on timing, so failures are likely under "
-            "heavy load, valgrind, etc.";
-    }
-    EXPECT_EQ(0U, consensus->lastSnapshotIndex);
 }
 
 } // namespace LogCabin::Server::<anonymous>
