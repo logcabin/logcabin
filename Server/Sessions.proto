@@ -1,0 +1,48 @@
+// Copyright (c) 2014 Stanford University
+//
+// Permission to use, copy, modify, and distribute this software for any
+// purpose with or without fee is hereby granted, provided that the above
+// copyright notice and this permission notice appear in all copies.
+//
+// THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR(S) DISCLAIM ALL WARRANTIES
+// WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+// MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL AUTHORS BE LIABLE FOR
+// ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+// WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+// ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+// OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+/**
+ * \file
+ * This file contains the formats for dumping out the state machine's Session
+ * table.
+ */
+
+package LogCabin.Server.SessionsProto;
+
+import "build/Protocol/Client.proto";
+
+/**
+ * The session table.
+ */
+message Sessions {
+    repeated Session session = 1;
+}
+
+/**
+ * An individual session.
+ */
+message Session {
+    required uint64 client_id = 1;
+    required uint64 first_outstanding_rpc = 2;
+    repeated Response rpc_response = 3;
+}
+
+/**
+ * The responses kept for a particular session.
+ * (There may be more than one for multi-threaded clients.)
+ */
+message Response {
+    required uint64 rpc_number = 1;
+    required Protocol.Client.CommandResponse response = 2;
+}

@@ -31,6 +31,8 @@ namespace Server {
 // forward declaration
 class Consensus;
 
+// TODO(ongaro): reorder file
+
 // TODO(ongaro): document
 class StateMachine {
   public:
@@ -58,6 +60,18 @@ class StateMachine {
     void snapshotThreadMain();
 
     /**
+     * Write the #sessions table to a snapshot file.
+     */
+    void dumpSessionSnapshot(
+                google::protobuf::io::CodedOutputStream& stream) const;
+
+    /**
+     * Read the #sessions table from a snapshot file.
+     */
+    void loadSessionSnapshot(
+                google::protobuf::io::CodedInputStream& stream);
+
+    /**
      * Return true if it is time to create a new snapshot.
      * This is called by applyThread as an optimization to avoid waking up
      * snapshotThread upon applying every single entry.
@@ -75,6 +89,9 @@ class StateMachine {
      */
     bool ignore(const Protocol::Client::ExactlyOnceRPCInfo& rpcInfo) const;
 
+    /**
+     * Invoked once per committed entry from the Raft log.
+     */
     void apply(uint64_t entryId, const std::string& data);
 
     void readWriteTreeRPC(
@@ -152,7 +169,6 @@ class StateMachine {
 
     /**
      * Client ID to Session map.
-     * TODO(ongaro): Will need to place this in snapshots.
      * TODO(ongaro): Will need to clean up stale sessions somehow.
      */
     std::unordered_map<uint64_t, Session> sessions;

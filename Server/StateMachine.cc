@@ -17,6 +17,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
+#include "build/Server/Sessions.pb.h"
 #include "Core/Debug.h"
 #include "Core/Mutex.h"
 #include "Core/ProtoBuf.h"
@@ -107,6 +108,65 @@ StateMachine::readOnlyTreeRPC(const PC::ReadOnlyTree::Request& request,
     Tree::ProtoBuf::readOnlyTreeRPC(tree, request, response);
 }
 
+void
+StateMachine::dumpSessionSnapshot(
+                google::protobuf::io::CodedOutputStream& stream) const
+{
+    // dump into protobuf
+    SessionsProto::Sessions sessionsProto;
+    for (auto it = sessions.begin(); it != sessions.end(); ++it) {
+        SessionsProto::Session& session = *sessionsProto.add_session();
+        session.set_client_id(it->first);
+        session.set_first_outstanding_rpc(it->second.firstOutstandingRPC);
+        for (auto it2 = it->second.responses.begin();
+             it2 != it->second.responses.end();
+             ++it2) {
+            SessionsProto::Response& response = *session.add_rpc_response();
+            response.set_rpc_number(it2->first);
+            *response.mutable_response() = it2->second;
+        }
+    }
+
+    // write protobuf to stream
+    int size = sessionsProto.ByteSize();
+    stream.WriteLittleEndian32(size);
+    sessionsProto.SerializeWithCachedSizes(&stream);
+}
+
+void
+StateMachine::loadSessionSnapshot(
+                google::protobuf::io::CodedInputStream& stream)
+{
+    // read protobuf from stream
+    bool ok = true;
+    uint32_t numBytes = 0;
+    ok = stream.ReadLittleEndian32(&numBytes);
+    if (!ok)
+        PANIC("couldn't read snapshot");
+    SessionsProto::Sessions sessionsProto;
+    auto limit = stream.PushLimit(numBytes);
+    ok = sessionsProto.MergePartialFromCodedStream(&stream);
+    stream.PopLimit(limit);
+    if (!ok)
+        PANIC("couldn't read snapshot");
+
+    // load from protobuf
+    sessions.clear();
+    for (auto it = sessionsProto.session().begin();
+         it != sessionsProto.session().end();
+         ++it) {
+        Session& session = sessions.insert({it->client_id(), {}})
+                                                        .first->second;
+        session.firstOutstandingRPC = it->first_outstanding_rpc();
+        for (auto it2 = it->rpc_response().begin();
+             it2 != it->rpc_response().end();
+             ++it2) {
+            session.responses.insert({it2->rpc_number(), it2->response()});
+        }
+    }
+}
+
+
 bool
 StateMachine::shouldTakeSnapshot(uint64_t lastIncludedIndex) const
 {
@@ -140,6 +200,7 @@ StateMachine::takeSnapshot(uint64_t lastIncludedIndex,
         PANIC("Couldn't fork: %s", strerror(errno));
     } else if (pid == 0) { // child
         usleep(stateMachineChildSleepMs * 1000); // for testing purposes
+        dumpSessionSnapshot(writer->getStream());
         tree.dumpSnapshot(writer->getStream());
         // Flush the changes to the snapshot file before exiting.
         writer->flushToOS();
@@ -205,6 +266,7 @@ StateMachine::applyThreadMain()
                 case Consensus::Entry::SNAPSHOT:
                     NOTICE("Loading snapshot through entry %lu into "
                            "state machine", entry.entryId);
+                    loadSessionSnapshot(entry.snapshotReader->getStream());
                     tree.loadSnapshot(entry.snapshotReader->getStream());
                     break;
             }
