@@ -77,7 +77,8 @@ StateMachine::getResponse(const PC::ExactlyOnceRPCInfo& rpcInfo,
     std::unique_lock<std::mutex> lockGuard(mutex);
     auto sessionIt = sessions.find(rpcInfo.client_id());
     if (sessionIt == sessions.end()) {
-        WARNING("Client session expired but client still active");
+        WARNING("Client %lu session expired but client still active",
+                rpcInfo.client_id());
         return false;
     }
     const Session& session = sessionIt->second;
@@ -86,6 +87,8 @@ StateMachine::getResponse(const PC::ExactlyOnceRPCInfo& rpcInfo,
         // The response for this RPC has already been removed: the client is
         // not waiting for it. This request is just a duplicate that is safe to
         // drop.
+        WARNING("Client %lu asking for discarded response to RPC %lu",
+                rpcInfo.client_id(), rpcInfo.rpc_number());
         return false;
     }
     response = responseIt->second;
@@ -131,13 +134,13 @@ StateMachine::apply(uint64_t entryId, const std::string& data)
     }
 
     Session& session = sessions[rpcInfo.client_id()];
-    if (session.firstOutstandingRPC < rpcInfo.rpc_number())
-        session.firstOutstandingRPC = rpcInfo.rpc_number();
+    if (session.firstOutstandingRPC < rpcInfo.first_outstanding_rpc())
+        session.firstOutstandingRPC = rpcInfo.first_outstanding_rpc();
 
     // Discard unneeded responses in session
     auto it = session.responses.begin();
     while (it != session.responses.end()) {
-        if (it->first < rpcInfo.first_outstanding_rpc())
+        if (it->first < session.firstOutstandingRPC)
             it = session.responses.erase(it);
         else
             ++it;
