@@ -18,50 +18,34 @@ a single server at the beginning of time when setting up a new cluster. This
 script will seed the first server's configuration with its own address. From
 there, you should use the cluster reconfiguration mechanism to grow the cluster
 to the desired size.
+
+Usage:
+  initlog.py --serverid <id> --address <address> --storage <path>
+  initlog.py (-h | --help)
+
+Options:
+  -h --help            Show this help message and exit.
+  --serverid=<id>      Numeric ID of the first server in the cluster. Make
+                       something up, but it better be unique. 1 is a good
+                       choice.
+  --address=<address>  Network address at which other servers will be able to
+                       contact this server, e.g., 192.168.0.1:61023.
+  --storage=<path>     Filesystem path at which the log and snapshots will be
+                       stored. Set this the same as in your config file.
 """
 
 from __future__ import print_function
-from optparse import OptionParser
+from docopt import docopt
 import glob
 import hashlib
 import os
 import sys
 
 if __name__ == '__main__':
-    parser = OptionParser(description= __doc__)
-    parser.add_option('--serverid', type=int,
-            metavar='ID', dest='server_id',
-            help='Numeric ID of the first server in the cluster. '
-                 'Make something up, but it better be unique. '
-                 '1 is a good choice. (required)')
-    parser.add_option('--address', metavar='ADDRESS',
-            dest='address',
-            help='Network address at which other servers will be able to '
-                 'contact this server, e.g., 192.168.0.1:61023. (required)')
-    parser.add_option('--storage', metavar='PATH',
-            dest='storagePath',
-            help='Filesystem path at which the log and snapshots will be '
-                 'stored. Set this the same as in your config file. '
-                 '(required)')
-    (options, args) = parser.parse_args()
-
-    def options_error(msg):
-        parser.print_help(sys.stderr)
-        print(file=sys.stderr)
-        print('Error: %s' % msg, file=sys.stderr)
-        sys.exit(1)
-
-    if args:
-        options_error("Didn't understand %s" % str(args))
-    server_id = options.server_id
-    if server_id is None:
-        options_error('server_id not specified')
-    address = options.address
-    if address is None:
-        options_error('address not specified')
-    storagePath = options.storagePath
-    if storagePath is None:
-        options_error('storagePath not specified')
+    arguments = docopt(__doc__)
+    server_id = int(arguments['--serverid'])
+    address = arguments['--address']
+    storagePath = arguments['--storage']
 
     if (glob.glob('%s/*' % storagePath)):
         print('Error: files found in storagePath, exiting', file=sys.stderr)
