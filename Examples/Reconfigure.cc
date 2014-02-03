@@ -142,4 +142,9 @@ main(int argc, char** argv)
     }
 
     printConfiguration(cluster.getConfiguration());
+
+    if (result.status == ConfigurationResult::OK)
+        return 0;
+    else
+        return 1;
 }
