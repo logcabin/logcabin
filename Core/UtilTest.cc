@@ -23,9 +23,11 @@ namespace Util {
 namespace {
 
 TEST(CoreUtilTest, downCast) {
+#if !NDEBUG
     EXPECT_DEATH(downCast<uint8_t>(256), "");
     EXPECT_DEATH(downCast<int8_t>(192), "");
     EXPECT_DEATH(downCast<uint8_t>(-10), "");
+#endif
     uint8_t x = downCast<uint8_t>(55UL);
     EXPECT_EQ(55, x);
 }

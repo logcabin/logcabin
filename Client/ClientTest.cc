@@ -31,6 +31,7 @@ namespace {
 using Core::ProtoBuf::fromString;
 using Core::StringUtil::format;
 
+#if DEBUG
 class ClientClusterTest : public ::testing::Test {
   public:
     typedef Client::LeaderRPCMock::OpCode OpCode;
@@ -62,6 +63,8 @@ class ClientClusterTest : public ::testing::Test {
 TEST_F(ClientClusterTest, constructor) {
     // TODO(ongaro): test
 }
+
+#endif /* DEBUG */
 
 // TODO(ongaro): test getConfiguration, setConfiguraton
 

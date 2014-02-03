@@ -109,7 +109,9 @@ Loop::Loop()
     , safeToLock()
     , unlocked()
 {
-    assert(LibEvent::initialized);
+    if (!LibEvent::initialized) {
+        PANIC("LibEvent not initialized");
+    }
     base = qualify(event_base_new());
     if (base == NULL) {
         PANIC("event_base_new failed: "
