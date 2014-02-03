@@ -18,6 +18,7 @@
 #include <event2/util.h>
 #include <limits>
 
+#include "Core/Debug.h"
 #include "Core/Random.h"
 #include "Event/Internal.h"
 
@@ -34,7 +35,8 @@ template<typename T>
 T
 getRandomBytes()
 {
-    assert(LibEvent::initialized);
+    if (!LibEvent::initialized)
+        PANIC("LibEvent not initialized");
 
     T buf;
     evutil_secure_rng_get_bytes(&buf, sizeof(buf));

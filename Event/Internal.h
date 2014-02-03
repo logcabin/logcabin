@@ -56,6 +56,9 @@ typedef short EventMask; // NOLINT
  * libevent properly. This boolean allows those files to create a build-time
  * dependency on this file and Internal.cc. It will always have the value
  * true.
+ * \warning
+ *      Be sure to avoid the obvious usage of assert(LibEvent::initialized),
+ *      since that'll get compiled out for NDEBUG builds!
  */
 extern const bool initialized;
 
