@@ -16,24 +16,37 @@
 """
 This runs some basic tests against a LogCabin cluster.
 
-To run the servers through wrapper programs like valgrind or eatmydata, set the
-SMOKETEST_WRAPPER environment variable accordingly.
+Usage:
+  smoketest.py [options]
+  smoketest.py (-h | --help)
+
+Options:
+  -h --help            Show this help message and exit
+  --client=<cmd>       Client binary to execute
+                       [default: build/Examples/SmokeTest]
+  --reconf=<opts>      Additional options to pass through to the Reconfigure
+                       binary. For example, you can pass the cluster name here.
+                       [default: '']
+  --servers=<num>      Number of servers [default: 5]
+  --timeout=<seconds>  Number of seconds to wait for client to complete before
+                       exiting with an error [default: 10]
 """
 
 from __future__ import print_function, division
 from common import sh, captureSh, Sandbox, smokehosts
+from docopt import docopt
 import os
 import subprocess
 import time
 
-def run(num_servers = None, # default 5
-        client_command = 'build/Examples/SmokeTest',
-        timeout = 10):
+def main():
+    arguments = docopt(__doc__)
+    client_command = arguments['--client']
+    num_servers = int(arguments['--servers'])
+    reconf_opts = arguments['--reconf']
+    timeout = int(arguments['--timeout'])
 
-    if num_servers is None:
-        num_servers = min(5, len(smokehosts))
     server_ids = range(1, num_servers + 1)
-
     with Sandbox() as sandbox:
         sh('rm -rf smoketeststorage/')
         sh('rm -f debug/*')
@@ -46,16 +59,14 @@ def run(num_servers = None, # default 5
         for server_id in server_ids:
             host = smokehosts[server_id - 1]
             command = 'build/LogCabin --id %d --config smoketest.conf' % server_id
-            if 'SMOKETEST_WRAPPER' in os.environ:
-                command = '%s %s' % (os.environ['SMOKETEST_WRAPPER'], command)
             print('Starting %s on %s' % (command, smokehosts[server_id - 1][0]))
             sandbox.rsh(smokehosts[server_id - 1][0], command, bg=True,
                         stderr=open('debug/%d' % server_id, 'w'))
             sandbox.checkFailures()
 
         print('Growing cluster')
-        sh('build/Examples/Reconfigure %s' %
-           ' '.join([h[0] for h in smokehosts]))
+        sh('build/Examples/Reconfigure %s %s' %
+           (reconf_opts, ' '.join([h[0] for h in smokehosts])))
 
         print('Starting %s on localhost' % client_command)
         client = sandbox.rsh('localhost', client_command, bg=True,
@@ -69,4 +80,4 @@ def run(num_servers = None, # default 5
                 raise Exception('timeout exceeded')
 
 if __name__ == '__main__':
-    run()
+    main()
