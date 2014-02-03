@@ -2003,6 +2003,7 @@ RaftConsensus::startNewElection()
     if (!configuration->hasVote(configuration->localServer)) {
         // Don't have a configuration or not part of the current configuration:
         // go back to sleep.
+        setElectionTimer();
         return;
     }
     if (state == State::FOLLOWER) {
