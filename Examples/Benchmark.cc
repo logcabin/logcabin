@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 Stanford University
+/* Copyright (c) 2012-2014 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -15,7 +15,7 @@
 
 /**
  * \file
- * This is a basic end-to-end test of LogCabin.
+ * This is a basic latency/bandwidth benchmark of LogCabin.
  */
 
 #include <cassert>
@@ -40,16 +40,14 @@ class OptionParser {
         : argc(argc)
         , argv(argv)
         , cluster("logcabin:61023")
-        , mock(false)
     {
         while (true) {
             static struct option longOptions[] = {
                {"cluster",  required_argument, NULL, 'c'},
-               {"mock",  no_argument, NULL, 'm'},
                {"help",  no_argument, NULL, 'h'},
                {0, 0, 0, 0}
             };
-            int c = getopt_long(argc, argv, "c:hm", longOptions, NULL);
+            int c = getopt_long(argc, argv, "c:h", longOptions, NULL);
 
             // Detect the end of the options.
             if (c == -1)
@@ -62,9 +60,6 @@ class OptionParser {
                 case 'h':
                     usage();
                     exit(0);
-                case 'm':
-                    mock = true;
-                    break;
                 case '?':
                 default:
                     // getopt_long already printed an error message.
@@ -82,16 +77,11 @@ class OptionParser {
                   << "(default: logcabin:61023)" << std::endl;
         std::cout << "  -h, --help              "
                   << "Print this usage information" << std::endl;
-        std::cout << "  -m, --mock              "
-                  << "Instead of connecting to a LogCabin cluster, "
-                  << "fake it with a local, in-memory implementation."
-                  << std::endl;
     }
 
     int& argc;
     char**& argv;
     std::string cluster;
-    bool mock;
 };
 
 } // anonymous namespace
@@ -100,8 +90,7 @@ int
 main(int argc, char** argv)
 {
     OptionParser options(argc, argv);
-    Cluster cluster = options.mock ? Cluster(Cluster::FOR_TESTING)
-                                   : Cluster(options.cluster);
+    Cluster cluster = Cluster(options.cluster);
 
     Tree tree = cluster.getTree();
     tree.makeDirectoryEx("/etc");

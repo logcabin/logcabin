@@ -3,6 +3,10 @@ Import('env')
 libs = [ "pthread", "protobuf", "rt", "cryptopp",
          "event_core", "event_pthreads" ]
 
+env.Program("Benchmark",
+            ["Benchmark.cc", "#build/liblogcabin.a"],
+            LIBS = libs)
+
 env.Program("HelloWorld",
             ["HelloWorld.cc", "#build/liblogcabin.a"],
             LIBS = libs)
