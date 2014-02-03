@@ -126,16 +126,6 @@ SimpleFileLog::readMetadata(const std::string& filename,
     std::string error = fileToProto(dir, filename, metadata);
     if (!error.empty())
         return error;
-    for (uint64_t entryId = metadata.entries_start();
-         entryId <= metadata.entries_end();
-         ++entryId) {
-        Protocol::Raft::Entry entry;
-        error = fileToProto(dir, format("%016lx", entryId), entry);
-        if (!error.empty()) {
-            return format("Could not parse file %s/%016lx: %s",
-                          dir.path.c_str(), entryId, error.c_str());
-        }
-    }
     return "";
 }
 
