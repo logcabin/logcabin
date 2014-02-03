@@ -39,21 +39,26 @@ class OptionParser {
     OptionParser(int& argc, char**& argv)
         : argc(argc)
         , argv(argv)
+        , cluster("logcabin:61023")
         , mock(false)
     {
         while (true) {
             static struct option longOptions[] = {
+               {"cluster",  required_argument, NULL, 'c'},
                {"mock",  no_argument, NULL, 'm'},
                {"help",  no_argument, NULL, 'h'},
                {0, 0, 0, 0}
             };
-            int c = getopt_long(argc, argv, "hm", longOptions, NULL);
+            int c = getopt_long(argc, argv, "c:hm", longOptions, NULL);
 
             // Detect the end of the options.
             if (c == -1)
                 break;
 
             switch (c) {
+                case 'c':
+                    cluster = optarg;
+                    break;
                 case 'h':
                     usage();
                     exit(0);
@@ -73,9 +78,12 @@ class OptionParser {
         std::cout << "Usage: " << argv[0] << " [--mock]"
                   << std::endl;
         std::cout << "Options: " << std::endl;
-        std::cout << "  -h, --help          "
+        std::cout << "  -c, --cluster <address> "
+                  << "The network address of the LogCabin cluster "
+                  << "(default: logcabin:61023)" << std::endl;
+        std::cout << "  -h, --help              "
                   << "Print this usage information" << std::endl;
-        std::cout << "  -m, --mock          "
+        std::cout << "  -m, --mock              "
                   << "Instead of connecting to a LogCabin cluster, "
                   << "fake it with a local, in-memory implementation."
                   << std::endl;
@@ -83,6 +91,7 @@ class OptionParser {
 
     int& argc;
     char**& argv;
+    std::string cluster;
     bool mock;
 };
 
@@ -93,7 +102,7 @@ main(int argc, char** argv)
 {
     OptionParser options(argc, argv);
     Cluster cluster = options.mock ? Cluster(Cluster::FOR_TESTING)
-                                   : Cluster("logcabin:61023");
+                                   : Cluster(options.cluster);
 
     Tree tree = cluster.getTree();
     tree.makeDirectoryEx("/etc");

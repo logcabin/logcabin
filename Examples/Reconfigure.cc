@@ -54,12 +54,12 @@ class OptionParser {
                 break;
 
             switch (c) {
-                case 'h':
-                    usage();
-                    exit(0);
                 case 'c':
                     cluster = optarg;
                     break;
+                case 'h':
+                    usage();
+                    exit(0);
                 case '?':
                 default:
                     // getopt_long already printed an error message.
@@ -83,11 +83,11 @@ class OptionParser {
         std::cout << "Usage: " << argv[0] << " [options] <servers>"
                   << std::endl;
         std::cout << "Options: " << std::endl;
-        std::cout << "  -h, --help          "
-                  << "Print this usage information" << std::endl;
         std::cout << "  -c, --cluster <address> "
-                  << "The network address of the LogCabin cluster"
+                  << "The network address of the LogCabin cluster "
                   << "(default: logcabin:61023)" << std::endl;
+        std::cout << "  -h, --help              "
+                  << "Print this usage information" << std::endl;
     }
 
     int& argc;

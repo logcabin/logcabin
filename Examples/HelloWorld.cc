@@ -14,17 +14,77 @@
  */
 
 #include <cassert>
+#include <getopt.h>
 #include <iostream>
 
 #include "Client/Client.h"
 
+namespace {
+
 using LogCabin::Client::Cluster;
 using LogCabin::Client::Tree;
+
+/**
+ * Parses argv for the main function.
+ */
+class OptionParser {
+  public:
+    OptionParser(int& argc, char**& argv)
+        : argc(argc)
+        , argv(argv)
+        , cluster("logcabin:61023")
+    {
+        while (true) {
+            static struct option longOptions[] = {
+               {"cluster",  required_argument, NULL, 'c'},
+               {"help",  no_argument, NULL, 'h'},
+               {0, 0, 0, 0}
+            };
+            int c = getopt_long(argc, argv, "c:h", longOptions, NULL);
+
+            // Detect the end of the options.
+            if (c == -1)
+                break;
+
+            switch (c) {
+                case 'c':
+                    cluster = optarg;
+                    break;
+                case 'h':
+                    usage();
+                    exit(0);
+                case '?':
+                default:
+                    // getopt_long already printed an error message.
+                    usage();
+                    exit(1);
+            }
+        }
+    }
+
+    void usage() {
+        std::cout << "Usage: " << argv[0] << " [options] <servers>"
+                  << std::endl;
+        std::cout << "Options: " << std::endl;
+        std::cout << "  -c, --cluster <address> "
+                  << "The network address of the LogCabin cluster "
+                  << "(default: logcabin:61023)" << std::endl;
+        std::cout << "  -h, --help              "
+                  << "Print this usage information" << std::endl;
+    }
+
+    int& argc;
+    char**& argv;
+    std::string cluster;
+};
+
+} // anonymous namespace
 
 int
 main(int argc, char** argv)
 {
-    Cluster cluster("logcabin:61023");
+    OptionParser options(argc, argv);
+    Cluster cluster(options.cluster);
     Tree tree = cluster.getTree();
     tree.makeDirectoryEx("/etc");
     tree.writeEx("/etc/passwd", "ha");
