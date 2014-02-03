@@ -44,6 +44,8 @@ def main():
     client_command = arguments['--client']
     num_servers = int(arguments['--servers'])
     reconf_opts = arguments['--reconf']
+    if reconf_opts == "''":
+        reconf_opts = ""
     timeout = int(arguments['--timeout'])
 
     server_ids = range(1, num_servers + 1)
