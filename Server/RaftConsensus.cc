@@ -749,7 +749,9 @@ void
 RaftConsensus::init()
 {
     std::unique_lock<Mutex> lockGuard(mutex);
+#if DEBUG
     mutex.callback = std::bind(&Invariants::checkAll, &invariants);
+#endif
     // TODO(ongaro): uhh, how are server ID's assigned? I don't think this
     // makes sense with reconfiguration.
     NOTICE("My server ID is %lu", serverId);
