@@ -68,7 +68,7 @@ def main():
 
         print('Growing cluster')
         sh('build/Examples/Reconfigure %s %s' %
-           (reconf_opts, ' '.join([h[0] for h in smokehosts])))
+           (reconf_opts, ' '.join([h[0] for h in smokehosts[:num_servers]])))
 
         print('Starting %s on localhost' % client_command)
         client = sandbox.rsh('localhost', client_command, bg=True,
