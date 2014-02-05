@@ -42,7 +42,7 @@ env.Prepend(CXXFLAGS = [
 if env["BUILDTYPE"] == "DEBUG":
     env.Append(CPPFLAGS = [ "-g", "-DDEBUG" ])
 elif env["BUILDTYPE"] == "RELEASE":
-    env.Append(CPPFLAGS = "-DNDEBUG")
+    env.Append(CPPFLAGS = [ "-DNDEBUG", "-O2" ])
 else:
     print "Error BUILDTYPE must be RELEASE or DEBUG"
     sys.exit(-1)
