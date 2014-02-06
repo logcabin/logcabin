@@ -76,7 +76,7 @@ fileToProto(const File& dir, const std::string& path,
     return "";
 }
 
-void
+FilesystemUtil::File
 protoToFile(const google::protobuf::Message& in,
             const File& dir, const std::string& path)
 {
@@ -109,15 +109,41 @@ protoToFile(const google::protobuf::Message& in,
               file.path.c_str(), strerror(errno));
     }
 
-    // sync file contents to disk
-    FilesystemUtil::fsync(file);
-
-    // sync directory entry to disk (needed if we created fd)
-    FilesystemUtil::fsync(dir);
+    return file;
 }
 }
 
-////////// Log //////////
+////////// SimpleFileLog::Sync //////////
+SimpleFileLog::Sync::Sync(std::unique_ptr<Log::Sync> memSync)
+    : Log::Sync(memSync->firstEntryId, memSync->lastEntryId)
+    , mutex()
+    , fds()
+{
+}
+
+std::string
+SimpleFileLog::Sync::wait()
+{
+    std::unique_lock<std::mutex> lockGuard(mutex);
+    std::string error;
+    for (auto it = fds.begin(); it != fds.end(); ++it) {
+        if (::fsync(it->first) != 0) {
+            error += format("Could not fsync fd %d for "
+                            "log entries %lu-%lu: %s. ",
+                            it->first, firstEntryId, lastEntryId,
+                            strerror(errno));
+        } else if (it->second && ::close(it->first) != 0) {
+            error += format("Could not close fd %d for "
+                            "log entries %lu-%lu: %s. ",
+                            it->first, firstEntryId, lastEntryId,
+                            strerror(errno));
+        }
+    }
+    fds.clear();
+    return error;
+}
+
+////////// SimpleFileLog //////////
 
 std::string
 SimpleFileLog::readMetadata(const std::string& filename,
@@ -190,8 +216,7 @@ SimpleFileLog::SimpleFileLog(const FilesystemUtil::File& parentDir)
     for (uint64_t id = metadata.entries_start();
          id <= metadata.entries_end();
          ++id) {
-        uint64_t entryId = Log::append(read(format("%016lx", id)));
-        assert(entryId == id);
+        Log::append(read(format("%016lx", id)))->wait();
     }
 
     Log::metadata = metadata.raft_metadata();
@@ -204,13 +229,19 @@ SimpleFileLog::~SimpleFileLog()
 {
 }
 
-uint64_t
+std::unique_ptr<Log::Sync>
 SimpleFileLog::append(const Entry& entry)
 {
-    uint64_t entryId = Log::append(entry);
-    protoToFile(entry, dir, format("%016lx", entryId));
-    updateMetadata();
-    return entryId;
+    std::unique_ptr<SimpleFileLog::Sync> sync(
+        new SimpleFileLog::Sync(Log::append(entry)));
+    uint64_t entryId = sync->firstEntryId;
+    FilesystemUtil::File file =
+        protoToFile(entry, dir, format("%016lx", entryId));
+    FilesystemUtil::File mdfile = updateMetadataCallerSync();
+    sync->fds.push_back({file.release(), true});
+    sync->fds.push_back({dir.fd, false});
+    sync->fds.push_back({mdfile.release(), true});
+    return std::move(sync);
 }
 
 void
@@ -240,15 +271,24 @@ SimpleFileLog::truncateSuffix(uint64_t lastEntryId)
 void
 SimpleFileLog::updateMetadata()
 {
+    // sync file to disk
+    FilesystemUtil::fsync(updateMetadataCallerSync());
+    // sync directory entry to disk (needed if we created file)
+    FilesystemUtil::fsync(dir);
+}
+
+FilesystemUtil::File
+SimpleFileLog::updateMetadataCallerSync()
+{
     Log::updateMetadata();
     *metadata.mutable_raft_metadata() = Log::metadata;
     metadata.set_entries_start(Log::getLogStartIndex());
     metadata.set_entries_end(Log::getLastLogIndex());
     metadata.set_version(metadata.version() + 1);
     if (metadata.version() % 2 == 1) {
-        protoToFile(metadata, dir, "metadata1");
+        return protoToFile(metadata, dir, "metadata1");
     } else {
-        protoToFile(metadata, dir, "metadata2");
+        return protoToFile(metadata, dir, "metadata2");
     }
 }
 

@@ -41,7 +41,9 @@ class ServerRaftLogTest : public ::testing::Test {
 
 TEST_F(ServerRaftLogTest, basic)
 {
-    EXPECT_EQ(1U, log.append(sampleEntry));
+    std::unique_ptr<Log::Sync> sync = log.append(sampleEntry);
+    EXPECT_EQ(1U, sync->firstEntryId);
+    EXPECT_EQ(1U, sync->lastEntryId);
     Log::Entry entry = log.getEntry(1);
     EXPECT_EQ(40U, entry.term());
     EXPECT_EQ("foo", entry.data());
@@ -49,14 +51,17 @@ TEST_F(ServerRaftLogTest, basic)
 
 TEST_F(ServerRaftLogTest, append)
 {
-    EXPECT_EQ(1U, log.append(sampleEntry));
+    std::unique_ptr<Log::Sync> sync = log.append(sampleEntry);
+    EXPECT_EQ(1U, sync->firstEntryId);
     log.truncatePrefix(10);
-    EXPECT_EQ(10U, log.append(sampleEntry));
+    sync = log.append(sampleEntry);
+    EXPECT_EQ(10U, sync->firstEntryId);
 }
 
 TEST_F(ServerRaftLogTest, getEntry)
 {
-    Log::Entry entry = log.getEntry(log.append(sampleEntry));
+    log.append(sampleEntry);
+    Log::Entry entry = log.getEntry(1);
     EXPECT_EQ(40U, entry.term());
     EXPECT_EQ("foo", entry.data());
     EXPECT_THROW(log.getEntry(0), std::out_of_range);
@@ -66,7 +71,8 @@ TEST_F(ServerRaftLogTest, getEntry)
     log.append(sampleEntry);
     log.truncatePrefix(2);
     EXPECT_THROW(log.getEntry(1), std::out_of_range);
-    Log::Entry entry2 = log.getEntry(log.append(sampleEntry));
+    log.append(sampleEntry);
+    Log::Entry entry2 = log.getEntry(2);
     EXPECT_EQ("bar", entry2.data());
 }
 

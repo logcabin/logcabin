@@ -15,6 +15,7 @@
 
 #include <cinttypes>
 #include <deque>
+#include <memory>
 #include <string>
 
 #include "build/Protocol/Raft.pb.h"
@@ -33,6 +34,43 @@ namespace RaftConsensusInternal {
 
 class Log {
   public:
+    /**
+     * This class provides an asynchronous interface
+     * for flushing log entries to stable storage.
+     * It's returned by Log::append().
+     *
+     * This class doesn't do anything since it's used with a purely in-memory
+     * log, but subclasses do override the wait() method.
+     */
+    class Sync {
+      protected:
+        Sync(uint64_t firstEntryId,
+             uint64_t lastEntryId)
+            : firstEntryId(firstEntryId)
+            , lastEntryId(lastEntryId) {
+        }
+      public:
+        virtual ~Sync() {}
+        /**
+         * Wait for the log entries to be durable.
+         * It is safe to call this method on the same object from multiple
+         * threads concurrently.
+         * \return
+         *      A string describing any errors that occurred, or the empty
+         *      string.
+         */
+        virtual std::string wait() { return ""; }
+        /**
+         * The index of the first log entry that is being appended.
+         */
+        const uint64_t firstEntryId;
+        /**
+         * The index of the last log entry that is being appended.
+         */
+        const uint64_t lastEntryId;
+        friend class Log;
+    };
+
 
     typedef Protocol::Raft::Entry Entry;
 
@@ -42,11 +80,11 @@ class Log {
     /**
      * Append a new entry to the log.
      * \param entry
-     *      Its entryId is ignored; a new one is assigned and returned.
+     *      Entry to place at the end of the log.
      * \return
-     *      The newly appended entry's entryId.
+     *      Object that can be used to wait for the entry to be durable.
      */
-    virtual uint64_t append(const Entry& entry);
+    virtual std::unique_ptr<Sync> append(const Entry& entry);
 
     /**
      * Look up an entry by ID.

@@ -13,6 +13,10 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <mutex>
+#include <string>
+#include <vector>
+
 #include "build/Server/SimpleFileLog.pb.h"
 #include "Storage/FilesystemUtil.h"
 #include "Server/RaftLog.h"
@@ -29,16 +33,32 @@ class Globals;
 namespace RaftConsensusInternal {
 
 class SimpleFileLog : public Log {
-  public:
+    class Sync : public Log::Sync {
+      public:
+        explicit Sync(std::unique_ptr<Log::Sync> memSync);
+        std::string wait();
+        /**
+         * Protects fds to avoid double-close.
+         */
+        std::mutex mutex;
+        /**
+         * Set of file descriptors that are fsynced and closed on wait().
+         * If the bool is true, close it too.
+         */
+        std::vector<std::pair<int, bool>> fds;
+    };
 
+  public:
     typedef Protocol::Raft::Entry Entry;
 
     explicit SimpleFileLog(const Storage::FilesystemUtil::File& parentDir);
     ~SimpleFileLog();
-    uint64_t append(const Entry& entry);
+    virtual std::unique_ptr<Log::Sync> append(const Entry& entry);
     void truncatePrefix(uint64_t firstEntryId);
     void truncateSuffix(uint64_t lastEntryId);
+
     void updateMetadata();
+    Storage::FilesystemUtil::File updateMetadataCallerSync();
 
 
   protected:

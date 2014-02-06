@@ -70,6 +70,7 @@ operator<<(std::ostream& os, const Server& server)
 LocalServer::LocalServer(uint64_t serverId, RaftConsensus& consensus)
     : Server(serverId)
     , consensus(consensus)
+    , lastSyncedIndex(0)
 {
 }
 
@@ -85,6 +86,7 @@ LocalServer::beginRequestVote()
 void
 LocalServer::beginLeadership()
 {
+    lastSyncedIndex = consensus.log->getLastLogIndex();
 }
 
 void
@@ -101,7 +103,7 @@ LocalServer::getLastAckEpoch() const
 uint64_t
 LocalServer::getLastAgreeIndex() const
 {
-    return consensus.log->getLastLogIndex();
+    return lastSyncedIndex;
 }
 
 bool
@@ -713,6 +715,7 @@ RaftConsensus::RaftConsensus(Globals& globals)
     , exiting(false)
     , numPeerThreads(0)
     , log()
+    , diskQueue()
     , configuration()
     , configurationManager()
     , currentTerm(0)
@@ -727,6 +730,7 @@ RaftConsensus::RaftConsensus(Globals& globals)
     , votedFor(0)
     , currentEpoch(0)
     , startElectionAt(TimePoint::max())
+    , leaderDiskThread()
     , timerThread()
     , stepDownThread()
     , invariants(*this)
@@ -736,6 +740,8 @@ RaftConsensus::RaftConsensus(Globals& globals)
 RaftConsensus::~RaftConsensus()
 {
     exit();
+    if (leaderDiskThread.joinable())
+        leaderDiskThread.join();
     if (timerThread.joinable())
         timerThread.join();
     if (stepDownThread.joinable())
@@ -743,6 +749,11 @@ RaftConsensus::~RaftConsensus()
     std::unique_lock<Mutex> lockGuard(mutex);
     while (numPeerThreads > 0)
         stateChanged.wait(lockGuard);
+    // issue any outstanding disk flushes
+    while (!diskQueue.empty()) {
+        diskQueue.front()->wait();
+        diskQueue.pop_front();
+    }
 }
 
 void
@@ -804,6 +815,8 @@ RaftConsensus::init()
 
     stepDown(currentTerm);
     if (startThreads) {
+        leaderDiskThread = std::thread(&RaftConsensus::leaderDiskThreadMain,
+                                       this);
         timerThread = std::thread(&RaftConsensus::timerThreadMain,
                                       this);
         stepDownThread = std::thread(&RaftConsensus::stepDownThreadMain,
@@ -1384,6 +1397,49 @@ operator<<(std::ostream& os, const RaftConsensus& raft)
 //// RaftConsensus private methods that MUST acquire the lock
 
 void
+RaftConsensus::leaderDiskThreadMain()
+{
+    std::unique_lock<Mutex> lockGuard(mutex);
+    Core::ThreadId::setName("LeaderDisk");
+    // Each iteration of this loop syncs one append to disk.
+    while (!exiting) {
+        if (state == State::LEADER && !diskQueue.empty()) {
+            uint64_t term = currentTerm;
+            uint64_t firstEntryId;
+            uint64_t lastEntryId;
+            std::string error;
+            {
+                std::unique_ptr<Log::Sync>& sync = diskQueue.front();
+                firstEntryId = sync->firstEntryId;
+                lastEntryId = sync->lastEntryId;
+                Core::MutexUnlock<Mutex> unlockGuard(lockGuard);
+                error = sync->wait();
+            }
+            if (state == State::LEADER && currentTerm == term) {
+                if (!error.empty()) {
+                    PANIC("Error syncing log entries %lu-%lu to disk: %s",
+                          firstEntryId, lastEntryId, error.c_str());
+                }
+                configuration->localServer->lastSyncedIndex = lastEntryId;
+                diskQueue.pop_front();
+                advanceCommittedId();
+            } else {
+                if (!error.empty()) {
+                    WARNING("Started syncing log entries %lu-%lu to disk in "
+                            "the background as a leader, but then lost "
+                            "leadership, so who knows what was actually "
+                            "synced. Errors were encountered but are probably "
+                            "of no consequence: %s",
+                            firstEntryId, lastEntryId, error.c_str());
+                }
+            }
+            continue;
+        }
+        stateChanged.wait(lockGuard);
+    }
+}
+
+void
 RaftConsensus::timerThreadMain()
 {
     std::unique_lock<Mutex> lockGuard(mutex);
@@ -1541,7 +1597,6 @@ RaftConsensus::advanceCommittedId()
             *entry.mutable_configuration()->mutable_prev_configuration() =
                 configuration->description.next_configuration();
             append(entry);
-            advanceCommittedId();
             return;
         }
     }
@@ -1551,7 +1606,13 @@ uint64_t
 RaftConsensus::append(const Log::Entry& entry)
 {
     assert(entry.term() != 0);
-    uint64_t entryId = log->append(entry);
+    std::unique_ptr<Log::Sync> sync = log->append(entry);
+    uint64_t entryId = sync->firstEntryId;
+    if (state == State::LEADER) { // defer file sync
+        diskQueue.push_back(std::move(sync));
+    } else { // sync file now
+        sync->wait();
+    }
     if (entry.type() == Protocol::Raft::EntryType::CONFIGURATION)
         configurationManager->add(entryId, entry.configuration());
     stateChanged.notify_all();
@@ -1776,6 +1837,11 @@ RaftConsensus::becomeLeader()
     leaderId = serverId;
     startElectionAt = TimePoint::max();
 
+    // The ordering is pretty important here: First set nextIndex and
+    // lastAgreeIndex for ourselves and each follower, then append the no op.
+    // Otherwise we'll set our localServer's last agree index too high.
+    configuration->forEach(&Server::beginLeadership);
+
     // Append a new entry so that commitment is not delayed indefinitely.
     // Otherwise, if the leader never gets anything to append, it will never
     // return to read-only operations (it can't prove that its committed index
@@ -1784,13 +1850,6 @@ RaftConsensus::becomeLeader()
     entry.set_term(currentTerm);
     entry.set_type(Protocol::Raft::EntryType::NOOP);
     append(entry);
-
-    // The ordering is pretty important here: First set nextIndex and
-    // lastAgreeIndex for each follower, then advance the committed ID.
-    // Otherwise we might advance the committed ID based on bogus values of
-    // nextIndex and lastAgreeIndex.
-    configuration->forEach(&Server::beginLeadership);
-    advanceCommittedId(); // in case localhost forms a quorum
 
     // Outstanding RequestVote RPCs are no longer needed.
     interruptAll();
@@ -1929,7 +1988,6 @@ RaftConsensus::replicateEntry(Log::Entry& entry,
     if (state == State::LEADER) {
         entry.set_term(currentTerm);
         uint64_t entryId = append(entry);
-        advanceCommittedId();
         while (!exiting && currentTerm == entry.term()) {
             if (commitIndex >= entryId) {
                 VERBOSE("replicate succeeded");
@@ -2050,6 +2108,13 @@ RaftConsensus::stepDown(uint64_t newTerm)
     if (startElectionAt == TimePoint::max())
         setElectionTimer();
     interruptAll();
+
+    // Empty the disk queue by flushing all the writes to disk. Don't bother
+    // updating the localServer's lastSyncedIndex, since it doesn't matter.
+    while (!diskQueue.empty()) {
+        diskQueue.front()->wait();
+        diskQueue.pop_front();
+    }
 }
 
 void

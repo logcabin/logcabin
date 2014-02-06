@@ -43,12 +43,13 @@ Log::~Log()
 {
 }
 
-uint64_t
+std::unique_ptr<Log::Sync>
 Log::append(const Entry& entry)
 {
     uint64_t entryId = startId + entries.size();
     entries.push_back(entry);
-    return entryId;
+    return std::unique_ptr<Sync>(
+        new Sync(entryId, entryId));
 }
 
 const Log::Entry&

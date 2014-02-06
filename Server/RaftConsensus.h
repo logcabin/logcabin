@@ -205,6 +205,12 @@ class LocalServer : public Server {
     void scheduleHeartbeat();
     std::ostream& dumpToStream(std::ostream& os) const;
     RaftConsensus& consensus;
+    /**
+     * The index of the last log entry that has been flushed to disk.
+     * Valid for leaders only. Returned by getLastAgreeIndex() and used to
+     * advance the leader's commitIndex.
+     */
+    uint64_t lastSyncedIndex;
 };
 
 /**
@@ -885,6 +891,13 @@ class RaftConsensus : public Consensus {
     //// The following private methods MUST acquire the lock.
 
     /**
+     * Flush log entries to stable storage in the background on leaders.
+     * Once they're flushed, it tries to advance the #commitIndex.
+     * This is the method that #leaderDiskThread executes.
+     */
+    void leaderDiskThreadMain();
+
+    /**
      * Start new elections when it's time to do so. This is the method that
      * #timerThread executes.
      */
@@ -913,9 +926,10 @@ class RaftConsensus : public Consensus {
 
     /**
      * Move forward #commitIndex if possible. Called only on leaders after
-     * receiving RPC responses. If commitIndex changes, this will notify
-     * #stateChanged. It will also change the configuration or step down due to
-     * a configuration change when appropriate.
+     * receiving RPC responses and flushing entries to disk. If commitIndex
+     * changes, this will notify #stateChanged. It will also change the
+     * configuration or step down due to a configuration change when
+     * appropriate.
      *
      * #commitIndex can jump by more than 1 on new leaders, since their
      * #commitIndex may be well out of date until they figure out which log
@@ -923,16 +937,13 @@ class RaftConsensus : public Consensus {
      *
      * \pre
      *      state is LEADER.
+     * TODO(ongaro): rename to advanceCommitIndex
      */
     void advanceCommittedId();
 
     /**
      * Append an entry to the log, set the configuration if this is a
      * configuration entry, and notify #stateChanged.
-     * Any series of append calls should always be followed by a call to
-     * advanceCommittedId(), in case this server forms a quorum by itself. The
-     * append calls should all come before advanceCommittedId(), since
-     * advanceCommittedId() will itself call append in some cases.
      */
     uint64_t append(const Log::Entry& entry);
 
@@ -1151,6 +1162,20 @@ class RaftConsensus : public Consensus {
     std::unique_ptr<Log> log;
 
     /**
+     * Queues writes that #leaderDiskThreadMain should flush to stable storage.
+     * This is always empty for followers and candidates and is only used for
+     * leaders.
+     *
+     * When a server steps down, it blocks on each of these writes and empties
+     * the queue while holding #mutex. This way, followers can assume that all
+     * of their log entries are durable when replying to leaders.
+     *
+     * This queue may only be modified while holding #mutex, but individual
+     * Sync objects may be flushed concurrently without holding the #mutex.
+     */
+    std::deque<std::unique_ptr<Log::Sync>> diskQueue;
+
+    /**
      * Defines the servers that are part of the cluster. See Configuration.
      */
     std::unique_ptr<Configuration> configuration;
@@ -1258,6 +1283,12 @@ class RaftConsensus : public Consensus {
      * as the largest startElectionAt value.
      */
     TimePoint startElectionAt;
+
+    /**
+     * The thread that executes leaderDiskThreadMain() to flush log entries to
+     * stable storage in the background on leaders.
+     */
+    std::thread leaderDiskThread;
 
     /**
      * The thread that executes timerThreadMain() to begin new elections
