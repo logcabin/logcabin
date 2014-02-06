@@ -165,7 +165,6 @@ message RequestVote {
 /**
  * AppendEntries RPC: replicate log entries to a follower.
  */
-// TODO(ongaro): rename to AppendEntries
 message AppendEntries {
     message Request {
         /**

@@ -655,22 +655,6 @@ TEST_F(ServerRaftConsensusTest, getConfiguration_ok)
     EXPECT_EQ(1U, id);
 }
 
-class AppendAndCommit {
-    explicit AppendAndCommit(RaftConsensus& consensus)
-        : consensus(consensus)
-    {
-    }
-    void operator()() {
-        using Core::StringUtil::format;
-        Log::Entry entry;
-        entry.set_term(50);
-        entry.set_data(format("entry%lu",
-                              consensus.log->getLastLogIndex() + 1));
-        consensus.commitIndex = consensus.log->append(entry);
-    }
-    RaftConsensus& consensus;
-};
-
 // TODO(ongaro): getLastCommittedId: low-priority test
 
 TEST_F(ServerRaftConsensusTest, getNextEntry)
