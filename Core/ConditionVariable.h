@@ -21,6 +21,8 @@
 #include <condition_variable>
 #include <functional>
 
+#include "Core/Mutex.h"
+
 #ifndef LOGCABIN_CORE_CONDITIONVARIABLE_H
 #define LOGCABIN_CORE_CONDITIONVARIABLE_H
 

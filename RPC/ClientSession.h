@@ -13,12 +13,12 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <unordered_map>
 
+#include "Core/ConditionVariable.h"
 #include "Event/Timer.h"
 #include "RPC/Address.h"
 #include "RPC/Buffer.h"
@@ -237,7 +237,7 @@ class ClientSession {
      * wait(). It is notified when a new response arrives or the session is
      * disconnected.
      */
-    std::condition_variable responseReceived;
+    Core::ConditionVariable responseReceived;
 
     /**
      * A map from MessageId to Response objects that is used to store the

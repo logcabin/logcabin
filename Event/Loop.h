@@ -17,8 +17,9 @@
 #define LOGCABIN_EVENT_LOOP_H
 
 #include <cinttypes>
-#include <condition_variable>
 #include <mutex>
+
+#include "Core/ConditionVariable.h"
 
 /**
  * This is a container for types that are used in place of the unqualified
@@ -172,12 +173,12 @@ class Loop {
      * happens either because runForever() just reached its safe place or
      * because some other Lock was destroyed.
      */
-    std::condition_variable safeToLock;
+    Core::ConditionVariable safeToLock;
 
     /**
      * Signaled when there are no longer any Locks active.
      */
-    std::condition_variable unlocked;
+    Core::ConditionVariable unlocked;
 
     // Event types are friends, since they need to mess with 'base'.
     friend class File;

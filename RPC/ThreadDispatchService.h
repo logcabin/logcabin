@@ -14,12 +14,12 @@
  */
 
 #include <cinttypes>
-#include <condition_variable>
 #include <mutex>
 #include <queue>
 #include <thread>
 #include <vector>
 
+#include "Core/ConditionVariable.h"
 #include "RPC/ServerRPC.h"
 #include "RPC/Service.h"
 
@@ -104,7 +104,7 @@ class ThreadDispatchService : public Service {
      * Notifies workers that there are available RPCs to process or #exit has
      * been set. To wait on this, one needs to hold #mutex.
      */
-    std::condition_variable conditionVariable;
+    Core::ConditionVariable conditionVariable;
 
     /**
      * A flag to tell workers that they should exit.

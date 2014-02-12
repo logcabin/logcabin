@@ -13,13 +13,13 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <thread>
 #include <unordered_map>
 
 #include "build/Protocol/Client.pb.h"
+#include "Core/ConditionVariable.h"
 #include "Tree/Tree.h"
 
 #ifndef LOGCABIN_SERVER_STATEMACHINE_H
@@ -129,14 +129,14 @@ class StateMachine {
      * Also notified upon exiting.
      * This is used for client threads to wait; see wait().
      */
-    mutable std::condition_variable entriesApplied;
+    mutable Core::ConditionVariable entriesApplied;
 
     /**
      * Notified when shouldTakeSnapshot(lastEntryId) becomes true.
      * Also notified upon exiting.
      * This is used for snapshotThread to wake up only when necessary.
      */
-    mutable std::condition_variable snapshotSuggested;
+    mutable Core::ConditionVariable snapshotSuggested;
 
     /**
      * applyThread sets this to true to signal that the server is shutting
