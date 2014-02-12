@@ -21,9 +21,17 @@
 #include <condition_variable>
 #include <functional>
 
+#ifndef LOGCABIN_CORE_CONDITIONVARIABLE_H
+#define LOGCABIN_CORE_CONDITIONVARIABLE_H
+
+namespace LogCabin {
+namespace Core {
+
 /**
  * A wrapper around std::condition_variable that is useful for testing
- * purposes. You can set a callback to be called when the condition variable is
+ * purposes and works around a bug in libstdc++.
+ *
+ * You can set a callback to be called when the condition variable is
  * waited on; instead of waiting, this callback will be called. This callback
  * can, for example, change some shared state so that the calling thread's
  * condition is satisfied. It also counts how many times the condition variable
@@ -34,12 +42,6 @@
  * std::unique_lock<Mutex>, since normal condition variables may only be used
  * with std::unique_lock<std::mutex>.
  */
-#ifndef LOGCABIN_CORE_CONDITIONVARIABLE_H
-#define LOGCABIN_CORE_CONDITIONVARIABLE_H
-
-namespace LogCabin {
-namespace Core {
-
 class ConditionVariable {
   public:
     ConditionVariable()
@@ -107,7 +109,13 @@ class ConditionVariable {
             callback();
             lockGuard.lock();
         } else {
-            cv.wait_until(lockGuard, abs_time);
+            // Work around overflow in libstdc++, see
+            // http://gcc.gnu.org/bugzilla/show_bug.cgi?id=58931
+            if (abs_time - Clock::now() > std::chrono::hours(1)) {
+                cv.wait_until(lockGuard, Clock::now() + std::chrono::hours(1));
+            } else {
+                cv.wait_until(lockGuard, abs_time);
+            }
         }
     }
 
@@ -133,7 +141,8 @@ class ConditionVariable {
     std::condition_variable cv;
     /**
      * This function will be called with the lock released during every
-     * invocation of wait/wait_until.
+     * invocation of wait/wait_until. No wait will actually occur; this is only
+     * used for unit testing.
      */
     std::function<void()> callback;
   public:
@@ -143,7 +152,8 @@ class ConditionVariable {
     std::atomic<uint64_t> notificationCount;
     /**
      * In the last call to wait_until, the timeout that the caller provided.
-     * This is stored as the number of milliseconds after the
+     * This is used in some unit tests to check that timeouts are set
+     * correctly. It is stored as the number of milliseconds after the
      * clock's epoch. (Since we don't know the Clock in advance, we can't store
      * a time_point here.)
      */
