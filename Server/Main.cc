@@ -34,7 +34,7 @@ class OptionParser {
         : argc(argc)
         , argv(argv)
         , configFilename("logcabin.conf")
-        , serverId(0)
+        , serverId(1)
     {
         while (true) {
             static struct option longOptions[] = {
@@ -80,7 +80,7 @@ class OptionParser {
         std::cout << "  -h, --help          "
                   << "Print this usage information" << std::endl;
         std::cout << "  -c, --config <file> "
-                  << "Write output to <file> "
+                  << "Specify the configuration file "
                   << "(default: logcabin.conf)" << std::endl;
         std::cout << "  -i, --id <id>       "
                   << "Set server id to <id> "
