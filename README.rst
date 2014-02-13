@@ -106,7 +106,7 @@ Now you're almost ready to start the servers. First, initialize one of the
 server's logs with a cluster membership configuration that contains just
 itself::
 
-  scripts/initlog.py --serverid=1 --address=192.168.2.1:61023 --storage=smoketeststorage
+  build/LogCabin --bootstrap --id 1
 
 The server with ID 1 will now have a valid cluster membership configuration in
 its log. At this point, there's only 1 server in the cluster, so only 1 vote is

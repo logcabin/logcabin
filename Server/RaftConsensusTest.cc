@@ -439,6 +439,7 @@ class ServerRaftConsensusTest : public ::testing::Test {
         startThreads = false;
         consensus.reset(new RaftConsensus(globals));
         consensus->serverId = 1;
+        consensus->serverAddress = "127.0.0.1:61023";
         Clock::useMockValue = true;
         Clock::mockValue = Clock::now();
 
@@ -621,6 +622,23 @@ TEST_F(ServerRaftConsensusTest, init_withsnapshot)
 }
 
 // TODO(ongaro): low-priority test: exit
+
+TEST_F(ServerRaftConsensusTest, bootstrapConfiguration)
+{
+    init();
+    consensus->bootstrapConfiguration();
+    EXPECT_EQ(1U, consensus->log->getLastLogIndex());
+    EXPECT_EQ("term: 1 "
+              "type: CONFIGURATION "
+              "configuration { "
+              "  prev_configuration { "
+              "    servers { server_id: 1 address: '127.0.0.1:61023' } "
+              "  } "
+              "} ",
+              consensus->log->getEntry(1));
+    EXPECT_DEATH(consensus->bootstrapConfiguration(),
+                 "Refusing to bootstrap configuration");
+}
 
 TEST_F(ServerRaftConsensusTest, getConfiguration_notleader)
 {

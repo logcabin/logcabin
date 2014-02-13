@@ -41,6 +41,7 @@ Consensus::Entry::~Entry()
 
 Consensus::Consensus()
     : serverId(0)
+    , serverAddress()
 {
 }
 

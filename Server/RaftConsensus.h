@@ -767,6 +767,14 @@ class RaftConsensus : public Consensus {
     void exit();
 
     /**
+     * Initialize the log with a configuration consisting of just this server.
+     * This should be called just once the very first time the very first
+     * server in your cluster is started.
+     * PANICs if any log entries or snapshots already exist.
+     */
+    void bootstrapConfiguration();
+
+    /**
      * Get the current leader's active, committed, simple cluster
      * configuration.
      */

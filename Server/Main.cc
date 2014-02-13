@@ -22,6 +22,7 @@
 #include "Core/Debug.h"
 #include "Core/ThreadId.h"
 #include "Server/Globals.h"
+#include "Server/RaftConsensus.h"
 
 namespace {
 
@@ -35,15 +36,17 @@ class OptionParser {
         , argv(argv)
         , configFilename("logcabin.conf")
         , serverId(1)
+        , bootstrap(false)
     {
         while (true) {
             static struct option longOptions[] = {
+               {"bootstrap",  no_argument, NULL, 'b'},
                {"config",  required_argument, NULL, 'c'},
                {"help",  no_argument, NULL, 'h'},
                {"id",  required_argument, NULL, 'i'},
                {0, 0, 0, 0}
             };
-            int c = getopt_long(argc, argv, "c:hi:", longOptions, NULL);
+            int c = getopt_long(argc, argv, "bc:hi:", longOptions, NULL);
 
             // Detect the end of the options.
             if (c == -1)
@@ -53,6 +56,9 @@ class OptionParser {
                 case 'h':
                     usage();
                     exit(0);
+                case 'b':
+                    bootstrap = true;
+                    break;
                 case 'c':
                     configFilename = optarg;
                     break;
@@ -79,6 +85,10 @@ class OptionParser {
         std::cout << "Options: " << std::endl;
         std::cout << "  -h, --help          "
                   << "Print this usage information" << std::endl;
+        std::cout << "  --bootstrap         "
+                  << "Write a cluster configuration into the very first "
+                  << "server's log and exit. This should only be run once "
+                  << "ever in each cluster" << std::endl;
         std::cout << "  -c, --config <file> "
                   << "Specify the configuration file "
                   << "(default: logcabin.conf)" << std::endl;
@@ -92,6 +102,7 @@ class OptionParser {
     char**& argv;
     std::string configFilename;
     uint64_t serverId;
+    bool bootstrap;
 };
 
 } // anonymous namespace
@@ -110,6 +121,11 @@ main(int argc, char** argv)
     LogCabin::Server::Globals globals;
     globals.config.readFile(options.configFilename.c_str());
     globals.init(options.serverId);
-    globals.run();
+    if (options.bootstrap) {
+        globals.raft->bootstrapConfiguration();
+        NOTICE("Done bootstrapping configuration. Exiting.");
+    } else {
+        globals.run();
+    }
     return 0;
 }

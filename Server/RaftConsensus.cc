@@ -836,6 +836,34 @@ RaftConsensus::exit()
     interruptAll();
 }
 
+void
+RaftConsensus::bootstrapConfiguration()
+{
+    std::unique_lock<Mutex> lockGuard(mutex);
+
+    if (currentTerm != 0 ||
+        log->getLogStartIndex() != 1 ||
+        log->getLastLogIndex() != 0 ||
+        lastSnapshotIndex != 0) {
+        PANIC("Refusing to bootstrap configuration: it looks like a log or "
+              "snapshot already exists.");
+    }
+    stepDown(1); // satisfies invariants assertions
+
+    // Append the configuration entry to the log
+    Log::Entry entry;
+    entry.set_term(1);
+    entry.set_type(Protocol::Raft::EntryType::CONFIGURATION);
+    Protocol::Raft::Configuration& configuration =
+        *entry.mutable_configuration();
+    Protocol::Raft::Server& server =
+        *configuration.mutable_prev_configuration()->add_servers();
+    server.set_server_id(serverId);
+    server.set_address(serverAddress);
+    uint64_t entryId = append(entry);
+    assert(entryId == 1);
+}
+
 RaftConsensus::ClientResult
 RaftConsensus::getConfiguration(
         Protocol::Raft::SimpleConfiguration& currentConfiguration,

@@ -175,6 +175,12 @@ class Consensus {
      * This server's unique ID. Not available until init() is called.
      */
     uint64_t serverId;
+
+    /**
+     * The address that this server is listening on. Not available until init()
+     * is called.
+     */
+    std::string serverAddress;
 };
 
 } // namespace LogCabin::Server

@@ -109,6 +109,7 @@ Globals::init(uint64_t serverId)
             if (error.empty()) {
                 NOTICE("Serving on %s", address.toString().c_str());
                 raft->serverId = i + 1;
+                raft->serverAddress = listenAddresses[i];
                 Core::Debug::processName =
                     Core::StringUtil::format("%lu", raft->serverId);
                 raft->init();

@@ -53,10 +53,9 @@ def main():
         sh('rm -rf smoketeststorage/')
         sh('rm -f debug/*')
         sh('mkdir -p debug')
-        sh('scripts/initlog.py '
-             '--serverid 1 '
-             '--address %s '
-             '--storage smoketeststorage' % smokehosts[0][0])
+        print('Initializing first server\'s log')
+        sh('build/LogCabin --bootstrap --id 1 --config smoketest.conf')
+        print()
 
         for server_id in server_ids:
             host = smokehosts[server_id - 1]
