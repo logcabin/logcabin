@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2013 Stanford University
+/* Copyright (c) 2012-2014 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,14 +14,14 @@
  */
 
 #include <cinttypes>
+#include <deque>
 #include <memory>
 #include <string>
 
-#include "build/Protocol/Raft.pb.h"
-#include "build/Server/RaftLogMetadata.pb.h"
+#include "Server/RaftLog.h"
 
-#ifndef LOGCABIN_SERVER_RAFTLOG_H
-#define LOGCABIN_SERVER_RAFTLOG_H
+#ifndef LOGCABIN_SERVER_MEMORYLOG_H
+#define LOGCABIN_SERVER_MEMORYLOG_H
 
 namespace LogCabin {
 namespace Server {
@@ -31,48 +31,10 @@ class Globals;
 
 namespace RaftConsensusInternal {
 
-class Log {
+class MemoryLog : public Log {
   public:
-    /**
-     * This class provides an asynchronous interface
-     * for flushing log entries to stable storage.
-     * It's returned by Log::append().
-     *
-     * This class doesn't do anything since it's used with a purely in-memory
-     * log, but subclasses do override the wait() method.
-     */
-    class Sync {
-      public:
-        Sync(uint64_t firstEntryId, uint64_t lastEntryId)
-            : firstEntryId(firstEntryId)
-            , lastEntryId(lastEntryId) {
-        }
-        virtual ~Sync() {}
-        /**
-         * Wait for the log entries to be durable.
-         * It is safe to call this method on the same object from multiple
-         * threads concurrently.
-         * \return
-         *      A string describing any errors that occurred, or the empty
-         *      string.
-         */
-        virtual std::string wait() { return ""; }
-        /**
-         * The index of the first log entry that is being appended.
-         */
-        const uint64_t firstEntryId;
-        /**
-         * The index of the last log entry that is being appended.
-         */
-        const uint64_t lastEntryId;
-        friend class Log;
-    };
-
-
-    typedef Protocol::Raft::Entry Entry;
-
-    Log();
-    virtual ~Log();
+    MemoryLog();
+    ~MemoryLog();
 
     /**
      * Append a new entry to the log.
@@ -81,7 +43,7 @@ class Log {
      * \return
      *      Object that can be used to wait for the entry to be durable.
      */
-    virtual std::unique_ptr<Sync> append(const Entry& entry) = 0;
+    std::unique_ptr<Sync> append(const Entry& entry);
 
     /**
      * Look up an entry by ID.
@@ -91,7 +53,7 @@ class Log {
      *      The entry corresponding to that entry ID. This reference is only
      *      guaranteed to be valid until the next time the log is modified.
      */
-    virtual const Entry& getEntry(uint64_t entryId) const = 0;
+    const Entry& getEntry(uint64_t entryId) const;
 
     /**
      * Get the entry ID of the first entry in the log (whether or not this
@@ -101,7 +63,7 @@ class Log {
      *      otherwise the largest ID passed to truncatePrefix.
      *      See 'startIndex'.
      */
-    virtual uint64_t getLogStartIndex() const = 0;
+    uint64_t getLogStartIndex() const;
 
     /**
      * Get the entry ID of the most recent entry in the log.
@@ -109,12 +71,12 @@ class Log {
      *      The entry ID of the most recent entry in the log,
      *      or startIndex - 1 if the log is empty.
      */
-    virtual uint64_t getLastLogIndex() const = 0;
+    uint64_t getLastLogIndex() const;
 
     /**
      * Get the size of the entire log in bytes.
      */
-    virtual uint64_t getSizeBytes() const = 0;
+    uint64_t getSizeBytes() const;
 
     /**
      * Delete the log entries before the given entry ID.
@@ -124,7 +86,7 @@ class Log {
      *      than firstEntryId. This can be any entry ID, including 0 and those
      *      past the end of the log.
      */
-    virtual void truncatePrefix(uint64_t firstEntryId) = 0;
+    void truncatePrefix(uint64_t firstEntryId);
 
     /**
      * Delete the log entries past the given entry ID.
@@ -134,32 +96,33 @@ class Log {
      *      than lastEntryId. This can be any entry ID, including 0 and those
      *      past the end of the log.
      */
-    virtual void truncateSuffix(uint64_t lastEntryId) = 0;
+    void truncateSuffix(uint64_t lastEntryId);
 
     /**
      * Call this after changing #metadata.
      */
-    virtual void updateMetadata() = 0;
-
-    /**
-     * Opaque metadata that the log keeps track of.
-     */
-    RaftLogMetadata::Metadata metadata;
-
-    /**
-     * Print out a Log for debugging purposes.
-     */
-    friend std::ostream& operator<<(std::ostream& os, const Log& log);
+    void updateMetadata();
 
   protected:
 
-    // Log is not copyable
-    Log(const Log&) = delete;
-    Log& operator=(const Log&) = delete;
+    /**
+     * The ID for the first entry in the log. Begins as 1 for new logs but
+     * will be larger for logs that have been snapshotted.
+     */
+    uint64_t startId;
+
+    /**
+     * Stores the entries that make up the log.
+     * The index into 'entries' is the ID of the entry minus 'startId'.
+     * This is a deque rather than a vector to support fast prefix truncation
+     * (used after snapshotting a prefix of the log).
+     */
+    std::deque<Entry> entries;
 };
 
 } // namespace LogCabin::Server::RaftConsensusInternal
 } // namespace LogCabin::Server
 } // namespace LogCabin
 
-#endif /* LOGCABIN_SERVER_RAFTLOG_H */
+#endif /* LOGCABIN_SERVER_MEMORYLOG_H */
+

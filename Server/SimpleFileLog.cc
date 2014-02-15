@@ -156,7 +156,8 @@ SimpleFileLog::readMetadata(const std::string& filename,
 }
 
 SimpleFileLog::SimpleFileLog(const FilesystemUtil::File& parentDir)
-    : metadata()
+    : memoryLog()
+    , metadata()
     , dir(FilesystemUtil::openDir(parentDir, "log"))
     , lostAndFound(FilesystemUtil::openDir(dir, "unknown"))
 {
@@ -212,11 +213,11 @@ SimpleFileLog::SimpleFileLog(const FilesystemUtil::File& parentDir)
         FilesystemUtil::fsync(dir);
     }
 
-    Log::truncatePrefix(metadata.entries_start());
+    memoryLog.truncatePrefix(metadata.entries_start());
     for (uint64_t id = metadata.entries_start();
          id <= metadata.entries_end();
          ++id) {
-        Log::append(read(format("%016lx", id)))->wait();
+        memoryLog.append(read(format("%016lx", id)))->wait();
     }
 
     Log::metadata = metadata.raft_metadata();
@@ -233,7 +234,7 @@ std::unique_ptr<Log::Sync>
 SimpleFileLog::append(const Entry& entry)
 {
     std::unique_ptr<SimpleFileLog::Sync> sync(
-        new SimpleFileLog::Sync(Log::append(entry)));
+        new SimpleFileLog::Sync(memoryLog.append(entry)));
     uint64_t entryId = sync->firstEntryId;
     FilesystemUtil::File file =
         protoToFile(entry, dir, format("%016lx", entryId));
@@ -248,7 +249,7 @@ void
 SimpleFileLog::truncatePrefix(uint64_t firstEntryId)
 {
     uint64_t old = getLogStartIndex();
-    Log::truncatePrefix(firstEntryId);
+    memoryLog.truncatePrefix(firstEntryId);
     // update metadata before removing files in case of interruption
     updateMetadata();
     for (uint64_t entryId = old; entryId < getLogStartIndex(); ++entryId)
@@ -260,12 +261,36 @@ void
 SimpleFileLog::truncateSuffix(uint64_t lastEntryId)
 {
     uint64_t old = getLastLogIndex();
-    Log::truncateSuffix(lastEntryId);
+    memoryLog.truncateSuffix(lastEntryId);
     // update metadata before removing files in case of interruption
     updateMetadata();
     for (uint64_t entryId = old; entryId > getLastLogIndex(); --entryId)
         FilesystemUtil::removeFile(dir, format("%016lx", entryId));
     // fsync(dir) not needed because of metadata
+}
+
+const SimpleFileLog::Entry&
+SimpleFileLog::getEntry(uint64_t i) const
+{
+    return memoryLog.getEntry(i);
+}
+
+uint64_t
+SimpleFileLog::getLogStartIndex() const
+{
+    return memoryLog.getLogStartIndex();
+}
+
+uint64_t
+SimpleFileLog::getLastLogIndex() const
+{
+    return memoryLog.getLastLogIndex();
+}
+
+uint64_t
+SimpleFileLog::getSizeBytes() const
+{
+    return memoryLog.getSizeBytes();
 }
 
 void
@@ -280,10 +305,9 @@ SimpleFileLog::updateMetadata()
 FilesystemUtil::File
 SimpleFileLog::updateMetadataCallerSync()
 {
-    Log::updateMetadata();
     *metadata.mutable_raft_metadata() = Log::metadata;
-    metadata.set_entries_start(Log::getLogStartIndex());
-    metadata.set_entries_end(Log::getLastLogIndex());
+    metadata.set_entries_start(memoryLog.getLogStartIndex());
+    metadata.set_entries_end(memoryLog.getLastLogIndex());
     metadata.set_version(metadata.version() + 1);
     if (metadata.version() % 2 == 1) {
         return protoToFile(metadata, dir, "metadata1");

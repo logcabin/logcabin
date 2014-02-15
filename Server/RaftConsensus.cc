@@ -35,6 +35,7 @@
 #include "RPC/ServerRPC.h"
 #include "Server/RaftConsensus.h"
 #include "Server/Globals.h"
+#include "Server/MemoryLog.h"
 #include "Server/SimpleFileLog.h"
 #include "Server/SnapshotFile.h"
 #include "Server/StateMachine.h"
@@ -784,7 +785,7 @@ RaftConsensus::init()
         std::string storageModule =
             globals.config.read<std::string>("storageModule", "filesystem");
         if (storageModule == "memory")
-            log.reset(new Log());
+            log.reset(new MemoryLog());
         else
             log.reset(new SimpleFileLog(storageDirectory));
     }

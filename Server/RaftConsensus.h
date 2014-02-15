@@ -14,6 +14,7 @@
  */
 
 #include <chrono>
+#include <deque>
 #include <functional>
 #include <memory>
 #include <thread>

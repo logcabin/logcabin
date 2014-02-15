@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2013 Stanford University
+/* Copyright (c) 2012-2014 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -15,7 +15,7 @@
 
 #include <gtest/gtest.h>
 #include <stdexcept>
-#include "Server/RaftLog.h"
+#include "Server/MemoryLog.h"
 
 namespace LogCabin {
 namespace Server {
@@ -27,19 +27,19 @@ using namespace RaftConsensusInternal; // NOLINT
 // basically affects every other method, so every test should include
 // a call to truncatePrefix.
 
-class ServerRaftLogTest : public ::testing::Test {
-    ServerRaftLogTest()
+class ServerMemoryLogTest : public ::testing::Test {
+    ServerMemoryLogTest()
         : log()
         , sampleEntry()
     {
         sampleEntry.set_term(40);
         sampleEntry.set_data("foo");
     }
-    Log log;
-    Log::Entry sampleEntry;
+    MemoryLog log;
+    MemoryLog::Entry sampleEntry;
 };
 
-TEST_F(ServerRaftLogTest, basic)
+TEST_F(ServerMemoryLogTest, basic)
 {
     std::unique_ptr<Log::Sync> sync = log.append(sampleEntry);
     EXPECT_EQ(1U, sync->firstEntryId);
@@ -49,7 +49,7 @@ TEST_F(ServerRaftLogTest, basic)
     EXPECT_EQ("foo", entry.data());
 }
 
-TEST_F(ServerRaftLogTest, append)
+TEST_F(ServerMemoryLogTest, append)
 {
     std::unique_ptr<Log::Sync> sync = log.append(sampleEntry);
     EXPECT_EQ(1U, sync->firstEntryId);
@@ -58,7 +58,7 @@ TEST_F(ServerRaftLogTest, append)
     EXPECT_EQ(10U, sync->firstEntryId);
 }
 
-TEST_F(ServerRaftLogTest, getEntry)
+TEST_F(ServerMemoryLogTest, getEntry)
 {
     log.append(sampleEntry);
     Log::Entry entry = log.getEntry(1);
@@ -76,7 +76,7 @@ TEST_F(ServerRaftLogTest, getEntry)
     EXPECT_EQ("bar", entry2.data());
 }
 
-TEST_F(ServerRaftLogTest, getLogStartIndex)
+TEST_F(ServerMemoryLogTest, getLogStartIndex)
 {
     EXPECT_EQ(1U, log.getLogStartIndex());
     log.truncatePrefix(200);
@@ -84,7 +84,7 @@ TEST_F(ServerRaftLogTest, getLogStartIndex)
     EXPECT_EQ(200U, log.getLogStartIndex());
 }
 
-TEST_F(ServerRaftLogTest, getLastLogIndex)
+TEST_F(ServerMemoryLogTest, getLastLogIndex)
 {
     EXPECT_EQ(0U, log.getLastLogIndex());
     log.append(sampleEntry);
@@ -95,7 +95,7 @@ TEST_F(ServerRaftLogTest, getLastLogIndex)
     EXPECT_EQ(2U, log.getLastLogIndex());
 }
 
-TEST_F(ServerRaftLogTest, getSizeBytes)
+TEST_F(ServerMemoryLogTest, getSizeBytes)
 {
     EXPECT_EQ(0U, log.getSizeBytes());
     log.append(sampleEntry);
@@ -105,7 +105,7 @@ TEST_F(ServerRaftLogTest, getSizeBytes)
     EXPECT_EQ(2 * s, log.getSizeBytes());
 }
 
-TEST_F(ServerRaftLogTest, truncatePrefix)
+TEST_F(ServerMemoryLogTest, truncatePrefix)
 {
     EXPECT_EQ(1U, log.startId);
     log.truncatePrefix(0);
@@ -147,7 +147,7 @@ TEST_F(ServerRaftLogTest, truncatePrefix)
     EXPECT_EQ(506U, log.startId);
 }
 
-TEST_F(ServerRaftLogTest, truncateSuffix)
+TEST_F(ServerMemoryLogTest, truncateSuffix)
 {
     log.truncateSuffix(0);
     log.truncateSuffix(10);

@@ -24,6 +24,7 @@
 #include "Core/StringUtil.h"
 #include "Core/STLUtil.h"
 #include "Server/Globals.h"
+#include "Server/MemoryLog.h"
 #include "Server/RaftConsensus.h"
 #include "Server/SnapshotFile.h"
 #include "Server/StateMachine.h"
@@ -46,7 +47,7 @@ class ServerStateMachineTest : public ::testing::Test {
         RaftConsensusInternal::startThreads = false;
         consensus.reset(new RaftConsensus(globals));
         consensus->serverId = 1;
-        consensus->log.reset(new RaftConsensusInternal::Log());
+        consensus->log.reset(new RaftConsensusInternal::MemoryLog());
         std::string path = Storage::FilesystemUtil::mkdtemp();
         consensus->storageDirectory =
             Storage::FilesystemUtil::File(open(path.c_str(),

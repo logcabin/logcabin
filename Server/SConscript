@@ -8,6 +8,7 @@ src = [
     "ClientService.cc",
     "Consensus.cc",
     "Globals.cc",
+    "MemoryLog.cc",
     "SimpleFileLog.cc",
     "SnapshotFile.cc",
     "StateMachine.cc",

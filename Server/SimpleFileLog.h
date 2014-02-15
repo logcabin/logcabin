@@ -19,6 +19,7 @@
 
 #include "build/Server/SimpleFileLog.pb.h"
 #include "Storage/FilesystemUtil.h"
+#include "Server/MemoryLog.h"
 #include "Server/RaftLog.h"
 
 #ifndef LOGCABIN_SERVER_SIMPLEFILELOG_H
@@ -57,11 +58,17 @@ class SimpleFileLog : public Log {
     void truncatePrefix(uint64_t firstEntryId);
     void truncateSuffix(uint64_t lastEntryId);
 
-    void updateMetadata();
-    Storage::FilesystemUtil::File updateMetadataCallerSync();
+    const Entry& getEntry(uint64_t) const;
+    uint64_t getLogStartIndex() const;
+    uint64_t getLastLogIndex() const;
+    uint64_t getSizeBytes() const;
 
+
+    void updateMetadata();
 
   protected:
+    Storage::FilesystemUtil::File updateMetadataCallerSync();
+    MemoryLog memoryLog;
     SimpleFileLogMetadata::Metadata metadata;
     Storage::FilesystemUtil::File dir;
     Storage::FilesystemUtil::File lostAndFound;
