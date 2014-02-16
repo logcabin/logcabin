@@ -56,7 +56,10 @@ def main():
         sh('rm -f debug/*')
         sh('mkdir -p debug')
         print('Initializing first server\'s log')
-        sh('%s --bootstrap --id 1 --config smoketest.conf' % server_command)
+        sandbox.rsh(smokehosts[0][0],
+                    '%s --bootstrap --id 1 --config smoketest.conf' %
+                    server_command,
+                   stderr=open('debug/bootstrap', 'w'))
         print()
 
         for server_id in server_ids:
