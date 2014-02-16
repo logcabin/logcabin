@@ -22,6 +22,7 @@ Usage:
 
 Options:
   -h --help            Show this help message and exit
+  --binary=<cmd>       Server binary to execute [default: build/LogCabin]
   --client=<cmd>       Client binary to execute
                        [default: build/Examples/SmokeTest]
   --reconf=<opts>      Additional options to pass through to the Reconfigure
@@ -42,6 +43,7 @@ import time
 def main():
     arguments = docopt(__doc__)
     client_command = arguments['--client']
+    server_command = arguments['--binary']
     num_servers = int(arguments['--servers'])
     reconf_opts = arguments['--reconf']
     if reconf_opts == "''":
@@ -54,12 +56,13 @@ def main():
         sh('rm -f debug/*')
         sh('mkdir -p debug')
         print('Initializing first server\'s log')
-        sh('build/LogCabin --bootstrap --id 1 --config smoketest.conf')
+        sh('%s --bootstrap --id 1 --config smoketest.conf' % server_command)
         print()
 
         for server_id in server_ids:
             host = smokehosts[server_id - 1]
-            command = 'build/LogCabin --id %d --config smoketest.conf' % server_id
+            command = ('%s --id %d --config smoketest.conf' %
+                       (server_command, server_id))
             print('Starting %s on %s' % (command, smokehosts[server_id - 1][0]))
             sandbox.rsh(smokehosts[server_id - 1][0], command, bg=True,
                         stderr=open('debug/%d' % server_id, 'w'))
