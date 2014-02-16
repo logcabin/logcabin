@@ -86,10 +86,9 @@ class Sandbox(object):
             self.processes.append(process)
             return process
         else:
-            sh_command = ['ssh', host,
-                          '%s/remoteexec.py' % scripts_path,
-                          "'%s'" % command, os.getcwd()]
-            subprocess.check_call(sh_command, **kwargs)
+            self.rsh(host, command, ignoreFailures, bg=True,
+                     **kwargs).proc.wait()
+            self.checkFailures()
             return None
 
     def kill(self, process):
