@@ -20,6 +20,7 @@
 
 #include "build/Protocol/Client.pb.h"
 #include "Core/ConditionVariable.h"
+#include "Core/Config.h"
 #include "Tree/Tree.h"
 
 #ifndef LOGCABIN_SERVER_STATEMACHINE_H
@@ -37,7 +38,8 @@ class Consensus;
  */
 class StateMachine {
   public:
-    explicit StateMachine(std::shared_ptr<Consensus> consensus);
+    StateMachine(std::shared_ptr<Consensus> consensus,
+                 Core::Config& config);
     ~StateMachine();
 
     /**
@@ -117,6 +119,17 @@ class StateMachine {
 
 
     std::shared_ptr<Consensus> consensus;
+
+    /**
+     * Size in bytes of smallest log to snapshot.
+     */
+    uint64_t snapshotMinLogSize;
+
+    /**
+     * Maximum log size as multiple of last snapshot size until server should
+     * snapshot.
+     */
+    uint64_t snapshotRatio;
 
     /**
      * Protects against concurrent access for all members of this class (except

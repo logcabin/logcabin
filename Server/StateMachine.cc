@@ -39,8 +39,11 @@ static const uint64_t NO_ENTRY_ID = ~0UL;
 bool stateMachineSuppressThreads = false;
 uint32_t stateMachineChildSleepMs = 0;
 
-StateMachine::StateMachine(std::shared_ptr<Consensus> consensus)
+StateMachine::StateMachine(std::shared_ptr<Consensus> consensus,
+                           Core::Config& config)
     : consensus(consensus)
+    , snapshotMinLogSize(config.read<uint64_t>("snapshotMinLogSize", 1024))
+    , snapshotRatio(config.read<uint64_t>("snapshotRatio", 10))
     , mutex()
     , entriesApplied()
     , snapshotSuggested()
@@ -278,11 +281,10 @@ StateMachine::openSession(
 bool
 StateMachine::shouldTakeSnapshot(uint64_t lastIncludedIndex) const
 {
-    // TODO(ongaro): these constants should be configurable
     SnapshotStats::SnapshotStats stats = consensus->getSnapshotStats();
-    if (stats.log_bytes() < 1024)
+    if (stats.log_bytes() < snapshotMinLogSize)
         return false;
-    if (stats.log_bytes() < stats.last_snapshot_bytes() * 10)
+    if (stats.log_bytes() < stats.last_snapshot_bytes() * snapshotRatio)
         return false;
     if (lastIncludedIndex < stats.last_snapshot_index())
         return false;

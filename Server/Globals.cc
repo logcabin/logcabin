@@ -125,7 +125,7 @@ Globals::init(uint64_t serverId)
     }
 
     if (!stateMachine) {
-        stateMachine.reset(new StateMachine(raft));
+        stateMachine.reset(new StateMachine(raft, config));
     }
 
 }

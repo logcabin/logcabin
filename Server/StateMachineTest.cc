@@ -69,7 +69,7 @@ class ServerStateMachineTest : public ::testing::Test {
         consensus->advanceCommittedId();
 
         stateMachineSuppressThreads = true;
-        stateMachine.reset(new StateMachine(consensus));
+        stateMachine.reset(new StateMachine(consensus, globals.config));
     }
     ~ServerStateMachineTest() {
         stateMachineSuppressThreads = false;
