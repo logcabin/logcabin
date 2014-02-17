@@ -87,6 +87,16 @@ File::release()
     return ret;
 }
 
+void
+allocate(const File& file, uint64_t offset, uint64_t bytes)
+{
+    int errnum = ::posix_fallocate(file.fd, offset, bytes);
+    if (errnum != 0) {
+        PANIC("Could not posix_fallocate bytes [%lu, %lu) of %s: %s",
+              offset, offset + bytes, file.path.c_str(), strerror(errnum));
+    }
+}
+
 File
 dup(const File& file)
 {
@@ -311,6 +321,16 @@ syncDir(const std::string& path)
     if (close(fd) != 0) {
         WARNING("Failed to close file %s: %s",
                 path.c_str(), strerror(errno));
+    }
+}
+
+void
+truncate(const File& file, uint64_t bytes)
+{
+    if (::ftruncate(file.fd, bytes) != 0) {
+        PANIC("Could not ftruncate %s: %s",
+              file.path.c_str(),
+              strerror(errno));
     }
 }
 

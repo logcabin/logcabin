@@ -100,6 +100,24 @@ class StorageFilesystemUtilTest : public ::testing::Test {
 
 namespace FS = FilesystemUtil;
 
+TEST_F(StorageFilesystemUtilTest, allocate) {
+    FS::File file(FS::openFile(tmpdir, "a", O_RDWR|O_CREAT));
+    FS::write(file.fd, "hello world", 11); // no null byte
+    char buf[15];
+
+    FS::allocate(file, 5, 10);
+    EXPECT_EQ(15U, FS::getSize(file));
+    EXPECT_EQ(15, pread(file.fd, buf, sizeof(buf), 0));
+    EXPECT_STREQ("hello world", buf);
+
+    FS::allocate(file, 0, 5);
+    EXPECT_EQ(15, pread(file.fd, buf, sizeof(buf), 0));
+    EXPECT_STREQ("hello world", buf);
+
+    EXPECT_DEATH(FS::allocate(File(), 0, 10),
+                 "Could not posix_fallocate");
+}
+
 TEST_F(StorageFilesystemUtilTest, dup) {
     File d1 = FS::dup(tmpdir);
     EXPECT_NE(d1.fd, tmpdir.fd);
@@ -271,6 +289,25 @@ TEST_F(StorageFilesystemUtilTest, syncDir) {
     FilesystemUtil::syncDir(tmpdir.path + "/..");
     EXPECT_DEATH(FilesystemUtil::syncDir(tmpdir.path + "/a"),
                  "open");
+}
+
+TEST_F(StorageFilesystemUtilTest, truncate) {
+    FS::File file(FS::openFile(tmpdir, "a", O_RDWR|O_CREAT));
+    FS::write(file.fd, "hello world", 11); // no null byte
+    char buf[15];
+
+    FS::truncate(file, 15);
+    EXPECT_EQ(15U, FS::getSize(file));
+    EXPECT_EQ(15, pread(file.fd, buf, sizeof(buf), 0));
+    EXPECT_STREQ("hello world", buf);
+
+    FS::truncate(file, 5);
+    EXPECT_EQ(5, pread(file.fd, buf, sizeof(buf), 0));
+    buf[5] = '\0';
+    EXPECT_STREQ("hello", buf);
+
+    EXPECT_DEATH(FS::truncate(File(), 10),
+                 "Could not ftruncate");
 }
 
 TEST_F(StorageFilesystemUtilTest, mkdtemp) {

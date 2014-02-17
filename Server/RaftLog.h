@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2013 Stanford University
+/* Copyright (c) 2012-2014 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -31,6 +31,11 @@ class Globals;
 
 namespace RaftConsensusInternal {
 
+/**
+ * This interface is used by RaftConsensus to store log entries and metadata.
+ * Typically, implementations will persist the log entries and metadata to
+ * stable storage (but MemoryLog keeps it all in volatile memory).
+ */
 class Log {
   public:
     /**
@@ -38,8 +43,8 @@ class Log {
      * for flushing log entries to stable storage.
      * It's returned by Log::append().
      *
-     * This class doesn't do anything since it's used with a purely in-memory
-     * log, but subclasses do override the wait() method.
+     * This class doesn't do anything but subclasses do override the wait()
+     * method.
      */
     class Sync {
       public:
@@ -65,10 +70,11 @@ class Log {
          * The index of the last log entry that is being appended.
          */
         const uint64_t lastIndex;
-        friend class Log;
     };
 
-
+    /**
+     * The type of a log entry (the same format that's used in AppendEntries).
+     */
     typedef Protocol::Raft::Entry Entry;
 
     Log();
@@ -99,7 +105,8 @@ class Log {
     /**
      * Look up an entry by its log index.
      * \param index
-     *      Must be in the range [startIndex, getLastLogIndex()].
+     *      Must be in the range [getLogStartIndex(), getLastLogIndex()].
+     *      Otherwise, this will crash the server.
      * \return
      *      The entry corresponding to that index. This reference is only
      *      guaranteed to be valid until the next time the log is modified.

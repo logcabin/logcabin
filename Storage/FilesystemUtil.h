@@ -85,6 +85,12 @@ class File {
 };
 
 /**
+ * Allocate a contiguous range of a file, padding with zeros if necessary.
+ * See man 3 posix_fallocate. Does not fsync the file.
+ */
+void allocate(const File& file, uint64_t offset, uint64_t bytes);
+
+/**
  * Clones a file descriptor. See man 2 dup.
  * \param file
  *      An open file descriptor.
@@ -195,6 +201,12 @@ void rename(const File& oldDir, const std::string& oldChild,
  * directory after creating a file or directory within it.
  */
 void syncDir(const std::string& path);
+
+/**
+ * Shrink or grow a file to the specified length, padding with zeros if
+ * necessary. See man 2 ftruncate. Does not fsync the file.
+ */
+void truncate(const File& file, uint64_t bytes);
 
 /**
  * Return a path to a temporary directory.
