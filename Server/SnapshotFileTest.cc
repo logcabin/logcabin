@@ -38,7 +38,6 @@ class ServerSnapshotFileTest : public ::testing::Test {
                                       path);
     }
     ~ServerSnapshotFileTest() {
-        tmpdir.close();
         FilesystemUtil::remove(tmpdir.path);
     }
     FilesystemUtil::File tmpdir;

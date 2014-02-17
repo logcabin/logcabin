@@ -88,7 +88,6 @@ TEST(TreeFileTest, dumpSnapshot)
         f.loadSnapshot(reader.getStream());
         EXPECT_EQ("hello, world!", f.contents);
     }
-    tmpdir.close();
     Storage::FilesystemUtil::remove(tmpdir.path);
 }
 
@@ -233,7 +232,6 @@ TEST(TreeDirectoryTest, dumpSnapshot)
         t2.superRoot.loadSnapshot(reader.getStream());
         EXPECT_EQ(dumpTree(tree), dumpTree(t2));
     }
-    tmpdir.close();
     Storage::FilesystemUtil::remove(tmpdir.path);
 }
 
@@ -311,7 +309,6 @@ TEST_F(TreeTreeTest, dumpSnapshot)
     std::vector<std::string> children;
     EXPECT_OK(tree.listDirectory("/", children));
     EXPECT_EQ((std::vector<std::string>{ "c" }), children);
-    tmpdir.close();
     Storage::FilesystemUtil::remove(tmpdir.path);
 }
 

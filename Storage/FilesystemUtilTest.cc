@@ -85,7 +85,6 @@ class StorageFilesystemUtilTest : public ::testing::Test {
         MockWritev::state.reset(new MockWritev::State);
     }
     ~StorageFilesystemUtilTest() {
-        tmpdir.close();
         // It's a bit dubious to be using the functions we're testing to set up
         // the test fixture. Hopefully this won't trash your home directory.
         FilesystemUtil::remove(tmpdir.path);
