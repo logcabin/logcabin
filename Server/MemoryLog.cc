@@ -43,12 +43,13 @@ MemoryLog::~MemoryLog()
 }
 
 std::unique_ptr<Log::Sync>
-MemoryLog::append(const Entry& entry)
+MemoryLog::append(const std::vector<const Entry*>& newEntries)
 {
-    uint64_t index = startIndex + entries.size();
-    entries.push_back(entry);
+    uint64_t firstIndex = startIndex + entries.size();
+    for (auto it = newEntries.begin(); it != newEntries.end(); ++it)
+        entries.push_back(**it);
     return std::unique_ptr<Sync>(
-        new Sync(index, index));
+        new Sync(firstIndex, firstIndex + newEntries.size() - 1));
 }
 
 const Log::Entry&

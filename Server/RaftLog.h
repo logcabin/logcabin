@@ -75,13 +75,26 @@ class Log {
     virtual ~Log();
 
     /**
-     * Append a new entry to the log.
+     * Append new entries to the log.
+     * \param entries
+     *      Entries to place at the end of the log.
+     * \return
+     *      Object that can be used to wait for the entries to be durable.
+     */
+    virtual std::unique_ptr<Sync> append(
+                            const std::vector<const Entry*>& entries) = 0;
+
+    /**
+     * Append a single new entry to the log. This is a wrapper around the
+     * vectored version of append; it's just for convenience. Callers that
+     * have more than one entry to append should use the vectored form of
+     * append directly for efficiency.
      * \param entry
      *      Entry to place at the end of the log.
      * \return
      *      Object that can be used to wait for the entry to be durable.
      */
-    virtual std::unique_ptr<Sync> append(const Entry& entry) = 0;
+    std::unique_ptr<Sync> appendSingle(const Entry& entry);
 
     /**
      * Look up an entry by its log index.

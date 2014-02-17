@@ -41,7 +41,7 @@ class ServerMemoryLogTest : public ::testing::Test {
 
 TEST_F(ServerMemoryLogTest, basic)
 {
-    std::unique_ptr<Log::Sync> sync = log.append(sampleEntry);
+    std::unique_ptr<Log::Sync> sync = log.appendSingle(sampleEntry);
     EXPECT_EQ(1U, sync->firstIndex);
     EXPECT_EQ(1U, sync->lastIndex);
     Log::Entry entry = log.getEntry(1);
@@ -51,16 +51,20 @@ TEST_F(ServerMemoryLogTest, basic)
 
 TEST_F(ServerMemoryLogTest, append)
 {
-    std::unique_ptr<Log::Sync> sync = log.append(sampleEntry);
+    std::unique_ptr<Log::Sync> sync = log.appendSingle(sampleEntry);
     EXPECT_EQ(1U, sync->firstIndex);
+    EXPECT_EQ(1U, sync->lastIndex);
     log.truncatePrefix(10);
-    sync = log.append(sampleEntry);
+    sync = log.append({&sampleEntry, &sampleEntry});
     EXPECT_EQ(10U, sync->firstIndex);
+    EXPECT_EQ(11U, sync->lastIndex);
+    EXPECT_EQ(10U, log.getLogStartIndex());
+    EXPECT_EQ(11U, log.getLastLogIndex());
 }
 
 TEST_F(ServerMemoryLogTest, getEntry)
 {
-    log.append(sampleEntry);
+    log.appendSingle(sampleEntry);
     Log::Entry entry = log.getEntry(1);
     EXPECT_EQ(40U, entry.term());
     EXPECT_EQ("foo", entry.data());
@@ -68,10 +72,10 @@ TEST_F(ServerMemoryLogTest, getEntry)
     EXPECT_THROW(log.getEntry(2), std::out_of_range);
 
     sampleEntry.set_data("bar");
-    log.append(sampleEntry);
+    log.appendSingle(sampleEntry);
     log.truncatePrefix(2);
     EXPECT_THROW(log.getEntry(1), std::out_of_range);
-    log.append(sampleEntry);
+    log.appendSingle(sampleEntry);
     Log::Entry entry2 = log.getEntry(2);
     EXPECT_EQ("bar", entry2.data());
 }
@@ -87,8 +91,8 @@ TEST_F(ServerMemoryLogTest, getLogStartIndex)
 TEST_F(ServerMemoryLogTest, getLastLogIndex)
 {
     EXPECT_EQ(0U, log.getLastLogIndex());
-    log.append(sampleEntry);
-    log.append(sampleEntry);
+    log.appendSingle(sampleEntry);
+    log.appendSingle(sampleEntry);
     EXPECT_EQ(2U, log.getLastLogIndex());
 
     log.truncatePrefix(2);
@@ -98,10 +102,10 @@ TEST_F(ServerMemoryLogTest, getLastLogIndex)
 TEST_F(ServerMemoryLogTest, getSizeBytes)
 {
     EXPECT_EQ(0U, log.getSizeBytes());
-    log.append(sampleEntry);
+    log.appendSingle(sampleEntry);
     uint64_t s = log.getSizeBytes();
     EXPECT_LT(0U, s);
-    log.append(sampleEntry);
+    log.appendSingle(sampleEntry);
     EXPECT_EQ(2 * s, log.getSizeBytes());
 }
 
@@ -119,23 +123,23 @@ TEST_F(ServerMemoryLogTest, truncatePrefix)
     EXPECT_EQ(0U, log.entries.size());
 
     // case 2: entries has fewer elements than truncated
-    log.append(sampleEntry);
+    log.appendSingle(sampleEntry);
     log.truncatePrefix(502);
     EXPECT_EQ(502U, log.startIndex);
     EXPECT_EQ(0U, log.entries.size());
 
     // case 3: entries has exactly the elements truncated
-    log.append(sampleEntry);
-    log.append(sampleEntry);
+    log.appendSingle(sampleEntry);
+    log.appendSingle(sampleEntry);
     log.truncatePrefix(504);
     EXPECT_EQ(504U, log.startIndex);
     EXPECT_EQ(0U, log.entries.size());
 
     // case 4: entries has more elements than truncated
-    log.append(sampleEntry);
-    log.append(sampleEntry);
+    log.appendSingle(sampleEntry);
+    log.appendSingle(sampleEntry);
     sampleEntry.set_data("bar");
-    log.append(sampleEntry);
+    log.appendSingle(sampleEntry);
     log.truncatePrefix(506);
     EXPECT_EQ(506U, log.startIndex);
     EXPECT_EQ(1U, log.entries.size());
@@ -152,8 +156,8 @@ TEST_F(ServerMemoryLogTest, truncateSuffix)
     log.truncateSuffix(0);
     log.truncateSuffix(10);
     EXPECT_EQ(0U, log.getLastLogIndex());
-    log.append(sampleEntry);
-    log.append(sampleEntry);
+    log.appendSingle(sampleEntry);
+    log.appendSingle(sampleEntry);
     log.truncateSuffix(10);
     EXPECT_EQ(2U, log.getLastLogIndex());
     log.truncateSuffix(2);
@@ -165,13 +169,13 @@ TEST_F(ServerMemoryLogTest, truncateSuffix)
 
 
     log.truncatePrefix(10);
-    log.append(sampleEntry);
+    log.appendSingle(sampleEntry);
     EXPECT_EQ(10U, log.getLastLogIndex());
     log.truncateSuffix(10);
     EXPECT_EQ(10U, log.getLastLogIndex());
     log.truncateSuffix(8);
     EXPECT_EQ(9U, log.getLastLogIndex());
-    log.append(sampleEntry);
+    log.appendSingle(sampleEntry);
     EXPECT_EQ(10U, log.getLastLogIndex());
 }
 

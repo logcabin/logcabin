@@ -217,7 +217,7 @@ SimpleFileLog::SimpleFileLog(const FilesystemUtil::File& parentDir)
     for (uint64_t id = metadata.entries_start();
          id <= metadata.entries_end();
          ++id) {
-        memoryLog.append(read(format("%016lx", id)))->wait();
+        memoryLog.appendSingle(read(format("%016lx", id)))->wait();
     }
 
     Log::metadata = metadata.raft_metadata();
@@ -231,15 +231,18 @@ SimpleFileLog::~SimpleFileLog()
 }
 
 std::unique_ptr<Log::Sync>
-SimpleFileLog::append(const Entry& entry)
+SimpleFileLog::append(const std::vector<const Entry*>& entries)
 {
     std::unique_ptr<SimpleFileLog::Sync> sync(
-        new SimpleFileLog::Sync(memoryLog.append(entry)));
-    uint64_t entryId = sync->firstIndex;
-    FilesystemUtil::File file =
-        protoToFile(entry, dir, format("%016lx", entryId));
+        new SimpleFileLog::Sync(memoryLog.append(entries)));
+    for (uint64_t index = sync->firstIndex;
+         index <= sync->lastIndex;
+         ++index) {
+        FilesystemUtil::File file = protoToFile(memoryLog.getEntry(index),
+                                                dir, format("%016lx", index));
+        sync->fds.push_back({file.release(), true});
+    }
     FilesystemUtil::File mdfile = updateMetadataCallerSync();
-    sync->fds.push_back({file.release(), true});
     sync->fds.push_back({dir.fd, false});
     sync->fds.push_back({mdfile.release(), true});
     return std::move(sync);

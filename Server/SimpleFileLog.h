@@ -54,7 +54,8 @@ class SimpleFileLog : public Log {
 
     explicit SimpleFileLog(const Storage::FilesystemUtil::File& parentDir);
     ~SimpleFileLog();
-    virtual std::unique_ptr<Log::Sync> append(const Entry& entry);
+    std::unique_ptr<Log::Sync>
+        append(const std::vector<const Entry*>& entries);
     void truncatePrefix(uint64_t firstEntryId);
     void truncateSuffix(uint64_t lastEntryId);
 

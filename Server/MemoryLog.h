@@ -36,7 +36,7 @@ class MemoryLog : public Log {
     MemoryLog();
     ~MemoryLog();
 
-    std::unique_ptr<Sync> append(const Entry& entry);
+    std::unique_ptr<Sync> append(const std::vector<const Entry*>& entries);
     const Entry& getEntry(uint64_t logIndex) const;
     uint64_t getLogStartIndex() const;
     uint64_t getLastLogIndex() const;

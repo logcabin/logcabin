@@ -562,16 +562,16 @@ TEST_F(ServerRaftConsensusTest, init_nonblanklog)
     entry.set_term(1);
     entry.set_type(Protocol::Raft::EntryType::CONFIGURATION);
     *entry.mutable_configuration() = desc(d);
-    log.append(entry);
+    log.appendSingle(entry);
 
     Log::Entry entry2;
     entry2.set_term(2);
     entry2.set_type(Protocol::Raft::EntryType::DATA);
     entry2.set_data("hello, world");
-    log.append(entry2);
+    log.appendSingle(entry2);
 
     entry.set_term(2);
-    log.append(entry); // append configuration entry again
+    log.appendSingle(entry); // append configuration entry again
 
     consensus->init();
     EXPECT_EQ(3U, consensus->log->getLastLogIndex());
@@ -612,7 +612,7 @@ TEST_F(ServerRaftConsensusTest, init_withsnapshot)
 
     consensus->log.reset(new MemoryLog());
     // the log should be discarded when the snapshot is read
-    consensus->log->append(entry3);
+    consensus->log->appendSingle(entry3);
     consensus->init();
     EXPECT_EQ(2U, consensus->lastSnapshotIndex);
     EXPECT_EQ(2U, consensus->lastSnapshotTerm);

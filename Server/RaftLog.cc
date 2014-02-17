@@ -41,6 +41,12 @@ Log::~Log()
 {
 }
 
+std::unique_ptr<Log::Sync>
+Log::appendSingle(const Entry& entry)
+{
+    return append({&entry});
+}
+
 std::ostream&
 operator<<(std::ostream& os, const Log& log)
 {

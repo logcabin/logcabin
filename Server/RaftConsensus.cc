@@ -1635,7 +1635,7 @@ uint64_t
 RaftConsensus::append(const Log::Entry& entry)
 {
     assert(entry.term() != 0);
-    std::unique_ptr<Log::Sync> sync = log->append(entry);
+    std::unique_ptr<Log::Sync> sync = log->appendSingle(entry);
     uint64_t index = sync->firstIndex;
     if (state == State::LEADER) { // defer file sync
         diskQueue.push_back(std::move(sync));
