@@ -33,7 +33,7 @@ namespace RaftConsensusInternal {
 ////////// MemoryLog //////////
 
 MemoryLog::MemoryLog()
-    : startId(1)
+    : startIndex(1)
     , entries()
 {
 }
@@ -45,30 +45,30 @@ MemoryLog::~MemoryLog()
 std::unique_ptr<Log::Sync>
 MemoryLog::append(const Entry& entry)
 {
-    uint64_t entryId = startId + entries.size();
+    uint64_t index = startIndex + entries.size();
     entries.push_back(entry);
     return std::unique_ptr<Sync>(
-        new Sync(entryId, entryId));
+        new Sync(index, index));
 }
 
 const Log::Entry&
-MemoryLog::getEntry(uint64_t entryId) const
+MemoryLog::getEntry(uint64_t index) const
 {
-    uint64_t index = entryId - startId;
-    return entries.at(index);
+    uint64_t offset = index - startIndex;
+    return entries.at(offset);
 }
 
 uint64_t
 MemoryLog::getLogStartIndex() const
 {
-    return startId;
+    return startIndex;
 }
 
 
 uint64_t
 MemoryLog::getLastLogIndex() const
 {
-    return startId + entries.size() - 1;
+    return startIndex + entries.size() - 1;
 }
 
 uint64_t
@@ -82,26 +82,26 @@ MemoryLog::getSizeBytes() const
 }
 
 void
-MemoryLog::truncatePrefix(uint64_t firstEntryId)
+MemoryLog::truncatePrefix(uint64_t firstIndex)
 {
-    if (firstEntryId > startId) {
-        // Erase log IDs in range [startId, firstEntryId), so deque indexes in
-        // range [0, firstEntryId - startId). Be careful not to erase past the
-        // end of the deque (STL doesn't check for this).
+    if (firstIndex > startIndex) {
+        // Erase log entries in range [startIndex, firstIndex), so deque
+        // offsets in range [0, firstIndex - startIndex). Be careful not to
+        // erase past the end of the deque (STL doesn't check for this).
         entries.erase(entries.begin(),
-                      entries.begin() + std::min(firstEntryId - startId,
+                      entries.begin() + std::min(firstIndex - startIndex,
                                                  entries.size()));
-        startId = firstEntryId;
+        startIndex = firstIndex;
     }
 }
 
 void
-MemoryLog::truncateSuffix(uint64_t lastEntryId)
+MemoryLog::truncateSuffix(uint64_t lastIndex)
 {
-    if (lastEntryId < startId)
+    if (lastIndex < startIndex)
         entries.clear();
-    else if (lastEntryId < startId - 1 + entries.size())
-        entries.resize(lastEntryId - startId + 1);
+    else if (lastIndex < startIndex - 1 + entries.size())
+        entries.resize(lastIndex - startIndex + 1);
 }
 
 void

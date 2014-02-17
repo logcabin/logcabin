@@ -1434,22 +1434,22 @@ RaftConsensus::leaderDiskThreadMain()
     while (!exiting) {
         if (state == State::LEADER && !diskQueue.empty()) {
             uint64_t term = currentTerm;
-            uint64_t firstEntryId;
-            uint64_t lastEntryId;
+            uint64_t firstIndex;
+            uint64_t lastIndex;
             std::string error;
             {
                 std::unique_ptr<Log::Sync>& sync = diskQueue.front();
-                firstEntryId = sync->firstEntryId;
-                lastEntryId = sync->lastEntryId;
+                firstIndex = sync->firstIndex;
+                lastIndex = sync->lastIndex;
                 Core::MutexUnlock<Mutex> unlockGuard(lockGuard);
                 error = sync->wait();
             }
             if (state == State::LEADER && currentTerm == term) {
                 if (!error.empty()) {
                     PANIC("Error syncing log entries %lu-%lu to disk: %s",
-                          firstEntryId, lastEntryId, error.c_str());
+                          firstIndex, lastIndex, error.c_str());
                 }
-                configuration->localServer->lastSyncedIndex = lastEntryId;
+                configuration->localServer->lastSyncedIndex = lastIndex;
                 diskQueue.pop_front();
                 advanceCommittedId();
             } else {
@@ -1459,7 +1459,7 @@ RaftConsensus::leaderDiskThreadMain()
                             "leadership, so who knows what was actually "
                             "synced. Errors were encountered but are probably "
                             "of no consequence: %s",
-                            firstEntryId, lastEntryId, error.c_str());
+                            firstIndex, lastIndex, error.c_str());
                 }
             }
             continue;
@@ -1636,16 +1636,16 @@ RaftConsensus::append(const Log::Entry& entry)
 {
     assert(entry.term() != 0);
     std::unique_ptr<Log::Sync> sync = log->append(entry);
-    uint64_t entryId = sync->firstEntryId;
+    uint64_t index = sync->firstIndex;
     if (state == State::LEADER) { // defer file sync
         diskQueue.push_back(std::move(sync));
     } else { // sync file now
         sync->wait();
     }
     if (entry.type() == Protocol::Raft::EntryType::CONFIGURATION)
-        configurationManager->add(entryId, entry.configuration());
+        configurationManager->add(index, entry.configuration());
     stateChanged.notify_all();
-    return entryId;
+    return index;
 }
 
 void

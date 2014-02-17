@@ -115,7 +115,7 @@ protoToFile(const google::protobuf::Message& in,
 
 ////////// SimpleFileLog::Sync //////////
 SimpleFileLog::Sync::Sync(std::unique_ptr<Log::Sync> memSync)
-    : Log::Sync(memSync->firstEntryId, memSync->lastEntryId)
+    : Log::Sync(memSync->firstIndex, memSync->lastIndex)
     , mutex()
     , fds()
 {
@@ -130,12 +130,12 @@ SimpleFileLog::Sync::wait()
         if (::fsync(it->first) != 0) {
             error += format("Could not fsync fd %d for "
                             "log entries %lu-%lu: %s. ",
-                            it->first, firstEntryId, lastEntryId,
+                            it->first, firstIndex, lastIndex,
                             strerror(errno));
         } else if (it->second && ::close(it->first) != 0) {
             error += format("Could not close fd %d for "
                             "log entries %lu-%lu: %s. ",
-                            it->first, firstEntryId, lastEntryId,
+                            it->first, firstIndex, lastIndex,
                             strerror(errno));
         }
     }
@@ -235,7 +235,7 @@ SimpleFileLog::append(const Entry& entry)
 {
     std::unique_ptr<SimpleFileLog::Sync> sync(
         new SimpleFileLog::Sync(memoryLog.append(entry)));
-    uint64_t entryId = sync->firstEntryId;
+    uint64_t entryId = sync->firstIndex;
     FilesystemUtil::File file =
         protoToFile(entry, dir, format("%016lx", entryId));
     FilesystemUtil::File mdfile = updateMetadataCallerSync();

@@ -417,7 +417,7 @@ void drainDiskQueue(RaftConsensus& consensus)
         std::unique_ptr<Log::Sync>& sync = consensus.diskQueue.front();
         sync->wait();
         consensus.configuration->localServer->lastSyncedIndex =
-                    sync->lastEntryId;
+                    sync->lastIndex;
         consensus.diskQueue.pop_front(); // sync is now off-limits
         consensus.advanceCommittedId();
     }

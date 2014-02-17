@@ -42,8 +42,8 @@ class ServerMemoryLogTest : public ::testing::Test {
 TEST_F(ServerMemoryLogTest, basic)
 {
     std::unique_ptr<Log::Sync> sync = log.append(sampleEntry);
-    EXPECT_EQ(1U, sync->firstEntryId);
-    EXPECT_EQ(1U, sync->lastEntryId);
+    EXPECT_EQ(1U, sync->firstIndex);
+    EXPECT_EQ(1U, sync->lastIndex);
     Log::Entry entry = log.getEntry(1);
     EXPECT_EQ(40U, entry.term());
     EXPECT_EQ("foo", entry.data());
@@ -52,10 +52,10 @@ TEST_F(ServerMemoryLogTest, basic)
 TEST_F(ServerMemoryLogTest, append)
 {
     std::unique_ptr<Log::Sync> sync = log.append(sampleEntry);
-    EXPECT_EQ(1U, sync->firstEntryId);
+    EXPECT_EQ(1U, sync->firstIndex);
     log.truncatePrefix(10);
     sync = log.append(sampleEntry);
-    EXPECT_EQ(10U, sync->firstEntryId);
+    EXPECT_EQ(10U, sync->firstIndex);
 }
 
 TEST_F(ServerMemoryLogTest, getEntry)
@@ -107,28 +107,28 @@ TEST_F(ServerMemoryLogTest, getSizeBytes)
 
 TEST_F(ServerMemoryLogTest, truncatePrefix)
 {
-    EXPECT_EQ(1U, log.startId);
+    EXPECT_EQ(1U, log.startIndex);
     log.truncatePrefix(0);
-    EXPECT_EQ(1U, log.startId);
+    EXPECT_EQ(1U, log.startIndex);
     log.truncatePrefix(1);
-    EXPECT_EQ(1U, log.startId);
+    EXPECT_EQ(1U, log.startIndex);
 
     // case 1: entries is empty
     log.truncatePrefix(500);
-    EXPECT_EQ(500U, log.startId);
+    EXPECT_EQ(500U, log.startIndex);
     EXPECT_EQ(0U, log.entries.size());
 
     // case 2: entries has fewer elements than truncated
     log.append(sampleEntry);
     log.truncatePrefix(502);
-    EXPECT_EQ(502U, log.startId);
+    EXPECT_EQ(502U, log.startIndex);
     EXPECT_EQ(0U, log.entries.size());
 
     // case 3: entries has exactly the elements truncated
     log.append(sampleEntry);
     log.append(sampleEntry);
     log.truncatePrefix(504);
-    EXPECT_EQ(504U, log.startId);
+    EXPECT_EQ(504U, log.startIndex);
     EXPECT_EQ(0U, log.entries.size());
 
     // case 4: entries has more elements than truncated
@@ -137,14 +137,14 @@ TEST_F(ServerMemoryLogTest, truncatePrefix)
     sampleEntry.set_data("bar");
     log.append(sampleEntry);
     log.truncatePrefix(506);
-    EXPECT_EQ(506U, log.startId);
+    EXPECT_EQ(506U, log.startIndex);
     EXPECT_EQ(1U, log.entries.size());
     EXPECT_EQ("bar", log.entries.at(0).data());
 
     // make sure truncating to an earlier id has no effect
     EXPECT_EQ(1U, log.entries.size());
     log.truncatePrefix(400);
-    EXPECT_EQ(506U, log.startId);
+    EXPECT_EQ(506U, log.startIndex);
 }
 
 TEST_F(ServerMemoryLogTest, truncateSuffix)
