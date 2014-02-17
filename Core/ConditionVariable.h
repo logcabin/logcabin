@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 Stanford University
+/* Copyright (c) 2012-2014 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -90,6 +90,8 @@ class ConditionVariable {
         assert(stdLockGuard);
         lockGuard = std::unique_lock<Core::Mutex>(mutex, std::adopt_lock_t());
         stdLockGuard.release();
+        if (mutex.callback)
+            mutex.callback();
     }
 
 
@@ -111,13 +113,14 @@ class ConditionVariable {
             callback();
             lockGuard.lock();
         } else {
-            // Work around overflow in libstdc++, see
+            // Work-around for bug in libstdc++: wait for no more than an hour
+            // to avoid overflow. See
             // http://gcc.gnu.org/bugzilla/show_bug.cgi?id=58931
-            if (abs_time - Clock::now() > std::chrono::hours(1)) {
-                cv.wait_until(lockGuard, Clock::now() + std::chrono::hours(1));
-            } else {
+            std::chrono::time_point<Clock, Duration> now = Clock::now();
+            if (abs_time < now + std::chrono::hours(1))
                 cv.wait_until(lockGuard, abs_time);
-            }
+            else
+                cv.wait_until(lockGuard, now + std::chrono::hours(1));
         }
     }
 
@@ -136,6 +139,8 @@ class ConditionVariable {
         assert(stdLockGuard);
         lockGuard = std::unique_lock<Core::Mutex>(mutex, std::adopt_lock_t());
         stdLockGuard.release();
+        if (mutex.callback)
+            mutex.callback();
     }
 
   private:
