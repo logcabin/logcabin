@@ -861,8 +861,7 @@ RaftConsensus::bootstrapConfiguration()
         *configuration.mutable_prev_configuration()->add_servers();
     server.set_server_id(serverId);
     server.set_address(serverAddress);
-    uint64_t entryId = append(entry);
-    assert(entryId == 1);
+    append({&entry});
 }
 
 RaftConsensus::ClientResult
@@ -1055,9 +1054,15 @@ RaftConsensus::handleAppendEntries(
             log->truncateSuffix(entryId - 1);
             configurationManager->truncateSuffix(entryId - 1);
         }
-        // TODO(ongaro): rewrite this to allow batching to disk
-        uint64_t e = append(entry);
-        assert(e == entryId);
+
+        // Append this and all following entries.
+        std::vector<const Protocol::Raft::Entry*> entries;
+        while (it != request.entries().end()) {
+            entries.push_back(&*it);
+            ++it;
+        }
+        append(entries);
+        break;
     }
 
     // Set our committed ID from the request's. In rare cases, this would make
@@ -1625,27 +1630,32 @@ RaftConsensus::advanceCommittedId()
             entry.set_type(Protocol::Raft::EntryType::CONFIGURATION);
             *entry.mutable_configuration()->mutable_prev_configuration() =
                 configuration->description.next_configuration();
-            append(entry);
+            append({&entry});
             return;
         }
     }
 }
 
-uint64_t
-RaftConsensus::append(const Log::Entry& entry)
+void
+RaftConsensus::append(const std::vector<const Log::Entry*>& entries)
 {
-    assert(entry.term() != 0);
-    std::unique_ptr<Log::Sync> sync = log->appendSingle(entry);
-    uint64_t index = sync->firstIndex;
+    for (auto it = entries.begin(); it != entries.end(); ++it)
+        assert((*it)->term() != 0);
+    std::unique_ptr<Log::Sync> sync = log->append(entries);
+    uint64_t firstIndex = sync->firstIndex;
     if (state == State::LEADER) { // defer file sync
         diskQueue.push_back(std::move(sync));
     } else { // sync file now
         sync->wait();
     }
-    if (entry.type() == Protocol::Raft::EntryType::CONFIGURATION)
-        configurationManager->add(index, entry.configuration());
+    uint64_t index = firstIndex;
+    for (auto it = entries.begin(); it != entries.end(); ++it) {
+        const Log::Entry& entry = **it;
+        if (entry.type() == Protocol::Raft::EntryType::CONFIGURATION)
+            configurationManager->add(index, entry.configuration());
+        ++index;
+    }
     stateChanged.notify_all();
-    return index;
 }
 
 void
@@ -1878,7 +1888,7 @@ RaftConsensus::becomeLeader()
     Log::Entry entry;
     entry.set_term(currentTerm);
     entry.set_type(Protocol::Raft::EntryType::NOOP);
-    append(entry);
+    append({&entry});
 
     // Outstanding RequestVote RPCs are no longer needed.
     interruptAll();
@@ -2016,11 +2026,12 @@ RaftConsensus::replicateEntry(Log::Entry& entry,
 {
     if (state == State::LEADER) {
         entry.set_term(currentTerm);
-        uint64_t entryId = append(entry);
+        append({&entry});
+        uint64_t index = log->getLastLogIndex();
         while (!exiting && currentTerm == entry.term()) {
-            if (commitIndex >= entryId) {
+            if (commitIndex >= index) {
                 VERBOSE("replicate succeeded");
-                return {ClientResult::SUCCESS, entryId};
+                return {ClientResult::SUCCESS, index};
             }
             stateChanged.wait(lockGuard);
         }

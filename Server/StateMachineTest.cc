@@ -62,7 +62,7 @@ class ServerStateMachineTest : public ::testing::Test {
                 "    servers { server_id: 1, address: '127.0.0.1:61023' }"
                 "}");
         consensus->init();
-        consensus->append(entry);
+        consensus->append({&entry});
         consensus->startNewElection();
         consensus->configuration->localServer->lastSyncedIndex =
             consensus->log->getLastLogIndex();

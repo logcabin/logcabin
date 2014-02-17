@@ -951,10 +951,10 @@ class RaftConsensus : public Consensus {
     void advanceCommittedId();
 
     /**
-     * Append an entry to the log, set the configuration if this is a
+     * Append entries to the log, set the configuration if this contains a
      * configuration entry, and notify #stateChanged.
      */
-    uint64_t append(const Log::Entry& entry);
+    void append(const std::vector<const Log::Entry*>& entries);
 
     /**
      * Send an AppendEntries RPC to the server (either a heartbeat or containing
