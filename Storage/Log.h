@@ -53,13 +53,10 @@ class Log {
         virtual ~Sync() {}
         /**
          * Wait for the log entries to be durable.
-         * It is safe to call this method on the same object from multiple
-         * threads concurrently.
-         * \return
-         *      A string describing any errors that occurred, or the empty
-         *      string.
+         * This is not thread-safe.
+         * PANICs on errors.
          */
-        virtual std::string wait() { return ""; }
+        virtual void wait() { }
         /**
          * The index of the first log entry that is being appended.
          */

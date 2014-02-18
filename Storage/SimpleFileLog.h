@@ -38,11 +38,7 @@ class SimpleFileLog : public Log {
     class Sync : public Log::Sync {
       public:
         explicit Sync(std::unique_ptr<Log::Sync> memSync);
-        std::string wait();
-        /**
-         * Protects fds to avoid double-close.
-         */
-        std::mutex mutex;
+        void wait();
         /**
          * Set of file descriptors that are fsynced and closed on wait().
          * If the bool is true, close it too.

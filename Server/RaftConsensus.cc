@@ -718,6 +718,7 @@ RaftConsensus::RaftConsensus(Globals& globals)
     , numPeerThreads(0)
     , log()
     , diskQueue()
+    , leaderDiskThreadWorking(false)
     , configuration()
     , configurationManager()
     , currentTerm(0)
@@ -1443,33 +1444,24 @@ RaftConsensus::leaderDiskThreadMain()
     while (!exiting) {
         if (state == State::LEADER && !diskQueue.empty()) {
             uint64_t term = currentTerm;
-            uint64_t firstIndex;
             uint64_t lastIndex;
             std::string error;
             {
-                std::unique_ptr<Log::Sync>& sync = diskQueue.front();
-                firstIndex = sync->firstIndex;
+                // mark true while holding RaftConsensus lock
+                leaderDiskThreadWorking = true;
+                std::unique_ptr<Log::Sync> sync = std::move(diskQueue.front());
+                diskQueue.pop_front();
                 lastIndex = sync->lastIndex;
                 Core::MutexUnlock<Mutex> unlockGuard(lockGuard);
-                error = sync->wait();
+                sync->wait();
+                // Mark this false before re-acquiring RaftConsensus lock,
+                // since stepDown() waits on this to go false while holding the
+                // lock.
+                leaderDiskThreadWorking = false;
             }
             if (state == State::LEADER && currentTerm == term) {
-                if (!error.empty()) {
-                    PANIC("Error syncing log entries %lu-%lu to disk: %s",
-                          firstIndex, lastIndex, error.c_str());
-                }
                 configuration->localServer->lastSyncedIndex = lastIndex;
-                diskQueue.pop_front();
                 advanceCommittedId();
-            } else {
-                if (!error.empty()) {
-                    WARNING("Started syncing log entries %lu-%lu to disk in "
-                            "the background as a leader, but then lost "
-                            "leadership, so who knows what was actually "
-                            "synced. Errors were encountered but are probably "
-                            "of no consequence: %s",
-                            firstIndex, lastIndex, error.c_str());
-                }
             }
             continue;
         }
@@ -2153,8 +2145,18 @@ RaftConsensus::stepDown(uint64_t newTerm)
         setElectionTimer();
     interruptAll();
 
-    // Empty the disk queue by flushing all the writes to disk. Don't bother
-    // updating the localServer's lastSyncedIndex, since it doesn't matter.
+    // If the leader disk thread is currently writing to disk, wait for it to
+    // finish. We poll here because we don't want to release the lock (this
+    // server would then believe its writes have been flushed when they
+    // haven't).
+    while (leaderDiskThreadWorking)
+        usleep(500);
+
+    // Empty the rest of the disk queue by flushing all the writes to disk.
+    // Do this after waiting for leaderDiskThread to preserve FIFO order of
+    // Sync objects.
+    // Don't bother updating the localServer's lastSyncedIndex, since it
+    // doesn't matter.
     while (!diskQueue.empty()) {
         diskQueue.front()->wait();
         diskQueue.pop_front();

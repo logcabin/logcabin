@@ -13,6 +13,11 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#if __GNUC__ >= 4 && __GNUC_MINOR__ >= 5
+#include <atomic>
+#else
+#include <cstdatomic>
+#endif
 #include <chrono>
 #include <deque>
 #include <functional>
@@ -1184,6 +1189,13 @@ class RaftConsensus : public Consensus {
      * Sync objects may be flushed concurrently without holding the #mutex.
      */
     std::deque<std::unique_ptr<Storage::Log::Sync>> diskQueue;
+
+    /**
+     * Used for stepDown() to wait on #leaderDiskThread without releasing
+     * #mutex. This is true while #leaderDiskThread is writing to disk. It's
+     * set to true while holding #mutex; set to false without #mutex.
+     */
+    std::atomic<bool> leaderDiskThreadWorking;
 
     /**
      * Defines the servers that are part of the cluster. See Configuration.

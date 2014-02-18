@@ -1447,21 +1447,20 @@ TEST_F(ServerRaftConsensusTest, snapshotDone)
     EXPECT_EQ(1U, consensus->configuration->id);
 }
 
-class ErrorSyncBumpTerm : public Log::Sync {
+class BumpTermSync : public Log::Sync {
   protected:
-    explicit ErrorSyncBumpTerm(RaftConsensus& consensus)
+    explicit BumpTermSync(RaftConsensus& consensus)
         : Log::Sync(10, 20)
         , consensus(consensus)
         , first(true)
     {
     }
-    std::string wait() {
+    void wait() {
         if (first) {
             first = false;
+            // clear leaderDiskThreadWorking or stepDown will block forever
+            consensus.leaderDiskThreadWorking = false;
             consensus.stepDown(consensus.currentTerm + 1);
-            return "ErrorSync!";
-        } else {
-            return "";
         }
     }
     RaftConsensus& consensus;
@@ -1484,14 +1483,8 @@ class DiskThreadMainHelper {
         } else if (iter == 2) {
             EXPECT_EQ(0U, consensus.diskQueue.size());
             consensus.diskQueue.push_back(std::unique_ptr<Log::Sync>(
-                                    new ErrorSyncBumpTerm(consensus)));
-            // expect warning
-            LogCabin::Core::Debug::setLogPolicy({
-                {"Server/RaftConsensus.cc", "ERROR"}
-            });
+                                    new BumpTermSync(consensus)));
         } else if (iter == 3) {
-            // expect warning
-            LogCabin::Core::Debug::setLogPolicy({});
             EXPECT_EQ(0U, consensus.diskQueue.size());
             EXPECT_EQ(2U,
                       consensus.configuration->localServer->lastSyncedIndex);
@@ -1511,9 +1504,9 @@ class DiskThreadMainHelper {
 
 TEST_F(ServerRaftConsensusTest, leaderDiskThreadMain)
 {
-    // iter 1: leader with sync to do, no error
+    // iter 1: leader with sync to do
     // iter 2: leader but queue empty
-    // iter 3: leader with sync to do, error, different term
+    // iter 3: leader with sync to do, different term
     // iter 4: not leader, sync to do
     // iter 5: exit
 

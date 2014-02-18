@@ -114,31 +114,21 @@ protoToFile(const google::protobuf::Message& in,
 ////////// SimpleFileLog::Sync //////////
 SimpleFileLog::Sync::Sync(std::unique_ptr<Log::Sync> memSync)
     : Log::Sync(memSync->firstIndex, memSync->lastIndex)
-    , mutex()
     , fds()
 {
 }
 
-std::string
+void
 SimpleFileLog::Sync::wait()
 {
-    std::unique_lock<std::mutex> lockGuard(mutex);
-    std::string error;
     for (auto it = fds.begin(); it != fds.end(); ++it) {
-        if (::fsync(it->first) != 0) {
-            error += format("Could not fsync fd %d for "
-                            "log entries %lu-%lu: %s. ",
-                            it->first, firstIndex, lastIndex,
-                            strerror(errno));
-        } else if (it->second && ::close(it->first) != 0) {
-            error += format("Could not close fd %d for "
-                            "log entries %lu-%lu: %s. ",
-                            it->first, firstIndex, lastIndex,
-                            strerror(errno));
-        }
+        FilesystemUtil::File f(it->first, "-unknown-");
+        FilesystemUtil::fsync(f);
+        if (it->second)
+            f.close();
+        else
+            f.release();
     }
-    fds.clear();
-    return error;
 }
 
 ////////// SimpleFileLog //////////
