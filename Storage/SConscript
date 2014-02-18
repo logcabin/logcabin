@@ -2,5 +2,9 @@ Import('env', 'object_files')
 
 src = [
     "FilesystemUtil.cc",
+    "Log.cc",
+    "MemoryLog.cc",
+    "SimpleFileLog.cc",
 ]
-object_files['Storage'] = env.StaticObject(src)
+object_files['Storage'] = (env.StaticObject(src) +
+                           env.Protobuf("SimpleFileLog.proto"))

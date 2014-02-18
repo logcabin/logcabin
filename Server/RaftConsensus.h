@@ -25,9 +25,9 @@
 #include "Core/ConditionVariable.h"
 #include "Core/Time.h"
 #include "RPC/ClientRPC.h"
-#include "Server/RaftLog.h"
 #include "Server/Consensus.h"
 #include "Server/SnapshotFile.h"
+#include "Storage/Log.h"
 
 #ifndef LOGCABIN_SERVER_RAFTCONSENSUS_H
 #define LOGCABIN_SERVER_RAFTCONSENSUS_H
@@ -954,7 +954,7 @@ class RaftConsensus : public Consensus {
      * Append entries to the log, set the configuration if this contains a
      * configuration entry, and notify #stateChanged.
      */
-    void append(const std::vector<const Log::Entry*>& entries);
+    void append(const std::vector<const Storage::Log::Entry*>& entries);
 
     /**
      * Send an AppendEntries RPC to the server (either a heartbeat or containing
@@ -1020,7 +1020,8 @@ class RaftConsensus : public Consensus {
      * Append an entry to the log and wait for it to be committed.
      */
     std::pair<ClientResult, uint64_t>
-    replicateEntry(Log::Entry& entry, std::unique_lock<Mutex>& lockGuard);
+    replicateEntry(Storage::Log::Entry& entry,
+                   std::unique_lock<Mutex>& lockGuard);
 
     /**
      * Send a RequestVote RPC to the server. This is used by candidates to
@@ -1168,7 +1169,7 @@ class RaftConsensus : public Consensus {
      *
      * If you modify this, be sure to keep #configurationManager consistent.
      */
-    std::unique_ptr<Log> log;
+    std::unique_ptr<Storage::Log> log;
 
     /**
      * Queues writes that #leaderDiskThreadMain should flush to stable storage.
@@ -1182,7 +1183,7 @@ class RaftConsensus : public Consensus {
      * This queue may only be modified while holding #mutex, but individual
      * Sync objects may be flushed concurrently without holding the #mutex.
      */
-    std::deque<std::unique_ptr<Log::Sync>> diskQueue;
+    std::deque<std::unique_ptr<Storage::Log::Sync>> diskQueue;
 
     /**
      * Defines the servers that are part of the cluster. See Configuration.

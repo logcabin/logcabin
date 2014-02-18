@@ -27,7 +27,7 @@
 #include "RPC/Server.h"
 #include "Server/RaftConsensus.h"
 #include "Server/Globals.h"
-#include "Server/MemoryLog.h"
+#include "Storage/MemoryLog.h"
 
 namespace LogCabin {
 namespace Server {
@@ -36,6 +36,7 @@ namespace {
 using namespace RaftConsensusInternal; // NOLINT
 typedef RaftConsensus::State State;
 typedef RaftConsensus::ClientResult ClientResult;
+typedef Storage::Log Log;
 using std::chrono::milliseconds;
 
 // class Server: nothing to test
@@ -117,7 +118,7 @@ class ServerRaftConsensusSimpleConfigurationTest : public ::testing::Test {
         , emptyCfg()
         , oneCfg()
     {
-        consensus.log.reset(new MemoryLog());
+        consensus.log.reset(new Storage::MemoryLog());
         startThreads = false;
         cfg.servers = {
             makeServer(1),
@@ -471,7 +472,7 @@ class ServerRaftConsensusTest : public ::testing::Test {
                                           path);
     }
     void init() {
-        consensus->log.reset(new MemoryLog());
+        consensus->log.reset(new Storage::MemoryLog());
         consensus->init();
     }
     ~ServerRaftConsensusTest()
@@ -537,7 +538,7 @@ class ServerRaftConsensusPTest : public ServerRaftConsensusTest {
 
 TEST_F(ServerRaftConsensusTest, init_blanklog)
 {
-    consensus->log.reset(new MemoryLog());
+    consensus->log.reset(new Storage::MemoryLog());
     consensus->init();
     EXPECT_EQ(0U, consensus->log->getLastLogIndex());
     EXPECT_EQ(0U, consensus->currentTerm);
@@ -554,7 +555,7 @@ TEST_F(ServerRaftConsensusTest, init_blanklog)
 
 TEST_F(ServerRaftConsensusTest, init_nonblanklog)
 {
-    consensus->log.reset(new MemoryLog());
+    consensus->log.reset(new Storage::MemoryLog());
     Log& log = *consensus->log.get();
     log.metadata.set_current_term(30);
     log.metadata.set_voted_for(63);
@@ -594,7 +595,7 @@ TEST_F(ServerRaftConsensusTest, init_withsnapshot)
         RaftConsensus c1(globals);
         c1.storageDirectory =
             Storage::FilesystemUtil::dup(consensus->storageDirectory);
-        c1.log.reset(new MemoryLog());
+        c1.log.reset(new Storage::MemoryLog());
         c1.serverId = 1;
         c1.init();
         c1.currentTerm = 1;
@@ -610,7 +611,7 @@ TEST_F(ServerRaftConsensusTest, init_withsnapshot)
         c1.snapshotDone(2, std::move(writer));
     }
 
-    consensus->log.reset(new MemoryLog());
+    consensus->log.reset(new Storage::MemoryLog());
     // the log should be discarded when the snapshot is read
     consensus->log->appendSingle(entry3);
     consensus->init();

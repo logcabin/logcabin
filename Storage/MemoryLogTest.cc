@@ -15,20 +15,18 @@
 
 #include <gtest/gtest.h>
 #include <stdexcept>
-#include "Server/MemoryLog.h"
+#include "Storage/MemoryLog.h"
 
 namespace LogCabin {
-namespace Server {
+namespace Storage {
 namespace {
-
-using namespace RaftConsensusInternal; // NOLINT
 
 // One thing to keep in mind for these tests is truncatePrefix. Calling that
 // basically affects every other method, so every test should include
 // a call to truncatePrefix.
 
-class ServerMemoryLogTest : public ::testing::Test {
-    ServerMemoryLogTest()
+class StorageMemoryLogTest : public ::testing::Test {
+    StorageMemoryLogTest()
         : log()
         , sampleEntry()
     {
@@ -39,7 +37,7 @@ class ServerMemoryLogTest : public ::testing::Test {
     MemoryLog::Entry sampleEntry;
 };
 
-TEST_F(ServerMemoryLogTest, basic)
+TEST_F(StorageMemoryLogTest, basic)
 {
     std::unique_ptr<Log::Sync> sync = log.appendSingle(sampleEntry);
     EXPECT_EQ(1U, sync->firstIndex);
@@ -49,7 +47,7 @@ TEST_F(ServerMemoryLogTest, basic)
     EXPECT_EQ("foo", entry.data());
 }
 
-TEST_F(ServerMemoryLogTest, append)
+TEST_F(StorageMemoryLogTest, append)
 {
     std::unique_ptr<Log::Sync> sync = log.appendSingle(sampleEntry);
     EXPECT_EQ(1U, sync->firstIndex);
@@ -62,7 +60,7 @@ TEST_F(ServerMemoryLogTest, append)
     EXPECT_EQ(11U, log.getLastLogIndex());
 }
 
-TEST_F(ServerMemoryLogTest, getEntry)
+TEST_F(StorageMemoryLogTest, getEntry)
 {
     log.appendSingle(sampleEntry);
     Log::Entry entry = log.getEntry(1);
@@ -80,7 +78,7 @@ TEST_F(ServerMemoryLogTest, getEntry)
     EXPECT_EQ("bar", entry2.data());
 }
 
-TEST_F(ServerMemoryLogTest, getLogStartIndex)
+TEST_F(StorageMemoryLogTest, getLogStartIndex)
 {
     EXPECT_EQ(1U, log.getLogStartIndex());
     log.truncatePrefix(200);
@@ -88,7 +86,7 @@ TEST_F(ServerMemoryLogTest, getLogStartIndex)
     EXPECT_EQ(200U, log.getLogStartIndex());
 }
 
-TEST_F(ServerMemoryLogTest, getLastLogIndex)
+TEST_F(StorageMemoryLogTest, getLastLogIndex)
 {
     EXPECT_EQ(0U, log.getLastLogIndex());
     log.appendSingle(sampleEntry);
@@ -99,7 +97,7 @@ TEST_F(ServerMemoryLogTest, getLastLogIndex)
     EXPECT_EQ(2U, log.getLastLogIndex());
 }
 
-TEST_F(ServerMemoryLogTest, getSizeBytes)
+TEST_F(StorageMemoryLogTest, getSizeBytes)
 {
     EXPECT_EQ(0U, log.getSizeBytes());
     log.appendSingle(sampleEntry);
@@ -109,7 +107,7 @@ TEST_F(ServerMemoryLogTest, getSizeBytes)
     EXPECT_EQ(2 * s, log.getSizeBytes());
 }
 
-TEST_F(ServerMemoryLogTest, truncatePrefix)
+TEST_F(StorageMemoryLogTest, truncatePrefix)
 {
     EXPECT_EQ(1U, log.startIndex);
     log.truncatePrefix(0);
@@ -151,7 +149,7 @@ TEST_F(ServerMemoryLogTest, truncatePrefix)
     EXPECT_EQ(506U, log.startIndex);
 }
 
-TEST_F(ServerMemoryLogTest, truncateSuffix)
+TEST_F(StorageMemoryLogTest, truncateSuffix)
 {
     log.truncateSuffix(0);
     log.truncateSuffix(10);
@@ -179,6 +177,6 @@ TEST_F(ServerMemoryLogTest, truncateSuffix)
     EXPECT_EQ(10U, log.getLastLogIndex());
 }
 
-} // namespace LogCabin::Server::<anonymous>
-} // namespace LogCabin::Server
+} // namespace LogCabin::Storage::<anonymous>
+} // namespace LogCabin::Storage
 } // namespace LogCabin

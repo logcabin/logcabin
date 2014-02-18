@@ -24,11 +24,11 @@
 #include "Core/StringUtil.h"
 #include "Core/STLUtil.h"
 #include "Server/Globals.h"
-#include "Server/MemoryLog.h"
 #include "Server/RaftConsensus.h"
 #include "Server/SnapshotFile.h"
 #include "Server/StateMachine.h"
 #include "Storage/FilesystemUtil.h"
+#include "Storage/MemoryLog.h"
 
 namespace LogCabin {
 namespace Server {
@@ -47,13 +47,13 @@ class ServerStateMachineTest : public ::testing::Test {
         RaftConsensusInternal::startThreads = false;
         consensus.reset(new RaftConsensus(globals));
         consensus->serverId = 1;
-        consensus->log.reset(new RaftConsensusInternal::MemoryLog());
+        consensus->log.reset(new Storage::MemoryLog());
         std::string path = Storage::FilesystemUtil::mkdtemp();
         consensus->storageDirectory =
             Storage::FilesystemUtil::File(open(path.c_str(),
                                                O_RDONLY|O_DIRECTORY),
                                           path);
-        RaftConsensusInternal::Log::Entry entry;
+        Storage::Log::Entry entry;
         entry.set_term(1);
         entry.set_type(Protocol::Raft::EntryType::CONFIGURATION);
         *entry.mutable_configuration() =

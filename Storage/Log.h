@@ -18,18 +18,16 @@
 #include <string>
 
 #include "build/Protocol/Raft.pb.h"
-#include "build/Server/RaftLogMetadata.pb.h"
+#include "build/Protocol/RaftLogMetadata.pb.h"
 
-#ifndef LOGCABIN_SERVER_RAFTLOG_H
-#define LOGCABIN_SERVER_RAFTLOG_H
+#ifndef LOGCABIN_STORAGE_LOG_H
+#define LOGCABIN_STORAGE_LOG_H
 
 namespace LogCabin {
-namespace Server {
+namespace Storage {
 
 // forward declaration
 class Globals;
-
-namespace RaftConsensusInternal {
 
 /**
  * This interface is used by RaftConsensus to store log entries and metadata.
@@ -163,7 +161,7 @@ class Log {
     /**
      * Opaque metadata that the log keeps track of.
      */
-    RaftLogMetadata::Metadata metadata;
+    Protocol::RaftLogMetadata::Metadata metadata;
 
     /**
      * Print out a Log for debugging purposes.
@@ -177,8 +175,7 @@ class Log {
     Log& operator=(const Log&) = delete;
 };
 
-} // namespace LogCabin::Server::RaftConsensusInternal
-} // namespace LogCabin::Server
+} // namespace LogCabin::Storage
 } // namespace LogCabin
 
-#endif /* LOGCABIN_SERVER_RAFTLOG_H */
+#endif /* LOGCABIN_STORAGE_LOG_H */

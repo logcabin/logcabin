@@ -12,18 +12,9 @@
 // ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 // OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-/**
- * \file
- * Contains the format for SimpleFileLog's metadata files.
- */
-
-package LogCabin.Server.SimpleFileLogMetadata;
-
-import "build/Server/RaftLogMetadata.proto";
+package LogCabin.Protocol.RaftLogMetadata;
 
 message Metadata {
-    required uint64 version = 1;
-    required RaftLogMetadata.Metadata raft_metadata = 2;
-    required uint64 entries_start = 3; // inclusive
-    required uint64 entries_end = 4; // inclusive
+    required uint64 current_term = 1;
+    required uint64 voted_for = 2;
 }

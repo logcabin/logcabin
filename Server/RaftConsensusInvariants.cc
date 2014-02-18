@@ -98,7 +98,7 @@ Invariants::checkBasic()
     for (uint64_t entryId = consensus.log->getLogStartIndex();
          entryId <= consensus.log->getLastLogIndex();
          ++entryId) {
-        const Log::Entry& entry = consensus.log->getEntry(entryId);
+        const Storage::Log::Entry& entry = consensus.log->getEntry(entryId);
         expect(entry.term() >= lastTerm);
         lastTerm = entry.term();
     }
@@ -110,7 +110,7 @@ Invariants::checkBasic()
     for (uint64_t entryId = consensus.log->getLastLogIndex();
          entryId >= consensus.log->getLogStartIndex();
          --entryId) {
-        const Log::Entry& entry = consensus.log->getEntry(entryId);
+        const Storage::Log::Entry& entry = consensus.log->getEntry(entryId);
         if (entry.type() == Protocol::Raft::EntryType::CONFIGURATION) {
             expect(consensus.configuration->id == entryId);
             expect(consensus.configuration->state !=
@@ -134,7 +134,7 @@ Invariants::checkBasic()
     for (uint64_t entryId = consensus.log->getLogStartIndex();
          entryId <= consensus.log->getLastLogIndex();
          ++entryId) {
-        const Log::Entry& entry = consensus.log->getEntry(entryId);
+        const Storage::Log::Entry& entry = consensus.log->getEntry(entryId);
         if (entry.type() == Protocol::Raft::EntryType::CONFIGURATION) {
             auto it = consensus.configurationManager->
                                         descriptions.find(entryId);

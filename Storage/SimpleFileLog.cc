@@ -27,13 +27,11 @@
 #include "RPC/Buffer.h"
 #include "RPC/ProtoBuf.h"
 #include "Storage/FilesystemUtil.h"
-#include "Server/SimpleFileLog.h"
+#include "Storage/SimpleFileLog.h"
 
 namespace LogCabin {
-namespace Server {
-namespace RaftConsensusInternal {
+namespace Storage {
 
-namespace FilesystemUtil = Storage::FilesystemUtil;
 using FilesystemUtil::File;
 using Core::StringUtil::format;
 
@@ -356,6 +354,5 @@ SimpleFileLog::read(const std::string& entryPath) const
     return entry;
 }
 
-} // namespace LogCabin::Server::RaftConsensusInternal
-} // namespace LogCabin::Server
+} // namespace LogCabin::Storage
 } // namespace LogCabin

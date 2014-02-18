@@ -24,11 +24,10 @@
 #include "Core/StringUtil.h"
 #include "RPC/Buffer.h"
 #include "RPC/ProtoBuf.h"
-#include "Server/RaftLog.h"
+#include "Storage/Log.h"
 
 namespace LogCabin {
-namespace Server {
-namespace RaftConsensusInternal {
+namespace Storage {
 
 ////////// Log //////////
 
@@ -63,6 +62,5 @@ operator<<(std::ostream& os, const Log& log)
     return os;
 }
 
-} // namespace LogCabin::Server::RaftConsensusInternal
-} // namespace LogCabin::Server
+} // namespace LogCabin::Storage
 } // namespace LogCabin

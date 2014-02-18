@@ -17,22 +17,23 @@
 #include <string>
 #include <vector>
 
-#include "build/Server/SimpleFileLog.pb.h"
+#include "build/Storage/SimpleFileLog.pb.h"
 #include "Storage/FilesystemUtil.h"
-#include "Server/MemoryLog.h"
-#include "Server/RaftLog.h"
+#include "Storage/MemoryLog.h"
+#include "Storage/Log.h"
 
-#ifndef LOGCABIN_SERVER_SIMPLEFILELOG_H
-#define LOGCABIN_SERVER_SIMPLEFILELOG_H
+#ifndef LOGCABIN_STORAGE_SIMPLEFILELOG_H
+#define LOGCABIN_STORAGE_SIMPLEFILELOG_H
 
 namespace LogCabin {
-namespace Server {
+namespace Storage {
 
 // forward declaration
 class Globals;
 
-namespace RaftConsensusInternal {
-
+/**
+ * TODO(ongaro): docs
+ */
 class SimpleFileLog : public Log {
     class Sync : public Log::Sync {
       public:
@@ -80,8 +81,7 @@ class SimpleFileLog : public Log {
     Entry read(const std::string& entryPath) const;
 };
 
-} // namespace LogCabin::Server::RaftConsensusInternal
-} // namespace LogCabin::Server
+} // namespace LogCabin::Storage
 } // namespace LogCabin
 
-#endif /* LOGCABIN_SERVER_SIMPLEFILELOG_H */
+#endif /* LOGCABIN_STORAGE_SIMPLEFILELOG_H */

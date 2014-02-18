@@ -24,11 +24,10 @@
 #include "Core/StringUtil.h"
 #include "RPC/Buffer.h"
 #include "RPC/ProtoBuf.h"
-#include "Server/MemoryLog.h"
+#include "Storage/MemoryLog.h"
 
 namespace LogCabin {
-namespace Server {
-namespace RaftConsensusInternal {
+namespace Storage {
 
 ////////// MemoryLog //////////
 
@@ -110,6 +109,5 @@ MemoryLog::updateMetadata()
 {
 }
 
-} // namespace LogCabin::Server::RaftConsensusInternal
-} // namespace LogCabin::Server
+} // namespace LogCabin::Storage
 } // namespace LogCabin

@@ -18,18 +18,16 @@
 #include <memory>
 #include <string>
 
-#include "Server/RaftLog.h"
+#include "Storage/Log.h"
 
-#ifndef LOGCABIN_SERVER_MEMORYLOG_H
-#define LOGCABIN_SERVER_MEMORYLOG_H
+#ifndef LOGCABIN_STORAGE_MEMORYLOG_H
+#define LOGCABIN_STORAGE_MEMORYLOG_H
 
 namespace LogCabin {
-namespace Server {
+namespace Storage {
 
 // forward declaration
 class Globals;
-
-namespace RaftConsensusInternal {
 
 class MemoryLog : public Log {
   public:
@@ -62,9 +60,7 @@ class MemoryLog : public Log {
     std::deque<Entry> entries;
 };
 
-} // namespace LogCabin::Server::RaftConsensusInternal
-} // namespace LogCabin::Server
+} // namespace LogCabin::Storage
 } // namespace LogCabin
 
-#endif /* LOGCABIN_SERVER_MEMORYLOG_H */
-
+#endif /* LOGCABIN_STORAGE_MEMORYLOG_H */

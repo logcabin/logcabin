@@ -35,15 +35,17 @@
 #include "RPC/ServerRPC.h"
 #include "Server/RaftConsensus.h"
 #include "Server/Globals.h"
-#include "Server/MemoryLog.h"
-#include "Server/SimpleFileLog.h"
 #include "Server/SnapshotFile.h"
 #include "Server/StateMachine.h"
+#include "Storage/MemoryLog.h"
+#include "Storage/SimpleFileLog.h"
 
 namespace LogCabin {
 namespace Server {
 
 namespace RaftConsensusInternal {
+
+typedef Storage::Log Log;
 
 bool startThreads = true;
 
@@ -785,9 +787,9 @@ RaftConsensus::init()
         std::string storageModule =
             globals.config.read<std::string>("storageModule", "filesystem");
         if (storageModule == "memory")
-            log.reset(new MemoryLog());
+            log.reset(new Storage::MemoryLog());
         else
-            log.reset(new SimpleFileLog(storageDirectory));
+            log.reset(new Storage::SimpleFileLog(storageDirectory));
     }
     for (uint64_t entryId = log->getLogStartIndex();
          entryId <= log->getLastLogIndex();
