@@ -21,11 +21,11 @@
 
 #include "Storage/FilesystemUtil.h"
 
-#ifndef LOGCABIN_SERVER_SNAPSHOTFILE_H
-#define LOGCABIN_SERVER_SNAPSHOTFILE_H
+#ifndef LOGCABIN_STORAGE_SNAPSHOTFILE_H
+#define LOGCABIN_STORAGE_SNAPSHOTFILE_H
 
 namespace LogCabin {
-namespace Server {
+namespace Storage {
 namespace SnapshotFile {
 
 // TODO(ongaro): protobuf::io uses 32-bit integer file offsets, but snapshots
@@ -125,8 +125,8 @@ class Writer {
     std::unique_ptr<google::protobuf::io::CodedOutputStream> codedStream;
 };
 
-} // namespace LogCabin::Server::SnapshotFile
-} // namespace LogCabin::Server
+} // namespace LogCabin::Storage::SnapshotFile
+} // namespace LogCabin::Storage
 } // namespace LogCabin
 
-#endif /* LOGCABIN_SERVER_SNAPSHOTFILE_H */
+#endif /* LOGCABIN_STORAGE_SNAPSHOTFILE_H */

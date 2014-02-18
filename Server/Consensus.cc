@@ -14,7 +14,7 @@
  */
 
 #include "Server/Consensus.h"
-#include "Server/SnapshotFile.h"
+#include "Storage/SnapshotFile.h"
 
 namespace LogCabin {
 namespace Server {

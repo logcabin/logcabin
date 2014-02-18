@@ -5,6 +5,7 @@ src = [
     "Log.cc",
     "MemoryLog.cc",
     "SimpleFileLog.cc",
+    "SnapshotFile.cc",
 ]
 object_files['Storage'] = (env.StaticObject(src) +
                            env.Protobuf("SimpleFileLog.proto"))

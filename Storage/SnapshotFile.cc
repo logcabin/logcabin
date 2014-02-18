@@ -19,10 +19,10 @@
 
 #include "Core/Debug.h"
 #include "Core/StringUtil.h"
-#include "Server/SnapshotFile.h"
+#include "Storage/SnapshotFile.h"
 
 namespace LogCabin {
-namespace Server {
+namespace Storage {
 namespace SnapshotFile {
 
 namespace FilesystemUtil = Storage::FilesystemUtil;
@@ -131,6 +131,6 @@ Writer::getStream()
      return *codedStream;
 }
 
-} // namespace LogCabin::Server::SnapshotFile
-} // namespace LogCabin::Server
+} // namespace LogCabin::Storage::SnapshotFile
+} // namespace LogCabin::Storage
 } // namespace LogCabin

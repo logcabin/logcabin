@@ -19,32 +19,30 @@
 
 #include "Core/Debug.h"
 #include "Core/StringUtil.h"
-#include "Server/SnapshotFile.h"
+#include "Storage/SnapshotFile.h"
 
 namespace LogCabin {
-namespace Server {
+namespace Storage {
 namespace SnapshotFile {
 namespace {
 
-namespace FilesystemUtil = Storage::FilesystemUtil;
-
-class ServerSnapshotFileTest : public ::testing::Test {
+class StorageSnapshotFileTest : public ::testing::Test {
   public:
-    ServerSnapshotFileTest()
+    StorageSnapshotFileTest()
         : tmpdir()
     {
         std::string path = FilesystemUtil::mkdtemp();
         tmpdir = FilesystemUtil::File(open(path.c_str(), O_RDONLY|O_DIRECTORY),
                                       path);
     }
-    ~ServerSnapshotFileTest() {
+    ~StorageSnapshotFileTest() {
         FilesystemUtil::remove(tmpdir.path);
     }
     FilesystemUtil::File tmpdir;
 };
 
 
-TEST_F(ServerSnapshotFileTest, basic)
+TEST_F(StorageSnapshotFileTest, basic)
 {
     {
         Writer writer(tmpdir);
@@ -59,16 +57,16 @@ TEST_F(ServerSnapshotFileTest, basic)
     }
 }
 
-TEST_F(ServerSnapshotFileTest, reader_fileNotFound)
+TEST_F(StorageSnapshotFileTest, reader_fileNotFound)
 {
     EXPECT_THROW(Reader reader(tmpdir), std::runtime_error);
 }
 
-TEST_F(ServerSnapshotFileTest, writer_orphan)
+TEST_F(StorageSnapshotFileTest, writer_orphan)
 {
     // expect warning
     Core::Debug::setLogPolicy({
-        {"Server/SnapshotFile.cc", "ERROR"}
+        {"Storage/SnapshotFile.cc", "ERROR"}
     });
     {
         Writer writer(tmpdir);
@@ -80,7 +78,7 @@ TEST_F(ServerSnapshotFileTest, writer_orphan)
     EXPECT_TRUE(Core::StringUtil::startsWith(file, "partial")) << file;
 }
 
-TEST_F(ServerSnapshotFileTest, writer_discard)
+TEST_F(StorageSnapshotFileTest, writer_discard)
 {
     {
         Writer writer(tmpdir);
@@ -90,7 +88,7 @@ TEST_F(ServerSnapshotFileTest, writer_discard)
     EXPECT_EQ(0U, FilesystemUtil::ls(tmpdir).size());
 }
 
-TEST_F(ServerSnapshotFileTest, writer_flushToOS_continue)
+TEST_F(StorageSnapshotFileTest, writer_flushToOS_continue)
 {
     {
         Writer writer(tmpdir);
@@ -109,7 +107,7 @@ TEST_F(ServerSnapshotFileTest, writer_flushToOS_continue)
     }
 }
 
-TEST_F(ServerSnapshotFileTest, writer_flushToOS_forking)
+TEST_F(StorageSnapshotFileTest, writer_flushToOS_forking)
 {
     {
         Writer writer(tmpdir);
@@ -143,7 +141,7 @@ TEST_F(ServerSnapshotFileTest, writer_flushToOS_forking)
     }
 }
 
-} // namespace LogCabin::Server::SnapshotFile::<anonymous>
-} // namespace LogCabin::Server::SnapshotFile
-} // namespace LogCabin::Server
+} // namespace LogCabin::Storage::SnapshotFile::<anonymous>
+} // namespace LogCabin::Storage::SnapshotFile
+} // namespace LogCabin::Storage
 } // namespace LogCabin

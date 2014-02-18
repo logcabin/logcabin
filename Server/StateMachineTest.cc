@@ -25,10 +25,10 @@
 #include "Core/STLUtil.h"
 #include "Server/Globals.h"
 #include "Server/RaftConsensus.h"
-#include "Server/SnapshotFile.h"
 #include "Server/StateMachine.h"
 #include "Storage/FilesystemUtil.h"
 #include "Storage/MemoryLog.h"
+#include "Storage/SnapshotFile.h"
 
 namespace LogCabin {
 namespace Server {
@@ -134,7 +134,7 @@ TEST_F(ServerStateMachineTest, dumpSessionSnapshot)
     stateMachine->sessions.insert({91, s3});
 
     {
-        SnapshotFile::Writer writer(consensus->storageDirectory);
+        Storage::SnapshotFile::Writer writer(consensus->storageDirectory);
         stateMachine->dumpSessionSnapshot(writer.getStream());
         writer.save();
     }
@@ -143,7 +143,7 @@ TEST_F(ServerStateMachineTest, dumpSessionSnapshot)
     stateMachine->sessions.at(80).firstOutstandingRPC = 10;
 
     {
-        SnapshotFile::Reader reader(consensus->storageDirectory);
+        Storage::SnapshotFile::Reader reader(consensus->storageDirectory);
         stateMachine->loadSessionSnapshot(reader.getStream());
     }
     EXPECT_EQ((std::vector<std::uint64_t>{4, 80, 91}),

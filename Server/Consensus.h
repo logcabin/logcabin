@@ -24,14 +24,16 @@
 #define LOGCABIN_SERVER_CONSENSUS_H
 
 namespace LogCabin {
-namespace Server {
 
 // forward declaration
+namespace Storage {
 namespace SnapshotFile {
 class Reader;
 class Writer;
 }
+}
 
+namespace Server {
 
 // TODO(ongaro): move this
 class ThreadInterruptedException : std::runtime_error {
@@ -104,7 +106,7 @@ class Consensus {
         /**
          * A handle to the snapshot file for entries of type 'SNAPSHOT'.
          */
-        std::unique_ptr<SnapshotFile::Reader> snapshotReader;
+        std::unique_ptr<Storage::SnapshotFile::Reader> snapshotReader;
 
         // copy and assign not allowed
         Entry(const Entry&) = delete;
@@ -151,7 +153,7 @@ class Consensus {
      * \return
      *      A file the state machine can dump its snapshot into.
      */
-    virtual std::unique_ptr<SnapshotFile::Writer>
+    virtual std::unique_ptr<Storage::SnapshotFile::Writer>
     beginSnapshot(uint64_t lastIncludedIndex) = 0;
 
     /**
@@ -169,7 +171,7 @@ class Consensus {
      */
     virtual void
     snapshotDone(uint64_t lastIncludedIndex,
-                 std::unique_ptr<SnapshotFile::Writer> writer) = 0;
+                 std::unique_ptr<Storage::SnapshotFile::Writer> writer) = 0;
 
     /**
      * This server's unique ID. Not available until init() is called.

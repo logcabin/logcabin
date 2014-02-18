@@ -35,7 +35,6 @@
 #include "RPC/ServerRPC.h"
 #include "Server/RaftConsensus.h"
 #include "Server/Globals.h"
-#include "Server/SnapshotFile.h"
 #include "Server/StateMachine.h"
 #include "Storage/MemoryLog.h"
 #include "Storage/SimpleFileLog.h"
@@ -1117,8 +1116,10 @@ RaftConsensus::handleAppendSnapshotChunk(
         assert(leaderId == request.server_id());
     }
 
-    if (!snapshotWriter)
-        snapshotWriter.reset(new SnapshotFile::Writer(storageDirectory));
+    if (!snapshotWriter) {
+        snapshotWriter.reset(
+            new Storage::SnapshotFile::Writer(storageDirectory));
+    }
     if (request.byte_offset() <
         uint64_t(snapshotWriter->getStream().ByteCount())) {
         WARNING("Ignoring stale snapshot chunk for byte offset %lu when the "
@@ -1288,15 +1289,15 @@ RaftConsensus::setConfiguration(
     }
 }
 
-std::unique_ptr<SnapshotFile::Writer>
+std::unique_ptr<Storage::SnapshotFile::Writer>
 RaftConsensus::beginSnapshot(uint64_t lastIncludedIndex)
 {
     std::unique_lock<Mutex> lockGuard(mutex);
 
     NOTICE("Creating new snapshot through log index %lu (inclusive)",
            lastIncludedIndex);
-    std::unique_ptr<SnapshotFile::Writer> writer(
-                new SnapshotFile::Writer(storageDirectory));
+    std::unique_ptr<Storage::SnapshotFile::Writer> writer(
+                new Storage::SnapshotFile::Writer(storageDirectory));
 
     // Only committed entries may be snapshotted.
     // (This check relies on commitIndex monotonically increasing.)
@@ -1351,8 +1352,9 @@ RaftConsensus::beginSnapshot(uint64_t lastIncludedIndex)
 }
 
 void
-RaftConsensus::snapshotDone(uint64_t lastIncludedIndex,
-                            std::unique_ptr<SnapshotFile::Writer> writer)
+RaftConsensus::snapshotDone(
+        uint64_t lastIncludedIndex,
+        std::unique_ptr<Storage::SnapshotFile::Writer> writer)
 {
     std::unique_lock<Mutex> lockGuard(mutex);
     if (lastIncludedIndex <= lastSnapshotIndex) {
@@ -1932,10 +1934,10 @@ RaftConsensus::interruptAll()
 void
 RaftConsensus::readSnapshot()
 {
-    std::unique_ptr<SnapshotFile::Reader> reader;
+    std::unique_ptr<Storage::SnapshotFile::Reader> reader;
     if (storageDirectory.fd != -1) {
         try {
-            reader.reset(new SnapshotFile::Reader(storageDirectory));
+            reader.reset(new Storage::SnapshotFile::Reader(storageDirectory));
         } catch (const std::runtime_error& e) { // file not found
             NOTICE("%s", e.what());
         }

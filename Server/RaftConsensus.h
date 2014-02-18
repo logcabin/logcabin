@@ -26,8 +26,8 @@
 #include "Core/Time.h"
 #include "RPC/ClientRPC.h"
 #include "Server/Consensus.h"
-#include "Server/SnapshotFile.h"
 #include "Storage/Log.h"
+#include "Storage/SnapshotFile.h"
 
 #ifndef LOGCABIN_SERVER_RAFTCONSENSUS_H
 #define LOGCABIN_SERVER_RAFTCONSENSUS_H
@@ -852,12 +852,12 @@ class RaftConsensus : public Consensus {
             const Protocol::Raft::SimpleConfiguration& newConfiguration);
 
     // See Consensus::beginSnapshot().
-    std::unique_ptr<SnapshotFile::Writer>
+    std::unique_ptr<Storage::SnapshotFile::Writer>
     beginSnapshot(uint64_t lastIncludedIndex);
 
     // See Consensus::snapshotDone().
     void snapshotDone(uint64_t lastIncludedIndex,
-                      std::unique_ptr<SnapshotFile::Writer> writer);
+                      std::unique_ptr<Storage::SnapshotFile::Writer> writer);
 
     /**
      * Print out the contents of this class for debugging purposes.
@@ -1234,12 +1234,12 @@ class RaftConsensus : public Consensus {
     uint64_t lastSnapshotBytes;
 
     /**
-     * If not NULL, this is a SnapshotFile::Reader that covers up through
+     * If not NULL, this is a Storage::SnapshotFile::Reader that covers up through
      * lastSnapshotIndex. This is ready for the state machine to process and is
      * returned to the state machine in getNextEntry(). It's just a cache which
      * can be repopulated with readSnapshot().
      */
-    mutable std::unique_ptr<SnapshotFile::Reader> snapshotReader;
+    mutable std::unique_ptr<Storage::SnapshotFile::Reader> snapshotReader;
 
     /**
      * This is used in handleAppendSnapshotChunk when receiving a snapshot from
@@ -1247,7 +1247,7 @@ class RaftConsensus : public Consensus {
      * at a time, and any partial snapshots here are discarded when the term
      * changes.
      */
-    std::unique_ptr<SnapshotFile::Writer> snapshotWriter;
+    std::unique_ptr<Storage::SnapshotFile::Writer> snapshotWriter;
 
     /**
      * The largest entry ID for which a quorum is known to have stored the same

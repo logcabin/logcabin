@@ -24,8 +24,8 @@
 #include "Core/ThreadId.h"
 #include "RPC/ProtoBuf.h"
 #include "Server/Consensus.h"
-#include "Server/SnapshotFile.h"
 #include "Server/StateMachine.h"
+#include "Storage/SnapshotFile.h"
 #include "Tree/ProtoBuf.h"
 
 namespace LogCabin {
@@ -315,7 +315,7 @@ StateMachine::takeSnapshot(uint64_t lastIncludedIndex,
     // Open a snapshot file, then fork a child to write a consistent view of
     // the state machine to the snapshot file while this process continues
     // accepting requests.
-    std::unique_ptr<SnapshotFile::Writer> writer =
+    std::unique_ptr<Storage::SnapshotFile::Writer> writer =
         consensus->beginSnapshot(lastIncludedIndex);
     // Flush the outstanding changes to the snapshot now so that they
     // aren't somehow double-flushed later.

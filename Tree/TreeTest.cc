@@ -20,8 +20,8 @@
 
 #include "Core/StringUtil.h"
 #include "Tree/Tree.h"
-#include "Server/SnapshotFile.h"
 #include "Storage/FilesystemUtil.h"
+#include "Storage/SnapshotFile.h"
 
 namespace LogCabin {
 namespace Tree {
@@ -76,14 +76,14 @@ TEST(TreeFileTest, dumpSnapshot)
            open(path.c_str(), O_RDONLY|O_DIRECTORY),
            path);
     {
-        Server::SnapshotFile::Writer writer(tmpdir);
+        Storage::SnapshotFile::Writer writer(tmpdir);
         File f;
         f.contents = "hello, world!";
         f.dumpSnapshot(writer.getStream());
         writer.save();
     }
     {
-        Server::SnapshotFile::Reader reader(tmpdir);
+        Storage::SnapshotFile::Reader reader(tmpdir);
         File f;
         f.loadSnapshot(reader.getStream());
         EXPECT_EQ("hello, world!", f.contents);
@@ -222,12 +222,12 @@ TEST(TreeDirectoryTest, dumpSnapshot)
            open(path.c_str(), O_RDONLY|O_DIRECTORY),
            path);
     {
-        Server::SnapshotFile::Writer writer(tmpdir);
+        Storage::SnapshotFile::Writer writer(tmpdir);
         tree.superRoot.dumpSnapshot(writer.getStream());
         writer.save();
     }
     {
-        Server::SnapshotFile::Reader reader(tmpdir);
+        Storage::SnapshotFile::Reader reader(tmpdir);
         Tree t2;
         t2.superRoot.loadSnapshot(reader.getStream());
         EXPECT_EQ(dumpTree(tree), dumpTree(t2));
@@ -295,7 +295,7 @@ TEST_F(TreeTreeTest, dumpSnapshot)
            open(path.c_str(), O_RDONLY|O_DIRECTORY),
            path);
     {
-        Server::SnapshotFile::Writer writer(tmpdir);
+        Storage::SnapshotFile::Writer writer(tmpdir);
         tree.write("/c", "foo");
         tree.dumpSnapshot(writer.getStream());
         writer.save();
@@ -303,7 +303,7 @@ TEST_F(TreeTreeTest, dumpSnapshot)
     tree.removeFile("/c");
     tree.write("/d", "bar");
     {
-        Server::SnapshotFile::Reader reader(tmpdir);
+        Storage::SnapshotFile::Reader reader(tmpdir);
         tree.loadSnapshot(reader.getStream());
     }
     std::vector<std::string> children;
