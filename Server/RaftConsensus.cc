@@ -769,9 +769,7 @@ RaftConsensus::init()
     // makes sense with reconfiguration.
     NOTICE("My server ID is %lu", serverId);
 
-    if (storageDirectory.fd == -1 && // unit tests set this
-        globals.config.read<std::string>("storageModule", "filesystem") ==
-            "filesystem") {
+    if (storageDirectory.fd == -1) {
         Storage::FilesystemUtil::File parentDir =
             Storage::FilesystemUtil::openDir(
                 globals.config.read<std::string>("storagePath", "storage"));
