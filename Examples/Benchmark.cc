@@ -101,7 +101,7 @@ class OptionParser {
                   << "Number of concurrent writers [default: 1]"
                   << std::endl;
         std::cout << "  --writes <num>          "
-                  << "Number of writes total writes [default: 1000]"
+                  << "Number of total writes [default: 1000]"
                   << std::endl;
     }
 
