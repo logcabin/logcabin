@@ -36,8 +36,7 @@
 #include "Server/RaftConsensus.h"
 #include "Server/Globals.h"
 #include "Server/StateMachine.h"
-#include "Storage/MemoryLog.h"
-#include "Storage/SimpleFileLog.h"
+#include "Storage/LogFactory.h"
 
 namespace LogCabin {
 namespace Server {
@@ -784,12 +783,7 @@ RaftConsensus::init()
     configurationManager.reset(new ConfigurationManager(*configuration));
 
     if (!log) { // some unit tests pre-set the log; don't overwrite it
-        std::string storageModule =
-            globals.config.read<std::string>("storageModule", "filesystem");
-        if (storageModule == "memory")
-            log.reset(new Storage::MemoryLog());
-        else
-            log.reset(new Storage::SimpleFileLog(storageDirectory));
+        log = Storage::LogFactory::makeLog(globals.config, storageDirectory);
     }
     for (uint64_t entryId = log->getLogStartIndex();
          entryId <= log->getLastLogIndex();
