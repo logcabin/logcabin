@@ -51,6 +51,11 @@ TEST_F(StorageLogFactoryTest, makeLog_memory)
 
 TEST_F(StorageLogFactoryTest, makeLog_filesystem)
 {
+    // expect warning
+    Core::Debug::setLogPolicy({
+        {"Storage/SimpleFileLog.cc", "ERROR"}
+    });
+
     // default
     std::unique_ptr<Log> log = LogFactory::makeLog(config, tmpdir);
     EXPECT_TRUE(log);
