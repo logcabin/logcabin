@@ -34,11 +34,13 @@ class MemoryLog : public Log {
     MemoryLog();
     ~MemoryLog();
 
-    std::unique_ptr<Sync> append(const std::vector<const Entry*>& entries);
+    std::pair<uint64_t, uint64_t>
+    append(const std::vector<const Entry*>& entries);
     const Entry& getEntry(uint64_t logIndex) const;
     uint64_t getLogStartIndex() const;
     uint64_t getLastLogIndex() const;
     uint64_t getSizeBytes() const;
+    std::unique_ptr<Sync> takeSync();
     void truncatePrefix(uint64_t firstIndex);
     void truncateSuffix(uint64_t lastIndex);
     void updateMetadata();
@@ -58,6 +60,14 @@ class MemoryLog : public Log {
      * (used after snapshotting a prefix of the log).
      */
     std::deque<Entry> entries;
+
+    /**
+     * This is returned by the next call to getSync.
+     * It's totally unnecessary to have this member for MemoryLog, as its syncs
+     * don't do anything. However, it's useful for injecting different times of
+     * Syncs into unit tests.
+     */
+    std::unique_ptr<Sync> currentSync;
 };
 
 } // namespace LogCabin::Storage

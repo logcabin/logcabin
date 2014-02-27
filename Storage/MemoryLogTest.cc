@@ -39,9 +39,9 @@ class StorageMemoryLogTest : public ::testing::Test {
 
 TEST_F(StorageMemoryLogTest, basic)
 {
-    std::unique_ptr<Log::Sync> sync = log.appendSingle(sampleEntry);
-    EXPECT_EQ(1U, sync->firstIndex);
-    EXPECT_EQ(1U, sync->lastIndex);
+    std::pair<uint64_t, uint64_t> range = log.append({&sampleEntry});
+    EXPECT_EQ(1U, range.first);
+    EXPECT_EQ(1U, range.second);
     Log::Entry entry = log.getEntry(1);
     EXPECT_EQ(40U, entry.term());
     EXPECT_EQ("foo", entry.data());
@@ -49,20 +49,20 @@ TEST_F(StorageMemoryLogTest, basic)
 
 TEST_F(StorageMemoryLogTest, append)
 {
-    std::unique_ptr<Log::Sync> sync = log.appendSingle(sampleEntry);
-    EXPECT_EQ(1U, sync->firstIndex);
-    EXPECT_EQ(1U, sync->lastIndex);
+    std::pair<uint64_t, uint64_t> range = log.append({&sampleEntry});
+    EXPECT_EQ(1U, range.first);
+    EXPECT_EQ(1U, range.second);
     log.truncatePrefix(10);
-    sync = log.append({&sampleEntry, &sampleEntry});
-    EXPECT_EQ(10U, sync->firstIndex);
-    EXPECT_EQ(11U, sync->lastIndex);
+    range = log.append({&sampleEntry, &sampleEntry});
+    EXPECT_EQ(10U, range.first);
+    EXPECT_EQ(11U, range.second);
     EXPECT_EQ(10U, log.getLogStartIndex());
     EXPECT_EQ(11U, log.getLastLogIndex());
 }
 
 TEST_F(StorageMemoryLogTest, getEntry)
 {
-    log.appendSingle(sampleEntry);
+    log.append({&sampleEntry});
     Log::Entry entry = log.getEntry(1);
     EXPECT_EQ(40U, entry.term());
     EXPECT_EQ("foo", entry.data());
@@ -70,10 +70,10 @@ TEST_F(StorageMemoryLogTest, getEntry)
     EXPECT_THROW(log.getEntry(2), std::out_of_range);
 
     sampleEntry.set_data("bar");
-    log.appendSingle(sampleEntry);
+    log.append({&sampleEntry});
     log.truncatePrefix(2);
     EXPECT_THROW(log.getEntry(1), std::out_of_range);
-    log.appendSingle(sampleEntry);
+    log.append({&sampleEntry});
     Log::Entry entry2 = log.getEntry(2);
     EXPECT_EQ("bar", entry2.data());
 }
@@ -89,8 +89,8 @@ TEST_F(StorageMemoryLogTest, getLogStartIndex)
 TEST_F(StorageMemoryLogTest, getLastLogIndex)
 {
     EXPECT_EQ(0U, log.getLastLogIndex());
-    log.appendSingle(sampleEntry);
-    log.appendSingle(sampleEntry);
+    log.append({&sampleEntry});
+    log.append({&sampleEntry});
     EXPECT_EQ(2U, log.getLastLogIndex());
 
     log.truncatePrefix(2);
@@ -100,10 +100,10 @@ TEST_F(StorageMemoryLogTest, getLastLogIndex)
 TEST_F(StorageMemoryLogTest, getSizeBytes)
 {
     EXPECT_EQ(0U, log.getSizeBytes());
-    log.appendSingle(sampleEntry);
+    log.append({&sampleEntry});
     uint64_t s = log.getSizeBytes();
     EXPECT_LT(0U, s);
-    log.appendSingle(sampleEntry);
+    log.append({&sampleEntry});
     EXPECT_EQ(2 * s, log.getSizeBytes());
 }
 
@@ -121,23 +121,23 @@ TEST_F(StorageMemoryLogTest, truncatePrefix)
     EXPECT_EQ(0U, log.entries.size());
 
     // case 2: entries has fewer elements than truncated
-    log.appendSingle(sampleEntry);
+    log.append({&sampleEntry});
     log.truncatePrefix(502);
     EXPECT_EQ(502U, log.startIndex);
     EXPECT_EQ(0U, log.entries.size());
 
     // case 3: entries has exactly the elements truncated
-    log.appendSingle(sampleEntry);
-    log.appendSingle(sampleEntry);
+    log.append({&sampleEntry});
+    log.append({&sampleEntry});
     log.truncatePrefix(504);
     EXPECT_EQ(504U, log.startIndex);
     EXPECT_EQ(0U, log.entries.size());
 
     // case 4: entries has more elements than truncated
-    log.appendSingle(sampleEntry);
-    log.appendSingle(sampleEntry);
+    log.append({&sampleEntry});
+    log.append({&sampleEntry});
     sampleEntry.set_data("bar");
-    log.appendSingle(sampleEntry);
+    log.append({&sampleEntry});
     log.truncatePrefix(506);
     EXPECT_EQ(506U, log.startIndex);
     EXPECT_EQ(1U, log.entries.size());
@@ -154,8 +154,8 @@ TEST_F(StorageMemoryLogTest, truncateSuffix)
     log.truncateSuffix(0);
     log.truncateSuffix(10);
     EXPECT_EQ(0U, log.getLastLogIndex());
-    log.appendSingle(sampleEntry);
-    log.appendSingle(sampleEntry);
+    log.append({&sampleEntry});
+    log.append({&sampleEntry});
     log.truncateSuffix(10);
     EXPECT_EQ(2U, log.getLastLogIndex());
     log.truncateSuffix(2);
@@ -167,13 +167,13 @@ TEST_F(StorageMemoryLogTest, truncateSuffix)
 
 
     log.truncatePrefix(10);
-    log.appendSingle(sampleEntry);
+    log.append({&sampleEntry});
     EXPECT_EQ(10U, log.getLastLogIndex());
     log.truncateSuffix(10);
     EXPECT_EQ(10U, log.getLastLogIndex());
     log.truncateSuffix(8);
     EXPECT_EQ(9U, log.getLastLogIndex());
-    log.appendSingle(sampleEntry);
+    log.append({&sampleEntry});
     EXPECT_EQ(10U, log.getLastLogIndex());
 }
 

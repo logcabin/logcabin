@@ -1177,18 +1177,15 @@ class RaftConsensus : public Consensus {
     std::unique_ptr<Storage::Log> log;
 
     /**
-     * Queues writes that #leaderDiskThreadMain should flush to stable storage.
-     * This is always empty for followers and candidates and is only used for
-     * leaders.
+     * Flag to indicate that #leaderDiskThreadMain should flush recent log
+     * writes to stable storage. This is always false for followers and
+     * candidates and is only used for leaders.
      *
-     * When a server steps down, it blocks on each of these writes and empties
-     * the queue while holding #mutex. This way, followers can assume that all
-     * of their log entries are durable when replying to leaders.
-     *
-     * This queue may only be modified while holding #mutex, but individual
-     * Sync objects may be flushed concurrently without holding the #mutex.
+     * When a server steps down, it waits for all syncs to complete, that way
+     * followers can assume that all of their log entries are durable when
+     * replying to leaders.
      */
-    std::deque<std::unique_ptr<Storage::Log::Sync>> diskQueue;
+    bool logSyncQueued;
 
     /**
      * Used for stepDown() to wait on #leaderDiskThread without releasing

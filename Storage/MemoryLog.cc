@@ -34,21 +34,24 @@ namespace Storage {
 MemoryLog::MemoryLog()
     : startIndex(1)
     , entries()
+    , currentSync(new Sync(0))
 {
 }
 
 MemoryLog::~MemoryLog()
 {
+    currentSync->completed = true;
 }
 
-std::unique_ptr<Log::Sync>
+std::pair<uint64_t, uint64_t>
 MemoryLog::append(const std::vector<const Entry*>& newEntries)
 {
     uint64_t firstIndex = startIndex + entries.size();
+    uint64_t lastIndex = firstIndex + newEntries.size() - 1;
     for (auto it = newEntries.begin(); it != newEntries.end(); ++it)
         entries.push_back(**it);
-    return std::unique_ptr<Sync>(
-        new Sync(firstIndex, firstIndex + newEntries.size() - 1));
+    currentSync->lastIndex = lastIndex;
+    return {firstIndex, lastIndex};
 }
 
 const Log::Entry&
@@ -79,6 +82,14 @@ MemoryLog::getSizeBytes() const
     for (auto it = entries.begin(); it < entries.end(); ++it)
         size += it->ByteSize();
     return size;
+}
+
+std::unique_ptr<Log::Sync>
+MemoryLog::takeSync()
+{
+    std::unique_ptr<Sync> other(new Sync(getLastLogIndex()));
+    std::swap(other, currentSync);
+    return other;
 }
 
 void

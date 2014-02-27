@@ -415,13 +415,16 @@ TEST_F(ServerRaftConsensusConfigurationManagerTest, restoreInvariants) {
 void drainDiskQueue(RaftConsensus& consensus)
 {
     assert(consensus.state == State::LEADER);
-    while (!consensus.diskQueue.empty()) {
-        std::unique_ptr<Log::Sync>& sync = consensus.diskQueue.front();
+    // This is a while loop since advanceCommittedId can append, causing
+    // logSyncQueued to go true again.
+    while (consensus.logSyncQueued) {
+        std::unique_ptr<Log::Sync> sync = consensus.log->takeSync();
+        consensus.logSyncQueued = false;
         sync->wait();
         consensus.configuration->localServer->lastSyncedIndex =
                     sync->lastIndex;
-        consensus.diskQueue.pop_front(); // sync is now off-limits
         consensus.advanceCommittedId();
+        consensus.log->syncComplete(std::move(sync));
     }
 }
 
@@ -564,16 +567,16 @@ TEST_F(ServerRaftConsensusTest, init_nonblanklog)
     entry.set_term(1);
     entry.set_type(Protocol::Raft::EntryType::CONFIGURATION);
     *entry.mutable_configuration() = desc(d);
-    log.appendSingle(entry);
+    log.append({&entry});
 
     Log::Entry entry2;
     entry2.set_term(2);
     entry2.set_type(Protocol::Raft::EntryType::DATA);
     entry2.set_data("hello, world");
-    log.appendSingle(entry2);
+    log.append({&entry2});
 
     entry.set_term(2);
-    log.appendSingle(entry); // append configuration entry again
+    log.append({&entry}); // append configuration entry again
 
     consensus->init();
     EXPECT_EQ(3U, consensus->log->getLastLogIndex());
@@ -615,7 +618,7 @@ TEST_F(ServerRaftConsensusTest, init_withsnapshot)
 
     consensus->log.reset(new Storage::MemoryLog());
     // the log should be discarded when the snapshot is read
-    consensus->log->appendSingle(entry3);
+    consensus->log->append({&entry3});
     consensus->init();
     EXPECT_EQ(2U, consensus->lastSnapshotIndex);
     EXPECT_EQ(2U, consensus->lastSnapshotTerm);
@@ -1450,7 +1453,7 @@ TEST_F(ServerRaftConsensusTest, snapshotDone)
 class BumpTermSync : public Log::Sync {
   protected:
     explicit BumpTermSync(RaftConsensus& consensus)
-        : Log::Sync(10, 20)
+        : Log::Sync(20)
         , consensus(consensus)
         , first(true)
     {
@@ -1474,26 +1477,28 @@ class DiskThreadMainHelper {
     {
     }
     void operator()() {
+        Storage::MemoryLog* log =
+            dynamic_cast<Storage::MemoryLog*>(consensus.log.get());
+        EXPECT_FALSE(consensus.leaderDiskThreadWorking);
         if (iter == 1) {
-            EXPECT_EQ(0U, consensus.diskQueue.size());
+            EXPECT_FALSE(consensus.logSyncQueued);
             EXPECT_EQ(2U,
                       consensus.configuration->localServer->lastSyncedIndex);
             EXPECT_EQ(2U, consensus.commitIndex);
-
         } else if (iter == 2) {
-            EXPECT_EQ(0U, consensus.diskQueue.size());
-            consensus.diskQueue.push_back(std::unique_ptr<Log::Sync>(
-                                    new BumpTermSync(consensus)));
+            EXPECT_FALSE(consensus.logSyncQueued);
+            log->currentSync->completed = true;
+            log->currentSync.reset(new BumpTermSync(consensus));
+            consensus.logSyncQueued = true;
         } else if (iter == 3) {
-            EXPECT_EQ(0U, consensus.diskQueue.size());
+            EXPECT_FALSE(consensus.logSyncQueued);
             EXPECT_EQ(2U,
                       consensus.configuration->localServer->lastSyncedIndex);
             EXPECT_EQ(2U, consensus.commitIndex);
-
-            consensus.diskQueue.push_back(std::unique_ptr<Log::Sync>(
-                                    new Log::Sync(3, 4)));
+            log->currentSync->lastIndex = 4;
+            consensus.logSyncQueued = true;
         } else if (iter == 4) {
-            EXPECT_EQ(1U, consensus.diskQueue.size());
+            EXPECT_TRUE(consensus.logSyncQueued);
             consensus.exit();
         }
         ++iter;
@@ -1505,7 +1510,7 @@ class DiskThreadMainHelper {
 TEST_F(ServerRaftConsensusTest, leaderDiskThreadMain)
 {
     // iter 1: leader with sync to do
-    // iter 2: leader but queue empty
+    // iter 2: leader with nothing to do
     // iter 3: leader with sync to do, different term
     // iter 4: not leader, sync to do
     // iter 5: exit
@@ -1520,7 +1525,7 @@ TEST_F(ServerRaftConsensusTest, leaderDiskThreadMain)
     consensus->startNewElection();
     EXPECT_EQ(State::LEADER, consensus->state);
     EXPECT_EQ(2U, consensus->log->getLastLogIndex());
-    EXPECT_EQ(1U, consensus->diskQueue.size());
+    EXPECT_TRUE(consensus->logSyncQueued);
     DiskThreadMainHelper helper(*consensus);
     consensus->stateChanged.callback = std::ref(helper);
     consensus->leaderDiskThreadMain();
@@ -1841,7 +1846,7 @@ TEST_F(ServerRaftConsensusTest, advanceCommittedId_commitTransitionToSelf)
     entry3.set_term(6);
     consensus->append({&entry3});
     drainDiskQueue(*consensus);
-    consensus->advanceCommittedId();
+    EXPECT_EQ(4U, consensus->configuration->localServer->lastSyncedIndex);
     EXPECT_EQ(4U, consensus->commitIndex);
     EXPECT_EQ(4U, consensus->log->getLastLogIndex());
     const Log::Entry& l3 = consensus->log->getEntry(4);
@@ -1862,7 +1867,7 @@ TEST_F(ServerRaftConsensusTest, append)
     consensus->stepDown(5);
     consensus->append({});
     consensus->append({&entry1, &entry2});
-    EXPECT_EQ(0U, consensus->diskQueue.size());
+    EXPECT_FALSE(consensus->logSyncQueued);
     EXPECT_EQ(1U, consensus->configuration->id);
     EXPECT_EQ(2U, consensus->log->getLastLogIndex());
     EXPECT_EQ((std::vector<uint64_t>{1}),
@@ -1872,7 +1877,7 @@ TEST_F(ServerRaftConsensusTest, append)
 
     // leaders put onto diskQueue rather than syncing inline
     consensus->startNewElection();
-    EXPECT_EQ(1U, consensus->diskQueue.size());
+    EXPECT_TRUE(consensus->logSyncQueued);
 }
 
 // used in AppendEntries tests
@@ -2572,7 +2577,7 @@ TEST_F(ServerRaftConsensusTest, stepDown)
     EXPECT_EQ(Configuration::State::STAGING, consensus->configuration->state);
 
     // from leader to new term
-    EXPECT_LT(0U, consensus->diskQueue.size());
+    EXPECT_TRUE(consensus->logSyncQueued);
     consensus->stepDown(10);
     EXPECT_EQ(0U, consensus->leaderId);
     EXPECT_EQ(0U, consensus->votedFor);
@@ -2581,7 +2586,7 @@ TEST_F(ServerRaftConsensusTest, stepDown)
     EXPECT_GT(Clock::now() +
               milliseconds(RaftConsensus::ELECTION_TIMEOUT_MS) * 2,
               consensus->startElectionAt);
-    EXPECT_EQ(0U, consensus->diskQueue.size());
+    EXPECT_FALSE(consensus->logSyncQueued);
 
     // from candidate to same term
     entry5.set_term(6);

@@ -37,34 +37,35 @@ class Globals;
 class Log {
   public:
     /**
-     * This class provides an asynchronous interface
-     * for flushing log entries to stable storage.
-     * It's returned by Log::append().
+     * An interface for flushing newly appended log entries to stable storage.
+     * Leaders do this in a separate thread, while followers and candidates do
+     * this immediately after appending the entries.
      *
-     * This class doesn't do anything but subclasses do override the wait()
-     * method.
+     * Callers should wait() on all Sync objects prior to calling
+     * truncateSuffix(). This never happens on leaders, so it's not a real
+     * limitation, but things may go wonky otherwise.
      */
     class Sync {
       public:
-        Sync(uint64_t firstIndex, uint64_t lastIndex)
-            : firstIndex(firstIndex)
-            , lastIndex(lastIndex) {
-        }
-        virtual ~Sync() {}
+        explicit Sync(uint64_t lastIndex);
+        virtual ~Sync();
         /**
          * Wait for the log entries to be durable.
-         * This is not thread-safe.
+         * This is safe to call while the Log is being accessed and modified
+         * from a separate thread.
          * PANICs on errors.
          */
-        virtual void wait() { }
+        virtual void wait() {}
         /**
-         * The index of the first log entry that is being appended.
+         * The index of the last log entry that is being flushed.
+         * After the call to wait, every entry in the log up to this one is
+         * durable.
          */
-        const uint64_t firstIndex;
+        uint64_t lastIndex;
         /**
-         * The index of the last log entry that is being appended.
+         * Used by destructor to make sure that Log::syncComplete was called.
          */
-        const uint64_t lastIndex;
+        bool completed;
     };
 
     /**
@@ -80,22 +81,10 @@ class Log {
      * \param entries
      *      Entries to place at the end of the log.
      * \return
-     *      Object that can be used to wait for the entries to be durable.
+     *      Range of indexes of the new entries in the log, inclusive.
      */
-    virtual std::unique_ptr<Sync> append(
+    virtual std::pair<uint64_t, uint64_t> append(
                             const std::vector<const Entry*>& entries) = 0;
-
-    /**
-     * Append a single new entry to the log. This is a wrapper around the
-     * vectored version of append; it's just for convenience. Callers that
-     * have more than one entry to append should use the vectored form of
-     * append directly for efficiency.
-     * \param entry
-     *      Entry to place at the end of the log.
-     * \return
-     *      Object that can be used to wait for the entry to be durable.
-     */
-    std::unique_ptr<Sync> appendSingle(const Entry& entry);
 
     /**
      * Look up an entry by its log index.
@@ -131,6 +120,31 @@ class Log {
     virtual uint64_t getSizeBytes() const = 0;
 
     /**
+     * Release resources attached to the Sync object.
+     * Call this after waiting on the Sync object.
+     */
+    void syncComplete(std::unique_ptr<Sync> sync) {
+        sync->completed = true;
+        syncCompleteVirtual(std::move(sync));
+    }
+  protected:
+    /**
+     * See syncComplete(). Intended for subclasses to override.
+     */
+    virtual void syncCompleteVirtual(std::unique_ptr<Sync> sync) {}
+  public:
+
+    /**
+     * Get and remove the Log's Sync object in order to wait on it.
+     * This Sync object must later be returned to the Log with syncComplete().
+     *
+     * While takeSync() and syncComplete() may not be done concurrently with
+     * other Log operations, Sync::wait() may be done concurrently with all
+     * operations except truncateSuffix().
+     */
+    virtual std::unique_ptr<Sync> takeSync() = 0;
+
+    /**
      * Delete the log entries before the given index.
      * Once you truncate a prefix from the log, there's no way to undo this.
      * \param firstIndex
@@ -147,6 +161,10 @@ class Log {
      *      After this call, the log will contain no entries indexed greater
      *      than lastIndex. This can be any log index, including 0 and those
      *      past the end of the log.
+     * \warning
+     *      Callers should wait() on all Sync object prior to calling
+     *      truncateSuffix(). This never happens on leaders, so it's not a real
+     *      limitation, but things may go wonky otherwise.
      */
     virtual void truncateSuffix(uint64_t lastIndex) = 0;
 

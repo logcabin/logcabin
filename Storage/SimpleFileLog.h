@@ -37,7 +37,7 @@ class Globals;
 class SimpleFileLog : public Log {
     class Sync : public Log::Sync {
       public:
-        explicit Sync(std::unique_ptr<Log::Sync> memSync);
+        explicit Sync(uint64_t lastIndex);
         void wait();
         /**
          * Set of file descriptors that are fsynced and closed on wait().
@@ -51,8 +51,9 @@ class SimpleFileLog : public Log {
 
     explicit SimpleFileLog(const Storage::FilesystemUtil::File& parentDir);
     ~SimpleFileLog();
-    std::unique_ptr<Log::Sync>
-        append(const std::vector<const Entry*>& entries);
+    std::pair<uint64_t, uint64_t>
+    append(const std::vector<const Entry*>& entries);
+    std::unique_ptr<Log::Sync> takeSync();
     void truncatePrefix(uint64_t firstEntryId);
     void truncateSuffix(uint64_t lastEntryId);
 
@@ -70,6 +71,7 @@ class SimpleFileLog : public Log {
     SimpleFileLogMetadata::Metadata metadata;
     Storage::FilesystemUtil::File dir;
     Storage::FilesystemUtil::File lostAndFound;
+    std::unique_ptr<Sync> currentSync;
 
     std::string readMetadata(const std::string& filename,
                              SimpleFileLogMetadata::Metadata& metadata) const;

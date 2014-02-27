@@ -716,7 +716,7 @@ RaftConsensus::RaftConsensus(Globals& globals)
     , exiting(false)
     , numPeerThreads(0)
     , log()
-    , diskQueue()
+    , logSyncQueued(false)
     , leaderDiskThreadWorking(false)
     , configuration()
     , configurationManager()
@@ -752,9 +752,10 @@ RaftConsensus::~RaftConsensus()
     while (numPeerThreads > 0)
         stateChanged.wait(lockGuard);
     // issue any outstanding disk flushes
-    while (!diskQueue.empty()) {
-        diskQueue.front()->wait();
-        diskQueue.pop_front();
+    if (logSyncQueued) {
+        std::unique_ptr<Log::Sync> sync = log->takeSync();
+        sync->wait();
+        log->syncComplete(std::move(sync));
     }
 }
 
@@ -1432,29 +1433,27 @@ RaftConsensus::leaderDiskThreadMain()
 {
     std::unique_lock<Mutex> lockGuard(mutex);
     Core::ThreadId::setName("LeaderDisk");
-    // Each iteration of this loop syncs one append to disk.
+    // Each iteration of this loop syncs the log to disk once or sleeps until
+    // that is necessary.
     while (!exiting) {
-        if (state == State::LEADER && !diskQueue.empty()) {
+        if (state == State::LEADER && logSyncQueued) {
             uint64_t term = currentTerm;
-            uint64_t lastIndex;
-            std::string error;
+            std::unique_ptr<Log::Sync> sync = log->takeSync();
+            logSyncQueued = false;
+            leaderDiskThreadWorking = true;
             {
-                // mark true while holding RaftConsensus lock
-                leaderDiskThreadWorking = true;
-                std::unique_ptr<Log::Sync> sync = std::move(diskQueue.front());
-                diskQueue.pop_front();
-                lastIndex = sync->lastIndex;
                 Core::MutexUnlock<Mutex> unlockGuard(lockGuard);
                 sync->wait();
                 // Mark this false before re-acquiring RaftConsensus lock,
-                // since stepDown() waits on this to go false while holding the
+                // since stepDown() polls on this to go false while holding the
                 // lock.
                 leaderDiskThreadWorking = false;
             }
             if (state == State::LEADER && currentTerm == term) {
-                configuration->localServer->lastSyncedIndex = lastIndex;
+                configuration->localServer->lastSyncedIndex = sync->lastIndex;
                 advanceCommittedId();
             }
+            log->syncComplete(std::move(sync));
             continue;
         }
         stateChanged.wait(lockGuard);
@@ -1629,14 +1628,15 @@ RaftConsensus::append(const std::vector<const Log::Entry*>& entries)
 {
     for (auto it = entries.begin(); it != entries.end(); ++it)
         assert((*it)->term() != 0);
-    std::unique_ptr<Log::Sync> sync = log->append(entries);
-    uint64_t firstIndex = sync->firstIndex;
-    if (state == State::LEADER) { // defer file sync
-        diskQueue.push_back(std::move(sync));
-    } else { // sync file now
+    std::pair<uint64_t, uint64_t> range = log->append(entries);
+    if (state == State::LEADER) { // defer log sync
+        logSyncQueued = true;
+    } else { // sync log now
+        std::unique_ptr<Log::Sync> sync = log->takeSync();
         sync->wait();
+        log->syncComplete(std::move(sync));
     }
-    uint64_t index = firstIndex;
+    uint64_t index = range.first;
     for (auto it = entries.begin(); it != entries.end(); ++it) {
         const Log::Entry& entry = **it;
         if (entry.type() == Protocol::Raft::EntryType::CONFIGURATION)
@@ -2144,14 +2144,15 @@ RaftConsensus::stepDown(uint64_t newTerm)
     while (leaderDiskThreadWorking)
         usleep(500);
 
-    // Empty the rest of the disk queue by flushing all the writes to disk.
-    // Do this after waiting for leaderDiskThread to preserve FIFO order of
-    // Sync objects.
+    // If a recent append has been queued, empty it here. Do this after waiting
+    // for leaderDiskThread to preserve FIFO ordering of Log::Sync objects.
     // Don't bother updating the localServer's lastSyncedIndex, since it
-    // doesn't matter.
-    while (!diskQueue.empty()) {
-        diskQueue.front()->wait();
-        diskQueue.pop_front();
+    // doesn't matter for non-leaders.
+    if (logSyncQueued) {
+        std::unique_ptr<Log::Sync> sync = log->takeSync();
+        sync->wait();
+        log->syncComplete(std::move(sync));
+        logSyncQueued = false;
     }
 }
 

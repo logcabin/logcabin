@@ -29,6 +29,18 @@
 namespace LogCabin {
 namespace Storage {
 
+////////// Log::Sync //////////
+
+Log::Sync::Sync(uint64_t lastIndex)
+    : lastIndex(lastIndex)
+    , completed(false) {
+}
+
+Log::Sync::~Sync()
+{
+    assert(completed);
+}
+
 ////////// Log //////////
 
 Log::Log()
@@ -38,12 +50,6 @@ Log::Log()
 
 Log::~Log()
 {
-}
-
-std::unique_ptr<Log::Sync>
-Log::appendSingle(const Entry& entry)
-{
-    return append({&entry});
 }
 
 std::ostream&

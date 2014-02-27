@@ -112,8 +112,8 @@ protoToFile(const google::protobuf::Message& in,
 }
 
 ////////// SimpleFileLog::Sync //////////
-SimpleFileLog::Sync::Sync(std::unique_ptr<Log::Sync> memSync)
-    : Log::Sync(memSync->firstIndex, memSync->lastIndex)
+SimpleFileLog::Sync::Sync(uint64_t lastIndex)
+    : Log::Sync(lastIndex)
     , fds()
 {
 }
@@ -148,6 +148,7 @@ SimpleFileLog::SimpleFileLog(const FilesystemUtil::File& parentDir)
     , metadata()
     , dir(FilesystemUtil::openDir(parentDir, "log"))
     , lostAndFound(FilesystemUtil::openDir(dir, "unknown"))
+    , currentSync(new Sync(0))
 {
     std::vector<uint64_t> fsEntryIds = getEntryIds();
 
@@ -205,7 +206,8 @@ SimpleFileLog::SimpleFileLog(const FilesystemUtil::File& parentDir)
     for (uint64_t id = metadata.entries_start();
          id <= metadata.entries_end();
          ++id) {
-        memoryLog.appendSingle(read(format("%016lx", id)))->wait();
+        Log::Entry e = read(format("%016lx", id));
+        memoryLog.append({&e});
     }
 
     Log::metadata = metadata.raft_metadata();
@@ -216,24 +218,32 @@ SimpleFileLog::SimpleFileLog(const FilesystemUtil::File& parentDir)
 
 SimpleFileLog::~SimpleFileLog()
 {
+    if (currentSync->fds.empty())
+        currentSync->completed = true;
+}
+
+std::pair<uint64_t, uint64_t>
+SimpleFileLog::append(const std::vector<const Entry*>& entries)
+{
+    std::pair<uint64_t, uint64_t> range = memoryLog.append(entries);
+    for (uint64_t index = range.first; index <= range.second; ++index) {
+        FilesystemUtil::File file = protoToFile(memoryLog.getEntry(index),
+                                                dir, format("%016lx", index));
+        currentSync->fds.push_back({file.release(), true});
+    }
+    FilesystemUtil::File mdfile = updateMetadataCallerSync();
+    currentSync->fds.push_back({dir.fd, false});
+    currentSync->fds.push_back({mdfile.release(), true});
+    currentSync->lastIndex = range.second;
+    return range;
 }
 
 std::unique_ptr<Log::Sync>
-SimpleFileLog::append(const std::vector<const Entry*>& entries)
+SimpleFileLog::takeSync()
 {
-    std::unique_ptr<SimpleFileLog::Sync> sync(
-        new SimpleFileLog::Sync(memoryLog.append(entries)));
-    for (uint64_t index = sync->firstIndex;
-         index <= sync->lastIndex;
-         ++index) {
-        FilesystemUtil::File file = protoToFile(memoryLog.getEntry(index),
-                                                dir, format("%016lx", index));
-        sync->fds.push_back({file.release(), true});
-    }
-    FilesystemUtil::File mdfile = updateMetadataCallerSync();
-    sync->fds.push_back({dir.fd, false});
-    sync->fds.push_back({mdfile.release(), true});
-    return std::move(sync);
+    std::unique_ptr<Sync> other(new Sync(getLastLogIndex()));
+    std::swap(other, currentSync);
+    return std::move(other);
 }
 
 void
