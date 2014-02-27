@@ -109,6 +109,19 @@ typedef MockableClock<std::chrono::steady_clock> SteadyClock;
  */
 typedef MockableClock<std::chrono::system_clock> SystemClock;
 
+/**
+ * Read the CPU's cycle counter.
+ * This is useful for benchmarking.
+ */
+static __inline __attribute__((always_inline))
+uint64_t
+rdtsc()
+{
+    uint32_t lo, hi;
+    __asm__ __volatile__("rdtsc" : "=a" (lo), "=d" (hi));
+    return (((uint64_t)hi << 32) | lo);
+}
+
 } // namespace LogCabin::Core::Time
 } // namespace LogCabin::Core
 } // namespace LogCabin
