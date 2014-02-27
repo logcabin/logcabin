@@ -121,9 +121,9 @@ writeThreadMain(uint64_t id,
                 const std::string& value)
 {
     uint64_t numWrites = options.totalWrites / options.writers;
-    if (id == 0) { // thread 0 takes any odd leftover writes
-        numWrites = options.totalWrites - numWrites * (options.writers - 1);
-    }
+    // assign any odd leftover writes in a balanced way
+    if (options.totalWrites - numWrites * options.writers > id)
+        numWrites += 1;
     for (uint64_t i = 0; i < numWrites; ++i) {
         tree.writeEx(key, value);
     }
