@@ -367,6 +367,12 @@ class Peer : public Server {
      */
     TimePoint backoffUntil;
 
+    /**
+     * Counts RPC failures to issue fewer warnings.
+     * Accessed only from callRPC() without holding the lock.
+     */
+    uint64_t rpcFailuresSinceLastWarning;
+
     // Used for isCaughtUp. TODO(ongaro): doc precisely
     uint64_t lastCatchUpIterationMs;
     TimePoint thisCatchUpIterationStart;

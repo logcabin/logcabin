@@ -156,6 +156,7 @@ Peer::Peer(uint64_t serverId, RaftConsensus& consensus)
     , lastAckEpoch(0)
     , nextHeartbeatTime(TimePoint::min())
     , backoffUntil(TimePoint::min())
+    , rpcFailuresSinceLastWarning(0)
     , lastCatchUpIterationMs(~0UL)
     , thisCatchUpIterationStart(Clock::now())
     , thisCatchUpIterationGoalId(~0UL)
@@ -249,12 +250,24 @@ Peer::callRPC(Protocol::Raft::OpCode opCode,
     Core::MutexUnlock<Mutex> unlockGuard(lockGuard);
     switch (rpc.waitForReply(&response, NULL)) {
         case RPCStatus::OK:
+            if (rpcFailuresSinceLastWarning > 0) {
+                WARNING("RPC to server succeeded after %lu failures",
+                        rpcFailuresSinceLastWarning);
+                rpcFailuresSinceLastWarning = 0;
+            }
             return true;
         case RPCStatus::SERVICE_SPECIFIC_ERROR:
             PANIC("unexpected service-specific error");
         default:
-            WARNING("RPC to server failed: %s",
-                    rpc.getErrorMessage().c_str());
+            ++rpcFailuresSinceLastWarning;
+            if (rpcFailuresSinceLastWarning == 1) {
+                WARNING("RPC to server failed: %s",
+                        rpc.getErrorMessage().c_str());
+            } else if (rpcFailuresSinceLastWarning % 100 == 0) {
+                WARNING("Last %lu RPCs to server failed. This failure: %s",
+                        rpcFailuresSinceLastWarning,
+                        rpc.getErrorMessage().c_str());
+            }
             return false;
     }
 }
@@ -702,8 +715,7 @@ uint64_t RaftConsensus::ELECTION_TIMEOUT_MS = 150;
 
 uint64_t RaftConsensus::HEARTBEAT_PERIOD_MS = ELECTION_TIMEOUT_MS / 2;
 
-// this is just set high for now so log messages shut up
-uint64_t RaftConsensus::RPC_FAILURE_BACKOFF_MS = 2000;
+uint64_t RaftConsensus::RPC_FAILURE_BACKOFF_MS = ELECTION_TIMEOUT_MS / 2;
 
 uint64_t RaftConsensus::SOFT_RPC_SIZE_LIMIT =
                 Protocol::Common::MAX_MESSAGE_LENGTH - 1024;
