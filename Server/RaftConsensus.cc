@@ -18,6 +18,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "build/Protocol/Raft.pb.h"
 #include "build/Server/SnapshotMetadata.pb.h"

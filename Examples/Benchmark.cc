@@ -28,6 +28,7 @@
 #include <getopt.h>
 #include <iostream>
 #include <thread>
+#include <unistd.h>
 
 #include "Client/Client.h"
 

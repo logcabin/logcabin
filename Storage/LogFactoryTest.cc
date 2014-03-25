@@ -46,7 +46,7 @@ TEST_F(StorageLogFactoryTest, makeLog_memory)
 {
     config.set("storageModule", "memory");
     std::unique_ptr<Log> log = LogFactory::makeLog(config, tmpdir);
-    EXPECT_TRUE(log);
+    EXPECT_TRUE(bool(log));
 }
 
 TEST_F(StorageLogFactoryTest, makeLog_filesystem)
@@ -58,12 +58,12 @@ TEST_F(StorageLogFactoryTest, makeLog_filesystem)
 
     // default
     std::unique_ptr<Log> log = LogFactory::makeLog(config, tmpdir);
-    EXPECT_TRUE(log);
+    EXPECT_TRUE(bool(log));
     log.reset();
 
     config.set("storageModule", "filesystem");
     log = LogFactory::makeLog(config, tmpdir);
-    EXPECT_TRUE(log);
+    EXPECT_TRUE(bool(log));
 }
 
 TEST_F(StorageLogFactoryTest, makeLog_notfound)
