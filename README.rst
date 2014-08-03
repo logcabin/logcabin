@@ -27,7 +27,7 @@ Pre-requisites:
 - protobuf (v2.4.1 is known to work)
 - crypto++ (v5.6.1 is known to work)
 - libevent2 (v2.0.19 is known to work)
-- doxygen (optional; v1.8.1 is known to work)
+- doxygen (optional; v1.8.7 is known to work)
 
 Get the source code::
 
