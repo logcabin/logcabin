@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012 Stanford University
+/* Copyright (c) 2011-2014 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -16,7 +16,8 @@
 #ifndef LOGCABIN_EVENT_SIGNAL_H
 #define LOGCABIN_EVENT_SIGNAL_H
 
-#include "Loop.h"
+#include "Event/File.h"
+#include "Event/Loop.h"
 
 namespace LogCabin {
 namespace Event {
@@ -29,9 +30,8 @@ namespace Event {
  * Signal handlers can be created from any thread, but they will always fire on
  * the thread running the Event::Loop.
  */
-class Signal {
+class Signal : public Event::File {
   public:
-
     /**
      * Construct and enable a signal handler.
      * \param eventLoop
@@ -48,6 +48,11 @@ class Signal {
     virtual ~Signal();
 
     /**
+     * Generic event handler for files. Calls handleSignalEvent().
+     */
+    void handleFileEvent(int events);
+
+    /**
      * This method is overridden by a subclass and invoked when the signal
      * is received. This method will be invoked by the main event loop on
      * whatever thread is running the Event::Loop.
@@ -55,21 +60,9 @@ class Signal {
     virtual void handleSignalEvent() = 0;
 
     /**
-     * Event::Loop that will manage this signal handler.
-     */
-    Event::Loop& eventLoop;
-
-    /**
      * The signal number identifying which signal to receive (man signal.h).
      */
     const int signalNumber;
-
-  private:
-    /**
-     * The signal event from libevent.
-     * This is never NULL.
-     */
-    LibEvent::event* event;
 
     // Signal is not copyable.
     Signal(const Signal&) = delete;

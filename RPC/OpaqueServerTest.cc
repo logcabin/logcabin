@@ -80,6 +80,7 @@ TEST_F(RPCOpaqueServerTest, TCPListener_handleNewConnection) {
 
 TEST_F(RPCOpaqueServerTest, MessageSocket_onReceiveMessage) {
     server.listener.handleNewConnection(fd1);
+    fd1 = -1;
     OpaqueServer::ServerMessageSocket& socket = *server.sockets.at(0);
     socket.onReceiveMessage(1, Buffer(NULL, 3, NULL));
     ASSERT_TRUE(server.lastRPC.get());
@@ -91,6 +92,7 @@ TEST_F(RPCOpaqueServerTest, MessageSocket_onReceiveMessage) {
 
 TEST_F(RPCOpaqueServerTest, MessageSocket_onReceiveMessage_ping) {
     server.listener.handleNewConnection(fd1);
+    fd1 = -1;
     OpaqueServer::ServerMessageSocket& socket = *server.sockets.at(0);
     socket.onReceiveMessage(0, Buffer());
     ASSERT_FALSE(server.lastRPC);

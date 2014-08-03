@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012 Stanford University
+/* Copyright (c) 2011-2014 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -13,37 +13,56 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <event2/listener.h>
+#include <cstring>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <sys/epoll.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include "Core/Debug.h"
 #include "Core/StringUtil.h"
-#include "Event/Internal.h"
 #include "RPC/TCPListener.h"
 
 namespace LogCabin {
 namespace RPC {
 
-namespace {
+////////// class TCPListener::BoundListener //////////
 
-/**
- * This is called by libevent when the listener accepts a new connection.
- */
-void
-onAccept(evconnlistener* libEventListener,
-         evutil_socket_t socket,
-         sockaddr* addr,
-         int addrLen,
-         void* listener)
+TCPListener::BoundListener::BoundListener(TCPListener& tcpListener,
+                                          Event::Loop& eventLoop,
+                                          int fd)
+    : Event::File(eventLoop, fd, EPOLLIN)
+    , tcpListener(tcpListener)
 {
-    static_cast<TCPListener*>(listener)->handleNewConnection(socket);
 }
 
-} // anonymous namespace
+void
+TCPListener::BoundListener::handleFileEvent(int events)
+{
+    int clientfd = accept4(fd, NULL, NULL, SOCK_NONBLOCK|SOCK_CLOEXEC);
+    if (clientfd < 0) {
+        PANIC("Could not accept connection on fd %d: %s",
+              fd, strerror(errno));
+    }
+    // TODO(ongaro): consider setting TCP_NODELAY
+    tcpListener.handleNewConnection(clientfd);
+}
+
+////////// class TCPListener //////////
 
 TCPListener::TCPListener(Event::Loop& eventLoop)
     : eventLoop(eventLoop)
-    , listeners()
+    , mutex()
+    , boundListeners()
 {
+}
+
+TCPListener::~TCPListener()
+{
+    std::unique_lock<Core::Mutex> lock(mutex);
+    boundListeners.clear();
 }
 
 std::string
@@ -51,37 +70,51 @@ TCPListener::bind(const Address& listenAddress)
 {
     using Core::StringUtil::format;
 
-    // This could just be a local mutex, but it's less effort to use this
-    // massive lock.
-    Event::Loop::Lock lockGuard(eventLoop);
-
     if (!listenAddress.isValid()) {
         return format("Can't listen on invalid address: %s",
                       listenAddress.toString().c_str());
     }
 
-    LibEvent::evconnlistener* listener = qualify(
-        evconnlistener_new_bind(
-            unqualify(eventLoop.base),
-            onAccept, this,
-            LEV_OPT_CLOSE_ON_FREE | LEV_OPT_CLOSE_ON_EXEC |
-            LEV_OPT_REUSEABLE | LEV_OPT_THREADSAFE,
-            -1 /* have libevent pick a sane default for backlog */,
-            listenAddress.getSockAddr(),
-            listenAddress.getSockAddrLen()));
-    if (listener == NULL) {
-        return format("evconnlistener_new_bind failed: "
-                      "Check to make sure the address (%s) is not in use.",
-                      listenAddress.toString().c_str());
-    }
-    listeners.push_back(listener);
-    return "";
-}
+    int fd = socket(AF_INET, SOCK_STREAM|SOCK_CLOEXEC, 0);
+    if (fd < 0)
+        PANIC("Could not create new TCP socket");
 
-TCPListener::~TCPListener()
-{
-    for (auto it = listeners.begin(); it != listeners.end(); ++it)
-        evconnlistener_free(unqualify(*it));
+    int flag = 1;
+    int r = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR,
+                       &flag, sizeof(flag));
+    if (r < 0) {
+        PANIC("Could not set SO_REUSEADDR on socket: %s",
+              strerror(errno));
+    }
+
+
+    r = ::bind(fd, listenAddress.getSockAddr(),
+                   listenAddress.getSockAddrLen());
+    if (r != 0) {
+        std::string msg =
+            format("Could not bind to address %s: %s%s",
+                   listenAddress.toString().c_str(),
+                   strerror(errno),
+                   errno == EINVAL ? " (is the port in use?)" : "");
+        r = close(fd);
+        if (r != 0) {
+            WARNING("Could not close socket that failed to bind: %s",
+                    strerror(errno));
+        }
+        return msg;
+    }
+
+    // Why 128? No clue. It's what libevent was setting it to.
+    r = listen(fd, 128);
+    if (r != 0) {
+        PANIC("Could not invoke listen() on address %s: %s",
+              listenAddress.toString().c_str(),
+              strerror(errno));
+    }
+
+    std::unique_lock<Core::Mutex> lock(mutex);
+    boundListeners.emplace_back(*this, eventLoop, fd);
+    return "";
 }
 
 } // namespace LogCabin::RPC

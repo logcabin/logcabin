@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012 Stanford University
+/* Copyright (c) 2011-2014 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -13,80 +13,88 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include "Core/Debug.h"
-#include "Internal.h"
-#include "Loop.h"
-#include "Timer.h"
+#include <cstring>
+#include <sys/epoll.h>
+#include <sys/timerfd.h>
+#include <unistd.h>
 
-#include <event2/event.h>
+#include "Core/Debug.h"
+#include "Event/Loop.h"
+#include "Event/Timer.h"
 
 namespace LogCabin {
 namespace Event {
 
 namespace {
 
-/**
- * This is called by libevent when any timer fires.
- * \param fd
- *      Unused.
- * \param events
- *      Unused.
- * \param timer
- *      The Event::Timer object whose timer fired.
- */
-void
-onTimerFired(evutil_socket_t fd, short events, void* timer) // NOLINT
+/// Helper for constructor.
+int
+createTimerFd()
 {
-    static_cast<Timer*>(timer)->handleTimerEvent();
+    int fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK|TFD_CLOEXEC);
+    if (fd < 0) {
+        PANIC("Could not create timerfd: %s", strerror(errno));
+    }
+    return fd;
 }
 
 } // anonymous namespace
 
 Timer::Timer(Event::Loop& eventLoop)
-    : eventLoop(eventLoop)
-    , event(NULL)
+    : Event::File(eventLoop, createTimerFd(), EPOLLIN|EPOLLET)
 {
-    event = qualify(evtimer_new(unqualify(eventLoop.base),
-                                onTimerFired, this));
-    if (event == NULL) {
-        PANIC("evtimer_new failed: "
-              "No information is available from libevent about this error.");
-    }
 }
 
 Timer::~Timer()
 {
-    event_free(unqualify(event));
+}
+
+void
+Timer::handleFileEvent(int events)
+{
+    handleTimerEvent();
 }
 
 void
 Timer::schedule(uint64_t nanoseconds)
 {
+    // avoid accidental de-schedules: epoll's semantics are that a timer for 0
+    // seconds and 0 nanoseconds will never fire.
+    if (nanoseconds == 0)
+        nanoseconds = 1;
+
     const uint64_t nanosPerSecond = 1000 * 1000 * 1000;
-    struct timeval timeout;
-    timeout.tv_sec  =  nanoseconds / nanosPerSecond;
-    timeout.tv_usec = (nanoseconds % nanosPerSecond) / 1000;
-    int r = evtimer_add(unqualify(event), &timeout);
-    if (r == -1) {
-        PANIC("evtimer_add failed: "
-              "No information is available from libevent about this error.");
+    struct itimerspec newValue;
+    memset(&newValue, 0, sizeof(newValue));
+    newValue.it_value.tv_sec  = nanoseconds / nanosPerSecond;
+    newValue.it_value.tv_nsec = nanoseconds % nanosPerSecond;
+    int r = timerfd_settime(fd, 0, &newValue, NULL);
+    if (r != 0) {
+        PANIC("Could not set timer to +%luns: %s",
+              nanoseconds,
+              strerror(errno));
     }
 }
 
 void
 Timer::deschedule()
 {
-    int r = evtimer_del(unqualify(event));
-    if (r == -1) {
-        PANIC("evtimer_add failed: "
-              "No information is available from libevent about this error.");
-    }
+    struct itimerspec newValue;
+    memset(&newValue, 0, sizeof(newValue));
+    int r = timerfd_settime(fd, 0, &newValue, NULL);
+    if (r != 0)
+        PANIC("Could not deschedule timer: %s", strerror(errno));
 }
 
 bool
 Timer::isScheduled() const
 {
-    return evtimer_pending(unqualify(event), NULL);
+    struct itimerspec currentValue;
+    int r = timerfd_gettime(fd, &currentValue);
+    if (r != 0)
+        PANIC("Could not get timer: %s", strerror(errno));
+    return (currentValue.it_value.tv_sec != 0 ||
+            currentValue.it_value.tv_nsec != 0);
 }
 
 } // namespace LogCabin::Event

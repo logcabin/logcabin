@@ -13,11 +13,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <event2/event.h>
 #include <gtest/gtest.h>
 #include <thread>
 
-#include "Event/Internal.h"
 #include "Event/Loop.h"
 #include "Event/Timer.h"
 

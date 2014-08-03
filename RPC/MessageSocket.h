@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 Stanford University
+/* Copyright (c) 2012-2014 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -13,10 +13,10 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <mutex>
-#include <queue>
+#include <deque>
 #include <vector>
 
+#include "Core/Mutex.h"
 #include "Event/Loop.h"
 #include "Event/File.h"
 #include "RPC/Buffer.h"
@@ -108,63 +108,39 @@ class MessageSocket {
     virtual void onDisconnect() = 0;
 
   private:
+
     /**
-     * This class is an Event::File monitor that calls readable() and
-     * writable() when the socket can be read from or written to without
-     * blocking. It's not meant to be a real abstraction.
+     * This class is an Event::File monitor that calls writable() when the
+     * socket can be written to without blocking. When there are messages to be
+     * sent out, it is set to EPOLLOUT|EPOLLONESHOT.
      *
-     * It is normally set to watch for READABLE events. When there are messages
-     * to be sent out, it is also set to watch for WRITABLE events. Once it's
-     * been closed, it is set to watch for no events.
+     * Since ReceiveSocket is more efficient when one-shot is not used, and
+     * SendSocket is more efficient when one-shot is used, the two are
+     * monitored as separate Event::File objects.
      */
-    class RawSocket : private Event::File {
+    struct SendSocket : public Event::File {
       public:
-        /**
-         * Constructor.
-         * \param eventLoop
-         *      Event::Loop that will be used to find out when the socket is
-         *      readable or writable.
-         * \param fd
-         *      Connected file descriptor for the socket. This object will
-         *      close the file descriptor when it is disconnected.
-         * \param messageSocket
-         *      The MessageSocket to notify.
-         */
-        RawSocket(Event::Loop& eventLoop, int fd,
+        SendSocket(Event::Loop& eventLoop, int fd,
                   MessageSocket& messageSocket);
-        /// Destructor.
-        ~RawSocket();
-
-        /**
-         * Close the socket if it is not already closed.
-         * This may be called from any thread (it uses an Event::Loop::Lock
-         * internally).
-         */
-        void close();
-
-        /**
-         * Set whether the MessageSocket should be notified when writing to the
-         * socket wouldn't block. This may be called from any thread (it uses
-         * an Event::Loop::Lock internally).
-         * \param shouldNotify
-         *      True if the MessageSocket is interested in Events::Writable
-         *      notifications, false otherwise.
-         */
-        void setNotifyWritable(bool shouldNotify);
-
-        // Expose 'fd' from Event::File.
-        // This should only be accessed from the event loop thread.
-        using Event::File::fd;
-
+        ~SendSocket();
+        void handleFileEvent(int events);
       private:
-        void handleFileEvent(uint32_t events);
-        /// The MessageSocket to notify.
         MessageSocket& messageSocket;
-        /**
-         * Set to true if the socket has been closed.
-         * This can only be accessed while holding an Event::Loop::Lock.
-         */
-        bool closed;
+    };
+
+    /**
+     * This class is an Event::File monitor that calls readable() when the
+     * socket can be read from without blocking. This is always set for EPOLLIN
+     * events in a non-one-shot (persistent) manner.
+     */
+    struct ReceiveSocket : public Event::File {
+      public:
+        ReceiveSocket(Event::Loop& eventLoop, int fd,
+                  MessageSocket& messageSocket);
+        ~ReceiveSocket();
+        void handleFileEvent(int events);
+      private:
+        MessageSocket& messageSocket;
     };
 
     /**
@@ -221,8 +197,14 @@ class MessageSocket {
      * This class stages a message while it is being sent.
      */
     struct Outbound {
+        /// Default constructor.
+        Outbound();
+        /// Move constructor.
+        Outbound(Outbound&& other);
         /// Constructor.
         Outbound(MessageId messageId, Buffer message);
+        /// Move assignment.
+        Outbound& operator=(Outbound&& other);
         /**
          * The number of bytes already sent for this message, including the
          * header.
@@ -237,6 +219,12 @@ class MessageSocket {
          */
         Buffer message;
     };
+
+    /**
+     * Cleans up and calls onDisconnect() when the socket has an error.
+     * Only called from event loop handlers.
+     */
+    void disconnect();
 
     /**
      * Called when the socket has data that can be read without blocking.
@@ -276,7 +264,7 @@ class MessageSocket {
     /**
      * Protects #outboundQueue only from concurrent modification.
      */
-    std::mutex outboundQueueMutex;
+    Core::Mutex outboundQueueMutex;
 
     /**
      * A queue of messages waiting to be sent. The first one may be in the
@@ -289,13 +277,19 @@ class MessageSocket {
      * guaranteed not to invalidate pointers while elements are pushed and
      * popped from the ends.
      */
-    std::queue<Outbound> outboundQueue;
+    std::deque<Outbound> outboundQueue;
 
     /**
-     * Notifies MessageSocket when the socket can be read from or written to
-     * without blocking.
+     * Notifies MessageSocket when the socket can be read from without
+     * blocking.
      */
-    RawSocket socket;
+    ReceiveSocket receiveSocket;
+
+    /**
+     * Notifies MessageSocket when the socket can be transmitted on without
+     * blocking.
+     */
+    SendSocket sendSocket;
 
     // MessageSocket is non-copyable.
     MessageSocket(const MessageSocket&) = delete;

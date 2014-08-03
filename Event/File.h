@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012 Stanford University
+/* Copyright (c) 2011-2014 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -16,7 +16,7 @@
 #ifndef LOGCABIN_EVENT_FILE_H
 #define LOGCABIN_EVENT_FILE_H
 
-#include "Loop.h"
+#include "Event/Loop.h"
 
 namespace LogCabin {
 namespace Event {
@@ -33,38 +33,21 @@ class File {
   public:
 
     /**
-     * All possible file events. These are bitwise OR-ed together.
-     */
-    enum Events : uint32_t {
-        /**
-         * The file is readable.
-         */
-        READABLE = 0x1,
-        /**
-         * The file is writable.
-         */
-        WRITABLE = 0x2,
-    };
-
-    /**
      * Construct and enable monitoring a file descriptor.
-     * \warning
-     *      See the documentation for 'fd', which describes when the caller may
-     *      safely close its file descriptor.
      * \param eventLoop
      *      Event::Loop that will manage this File object.
      * \param fd
-     *      The file descriptor to monitor. The caller may only close this file
-     *      descriptor if this object is never again used to monitor file
-     *      events for the file (by setting events to 0 here or calling
-     *      setEvents(0)).
+     *      A file descriptor of a valid open file to monitor. Unless release()
+     *      is called first, this File object will close the file descriptor
+     *      when it is destroyed.
      * \param events
-     *      Invoke the object when any of the events specified by this
-     *      parameter occur (OR-ed combination of File::Events values). If this
+     *      Invoke the handler when any of the events specified by this
+     *      parameter occur (OR-ed combination of EPOLL_EVENTS values). If this
      *      is 0 then the file handler starts off inactive; it will not trigger
-     *      until setEvents() has been called.
+     *      until setEvents() has been called (except possibly for errors such
+     *      as EPOLLHUP; these events are always active).
      */
-    explicit File(Event::Loop& eventLoop, int fd, uint32_t events);
+    explicit File(Event::Loop& eventLoop, int fd, int events);
 
     /**
      * Destructor.
@@ -78,33 +61,37 @@ class File {
      *
      * If the event still exists when this method returns (e.g., the file is
      * readable but the method did not read the data), then the method will be
-     * invoked again.
+     * invoked again (unless flags such as EPOLLONESHOT or EPOLLET are used).
      *
      * \param events
      *      Indicates whether the file is readable or writable or both (OR'ed
-     *      combination of File::Events values).
+     *      combination of EPOLL_EVENTS values).
      */
-    virtual void handleFileEvent(uint32_t events) = 0;
+    virtual void handleFileEvent(int events) = 0;
+
+    /**
+     * Remove the file descriptor from being monitored by this object. Unless
+     * running in the event loop thread, a caller must typically take an
+     * Event::Loop::Lock before closing the file descriptor, to ensure that a
+     * concurrent handler call does not access the closed file.
+     * This may only be called once.
+     */
+    int release();
 
     /**
      * Specify the events of interest for this file handler.
-     *
-     * This method behaves in a friendly way when called concurrently with file
-     * events triggering:
-     * - If this method is called from another thread and handleFileEvent() is
-     *   running concurrently on the event loop thread, setEvents() will wait
-     *   for handleFileEvent() to complete before returning.
-     * - If this method is called from the event loop thread and
-     *   handleFileEvent() is currently being fired, then setEvents() can't
-     *   wait and returns immediately.
+     * This method is safe to call concurrently with file events triggering. If
+     * called outside an event handler and no Event::Loop::Lock is taken, this
+     * may have a short delay while active handlers continue to be called.
      *
      * \param events
      *      Indicates the conditions under which this object should be invoked
-     *      (OR-ed combination of File::Events values). If this is 0 then the
+     *      (OR-ed combination of EPOLL_EVENTS values). If this is 0 then the
      *      file handler is set to inactive; it will not trigger until
-     *      setEvents() has been called.
+     *      setEvents() has been called (except possibly for errors such as
+     *      EPOLLHUP; these events are always active).
      */
-    void setEvents(uint32_t events);
+    void setEvents(int events);
 
     /**
      * Event::Loop that will manage this file.
@@ -114,16 +101,9 @@ class File {
     /**
      * The file descriptor to monitor.
      */
-    const int fd;
+    int fd;
 
   private:
-
-    /**
-     * The file event from libevent.
-     * This is never NULL.
-     */
-    LibEvent::event* event;
-
     // File is not copyable.
     File(const File&) = delete;
     File& operator=(const File&) = delete;

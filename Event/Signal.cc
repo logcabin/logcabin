@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012 Stanford University
+/* Copyright (c) 2011-2014 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -13,57 +13,84 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include "Core/Debug.h"
-#include "Internal.h"
-#include "Loop.h"
-#include "Signal.h"
+#include <cstring>
+#include <signal.h>
+#include <sys/epoll.h>
+#include <sys/signalfd.h>
+#include <unistd.h>
 
-#include <event2/event.h>
+#include "Core/Debug.h"
+#include "Event/Loop.h"
+#include "Event/Signal.h"
 
 namespace LogCabin {
 namespace Event {
 
 namespace {
 
-/**
- * This is called by libevent when any signal fires.
- * \param fd
- *      Unused.
- * \param events
- *      Unused.
- * \param signal
- *      The Event::Signal object whose signal fired.
- */
-void
-onSignalFired(evutil_socket_t fd, short events, void* signal) // NOLINT
+/// Helper for constructor.
+int
+createSignalFd(int signalNumber)
 {
-    static_cast<Signal*>(signal)->handleSignalEvent();
+    sigset_t mask;
+    sigemptyset(&mask);
+    sigaddset(&mask, signalNumber);
+    int fd = signalfd(-1, &mask, SFD_NONBLOCK|SFD_CLOEXEC);
+    if (fd < 0) {
+        PANIC("Could not create signalfd for signal %d: %s",
+              signalNumber, strerror(errno));
+    }
+    return fd;
 }
 
 } // anonymous namespace
 
 Signal::Signal(Event::Loop& eventLoop, int signalNumber)
-    : eventLoop(eventLoop)
+    : Event::File(eventLoop, createSignalFd(signalNumber), EPOLLIN)
     , signalNumber(signalNumber)
-    , event(NULL)
 {
-    event = qualify(evsignal_new(unqualify(eventLoop.base),
-                                 signalNumber,
-                                 onSignalFired, this));
-    if (event == NULL) {
-        PANIC("evsignal_new failed: "
-              "No information is available from libevent about this error.");
-    }
-    int r = evsignal_add(unqualify(event), NULL);
-    if (r == -1) {
-        PANIC("evsignal_add failed: "
-              "No information is available from libevent about this error.");
+    // Block signals so that they only come through signalfd
+    sigset_t mask;
+    sigemptyset(&mask);
+    sigaddset(&mask, signalNumber);
+    if (sigprocmask(SIG_BLOCK, &mask, NULL) == -1) {
+        PANIC("Could not block signal %d: %s",
+              signalNumber, strerror(errno));
     }
 }
 
 Signal::~Signal()
 {
-    event_free(unqualify(event));
+    Event::Loop::Lock lock(eventLoop);
+    int fd = release();
+
+    // Unblock normal signals
+    sigset_t mask;
+    sigemptyset(&mask);
+    sigaddset(&mask, signalNumber);
+    if (sigprocmask(SIG_UNBLOCK, &mask, NULL) == -1) {
+        PANIC("Could not unblock signal %d: %s",
+              signalNumber, strerror(errno));
+    }
+
+    int r = close(fd);
+    if (r != 0)
+        PANIC("Could not close signalfd %d: %s", fd, strerror(errno));
+}
+
+void
+Signal::handleFileEvent(int events)
+{
+    struct signalfd_siginfo info;
+    ssize_t s = read(fd, &info, sizeof(struct signalfd_siginfo));
+    if (s < 0) {
+        PANIC("Could not read signal info (to discard): %s",
+              strerror(errno));
+    }
+    if (size_t(s) != sizeof(struct signalfd_siginfo)) {
+        PANIC("Could not read full signal info (to discard)");
+    }
+    handleSignalEvent();
 }
 
 } // namespace LogCabin::Event

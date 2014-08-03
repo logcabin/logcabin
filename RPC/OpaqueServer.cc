@@ -100,8 +100,8 @@ OpaqueServer::ServerMessageSocket::close()
     if (server != NULL) {
         auto& sockets = server->sockets;
         server = NULL;
-        std::swap(sockets[socketsIndex], sockets[sockets.size() - 1]);
-        sockets[socketsIndex]->socketsIndex = socketsIndex;
+        std::swap(sockets.at(socketsIndex), sockets.back());
+        sockets.at(socketsIndex)->socketsIndex = socketsIndex;
         sockets.pop_back(); // may destroy this object, so do it last
     }
 }

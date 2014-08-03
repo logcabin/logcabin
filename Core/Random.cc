@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 Stanford University
+/* Copyright (c) 2009-2014 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -11,22 +11,62 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ *
+ *
+ * Some of this code is copied from RAMCloud src/Common.cc _generateRandom(),
+ * Copyright (c) 2009-2014 Stanford University also under the same ISC license.
  */
 
 #include <cassert>
 #include <cmath>
-#include <event2/util.h>
+#include <cstring>
+#include <fcntl.h>
 #include <limits>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "Core/Debug.h"
 #include "Core/Random.h"
-#include "Event/Internal.h"
 
 namespace LogCabin {
 namespace Core {
 namespace Random {
 
 namespace {
+
+// Internal scratch state used by random_r 128 is the same size as
+// initstate() uses for regular random(), see manpages for details.
+// statebuf is malloc'ed and this memory is leaked, it could be a __thread
+// buffer, but after running into linker issues with large thread local
+// storage buffers, we thought better.
+enum { STATE_BYTES = 128 };
+__thread char* statebuf;
+// random_r's state, must be handed to each call, and seems to refer to
+// statebuf in some undocumented way.
+__thread random_data randbuf;
+
+/**
+ * Initialize thread-local state for random number generator.
+ * Must be called before any random numbers are generated.
+ */
+void
+initRandom()
+{
+    if (statebuf == NULL) {
+        int fd = open("/dev/urandom", O_RDONLY);
+        if (fd < 0)
+            PANIC("Couldn't open /dev/urandom: %s", strerror(errno));
+        unsigned int seed;
+        ssize_t bytesRead = read(fd, &seed, sizeof(seed));
+        close(fd);
+        if (bytesRead != sizeof(seed))
+            PANIC("Couldn't read full seed from /dev/urandom");
+        statebuf = static_cast<char*>(malloc(STATE_BYTES));
+        initstate_r(seed, statebuf, STATE_BYTES, &randbuf);
+    }
+
+    static_assert(RAND_MAX >= (1 << 31), "RAND_MAX too small");
+}
 
 /**
  * Fill a variable of type T with some random bytes.
@@ -35,11 +75,14 @@ template<typename T>
 T
 getRandomBytes()
 {
-    if (!LibEvent::initialized)
-        PANIC("LibEvent not initialized");
-
     T buf;
-    evutil_secure_rng_get_bytes(&buf, sizeof(buf));
+    size_t offset = 0;
+    while (offset < sizeof(buf)) {
+        uint64_t r = random64();
+        size_t copy = std::min(sizeof(r), sizeof(buf) - offset);
+        memcpy(reinterpret_cast<char*>(&buf) + offset, &r, copy);
+        offset += copy;
+    }
     return buf;
 }
 
@@ -74,7 +117,17 @@ random32()
 uint64_t
 random64()
 {
-    return getRandomBytes<uint64_t>();
+    // Each call to random returns 31 bits of randomness,
+    // so we need three to get 64 bits of randomness.
+    initRandom();
+    int32_t lo, mid, hi;
+    random_r(&randbuf, &lo);
+    random_r(&randbuf, &mid);
+    random_r(&randbuf, &hi);
+    uint64_t r = (((uint64_t(hi) & 0x7FFFFFFF) << 33) | // NOLINT
+                  ((uint64_t(mid) & 0x7FFFFFFF) << 2)  | // NOLINT
+                  (uint64_t(lo) & 0x00000003)); // NOLINT
+    return r;
 }
 
 double

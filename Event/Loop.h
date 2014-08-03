@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012 Stanford University
+/* Copyright (c) 2011-2014 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -17,36 +17,20 @@
 #define LOGCABIN_EVENT_LOOP_H
 
 #include <cinttypes>
-#include <mutex>
+#include <memory>
 
 #include "Core/ConditionVariable.h"
-
-/**
- * This is a container for types that are used in place of the unqualified
- * types found in libevent2. The idea is to not pollute the global namespace
- * with libevent2's unqualified types.
- */
-namespace LibEvent {
-struct event_base;
-struct event;
-}
+#include "Core/Mutex.h"
 
 namespace LogCabin {
-
-// forward declarations
-namespace RPC {
-class TCPListener;
-}
-
 namespace Event {
 
 // forward declarations
 class File;
-class Signal;
 class Timer;
 
 /**
- * This class contains an event loop based on the libevent2 library.
+ * This class contains an event loop based on Linux's epoll interface.
  * It keeps track of interesting events such as timers and socket activity, and
  * arranges for callbacks to be invoked when the events happen.
  */
@@ -108,24 +92,23 @@ class Loop {
     void exit();
 
   private:
-    /**
-     * The core of the event loop from libevent.
-     * This is never NULL.
-     */
-    LibEvent::event_base* base;
 
     /**
-     * This event is scheduled by Lock and exit() to break out of libevent's
-     * main event loop.
-     *
-     * This is a libevent timer event with an immediate timeout value; it is
-     * designed to fire immediately. (It's not an Event::Timer instance because
-     * that creates strange dependencies. Specifically, Event::Timer wouldn't
-     * be able to use Event::Loop::Lock if it wanted to, and this member's
-     * construction would have to be deferred until the end of the
-     * constructor.)
+     * The file descriptor used in epoll calls to monitor other files.
      */
-    LibEvent::event* breakEvent;
+    int epollfd;
+
+    /**
+     * Used by other threads to break runForever() out of epoll_wait. It is
+     * heap-allocated so that it can be constructed once epollfd is set up.
+     */
+    std::unique_ptr<Event::Timer> breakTimer;
+
+    /**
+     * This is a flag to runForever() to exit, set by exit().
+     * Protected by Event::Loop::Lock (or #mutex directly inside runForever()).
+     */
+    bool shouldExit;
 
     /**
      * This mutex protects all of the members of this class defined below this
@@ -141,11 +124,6 @@ class Loop {
      * Second, it allows Lock to tell if the event loop is running.
      */
     uint64_t runningThread;
-
-    /**
-     * This is a flag to runForever() to exit, set by exit().
-     */
-    bool shouldExit;
 
     /**
      * The number of Lock instances, including those that are blocked and those
@@ -180,11 +158,7 @@ class Loop {
      */
     Core::ConditionVariable unlocked;
 
-    // Event types are friends, since they need to mess with 'base'.
-    friend class File;
-    friend class Signal;
-    friend class Timer;
-    friend class RPC::TCPListener;
+    friend class Event::File;
 
     // Loop is not copyable.
     Loop(const Loop&) = delete;

@@ -13,12 +13,10 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <event2/event.h>
 #include <gtest/gtest.h>
 #include <sys/time.h>
 
-#include "Internal.h"
-#include "Timer.h"
+#include "Event/Timer.h"
 
 namespace LogCabin {
 namespace Event {
@@ -49,7 +47,6 @@ struct EventTimerTest : public ::testing::Test {
 };
 
 TEST_F(EventTimerTest, constructor) {
-    EXPECT_TRUE(timer1.event != NULL);
 }
 
 TEST_F(EventTimerTest, destructor) {
@@ -57,10 +54,13 @@ TEST_F(EventTimerTest, destructor) {
 }
 
 TEST_F(EventTimerTest, schedule_immediate) {
-    timer1.schedule(0);
+    timer1.schedule(1000*1000);
     EXPECT_TRUE(timer1.isScheduled());
+    timer1.schedule(0);
     loop.runForever();
-    EXPECT_EQ(1U, timer1.triggerCount);
+    timer1.schedule(1000);
+    loop.runForever();
+    EXPECT_EQ(2U, timer1.triggerCount);
     EXPECT_FALSE(timer1.isScheduled());
 }
 

@@ -15,6 +15,7 @@
 
 #include <memory>
 #include <gtest/gtest.h>
+#include <sys/epoll.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 
@@ -56,7 +57,8 @@ class RPCMessageSocketTest : public ::testing::Test {
         , remote(-1)
     {
         int socketPair[2];
-        EXPECT_EQ(0, socketpair(AF_UNIX, SOCK_STREAM, 0, socketPair));
+        EXPECT_EQ(0, socketpair(AF_UNIX, SOCK_STREAM|SOCK_NONBLOCK, 0,
+                                socketPair));
         remote = socketPair[1];
         msgSocket.reset(new MyMessageSocket(loop, socketPair[0]));
     }
@@ -78,41 +80,6 @@ class RPCMessageSocketTest : public ::testing::Test {
     int remote;
 };
 
-TEST_F(RPCMessageSocketTest, RawSocket_handleFileEvent)
-{
-    MessageSocket::Header header;
-    header.messageId = 12;
-    header.payloadLength = 64;
-    header.toBigEndian();
-    char buf[sizeof(header) + 64];
-    memcpy(buf, &header, sizeof(header));
-    strncpy(buf + sizeof(header), payload, 64);
-
-    // queue data to read
-    EXPECT_EQ(ssize_t(sizeof(buf)) - 1, send(remote, buf, sizeof(buf) - 1, 0));
-    EXPECT_EQ(0U, msgSocket->inbound.bytesRead);
-
-    // queue data to write
-    msgSocket->sendMessage(12,
-                           Buffer(const_cast<char*>(payload), 64, NULL));
-    ASSERT_EQ(1U, msgSocket->outboundQueue.size());
-    EXPECT_EQ(0U, msgSocket->outboundQueue.front().bytesSent);
-
-    // make sure this read but didn't write
-    msgSocket->socket.handleFileEvent(Event::File::Events::READABLE |
-                                      Event::File::Events::WRITABLE);
-    msgSocket->socket.handleFileEvent(Event::File::Events::READABLE);
-    EXPECT_EQ(sizeof(buf) - 1, msgSocket->inbound.bytesRead);
-    ASSERT_EQ(1U, msgSocket->outboundQueue.size());
-    EXPECT_EQ(0U, msgSocket->outboundQueue.front().bytesSent);
-
-    // make sure this wrote but didn't read
-    EXPECT_EQ(1, send(remote, buf + sizeof(buf) - 1, 1, 0));
-    msgSocket->socket.handleFileEvent(Event::File::Events::WRITABLE);
-    EXPECT_EQ(sizeof(buf) - 1, msgSocket->inbound.bytesRead);
-    ASSERT_EQ(0U, msgSocket->outboundQueue.size());
-}
-
 TEST_F(RPCMessageSocketTest, sendMessage) {
     EXPECT_DEATH(msgSocket->sendMessage(0, Buffer(NULL, ~0U, NULL)),
                  "too long to send");
@@ -132,6 +99,7 @@ TEST_F(RPCMessageSocketTest, sendMessage) {
 
 TEST_F(RPCMessageSocketTest, readableSpurious) {
     msgSocket->readable();
+    EXPECT_FALSE(msgSocket->disconnected);
     msgSocket->readable();
     EXPECT_EQ(0U, msgSocket->inbound.bytesRead);
     EXPECT_FALSE(msgSocket->disconnected);
@@ -141,7 +109,6 @@ TEST_F(RPCMessageSocketTest, readableSenderDisconnectInHeader) {
     closeRemote();
     msgSocket->readable();
     EXPECT_TRUE(msgSocket->disconnected);
-    EXPECT_TRUE(msgSocket->socket.closed);
 }
 
 TEST_F(RPCMessageSocketTest, readableMessageTooLong) {
@@ -186,7 +153,6 @@ TEST_F(RPCMessageSocketTest, readableSenderDisconnectInPayload) {
     closeRemote();
     msgSocket->readable();
     EXPECT_TRUE(msgSocket->disconnected);
-    EXPECT_TRUE(msgSocket->socket.closed);
 }
 
 TEST_F(RPCMessageSocketTest, readableAllAtOnce) {

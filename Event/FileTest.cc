@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 Stanford University
+/* Copyright (c) 2012-2014 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -13,13 +13,11 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <event2/event.h>
 #include <gtest/gtest.h>
+#include <sys/epoll.h>
 #include <unistd.h>
 
-#include "Core/Debug.h"
-#include "Internal.h"
-#include "File.h"
+#include "Event/File.h"
 
 namespace LogCabin {
 namespace Event {
@@ -28,12 +26,12 @@ namespace {
 struct MyFile : public Event::File {
     explicit MyFile(Event::Loop& loop,
                     int fd,
-                    uint32_t events)
+                    int events)
         : File(loop, fd, events)
         , triggerCount(0)
     {
     }
-    void handleFileEvent(uint32_t events) {
+    void handleFileEvent(int events) {
         ++triggerCount;
         eventLoop.exit();
     }
@@ -55,6 +53,7 @@ struct EventFileTest : public ::testing::Test {
     void
     closePipeFds()
     {
+        Event::Loop::Lock lock(loop);
         if (pipeFds[0] >= 0) {
             EXPECT_EQ(0, close(pipeFds[0]));
             pipeFds[0] = -1;
@@ -64,26 +63,32 @@ struct EventFileTest : public ::testing::Test {
             pipeFds[1] = -1;
         }
     }
+    bool hasPending() {
+        struct epoll_event event;
+        int r = epoll_wait(loop.epollfd, &event,
+                           1, 0);
+        if (r == 0)
+            return false;
+        return true;
+    }
     Event::Loop loop;
     int pipeFds[2];
 };
 
-TEST_F(EventFileTest, constructor_badFileNotMonitored) {
-    MyFile file(loop, -1, 0);
-    EXPECT_TRUE(file.event != NULL);
-    EXPECT_EQ(-1, file.fd);
-    // not added
-    EXPECT_EQ(0, event_pending(unqualify(file.event),
-                               EV_READ,
-                               NULL));
-}
-
 TEST_F(EventFileTest, destructor) {
-    // Nothing to test.
+    {
+        MyFile file(loop, pipeFds[0], EPOLLIN|EPOLLONESHOT);
+        pipeFds[0] = -1;
+    }
+    {
+        MyFile file(loop, pipeFds[1], EPOLLIN|EPOLLONESHOT);
+        file.release();
+    }
 }
 
 TEST_F(EventFileTest, fires) {
-    MyFile file(loop, pipeFds[0], File::Events::READABLE);
+    MyFile file(loop, pipeFds[0], EPOLLIN|EPOLLONESHOT);
+    pipeFds[0] = -1;
     EXPECT_EQ(1, write(pipeFds[1], "x", 1));
     loop.runForever();
     EXPECT_EQ(1U, file.triggerCount);
@@ -91,28 +96,22 @@ TEST_F(EventFileTest, fires) {
 
 TEST_F(EventFileTest, setEvents) {
     MyFile file(loop, pipeFds[0], 0);
+    pipeFds[0] = -1;
     EXPECT_EQ(1, write(pipeFds[1], "x", 1));
-    EXPECT_EQ(0, event_pending(unqualify(file.event),
-                               EV_READ,
-                               NULL));
-    file.setEvents(File::Events::READABLE);
+    EXPECT_FALSE(hasPending());
+    file.setEvents(EPOLLIN|EPOLLONESHOT);
     loop.runForever();
     EXPECT_EQ(1U, file.triggerCount);
     file.triggerCount = 0;
     file.setEvents(0);
-    EXPECT_EQ(0, event_pending(unqualify(file.event),
-                               EV_READ,
-                               NULL));
+    EXPECT_FALSE(hasPending());
 }
 
-TEST_F(EventFileTest, setEvents_badFileNotMonitored) {
-    MyFile file(loop, pipeFds[0], File::Events::READABLE);
+TEST_F(EventFileTest, release) {
+    MyFile file(loop, pipeFds[0], EPOLLIN|EPOLLONESHOT);
+    file.release();
     EXPECT_EQ(1, write(pipeFds[1], "x", 1));
-    file.setEvents(0);
-    closePipeFds();
-    EXPECT_EQ(0, event_pending(unqualify(file.event),
-                               EV_READ,
-                               NULL));
+    EXPECT_FALSE(hasPending());
 }
 
 } // namespace LogCabin::Event::<anonymous>

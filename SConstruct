@@ -12,7 +12,6 @@ opts.AddVariables(
     ("AS", "Assembler"),
     ("LIBPATH", "Library paths that are passed to the linker", []),
     ("LINK", "Linker"),
-    ("LIBEVENT2PATH", "libevent-2.0 library path (if necessary).", ""),
     ("BUILDTYPE", "Build type (RELEASE or DEBUG)", "DEBUG"),
     ("VERBOSE", "Show full build information (0 or 1)", "0"),
     ("NUMCPUS", "Number of CPUs to use for build (0 means auto).", "0"),
@@ -54,9 +53,6 @@ if env["VERBOSE"] == "0":
     env["SHCXXCOMSTR"] = "Compiling $SOURCE"
     env["ARCOMSTR"] = "Creating library $TARGET"
     env["LINKCOMSTR"] = "Linking $TARGET"
-
-if env["LIBEVENT2PATH"] != "":
-    env.Append(LIBPATH = [env["LIBEVENT2PATH"]])
 
 env.Append(CPPPATH = '#')
 
@@ -130,5 +126,4 @@ env.Program("build/LogCabin",
              object_files['RPC'] +
              object_files['Event'] +
              object_files['Core']),
-            LIBS = [ "pthread", "protobuf", "rt", "cryptopp",
-                     "event_core", "event_pthreads" ])
+            LIBS = [ "pthread", "protobuf", "rt", "cryptopp" ])

@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012 Stanford University
+/* Copyright (c) 2011-2014 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -13,48 +13,33 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <assert.h>
-#include <event2/event.h>
-#include <event2/thread.h>
+#include <cassert>
+#include <cstring>
+#include <sys/epoll.h>
+#include <sys/timerfd.h>
+#include <unistd.h>
 
 #include "Core/Debug.h"
 #include "Core/ThreadId.h"
-#include "Event/Internal.h"
+#include "Event/File.h"
 #include "Event/Loop.h"
+#include "Event/Timer.h"
 
 namespace LogCabin {
 namespace Event {
 
 namespace {
 
-/**
- * Libevent callback to break out of the event loop.
- * This is called when Event::Loop::breakEvent becomes active.
- */
-void
-returnFromLibevent(evutil_socket_t fd, short events, void* base) // NOLINT
-{
-    int r = event_base_loopbreak(static_cast<event_base*>(base));
-    if (r == -1) {
-        PANIC("event_loop_break failed: No information is available from "
-              "libevent about this error.");
+// Used in breakTimer, whose purpose is not to handle events but to break
+// runForever() out of epoll.
+class NullTimer : public Event::Timer {
+  public:
+    explicit NullTimer(Event::Loop& eventLoop)
+        : Event::Timer(eventLoop) {
     }
-}
-
-/**
- * Schedule returnFromLibevent() to be called next time libevent gets around
- * to it.
- */
-void
-scheduleReturnFromLibevent(LibEvent::event* breakEvent)
-{
-    struct timeval timeout = {0, 0};
-    int r = evtimer_add(unqualify(breakEvent), &timeout);
-    if (r == -1) {
-        PANIC("evtimer_add failed: "
-              "No information is available from libevent about this error.");
+    void handleTimerEvent() {
     }
-}
+};
 
 } // anonymous namespace
 
@@ -70,7 +55,7 @@ Loop::Lock::Lock(Event::Loop& eventLoop)
         // This is an actual lock: we're not running inside the event loop, and
         //                         we're not recursively locking.
         if (eventLoop.runningThread != Core::ThreadId::NONE)
-            scheduleReturnFromLibevent(eventLoop.breakEvent);
+            eventLoop.breakTimer->schedule(0);
         while (eventLoop.runningThread != Core::ThreadId::NONE ||
                eventLoop.lockOwner != Core::ThreadId::NONE) {
             eventLoop.safeToLock.wait(lockGuard);
@@ -98,61 +83,40 @@ Loop::Lock::~Lock()
 ////////// Loop //////////
 
 Loop::Loop()
-    : base(NULL)
-    , breakEvent(NULL)
+    : epollfd(-1)
+    , breakTimer()
+    , shouldExit(false)
     , mutex()
     , runningThread(Core::ThreadId::NONE)
-    , shouldExit(false)
     , numLocks(0)
     , numActiveLocks(0)
     , lockOwner(Core::ThreadId::NONE)
     , safeToLock()
     , unlocked()
 {
-    if (!LibEvent::initialized) {
-        PANIC("LibEvent not initialized");
-    }
-    base = qualify(event_base_new());
-    if (base == NULL) {
-        PANIC("event_base_new failed: "
-              "No information is available from libevent about this error.");
+    epollfd = epoll_create1(0);
+    if (epollfd < 0) {
+        PANIC("epoll_create1 failed: %s", strerror(errno));
     }
 
-    // Set the number of priority levels to 2.
-    // Then by default, events will get priority 2/2=1.
-    // Smaller priority numbers will run first.
-    // We'll use priority 0 for breakEvent only, which should run quickly.
-    int r = event_base_priority_init(unqualify(base), 2);
-    if (r != 0) {
-        PANIC("event_base_priority_init failed: "
-              "No information is available from libevent about this error.");
-    }
-
-    breakEvent = qualify(evtimer_new(unqualify(base),
-                                    returnFromLibevent, unqualify(base)));
-    if (breakEvent == NULL) {
-        PANIC("evtimer_new failed: "
-              "No information is available from libevent about this error.");
-    }
-
-    r = event_priority_set(unqualify(breakEvent), 0);
-    if (r != 0) {
-        PANIC("event_priority_set failed: "
-              "No information is available from libevent about this error.");
-    }
+    breakTimer.reset(new NullTimer(*this));
 }
 
 Loop::~Loop()
 {
-    event_free(unqualify(breakEvent));
-    event_base_free(unqualify(base));
+    breakTimer.reset();
+    if (epollfd >= 0) {
+        int r = close(epollfd);
+        if (r != 0)
+            PANIC("Could not close epollfd %d: %s", epollfd, strerror(errno));
+    }
 }
 
 void
 Loop::runForever()
 {
     while (true) {
-        {
+        { // Handle Loop::Lock requests and exiting.
             std::unique_lock<std::mutex> lockGuard(mutex);
             runningThread = Core::ThreadId::NONE;
             // Wait for all Locks to finish up
@@ -166,10 +130,26 @@ Loop::runForever()
             }
             runningThread = Core::ThreadId::getId();
         }
-        int r = event_base_dispatch(unqualify(base));
-        if (r == -1) {
-            PANIC("event_loop_dispatch failed: No information is "
-                  "available from libevent about this error.");
+
+        // Block in the kernel for events, then process them.
+        // TODO(ongaro): It'd be more efficient to handle more than 1 event at
+        // a time, but that complicates the interface: if a handler removes
+        // itself from the poll set and deletes itself, we don't want further
+        // events to call that same handler. For example, if a socket is
+        // dup()ed so that the receive side handles events separately from the
+        // send side, both are active events, and the first deletes the object,
+        // this could cause trouble.
+        enum { NUM_EVENTS = 1 };
+        struct epoll_event events[NUM_EVENTS];
+        int r = epoll_wait(epollfd, events, NUM_EVENTS, -1);
+        if (r <= 0) {
+            if (errno == EINTR) // caused by GDB
+                continue;
+            PANIC("epoll_wait failed: %s", strerror(errno));
+        }
+        for (int i = 0; i < r; ++i) {
+            Event::File& file = *static_cast<Event::File*>(events[i].data.ptr);
+            file.handleFileEvent(events[i].events);
         }
     }
 }
@@ -177,14 +157,8 @@ Loop::runForever()
 void
 Loop::exit()
 {
-    {
-        // Set the flag for runForever to exit.
-        std::unique_lock<std::mutex> lockGuard(mutex);
-        shouldExit = true;
-    }
-
-    // Convince run() to break out of libevent.
-    scheduleReturnFromLibevent(this->breakEvent);
+    Event::Loop::Lock lock(*this);
+    shouldExit = true;
 }
 
 } // namespace LogCabin::Event

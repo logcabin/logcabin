@@ -2,7 +2,6 @@ Import('env', 'object_files')
 
 src = [
     "File.cc",
-    "Internal.cc",
     "Loop.cc",
     "Signal.cc",
     "Timer.cc",

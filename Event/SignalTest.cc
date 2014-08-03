@@ -13,13 +13,11 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <event2/event.h>
 #include <gtest/gtest.h>
 #include <signal.h>
 
 #include "Core/Debug.h"
-#include "Internal.h"
-#include "Signal.h"
+#include "Event/Signal.h"
 
 namespace LogCabin {
 namespace Event {
@@ -48,7 +46,6 @@ struct EventSignalTest : public ::testing::Test {
 
 TEST_F(EventSignalTest, constructor) {
     ExitOnSigTerm signal(loop);
-    EXPECT_TRUE(signal.event != NULL);
 }
 
 TEST_F(EventSignalTest, destructor) {
@@ -57,7 +54,7 @@ TEST_F(EventSignalTest, destructor) {
 
 TEST_F(EventSignalTest, fires) {
     ExitOnSigTerm signal(loop);
-    // Warning: if you run this in gbb, you'll need to pass the signal through
+    // Warning: if you run this in gdb, you'll need to pass the signal through
     // to the application.
     EXPECT_EQ(0, kill(getpid(), SIGTERM));
     // must have been caught if we get this far

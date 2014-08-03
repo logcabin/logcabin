@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012 Stanford University
+/* Copyright (c) 2011-2014 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -16,7 +16,8 @@
 #ifndef LOGCABIN_EVENT_TIMER_H
 #define LOGCABIN_EVENT_TIMER_H
 
-#include "Loop.h"
+#include "Event/Loop.h"
+#include "Event/File.h"
 
 namespace LogCabin {
 namespace Event {
@@ -29,7 +30,7 @@ namespace Event {
  * Timers can be added and scheduled from any thread, but they will always fire
  * on the thread running the Event::Loop.
  */
-class Timer {
+class Timer : public File {
   public:
 
     /**
@@ -44,6 +45,11 @@ class Timer {
      * Destructor.
      */
     virtual ~Timer();
+
+    /**
+     * Generic event handler for files. Calls handleTimerEvent().
+     */
+    void handleFileEvent(int events);
 
     /**
      * This method is overridden by a subclass and invoked when the timer
@@ -78,6 +84,7 @@ class Timer {
 
     /**
      * Returns true if the timer has been scheduled and has not yet fired.
+     * This is prone to races; it's primarily useful for unit tests.
      * \return
      *      True if the timer has been scheduled and will eventually call
      *      handleTimerEvent().
@@ -86,18 +93,7 @@ class Timer {
      */
     bool isScheduled() const;
 
-    /**
-     * Event::Loop that will manage this timer.
-     */
-    Event::Loop& eventLoop;
-
   private:
-    /**
-     * The timer event from libevent.
-     * This is never NULL.
-     */
-    LibEvent::event* event;
-
     // Timer is not copyable.
     Timer(const Timer&) = delete;
     Timer& operator=(const Timer&) = delete;

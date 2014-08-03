@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2012 Stanford University
+/* Copyright (c) 2010-2014 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -16,6 +16,7 @@
 #include <cassert>
 #include <errno.h>
 #include <string.h>
+#include <sys/epoll.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -27,59 +28,58 @@
 namespace LogCabin {
 namespace RPC {
 
-////////// MessageSocket::RawSocket //////////
+namespace {
 
-MessageSocket::RawSocket::RawSocket(Event::Loop& eventLoop,
-                                    int fd,
-                                    MessageSocket& messageSocket)
-    : Event::File(eventLoop, fd, Events::READABLE)
+/// Wrapper for dup().
+int
+dupOrPanic(int oldfd)
+{
+    int newfd = dup(oldfd);
+    if (newfd < 0)
+        PANIC("Failed to dup(%d): %s", oldfd, strerror(errno));
+    return newfd;
+}
+
+} // anonymous namespace
+
+////////// MessageSocket::SendSocket //////////
+
+MessageSocket::SendSocket::SendSocket(Event::Loop& eventLoop,
+                                      int fd,
+                                      MessageSocket& messageSocket)
+    : Event::File(eventLoop, fd, 0)
     , messageSocket(messageSocket)
-    , closed(false)
 {
 }
 
-MessageSocket::RawSocket::~RawSocket()
+MessageSocket::SendSocket::~SendSocket()
 {
-    close();
-}
-
-void
-MessageSocket::RawSocket::close()
-{
-    Event::Loop::Lock lock(eventLoop);
-    if (!closed) {
-        setEvents(0);
-        ::close(fd);
-        closed = true;
-    }
 }
 
 void
-MessageSocket::RawSocket::setNotifyWritable(bool shouldNotify)
+MessageSocket::SendSocket::handleFileEvent(int events)
 {
-    Event::Loop::Lock lock(eventLoop);
-    if (!closed) {
-        if (shouldNotify)
-            setEvents(Events::READABLE | Events::WRITABLE);
-        else
-            setEvents(Events::READABLE);
-    }
+    messageSocket.writable();
+}
+
+////////// MessageSocket::ReceiveSocket //////////
+
+MessageSocket::ReceiveSocket::ReceiveSocket(Event::Loop& eventLoop,
+                                            int fd,
+                                            MessageSocket& messageSocket)
+    : Event::File(eventLoop, fd, EPOLLIN)
+    , messageSocket(messageSocket)
+{
+}
+
+MessageSocket::ReceiveSocket::~ReceiveSocket()
+{
 }
 
 void
-MessageSocket::RawSocket::handleFileEvent(uint32_t events)
+MessageSocket::ReceiveSocket::handleFileEvent(int events)
 {
-    assert(!closed);
-    if (events & Events::READABLE) {
-        messageSocket.readable();
-        // return immediately in case readable() destroyed this object
-        return;
-    }
-    if (events & Events::WRITABLE) {
-        messageSocket.writable();
-        // return immediately in case writable() destroyed this object
-        return;
-    }
+    messageSocket.readable();
 }
 
 ////////// MessageSocket::Header //////////
@@ -109,6 +109,20 @@ MessageSocket::Inbound::Inbound()
 
 ////////// MessageSocket::Outbound //////////
 
+MessageSocket::Outbound::Outbound()
+    : bytesSent(0)
+    , header()
+    , message()
+{
+}
+
+MessageSocket::Outbound::Outbound(Outbound&& other)
+    : bytesSent(other.bytesSent)
+    , header(other.header)
+    , message(std::move(other.message))
+{
+}
+
 MessageSocket::Outbound::Outbound(MessageId messageId,
                                   Buffer message)
     : bytesSent(0)
@@ -120,6 +134,15 @@ MessageSocket::Outbound::Outbound(MessageId messageId,
     header.toBigEndian();
 }
 
+MessageSocket::Outbound&
+MessageSocket::Outbound::operator=(Outbound&& other)
+{
+    bytesSent = other.bytesSent;
+    header = other.header;
+    message = std::move(other.message);
+    return *this;
+}
+
 ////////// MessageSocket //////////
 
 MessageSocket::MessageSocket(Event::Loop& eventLoop, int fd,
@@ -128,7 +151,8 @@ MessageSocket::MessageSocket(Event::Loop& eventLoop, int fd,
     , inbound()
     , outboundQueueMutex()
     , outboundQueue()
-    , socket(eventLoop, fd, *this)
+    , receiveSocket(eventLoop, dupOrPanic(fd), *this)
+    , sendSocket(eventLoop, fd, *this)
 {
 }
 
@@ -145,62 +169,90 @@ MessageSocket::sendMessage(MessageId messageId, Buffer contents)
               "(limit is %u bytes)",
               contents.getLength(), maxMessageLength);
     }
+
+    bool kick;
     { // Place the message on the outbound queue.
-        std::lock_guard<std::mutex> lock(outboundQueueMutex);
-        outboundQueue.emplace(messageId, std::move(contents));
+        std::lock_guard<Core::Mutex> lock(outboundQueueMutex);
+        kick = outboundQueue.empty();
+        outboundQueue.emplace_back(messageId, std::move(contents));
     }
-    // Make sure the RawSocket is set up to call writable().
-    socket.setNotifyWritable(true);
+    // Make sure the SendSocket is set up to call writable().
+    if (kick)
+        sendSocket.setEvents(EPOLLOUT|EPOLLONESHOT);
+}
+
+void
+MessageSocket::disconnect()
+{
+    int r = close(receiveSocket.release());
+    if (r != 0)
+        PANIC("Could not close receive socket: %s", strerror(errno));
+    r = close(sendSocket.release());
+    if (r != 0)
+        PANIC("Could not close send socket: %s", strerror(errno));
+    // TODO(ongaro): to make it safe for epoll_wait to return  multiple events,
+    // need to somehow queue the onDisconnect for later.
+    onDisconnect();
 }
 
 void
 MessageSocket::readable()
 {
-    if (inbound.bytesRead < sizeof(Header)) {
-        // Receiving header
-        ssize_t bytesRead = read(
-            reinterpret_cast<char*>(&inbound.header) + inbound.bytesRead,
-            sizeof(Header) - inbound.bytesRead);
-        if (bytesRead == -1)
-            return; // disconnected, must return immediately
-        inbound.bytesRead += bytesRead;
-        if (inbound.bytesRead == sizeof(Header)) {
+    if (receiveSocket.fd < 0)
+        return;
+    // Try to read data from the kernel until there is no more left.
+    while (true) {
+        if (inbound.bytesRead < sizeof(Header)) {
+            // Receiving header
+            ssize_t bytesRead = read(
+                reinterpret_cast<char*>(&inbound.header) + inbound.bytesRead,
+                sizeof(Header) - inbound.bytesRead);
+            if (bytesRead == -1) {
+                disconnect();
+                return;
+            }
+            inbound.bytesRead += bytesRead;
+            if (inbound.bytesRead < sizeof(Header))
+                return;
             // Transition to receiving data
             inbound.header.fromBigEndian();
             if (inbound.header.payloadLength > maxMessageLength) {
                 WARNING("Dropping message that is too long to receive "
                         "(message is %u bytes, limit is %u bytes)",
                         inbound.header.payloadLength, maxMessageLength);
-                socket.close();
-                onDisconnect();
-                return; // disconnected, must return immediately
+                disconnect();
+                return;
             }
             inbound.message.setData(new char[inbound.header.payloadLength],
                                     inbound.header.payloadLength,
                                     Buffer::deleteArrayFn<char>);
         }
-    }
-    // Don't use 'else' here; we want to check this branch for two reasons:
-    // First, if there is a header with a length of 0, the socket won't be
-    // readable, but we still need to process the message. Second, most of the
-    // time the header will arrive with at least some data. It makes sense to
-    // go ahead and try a non-blocking read, rather than going back to the
-    // event loop.
-    if (inbound.bytesRead >= sizeof(Header)) {
-        // Receiving data
-        size_t payloadBytesRead = inbound.bytesRead - sizeof(Header);
-        ssize_t bytesRead = read(
-            static_cast<char*>(inbound.message.getData()) + payloadBytesRead,
-            inbound.header.payloadLength - payloadBytesRead);
-        if (bytesRead == -1)
-            return; // disconnected, must return immediately
-        inbound.bytesRead += bytesRead;
-        if (inbound.bytesRead == (sizeof(Header) +
-                                  inbound.header.payloadLength)) {
-            // Transition to receiving header
-            inbound.bytesRead = 0;
+        // Don't use 'else' here; we want to check this branch for two reasons:
+        // First, if there is a header with a length of 0, the socket won't be
+        // readable, but we still need to process the message. Second, most of
+        // the time the header will arrive with at least some data. It makes
+        // sense to go ahead and try a non-blocking read, rather than going
+        // back to the event loop.
+        if (inbound.bytesRead >= sizeof(Header)) {
+            // Receiving data
+            size_t payloadBytesRead = inbound.bytesRead - sizeof(Header);
+            ssize_t bytesRead = read(
+                (static_cast<char*>(inbound.message.getData()) +
+                 payloadBytesRead),
+                inbound.header.payloadLength - payloadBytesRead);
+            if (bytesRead == -1) {
+                disconnect();
+                return;
+            }
+            inbound.bytesRead += bytesRead;
+            if (inbound.bytesRead < (sizeof(Header) +
+                                     inbound.header.payloadLength)) {
+                return;
+            }
             onReceiveMessage(inbound.header.messageId,
                              std::move(inbound.message));
+            // Transition to receiving header
+            inbound.bytesRead = 0;
         }
     }
 }
@@ -208,15 +260,11 @@ MessageSocket::readable()
 ssize_t
 MessageSocket::read(void* buf, size_t maxBytes)
 {
-    ssize_t actual = recv(socket.fd, buf, maxBytes, MSG_DONTWAIT);
+    ssize_t actual = recv(receiveSocket.fd, buf, maxBytes, MSG_DONTWAIT);
     if (actual > 0)
         return actual;
     if (actual == 0 || // peer performed orderly shutdown.
         errno == ECONNRESET || errno == ETIMEDOUT) {
-        socket.close();
-        // This must be the last line to touch this object, in case
-        // onDisconnect() deletes this object.
-        onDisconnect();
         return -1;
     }
     if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
@@ -227,75 +275,84 @@ MessageSocket::read(void* buf, size_t maxBytes)
 void
 MessageSocket::writable()
 {
-    // Get a pointer to the current outbound message.
-    Outbound* outbound;
-    {
-        std::lock_guard<std::mutex> lock(outboundQueueMutex);
-        if (outboundQueue.empty()) {
-            // This shouldn't happen, but it's easy to deal with.
-            socket.setNotifyWritable(false);
-            return;
+    if (receiveSocket.fd < 0)
+        return;
+    // Each iteration of this loop tries to write one message
+    // from outboundQueue.
+    while (true) {
+
+        // Get the next outbound message.
+        Outbound outbound;
+        int flags = MSG_DONTWAIT | MSG_NOSIGNAL;
+        {
+            std::lock_guard<Core::Mutex> lock(outboundQueueMutex);
+            if (outboundQueue.empty())
+                return;
+            outbound = std::move(outboundQueue.front());
+            outboundQueue.pop_front();
+            if (!outboundQueue.empty())
+                flags |= MSG_MORE;
         }
-        outbound = &outboundQueue.front();
-    }
 
-    // Use an iovec to send everything in one kernel call: one iov for the
-    // header, another for the payload.
-    enum { IOV_LEN = 2 };
-    struct iovec iov[IOV_LEN];
-    iov[0].iov_base = &outbound->header;
-    iov[0].iov_len = sizeof(Header);
-    iov[1].iov_base = outbound->message.getData();
-    iov[1].iov_len = outbound->message.getLength();
+        // Use an iovec to send everything in one kernel call: one iov for the
+        // header, another for the payload.
+        enum { IOV_LEN = 2 };
+        struct iovec iov[IOV_LEN];
+        iov[0].iov_base = &outbound.header;
+        iov[0].iov_len = sizeof(Header);
+        iov[1].iov_base = outbound.message.getData();
+        iov[1].iov_len = outbound.message.getLength();
 
-    { // Skip the parts of the iovec that have already been sent.
-        size_t bytesSent = outbound->bytesSent;
-        for (uint32_t i = 0; i < IOV_LEN; ++i) {
-            iov[i].iov_base = static_cast<char*>(iov[i].iov_base) + bytesSent;
-            if (bytesSent < iov[i].iov_len) {
-                iov[i].iov_len -= bytesSent;
-                bytesSent = 0;
-                break;
-            } else {
-                bytesSent -= iov[i].iov_len;
-                iov[i].iov_len = 0;
+        { // Skip the parts of the iovec that have already been sent.
+            size_t bytesSent = outbound.bytesSent;
+            for (uint32_t i = 0; i < IOV_LEN; ++i) {
+                iov[i].iov_base = (static_cast<char*>(iov[i].iov_base) +
+                                   bytesSent);
+                if (bytesSent < iov[i].iov_len) {
+                    iov[i].iov_len -= bytesSent;
+                    bytesSent = 0;
+                    break;
+                } else {
+                    bytesSent -= iov[i].iov_len;
+                    iov[i].iov_len = 0;
+                }
             }
         }
-    }
 
-    struct msghdr msg;
-    memset(&msg, 0, sizeof(msg));
-    msg.msg_iov = iov;
-    msg.msg_iovlen = IOV_LEN;
+        struct msghdr msg;
+        memset(&msg, 0, sizeof(msg));
+        msg.msg_iov = iov;
+        msg.msg_iovlen = IOV_LEN;
 
-    // Do the actual send
-    ssize_t bytesSent = sendmsg(socket.fd, &msg, MSG_DONTWAIT | MSG_NOSIGNAL);
-    if (bytesSent >= 0) {
-        // Sent successfully.
-        outbound->bytesSent += bytesSent;
-        if (outbound->bytesSent == (sizeof(Header) +
-                                    outbound->message.getLength())) {
-            // done with this message
-            std::lock_guard<std::mutex> lock(outboundQueueMutex);
-            outboundQueue.pop();
-            if (outboundQueue.empty())
-                socket.setNotifyWritable(false);
+        // Do the actual send
+        ssize_t bytesSent = sendmsg(sendSocket.fd, &msg, flags);
+        if (bytesSent < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+                // Wasn't able to send, try again later.
+                bytesSent = 0;
+            } else if (errno == ECONNRESET || errno == EPIPE) {
+                // Connection closed; disconnect this end.
+                // This must be the last line to touch this object, in case
+                // onDisconnect() deletes this object.
+                disconnect();
+                return;
+            } else {
+                // Unexpected error.
+                PANIC("Error while writing to socket %d: %s",
+                      sendSocket.fd, strerror(errno));
+            }
         }
-        return;
+
+        // Sent successfully.
+        outbound.bytesSent += bytesSent;
+        if (outbound.bytesSent != (sizeof(Header) +
+                                   outbound.message.getLength())) {
+            sendSocket.setEvents(EPOLLOUT|EPOLLONESHOT);
+            std::unique_lock<Core::Mutex> lockGuard(outboundQueueMutex);
+            outboundQueue.emplace_front(std::move(outbound));
+            return;
+        }
     }
-    // Wasn't able to send, try again later.
-    if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
-        return;
-    // Connection closed; disconnect this end.
-    if (errno == ECONNRESET || errno == EPIPE) {
-        socket.close();
-        // This must be the last line to touch this object, in case
-        // onDisconnect() deletes this object.
-        onDisconnect();
-        return;
-    }
-    // Unexpected error.
-    PANIC("Error while writing to socket %d: %s", socket.fd, strerror(errno));
 }
 
 } // namespace LogCabin::RPC

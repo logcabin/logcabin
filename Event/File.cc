@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012 Stanford University
+/* Copyright (c) 2011-2014 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -13,130 +13,68 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include "Core/Debug.h"
-#include "Internal.h"
-#include "Loop.h"
-#include "File.h"
+#include <cstring>
+#include <sys/epoll.h>
+#include <unistd.h>
 
-#include <event2/event.h>
+#include "Core/Debug.h"
+#include "Event/File.h"
+#include "Event/Loop.h"
 
 namespace LogCabin {
 namespace Event {
 
-namespace {
-
-/**
- * Convert from libevent's event mask type to File's.
- */
-uint32_t
-toFileEvents(LibEvent::EventMask libEventEvents)
-{
-    uint32_t fileEvents = 0;
-    if (libEventEvents & EV_READ)
-        fileEvents |= File::Events::READABLE;
-    if (libEventEvents & EV_WRITE)
-        fileEvents |= File::Events::WRITABLE;
-    return fileEvents;
-}
-
-/**
- * Convert from File's event mask type to libevent's.
- */
-LibEvent::EventMask
-toLibEventEvents(uint32_t fileEvents)
-{
-    LibEvent::EventMask libEventEvents = EV_PERSIST;
-    if (fileEvents & File::Events::READABLE)
-        libEventEvents |= EV_READ;
-    if (fileEvents & File::Events::WRITABLE)
-        libEventEvents |= EV_WRITE;
-    return libEventEvents;
-}
-
-/**
- * This is called by libevent when any file event fires.
- * \param fd
- *      Unused.
- * \param libEventEvents
- *      The bitwise OR of EV_READ, EV_WRITE, etc describing what has happened.
- * \param file
- *      The Event::File object whose file event fired.
- */
-void
-onFileEventFired(evutil_socket_t fd,
-                 LibEvent::EventMask libEventEvents,
-                 void* file)
-{
-    static_cast<File*>(file)->handleFileEvent(
-                                    toFileEvents(libEventEvents));
-}
-
-} // anonymous namespace
-
-File::File(Event::Loop& eventLoop, int fd, uint32_t fileEvents)
+File::File(Event::Loop& eventLoop, int fd, int fileEvents)
     : eventLoop(eventLoop)
     , fd(fd)
-    , event(NULL)
 {
-    event = qualify(event_new(unqualify(eventLoop.base),
-                              fd,
-                              toLibEventEvents(fileEvents),
-                              onFileEventFired, this));
-    if (event == NULL) {
-        PANIC("event_new failed: "
-              "No information is available from libevent about this error.");
-    }
-    if (fileEvents == 0) {
-        // If the user is not interested in any events, libevent should not
-        // track the file descriptor. That way the user may safely close the
-        // file.
-        return;
-    }
-    int r = event_add(unqualify(event), NULL);
-    if (r == -1) {
-        PANIC("event_add failed: "
-              "No information is available from libevent about this error.");
+    struct epoll_event event;
+    memset(&event, 0, sizeof(event));
+    event.events = fileEvents;
+    event.data.ptr = this;
+    int r = epoll_ctl(eventLoop.epollfd, EPOLL_CTL_ADD, fd, &event);
+    if (r != 0) {
+        PANIC("Adding file %d event with epoll_ctl failed: %s",
+              fd, strerror(errno));
     }
 }
 
 File::~File()
 {
-    event_free(unqualify(event));
+    if (fd < 0)
+        return;
+    Event::Loop::Lock lock(eventLoop);
+    int fd = release();
+    int r = close(fd);
+    if (r != 0)
+        PANIC("Could not close file %d: %s", fd, strerror(errno));
 }
 
 void
-File::setEvents(uint32_t fileEvents)
+File::setEvents(int fileEvents)
 {
-    // This Lock is necessary for thread safety when multiple threads are
-    // running within setEvents.
-    Event::Loop::Lock lockGuard(eventLoop);
+    struct epoll_event event;
+    memset(&event, 0, sizeof(event));
+    event.events = fileEvents;
+    event.data.ptr = this;
+    int r = epoll_ctl(eventLoop.epollfd, EPOLL_CTL_MOD, fd, &event);
+    if (r != 0) {
+        PANIC("Modifying file %d event with epoll_ctl failed: %s",
+              fd, strerror(errno));
+    }
+}
 
-    int r = event_del(unqualify(event));
-    if (r == -1) {
-        PANIC("event_del failed: "
-              "No information is available from libevent about this error.");
+int
+File::release()
+{
+    int r = epoll_ctl(eventLoop.epollfd, EPOLL_CTL_DEL, fd, NULL);
+    if (r != 0) {
+        PANIC("Removing file %d event with epoll_ctl failed: %s",
+              fd, strerror(errno));
     }
-    if (fileEvents == 0) {
-        // If the user is not interested in any events, libevent should not
-        // track the file descriptor. That way the user may safely close the
-        // file.
-        return;
-    }
-    r = event_assign(unqualify(event),
-                     unqualify(eventLoop.base),
-                     fd,
-                     toLibEventEvents(fileEvents),
-                     onFileEventFired, this);
-    if (r == -1) {
-        PANIC("event_assign failed: "
-              "No information is available from libevent about this error.");
-    }
-
-    r = event_add(unqualify(event), NULL);
-    if (r == -1) {
-        PANIC("event_add failed: "
-              "No information is available from libevent about this error.");
-    }
+    int released = fd;
+    fd = -1;
+    return released;
 }
 
 } // namespace LogCabin::Event

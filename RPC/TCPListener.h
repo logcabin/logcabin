@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012 Stanford University
+/* Copyright (c) 2011-2014 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -16,15 +16,11 @@
 #ifndef LOGCABIN_RPC_TCPLISTENER_H
 #define LOGCABIN_RPC_TCPLISTENER_H
 
-#include <vector>
+#include <deque>
 
-#include "Event/Loop.h"
-#include "Address.h"
-
-// forward declaration
-namespace LibEvent {
-struct evconnlistener;
-}
+#include "Core/Mutex.h"
+#include "Event/File.h"
+#include "RPC/Address.h"
 
 namespace LogCabin {
 namespace RPC {
@@ -37,8 +33,8 @@ namespace RPC {
  * TCPListeners can be created from any thread, but they will always run on
  * the thread running the Event::Loop.
  *
- * This is intended for use by RPC::Server only. It's not a very good
- * abstraction, but it encapsulates knowledge of libevent.
+ * TODO(ongaro): Merge this class into RPC::OpaqueServer. It was originally
+ * separate to hide some libevent internals, but that's no longer the case.
  */
 class TCPListener {
   public:
@@ -67,7 +63,7 @@ class TCPListener {
      *      An error message if this was not able to listen on the given
      *      address; the empty string otherwise.
      */
-    std::string bind(const Address& listenAddress);
+    std::string bind(const RPC::Address& listenAddress);
 
     /**
      * This method is overridden by a subclass and invoked when a new
@@ -78,18 +74,36 @@ class TCPListener {
      */
     virtual void handleNewConnection(int socket) = 0;
 
-    /**
-     * Event::Loop that will manage this listener.
-     */
-    Event::Loop& eventLoop;
-
   private:
 
     /**
-     * The listeners from libevent.
-     * These are never NULL.
+     * A socket that listens on a particular address.
      */
-    std::vector<LibEvent::evconnlistener*> listeners;
+    class BoundListener : public Event::File {
+      public:
+        explicit BoundListener(TCPListener& tcpListener,
+                               Event::Loop& eventLoop,
+                               int fd);
+        void handleFileEvent(int events);
+        TCPListener& tcpListener;
+    };
+
+    /**
+     * Event::Loop which invokes listeners when a client requests a connection.
+     */
+    Event::Loop& eventLoop;
+
+    /**
+     * Lock to prevent concurrent modification of boundListeners.
+     */
+    Core::Mutex mutex;
+
+    /**
+     * A list of sockets that each listen on a particular address.
+     * std::deque is used so that Event::File objects have a stable memory
+     * location (otherwise their handlers would blow up).
+     */
+    std::deque<BoundListener> boundListeners;
 
     // TCPListener is not copyable.
     TCPListener(const TCPListener&) = delete;

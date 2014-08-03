@@ -1,7 +1,6 @@
 Import('env')
 
-libs = [ "pthread", "protobuf", "rt", "cryptopp",
-         "event_core", "event_pthreads" ]
+libs = [ "pthread", "protobuf", "rt", "cryptopp" ]
 
 env.Program("Benchmark",
             ["Benchmark.cc", "#build/liblogcabin.a"],
