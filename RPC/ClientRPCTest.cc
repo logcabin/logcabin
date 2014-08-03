@@ -98,8 +98,10 @@ class RPCClientRPCTest : public ::testing::Test {
 
 TEST_F(RPCClientRPCTest, constructor) {
     ClientRPC rpc(session, 2, 3, 4, payload);
-    while (!rpc.isReady())
+    while (!rpc.isReady()) {
         /* spin -- can't call waitForReply because it will PANIC */;
+        usleep(100);
+    }
     EXPECT_LT(sizeof(Protocol::RequestHeaderVersion1),
               server.lastRequest.getLength());
     Protocol::RequestHeaderVersion1 header =
