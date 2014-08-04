@@ -46,7 +46,6 @@ TCPListener::BoundListener::handleFileEvent(int events)
         PANIC("Could not accept connection on fd %d: %s",
               fd, strerror(errno));
     }
-    // TODO(ongaro): consider setting TCP_NODELAY
     tcpListener.handleNewConnection(clientfd);
 }
 

@@ -15,6 +15,8 @@
 
 #include <cassert>
 #include <errno.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <string.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
@@ -50,6 +52,12 @@ MessageSocket::SendSocket::SendSocket(Event::Loop& eventLoop,
     : Event::File(eventLoop, fd, 0)
     , messageSocket(messageSocket)
 {
+    int flag = 1;
+    int r = setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
+    if (r < 0) {
+        WARNING("Could not set TCP_NODELAY flag on sending socket %d: %s",
+                fd, strerror(errno));
+    }
 }
 
 MessageSocket::SendSocket::~SendSocket()
@@ -70,6 +78,14 @@ MessageSocket::ReceiveSocket::ReceiveSocket(Event::Loop& eventLoop,
     : Event::File(eventLoop, fd, EPOLLIN)
     , messageSocket(messageSocket)
 {
+    // I don't know that TCP_NODELAY has any effect if we're only reading from
+    // this file descriptor, but I guess it can't hurt.
+    int flag = 1;
+    int r = setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
+    if (r < 0) {
+        WARNING("Could not set TCP_NODELAY flag on receiving socket %d: %s",
+                fd, strerror(errno));
+    }
 }
 
 MessageSocket::ReceiveSocket::~ReceiveSocket()
