@@ -220,7 +220,7 @@ main(int argc, char** argv)
     std::string value(options.size, 'v');
 
     uint64_t startNanos = timeNanos();
-    std::atomic<bool> exit;
+    std::atomic<bool> exit(false);
     std::vector<uint64_t> writesDonePerThread(options.writers);
     uint64_t totalWritesDone = 0;
     std::vector<std::thread> threads;
