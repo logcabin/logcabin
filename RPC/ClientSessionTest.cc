@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 Stanford University
+/* Copyright (c) 2012-2014 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -86,7 +86,8 @@ TEST_F(RPCClientSessionTest, onReceiveMessage) {
     session->timer.schedule(1000000000);
     session->responses[1] = new ClientSession::Response();
     session->messageSocket->onReceiveMessage(1, buf("b"));
-    EXPECT_TRUE(session->responses[1]->ready);
+    EXPECT_EQ(ClientSession::Response::HAS_REPLY,
+              session->responses[1]->status);
     EXPECT_EQ("b", str(session->responses[1]->reply));
     EXPECT_EQ(0U, session->numActiveRPCs);
     EXPECT_FALSE(session->timer.isScheduled());
@@ -181,7 +182,8 @@ TEST_F(RPCClientSessionTest, sendRequest) {
     auto it = session->responses.find(1);
     ASSERT_TRUE(it != session->responses.end());
     ClientSession::Response& response = *it->second;
-    EXPECT_FALSE(response.ready);
+    EXPECT_EQ(ClientSession::Response::WAITING,
+              response.status);
 }
 
 TEST_F(RPCClientSessionTest, getErrorMessage) {
@@ -206,7 +208,9 @@ TEST_F(RPCClientSessionTest, cancel) {
     EXPECT_EQ(0U, rpc.reply.getLength());
     EXPECT_EQ("RPC canceled by user", rpc.errorMessage);
     EXPECT_EQ(0U, session->responses.size());
-    // TODO(ongaro): Test notify with Core/ConditionVariable
+
+    // Cancel while there's a waiter is tested below in
+    // waitCanceledWhileWaiting.
 }
 
 TEST_F(RPCClientSessionTest, updateCanceled) {
@@ -233,7 +237,7 @@ TEST_F(RPCClientSessionTest, updateReady) {
     auto it = session->responses.find(1);
     ASSERT_TRUE(it != session->responses.end());
     ClientSession::Response& response = *it->second;
-    response.ready = true;
+    response.status = ClientSession::Response::HAS_REPLY;
     response.reply = buf("bye");
     rpc.update();
     EXPECT_TRUE(rpc.ready);
@@ -266,12 +270,24 @@ TEST_F(RPCClientSessionTest, waitCanceled) {
     EXPECT_TRUE(rpc.ready);
 }
 
+TEST_F(RPCClientSessionTest, waitCanceledWhileWaiting) {
+    OpaqueClientRPC rpc = session->sendRequest(buf("hi"));
+    {
+        ClientSession::Response& response = *session->responses.at(1);
+        response.ready.callback = std::bind(&OpaqueClientRPC::cancel, &rpc);
+        rpc.waitForReply();
+    }
+    EXPECT_TRUE(rpc.ready);
+    EXPECT_EQ("RPC canceled by user", rpc.errorMessage);
+    EXPECT_EQ(0U, session->responses.size());
+}
+
 TEST_F(RPCClientSessionTest, waitReady) {
     OpaqueClientRPC rpc = session->sendRequest(buf("hi"));
     auto it = session->responses.find(1);
     ASSERT_TRUE(it != session->responses.end());
     ClientSession::Response& response = *it->second;
-    response.ready = true;
+    response.status = ClientSession::Response::HAS_REPLY;
     response.reply = buf("bye");
     rpc.waitForReply();
     EXPECT_TRUE(rpc.ready);

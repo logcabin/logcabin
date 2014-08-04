@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 Stanford University
+/* Copyright (c) 2012-2014 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -87,7 +87,7 @@ ClientSession::ClientMessageSocket::onReceiveMessage(MessageId messageId,
         return;
     }
     Response& response = *it->second;
-    if (response.ready) {
+    if (response.status == Response::HAS_REPLY) {
         WARNING("Received a second response from the server for "
                 "message ID %lu. This indicates that either the client or "
                 "server is assigning message IDs incorrectly, or "
@@ -104,11 +104,9 @@ ClientSession::ClientMessageSocket::onReceiveMessage(MessageId messageId,
         session.timer.schedule(TIMEOUT_MS * 1000 * 1000);
 
     // Fill in the response
-    response.ready = true;
+    response.status = Response::HAS_REPLY;
     response.reply = std::move(message);
-    // This is inefficient when there are many RPCs outstanding, but that's
-    // not the expected case.
-    session.responseReceived.notify_all();
+    response.ready.notify_all();
 }
 
 void
@@ -122,15 +120,22 @@ ClientSession::ClientMessageSocket::onDisconnect()
         session.errorMessage = ("Disconnected from server " +
                                 session.address.toString());
         // Notify any waiting RPCs.
-        session.responseReceived.notify_all();
+        for (auto it = session.responses.begin();
+             it != session.responses.end();
+             ++it) {
+            Response* response = it->second;
+            response->ready.notify_all();
+        }
     }
 }
 
 ////////// ClientSession::Response //////////
 
 ClientSession::Response::Response()
-    : ready(false)
+    : status(Response::WAITING)
     , reply()
+    , hasWaiter(false)
+    , ready()
 {
 }
 
@@ -168,7 +173,12 @@ ClientSession::Timer::handleTimerEvent()
                                 session.address.toString() +
                                 " timed out");
         // Notify any waiting RPCs.
-        session.responseReceived.notify_all();
+        for (auto it = session.responses.begin();
+             it != session.responses.end();
+             ++it) {
+            Response* response = it->second;
+            response->ready.notify_all();
+        }
     }
 }
 
@@ -184,7 +194,6 @@ ClientSession::ClientSession(Event::Loop& eventLoop,
     , timer(*this)
     , mutex()
     , nextMessageId(1) // 0 is reserved for PING_MESSAGE_ID
-    , responseReceived()
     , responses()
     , errorMessage()
     , numActiveRPCs(0)
@@ -279,13 +288,23 @@ ClientSession::cancel(OpaqueClientRPC& rpc)
     // we return from this method. It must be the first line in this method.
     std::shared_ptr<ClientSession> selfGuard(self.lock());
 
+    // There are two ways to cancel an RPC:
+    // 1. If there's some thread currently blocked in wait(), this method marks
+    //    the Response's status as CANCELED, and wait() will delete it later.
+    // 2. If there's no thread currently blocked in wait(), the Response is
+    //    deleted entirely.
     std::unique_lock<std::mutex> mutexGuard(mutex);
     auto it = responses.find(rpc.responseToken);
     if (it == responses.end())
         return;
-    delete it->second;
-    responses.erase(it);
-    responseReceived.notify_all();
+    Response* response = it->second;
+    if (response->hasWaiter) {
+        response->status = Response::CANCELED;
+        response->ready.notify_all();
+    } else {
+        delete response;
+        responses.erase(it);
+    }
 
     --numActiveRPCs;
     // Even if numActiveRPCs == 0, it's simpler here to just let the timer wake
@@ -310,12 +329,16 @@ ClientSession::update(OpaqueClientRPC& rpc)
         return;
     }
     Response* response = it->second;
-    if (response->ready)
+    if (response->status == Response::HAS_REPLY) {
         rpc.reply = std::move(response->reply);
-    else if (!errorMessage.empty())
+    } else if (!errorMessage.empty()) {
         rpc.errorMessage = errorMessage;
-    else
+    } else {
+        // If the RPC was canceled, then it'd be marked ready and update()
+        // wouldn't be called again.
+        assert(response->status != Response::CANCELED);
         return; // not ready
+    }
     rpc.ready = true;
     rpc.session.reset();
 
@@ -326,17 +349,30 @@ ClientSession::update(OpaqueClientRPC& rpc)
 void
 ClientSession::wait(const OpaqueClientRPC& rpc)
 {
+    // The RPC may be holding the last reference to this session. This
+    // temporary reference makes sure this object isn't destroyed until after
+    // we return from this method. It must be the first line in this method.
+    std::shared_ptr<ClientSession> selfGuard(self.lock());
+
     std::unique_lock<std::mutex> mutexGuard(mutex);
     while (true) {
-        if (!errorMessage.empty())
-            return; // session has error
         auto it = responses.find(rpc.responseToken);
         if (it == responses.end())
             return; // RPC was cancelled or already updated
         Response* response = it->second;
-        if (response->ready)
+        if (response->status == Response::HAS_REPLY) {
             return; // RPC has completed
-        responseReceived.wait(mutexGuard);
+        } else if (response->status == Response::CANCELED) {
+            // RPC was cancelled, finish cleaning up
+            delete response;
+            responses.erase(it);
+            return;
+        } else if (!errorMessage.empty()) {
+            return; // session has error
+        }
+        response->hasWaiter = true;
+        response->ready.wait(mutexGuard);
+        response->hasWaiter = false;
     }
 }
 

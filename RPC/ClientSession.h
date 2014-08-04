@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 Stanford University
+/* Copyright (c) 2012-2014 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -141,12 +141,43 @@ class ClientSession {
      * response/error.
      */
     struct Response {
-        /// Constructor.
+        /**
+         * Constructor.
+         */
         Response();
-        /// True indicates #reply is valid.
-        bool ready;
-        /// The contents of the response. This is valid when #ready is set.
+        /**
+         * Current state of the RPC.
+         */
+        enum {
+          /**
+           * Waiting for a reply from the server.
+           */
+          WAITING,
+          /**
+           * Received a reply (find it in #reply).
+           */
+          HAS_REPLY,
+          /**
+           * The RPC has been canceled by another thread.
+           */
+          CANCELED,
+        } status;
+        /**
+         * The contents of the response. This is valid when
+         * #status is HAS_REPLY.
+         */
         Buffer reply;
+        /**
+         * If true, a thread is blocked waiting on #ready,
+         * and this object may not be deleted.
+         */
+        bool hasWaiter;
+        /**
+         * OpaqueClientRPC objects wait on this condition variable inside of
+         * wait(). It is notified when a new response arrives, the session
+         * is disconnected, or the RPC is canceled.
+         */
+        Core::ConditionVariable ready;
     };
 
     /**
@@ -231,13 +262,6 @@ class ClientSession {
      * server liveness.
      */
     MessageSocket::MessageId nextMessageId;
-
-    /**
-     * OpaqueClientRPC objects wait on this condition variable inside of
-     * wait(). It is notified when a new response arrives or the session is
-     * disconnected.
-     */
-    Core::ConditionVariable responseReceived;
 
     /**
      * A map from MessageId to Response objects that is used to store the
