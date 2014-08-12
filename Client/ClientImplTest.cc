@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 Stanford University
+/* Copyright (c) 2012-2014 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -88,6 +88,41 @@ TEST_F(ClientClientImplExactlyOnceTest, doneWithRPC) {
               client.exactlyOnceRPCHelper.outstandingRPCNumbers);
     RPCInfo rpcInfo5 = client.exactlyOnceRPCHelper.getRPCInfo();
     EXPECT_EQ(4U, rpcInfo5.first_outstanding_rpc());
+}
+
+// This test is timing-sensitive. Not sure how else to do it.
+TEST_F(ClientClientImplExactlyOnceTest, keepAliveThreadMain) {
+    std::string disclaimer("This test depends on timing, so failures are "
+                           "likely under heavy load, valgrind, etc.");
+    EXPECT_EQ(1U, mockRPC->requestLog.size());
+    for (uint64_t i = 0; i < 6; ++i) {
+        mockRPC->expect(OpCode::READ_WRITE_TREE,
+            fromString<Protocol::Client::ReadWriteTree::Response>(
+                        "status: CONDITION_NOT_MET, error: 'err'"));
+    }
+    client.exactlyOnceRPCHelper.keepAliveIntervalMs = 2;
+    client.exactlyOnceRPCHelper.keepAliveCV.notify_all();
+    // in 2ms, 4ms, 6ms, 8ms, 10ms
+    usleep(11000);
+    EXPECT_EQ(6U, mockRPC->requestLog.size()) << disclaimer;
+
+    // Disable heartbeat.
+    client.exactlyOnceRPCHelper.keepAliveIntervalMs = 0;
+    client.exactlyOnceRPCHelper.keepAliveCV.notify_all();
+    usleep(3000);
+    EXPECT_EQ(6U, mockRPC->requestLog.size()) << disclaimer;
+
+    // Now enable but "make a request" ourselves to prevent heartbeat.
+    client.exactlyOnceRPCHelper.getRPCInfo();
+    client.exactlyOnceRPCHelper.keepAliveIntervalMs = 10;
+    client.exactlyOnceRPCHelper.keepAliveCV.notify_all();
+    usleep(7500);
+    client.exactlyOnceRPCHelper.getRPCInfo();
+    usleep(6000);
+    EXPECT_EQ(6U, mockRPC->requestLog.size()) << disclaimer;
+    usleep(6000);
+    EXPECT_EQ(7U, mockRPC->requestLog.size()) << disclaimer;
+
 }
 
 using Client::Result;

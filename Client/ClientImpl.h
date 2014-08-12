@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 Stanford University
+/* Copyright (c) 2012-2014 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -19,6 +19,8 @@
 #include "Client/Client.h"
 #include "Client/ClientImplBase.h"
 #include "Client/LeaderRPC.h"
+#include "Core/ConditionVariable.h"
+#include "Core/Time.h"
 
 #ifndef LOGCABIN_CLIENT_CLIENTIMPL_H
 #define LOGCABIN_CLIENT_CLIENTIMPL_H
@@ -34,6 +36,8 @@ class ClientImpl : public ClientImplBase {
   public:
     /// Constructor.
     ClientImpl();
+    /// Destructor.
+    ~ClientImpl();
 
     // Implementations of ClientImplBase methods
     void initDerived();
@@ -68,6 +72,12 @@ class ClientImpl : public ClientImplBase {
 
 
   protected:
+
+    /**
+     * Make no-op request to the cluster to keep the client's session active.
+     */
+    void keepAlive();
+
     /**
      * Asks the cluster leader for the range of supported RPC protocol
      * versions, and select the best one. This is used to make sure the client
@@ -106,6 +116,10 @@ class ClientImpl : public ClientImplBase {
          */
         ~ExactlyOnceRPCHelper();
         /**
+         * Prepare to shut down (join with thread).
+         */
+        void exit();
+        /**
          * Call this before sending an RPC.
          */
         Protocol::Client::ExactlyOnceRPCInfo getRPCInfo();
@@ -116,6 +130,21 @@ class ClientImpl : public ClientImplBase {
 
       private:
         /**
+         * Main function for keep-alive thread. Periodically makes
+         * requests to the cluster to keep the client's session active.
+         */
+        void keepAliveThreadMain();
+
+        /**
+         * Clock type used for keep-alive timer.
+         */
+        typedef Core::Time::SteadyClock Clock;
+        /**
+         * TimePoint type used for keep-alive timer.
+         */
+        typedef Clock::time_point TimePoint;
+
+        /**
          * Used to open a session with the cluster.
          * const and non-NULL except for unit tests.
          */
@@ -123,7 +152,7 @@ class ClientImpl : public ClientImplBase {
         /**
          * Protects all the members of this class.
          */
-        std::mutex mutex;
+        mutable std::mutex mutex;
         /**
          * The numbers of the RPCs for which this client is still awaiting a
          * response.
@@ -138,6 +167,34 @@ class ClientImpl : public ClientImplBase {
          * The number to assign to the next RPC.
          */
         uint64_t nextRPCNumber;
+        /**
+         * keepAliveThread blocks on this. Notified when lastKeepAliveStart,
+         * keepAliveIntervalMs, or exiting changes.
+         */
+        Core::ConditionVariable keepAliveCV;
+        /**
+         * Flag to keepAliveThread that it should shut down.
+         */
+        bool exiting;
+        /**
+         * Time just before the last keep-alive or read-write request to the
+         * cluster was made. The next keep-alive request will be invoked
+         * keepAliveIntervalMs after this, if no intervening requests are made.
+         */
+        TimePoint lastKeepAliveStart;
+        /**
+         * How often session keep-alive requests are sent during periods of
+         * inactivity, in milliseconds.
+         */
+        uint64_t keepAliveIntervalMs;
+        /**
+         * Runs keepAliveThreadMain().
+         * Since this thread would be unexpected/wasteful for clients that only
+         * issue read-only requests (or no requests at all), it is spawned
+         * lazy, if/when the client opens its session with the cluster (upon
+         * its first read-write request).
+         */
+        std::thread keepAliveThread;
 
         // ExactlyOnceRPCHelper is not copyable.
         ExactlyOnceRPCHelper(const ExactlyOnceRPCHelper&) = delete;

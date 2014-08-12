@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 Stanford University
+/* Copyright (c) 2012-2014 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -47,11 +47,30 @@ ClientImpl::ExactlyOnceRPCHelper::ExactlyOnceRPCHelper(ClientImpl* client)
     , outstandingRPCNumbers()
     , clientId(0)
     , nextRPCNumber(1)
+    , keepAliveCV()
+    , exiting(false)
+    , lastKeepAliveStart(TimePoint::min())
+      // TODO(ongaro): set dynamically based on cluster configuration
+    , keepAliveIntervalMs(60 * 1000)
+    , keepAliveThread()
 {
 }
 
 ClientImpl::ExactlyOnceRPCHelper::~ExactlyOnceRPCHelper()
 {
+}
+
+void
+ClientImpl::ExactlyOnceRPCHelper::exit()
+{
+    {
+        std::unique_lock<std::mutex> lockGuard(mutex);
+        exiting = true;
+        keepAliveCV.notify_all();
+        // TODO(ongaro): would be better if we could cancel keep-alive calls
+    }
+    if (keepAliveThread.joinable())
+        keepAliveThread.join();
 }
 
 Protocol::Client::ExactlyOnceRPCInfo
@@ -65,13 +84,19 @@ ClientImpl::ExactlyOnceRPCHelper::getRPCInfo()
         return rpcInfo;
     }
     if (clientId == 0) {
+        lastKeepAliveStart = Clock::now();
         Protocol::Client::OpenSession::Request request;
         Protocol::Client::OpenSession::Response response;
         client->leaderRPC->call(OpCode::OPEN_SESSION, request, response);
         clientId = response.client_id();
         assert(clientId > 0);
+        keepAliveThread = std::thread(
+            &ClientImpl::ExactlyOnceRPCHelper::keepAliveThreadMain,
+            this);
     }
 
+    lastKeepAliveStart = Clock::now();
+    keepAliveCV.notify_all();
     rpcInfo.set_client_id(clientId);
     uint64_t rpcNumber = nextRPCNumber;
     ++nextRPCNumber;
@@ -89,6 +114,29 @@ ClientImpl::ExactlyOnceRPCHelper::doneWithRPC(
     outstandingRPCNumbers.erase(rpcInfo.rpc_number());
 }
 
+void
+ClientImpl::ExactlyOnceRPCHelper::keepAliveThreadMain()
+{
+    std::unique_lock<std::mutex> lockGuard(mutex);
+    while (true) {
+        if (exiting)
+            return;
+        TimePoint nextKeepAlive;
+        if (keepAliveIntervalMs > 0) {
+            nextKeepAlive = (lastKeepAliveStart +
+                             std::chrono::milliseconds(keepAliveIntervalMs));
+        } else {
+            nextKeepAlive = TimePoint::max();
+        }
+        if (Clock::now() > nextKeepAlive) {
+            // release lock to avoid deadlock
+            Core::MutexUnlock<std::mutex> unlockGuard(lockGuard);
+            client->keepAlive(); // will set nextKeepAlive
+            continue;
+        }
+        keepAliveCV.wait_until(lockGuard, nextKeepAlive);
+    }
+}
 
 ////////// class ClientImpl //////////
 
@@ -99,41 +147,17 @@ ClientImpl::ClientImpl()
 {
 }
 
+ClientImpl::~ClientImpl()
+{
+    exactlyOnceRPCHelper.exit();
+}
+
 void
 ClientImpl::initDerived()
 {
     if (!leaderRPC) // sometimes set in unit tests
         leaderRPC.reset(new LeaderRPC(RPC::Address(hosts, 0)));
     rpcProtocolVersion = negotiateRPCVersion();
-}
-
-uint32_t
-ClientImpl::negotiateRPCVersion()
-{
-    Protocol::Client::GetSupportedRPCVersions::Request request;
-    Protocol::Client::GetSupportedRPCVersions::Response response;
-    leaderRPC->call(OpCode::GET_SUPPORTED_RPC_VERSIONS,
-                    request, response);
-    uint32_t serverMin = response.min_version();
-    uint32_t serverMax = response.max_version();
-    if (MAX_RPC_PROTOCOL_VERSION < serverMin) {
-        PANIC("This client is too old to talk to your LogCabin cluster. "
-              "You'll need to update your LogCabin client library. The "
-              "server supports down to version %u, but this library only "
-              "supports up to version %u.",
-              serverMin, MAX_RPC_PROTOCOL_VERSION);
-
-    } else if (MIN_RPC_PROTOCOL_VERSION > serverMax) {
-        PANIC("This client is too new to talk to your LogCabin cluster. "
-              "You'll need to upgrade your LogCabin cluster or downgrade "
-              "your LogCabin client library. The server supports up to "
-              "version %u, but this library only supports down to version %u.",
-              serverMax, MIN_RPC_PROTOCOL_VERSION);
-    } else {
-        // There exists a protocol version both the client and server speak.
-        // The preferred one is the maximum one they both support.
-        return std::min(MAX_RPC_PROTOCOL_VERSION, serverMax);
-    }
 }
 
 std::pair<uint64_t, Configuration>
@@ -429,6 +453,57 @@ ClientImpl::removeFile(const std::string& path,
         return treeError(response);
     return Result();
 }
+
+void
+ClientImpl::keepAlive()
+{
+    Protocol::Client::ReadWriteTree::Request request;
+    *request.mutable_exactly_once() = exactlyOnceRPCHelper.getRPCInfo();
+    setCondition(request,
+                 {"keepalive",
+                 "this is just a no-op to keep the client's session active; "
+                 "the condition is expected to fail"});
+    request.mutable_write()->set_path("keepalive");
+    request.mutable_write()->set_contents("you shouldn't see this!");
+    Protocol::Client::ReadWriteTree::Response response;
+    leaderRPC->call(OpCode::READ_WRITE_TREE, request, response);
+    exactlyOnceRPCHelper.doneWithRPC(request.exactly_once());
+    if (response.status() != Protocol::Client::Status::CONDITION_NOT_MET) {
+        WARNING("Keep-alive write should have failed its condition. "
+                "Unexpected status was: %s",
+                response.error().c_str());
+    }
+}
+
+uint32_t
+ClientImpl::negotiateRPCVersion()
+{
+    Protocol::Client::GetSupportedRPCVersions::Request request;
+    Protocol::Client::GetSupportedRPCVersions::Response response;
+    leaderRPC->call(OpCode::GET_SUPPORTED_RPC_VERSIONS,
+                    request, response);
+    uint32_t serverMin = response.min_version();
+    uint32_t serverMax = response.max_version();
+    if (MAX_RPC_PROTOCOL_VERSION < serverMin) {
+        PANIC("This client is too old to talk to your LogCabin cluster. "
+              "You'll need to update your LogCabin client library. The "
+              "server supports down to version %u, but this library only "
+              "supports up to version %u.",
+              serverMin, MAX_RPC_PROTOCOL_VERSION);
+
+    } else if (MIN_RPC_PROTOCOL_VERSION > serverMax) {
+        PANIC("This client is too new to talk to your LogCabin cluster. "
+              "You'll need to upgrade your LogCabin cluster or downgrade "
+              "your LogCabin client library. The server supports up to "
+              "version %u, but this library only supports down to version %u.",
+              serverMax, MIN_RPC_PROTOCOL_VERSION);
+    } else {
+        // There exists a protocol version both the client and server speak.
+        // The preferred one is the maximum one they both support.
+        return std::min(MAX_RPC_PROTOCOL_VERSION, serverMax);
+    }
+}
+
 
 } // namespace LogCabin::Client
 } // namespace LogCabin
