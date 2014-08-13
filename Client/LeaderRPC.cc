@@ -95,12 +95,14 @@ LeaderRPC::handleServiceSpecificError(
             // The server we tried is not the current cluster leader.
             if (error.has_leader_hint()) {
                 // Server returned hint as to who the leader might be.
-                VERBOSE("Trying suggested %s as new leader",
-                        error.leader_hint().c_str());
+                VERBOSE("Trying suggested %s as new leader (was using %s)",
+                        error.leader_hint().c_str(),
+                        cachedSession->toString().c_str());
                 connectHost(error.leader_hint(), cachedSession);
             } else {
                 // Well, this server isn't the leader. Try someone else.
-                VERBOSE("Trying random host as new leader");
+                VERBOSE("Trying random host as new leader (was using %s)",
+                        cachedSession->toString().c_str());
                 connectRandom(cachedSession);
             }
             break;

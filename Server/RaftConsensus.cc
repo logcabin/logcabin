@@ -439,6 +439,15 @@ Configuration::hasVote(std::shared_ptr<Server> server) const
     }
 }
 
+std::string
+Configuration::lookupAddress(uint64_t serverId) const
+{
+    auto it = knownServers.find(serverId);
+    if (it != knownServers.end())
+        return it->second->address;
+    return "";
+}
+
 bool
 Configuration::quorumAll(const Predicate& predicate) const
 {
@@ -897,6 +906,13 @@ RaftConsensus::getLastCommittedId() const
         return {ClientResult::NOT_LEADER, 0};
     else
         return {ClientResult::SUCCESS, commitIndex};
+}
+
+std::string
+RaftConsensus::getLeaderHint() const
+{
+    std::unique_lock<Mutex> lockGuard(mutex);
+    return configuration->lookupAddress(leaderId);
 }
 
 Consensus::Entry

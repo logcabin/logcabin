@@ -505,6 +505,12 @@ class Configuration {
     bool hasVote(ServerRef server) const;
 
     /**
+     * Lookup the network address for a particular server.
+     * Returns empty string if not found.
+     */
+    std::string lookupAddress(uint64_t serverId) const;
+
+    /**
      * Return true if there exists a quorum for which every server satisfies
      * the predicate, false otherwise.
      */
@@ -800,6 +806,12 @@ class RaftConsensus : public Consensus {
      * machine.
      */
     std::pair<ClientResult, uint64_t> getLastCommittedId() const;
+
+    /**
+     * Return the network address for a recent leader, if known,
+     * or empty string otherwise.
+     */
+    std::string getLeaderHint() const;
 
     // See Consensus::getNextEntry().
     Consensus::Entry getNextEntry(uint64_t lastEntryId) const;
