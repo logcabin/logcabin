@@ -145,7 +145,7 @@ class ConditionVariable {
 
   private:
     /// Underlying condition variable.
-    std::condition_variable cv;
+    std::condition_variable cv; // NOLINT
     /**
      * This function will be called with the lock released during every
      * invocation of wait/wait_until. No wait will actually occur; this is only

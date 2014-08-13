@@ -2472,6 +2472,10 @@ def CheckLanguage(filename, clean_lines, linenum, file_extension, include_state,
       not Search(r'\bNOLINT\b', line)):
       error(filename, linenum, 'ramcloud/object_pool', 5,
             'Use RAMCloud::ObjectPool rather than boost::object_pool')
+  if (Search(r'\bcondition_variable\b', line) and
+      not Search(r'\bNOLINT\b', line)):
+      error(filename, linenum, 'logcabin/condition_variable', 5,
+            'Use Core::ConditionVariable rather than std::condition_variable.')
 
   # Check if some verboten operator overloading is going on
   # TODO(unknown): catch out-of-line unary operator&:
