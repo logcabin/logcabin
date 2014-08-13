@@ -55,8 +55,10 @@ MessageSocket::SendSocket::SendSocket(Event::Loop& eventLoop,
     int flag = 1;
     int r = setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
     if (r < 0) {
-        WARNING("Could not set TCP_NODELAY flag on sending socket %d: %s",
-                fd, strerror(errno));
+        // This should be a warning, but some unit tests pass weird types of
+        // file descriptors in here. It's not very important, anyhow.
+        NOTICE("Could not set TCP_NODELAY flag on sending socket %d: %s",
+               fd, strerror(errno));
     }
 }
 
@@ -83,7 +85,9 @@ MessageSocket::ReceiveSocket::ReceiveSocket(Event::Loop& eventLoop,
     int flag = 1;
     int r = setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
     if (r < 0) {
-        WARNING("Could not set TCP_NODELAY flag on receiving socket %d: %s",
+        // This should be a warning, but some unit tests pass weird types of
+        // file descriptors in here. It's not very important, anyhow.
+        NOTICE("Could not set TCP_NODELAY flag on receiving socket %d: %s",
                 fd, strerror(errno));
     }
 }
