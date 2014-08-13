@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2013 Stanford University
+/* Copyright (c) 2012-2014 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -44,6 +44,13 @@ StateMachine::StateMachine(std::shared_ptr<Consensus> consensus,
     : consensus(consensus)
     , snapshotMinLogSize(config.read<uint64_t>("snapshotMinLogSize", 1024))
     , snapshotRatio(config.read<uint64_t>("snapshotRatio", 10))
+      // TODO(ongaro): This should be configurable, but it must be the same for
+      // every server, so it's dangerous to put it in the config file. Need to
+      // use the Raft log to agree on this value. Also need to inform clients
+      // of the value and its changes, so that they can send keep-alives at
+      // appropriate intervals. For now, servers time out after an hour, and
+      // clients send keep-alives every minute.
+    , sessionTimeoutNanos(1000UL * 1000 * 1000 * 60 * 60)
     , mutex()
     , entriesApplied()
     , snapshotSuggested()
@@ -120,38 +127,50 @@ StateMachine::wait(uint64_t entryId) const
 void
 StateMachine::apply(uint64_t entryId, const std::string& data)
 {
+    // TODO(ongaro): Switch from string to binary format. This is probably
+    // really slow to parse.
     PC::Command command = Core::ProtoBuf::fromString<PC::Command>(data);
-    PC::CommandResponse commandResponse;
-    PC::ExactlyOnceRPCInfo rpcInfo;
+    Session* session = NULL;
     if (command.has_tree()) {
-        rpcInfo = command.tree().exactly_once();
-        if (ignore(rpcInfo))
-            return;
-        Tree::ProtoBuf::readWriteTreeRPC(
-            tree, command.tree(), *commandResponse.mutable_tree());
+        PC::ExactlyOnceRPCInfo rpcInfo = command.tree().exactly_once();
+        auto it = sessions.find(rpcInfo.client_id());
+        if (it == sessions.end()) {
+            // session does not exist
+        } else {
+            // session exists
+            session = &it->second;
+            expireResponses(*session, rpcInfo.first_outstanding_rpc());
+            if (rpcInfo.rpc_number() < session->firstOutstandingRPC) {
+                // response already discarded, do not re-apply
+            } else {
+                auto inserted = session->responses.insert(
+                                                {rpcInfo.rpc_number(), {}});
+                if (inserted.second) {
+                    // response not found, apply and save it
+                    Tree::ProtoBuf::readWriteTreeRPC(
+                        tree,
+                        command.tree(),
+                        *inserted.first->second.mutable_tree());
+                } else {
+                    // response exists, do not re-apply
+                }
+            }
+        }
     } else if (command.has_open_session()) {
-        openSession(entryId, command.open_session());
-        return;
+        uint64_t clientId = entryId;
+        session = &sessions.insert({clientId, {}}).first->second;
     } else {
         PANIC("unknown command at %lu: %s", entryId, data.c_str());
     }
 
-    Session& session = sessions[rpcInfo.client_id()];
-    if (session.firstOutstandingRPC < rpcInfo.first_outstanding_rpc())
-        session.firstOutstandingRPC = rpcInfo.first_outstanding_rpc();
-
-    // Discard unneeded responses in session
-    auto it = session.responses.begin();
-    while (it != session.responses.end()) {
-        if (it->first < session.firstOutstandingRPC)
-            it = session.responses.erase(it);
-        else
-            ++it;
+    if (command.has_nanoseconds_since_epoch()) {
+        if (session != NULL) {
+            session->lastModified = command.nanoseconds_since_epoch();
+            session = NULL; // pointer invalidated by expireSessions()
+        }
+        expireSessions(command.nanoseconds_since_epoch());
     }
-    // Add new response to session
-    session.responses[rpcInfo.rpc_number()] = commandResponse;
 }
-
 
 void
 StateMachine::applyThreadMain()
@@ -220,21 +239,42 @@ StateMachine::dumpSessionSnapshot(
     sessionsProto.SerializeWithCachedSizes(&stream);
 }
 
-bool
-StateMachine::ignore(const PC::ExactlyOnceRPCInfo& rpcInfo) const
+void
+StateMachine::expireResponses(Session& session, uint64_t firstOutstandingRPC)
 {
-    auto it = sessions.find(rpcInfo.client_id());
-    if (it == sessions.end())
-        return true; // no such session
-    const Session& session = it->second;
-    if (session.responses.find(rpcInfo.rpc_number()) !=
-        session.responses.end()) {
-        return true; // response exists
+    if (session.firstOutstandingRPC >= firstOutstandingRPC)
+        return;
+    session.firstOutstandingRPC = firstOutstandingRPC;
+    auto it = session.responses.begin();
+    while (it != session.responses.end()) {
+        if (it->first < session.firstOutstandingRPC)
+            it = session.responses.erase(it);
+        else
+            ++it;
     }
-    if (rpcInfo.rpc_number() < session.firstOutstandingRPC)
-        return true; // response already discarded
-    return false;
 }
+
+void
+StateMachine::expireSessions(uint64_t nanosecondsSinceEpoch)
+{
+    auto it = sessions.begin();
+    while (it != sessions.end()) {
+        Session& session = it->second;
+        uint64_t expireTime = session.lastModified + sessionTimeoutNanos;
+        if (expireTime < nanosecondsSinceEpoch) {
+            uint64_t diffNanos = nanosecondsSinceEpoch - session.lastModified;
+            NOTICE("Expiring client %lu's session after %lu.%09lu seconds "
+                   "due to inactivity",
+                   it->first,
+                   diffNanos / (1000 * 1000 * 1000UL),
+                   diffNanos % (1000 * 1000 * 1000UL));
+            it = sessions.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
 
 void
 StateMachine::loadSessionSnapshot(
@@ -267,15 +307,6 @@ StateMachine::loadSessionSnapshot(
             session.responses.insert({it2->rpc_number(), it2->response()});
         }
     }
-}
-
-void
-StateMachine::openSession(
-        uint64_t entryId,
-        const Protocol::Client::OpenSession::Request& request)
-{
-    uint64_t clientId = entryId;
-    sessions.insert({clientId, {}});
 }
 
 bool

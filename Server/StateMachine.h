@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2013 Stanford University
+/* Copyright (c) 2012-2014 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -64,6 +64,9 @@ class StateMachine {
     void wait(uint64_t entryId) const;
 
   private:
+    // forward declaration
+    struct Session;
+
     /**
      * Invoked once per committed entry from the Raft log.
      */
@@ -81,22 +84,27 @@ class StateMachine {
                 google::protobuf::io::CodedOutputStream& stream) const;
 
     /**
-     * Return true if the state machine should ignore the command (because it
-     * is a duplicate of a previous command).
+     * Update the session and clean up unnecessary responses.
+     * \param session
+     *      Affected session.
+     * \param firstOutstandingRPC
+     *      New value for the first outstanding RPC for a session.
      */
-    bool ignore(const Protocol::Client::ExactlyOnceRPCInfo& rpcInfo) const;
+    void expireResponses(Session& session, uint64_t firstOutstandingRPC);
+
+    /**
+     * Remove old sessions.
+     * \param nanosecondsSinceEpoch
+     *      Sessions that have not been used since this (leader) time are
+     *      removed.
+     */
+    void expireSessions(uint64_t nanosecondsSinceEpoch);
 
     /**
      * Read the #sessions table from a snapshot file.
      */
     void loadSessionSnapshot(
                 google::protobuf::io::CodedInputStream& stream);
-
-    /**
-     * Allocate a new Session upon a client request to do so.
-     */
-    void openSession(uint64_t entryId,
-                     const Protocol::Client::OpenSession::Request& request);
 
     /**
      * Return true if it is time to create a new snapshot.
@@ -116,8 +124,6 @@ class StateMachine {
     void takeSnapshot(uint64_t lastIncludedIndex,
                       std::unique_lock<std::mutex>& lockGuard);
 
-
-
     std::shared_ptr<Consensus> consensus;
 
     /**
@@ -130,6 +136,12 @@ class StateMachine {
      * snapshot.
      */
     uint64_t snapshotRatio;
+
+    /**
+     * The time interval after which to remove an inactive client session, in
+     * nanoseconds of leader time.
+     */
+    uint64_t sessionTimeoutNanos;
 
     /**
      * Protects against concurrent access for all members of this class (except
@@ -177,13 +189,18 @@ class StateMachine {
      */
     struct Session {
         Session()
-            : firstOutstandingRPC(0)
+            : lastModified(0)
+            , firstOutstandingRPC(0)
             , responses()
         {
         }
         /**
+         * When the session was last active, measured in leader time
+         * nanoseconds since the Unix epoch.
+         */
+        uint64_t lastModified;
+        /**
          * Largest firstOutstandingRPC number processed from this client.
-         * (RPCs that are ignored do not count for this purpose.)
          */
         uint64_t firstOutstandingRPC;
         /**
@@ -197,7 +214,6 @@ class StateMachine {
 
     /**
      * Client ID to Session map.
-     * TODO(ongaro): Will need to clean up stale sessions somehow.
      */
     std::unordered_map<uint64_t, Session> sessions;
 

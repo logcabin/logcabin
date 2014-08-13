@@ -291,6 +291,14 @@ message ReadWriteTree {
  * This is what the state machine takes in from the replicated log.
  */
 message Command {
+    /**
+     * The leader's time when it received the command, measured in nanoseconds
+     * since the Unix epoch. Useful for cleaning up client sessions. Note that
+     * this may occasionally go backwards due to leader changes or time
+     * synchronization.
+     */
+    optional uint64 nanoseconds_since_epoch = 1;
+
     // The following are mutually exclusive.
     optional OpenSession.Request open_session = 4;
     optional ReadWriteTree.Request tree = 5;

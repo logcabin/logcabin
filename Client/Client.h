@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012 Stanford University
+/* Copyright (c) 2011-2014 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -416,6 +416,14 @@ class Tree {
 
 /**
  * A handle to the LogCabin cluster.
+ *
+ * If the client requests changes to the cluster's replicated state machine
+ * (for example, by writing a value), the client library will first open a
+ * session with the cluster. It will thereafter periodically send keep-alive
+ * requests to the cluster during periods of inactivity to maintain this
+ * session. If communication to the LogCabin cluster is lost for an extended
+ * period of time, the client's session will expire, and this library will
+ * force the client to crash.
  */
 class Cluster {
   public:

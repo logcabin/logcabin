@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 Stanford University
+/* Copyright (c) 2013-2014 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -81,6 +81,100 @@ class ServerStateMachineTest : public ::testing::Test {
     std::unique_ptr<StateMachine> stateMachine;
     Storage::FilesystemUtil::File tmpdir;
 };
+
+TEST_F(ServerStateMachineTest, getResponse)
+{
+    Core::Debug::setLogPolicy({{"Server/StateMachine.cc", "ERROR"}});
+    stateMachine->sessions.insert({1, {}});
+    StateMachine::Session& session = stateMachine->sessions.at(1);
+    Protocol::Client::CommandResponse r1;
+    Protocol::Client::CommandResponse r2;
+    r1.mutable_tree()->set_status(Protocol::Client::Status::LOOKUP_ERROR);
+    session.responses.insert({1, r1});
+    Protocol::Client::ExactlyOnceRPCInfo rpcInfo;
+    rpcInfo.set_client_id(2);
+    rpcInfo.set_rpc_number(1);
+    EXPECT_FALSE(stateMachine->getResponse(rpcInfo, r2));
+    rpcInfo.set_client_id(1);
+    rpcInfo.set_rpc_number(2);
+    EXPECT_FALSE(stateMachine->getResponse(rpcInfo, r2));
+    Core::Debug::setLogPolicy({{"", "WARNING"}});
+    rpcInfo.set_client_id(1);
+    rpcInfo.set_rpc_number(1);
+    EXPECT_TRUE(stateMachine->getResponse(rpcInfo, r2));
+    EXPECT_EQ(r1, r2);
+}
+
+TEST_F(ServerStateMachineTest, apply_tree)
+{
+    stateMachine->sessionTimeoutNanos = 1;
+    Protocol::Client::Command command =
+        Core::ProtoBuf::fromString<Protocol::Client::Command>(
+            "nanoseconds_since_epoch: 2, "
+            "tree: { "
+            " exactly_once: { "
+            "  client_id: 39 "
+            "  first_outstanding_rpc: 2 "
+            "  rpc_number: 3 "
+            " } "
+            " make_directory { "
+            "  path: '/a' "
+            " } "
+            "}");
+    std::vector<std::string> children;
+
+    // session does not exist
+    stateMachine->sessions.insert({1, {}});
+    stateMachine->apply(6, Core::ProtoBuf::dumpString(command));
+    stateMachine->tree.listDirectory("/", children);
+    EXPECT_EQ((std::vector<std::string> {}), children);
+    ASSERT_EQ(0U, stateMachine->sessions.size());
+
+    // session exists and need to apply
+    stateMachine->sessions.insert({1, {}});
+    stateMachine->sessions.insert({39, {}});
+    stateMachine->apply(6, Core::ProtoBuf::dumpString(command));
+    stateMachine->tree.listDirectory("/", children);
+    EXPECT_EQ((std::vector<std::string> {"a/"}), children);
+    ASSERT_EQ(1U, stateMachine->sessions.size());
+    EXPECT_EQ(2U, stateMachine->sessions.at(39).lastModified);
+
+    // session exists and response exists
+    stateMachine->sessions.insert({1, {}});
+    stateMachine->tree.removeDirectory("/a");
+    stateMachine->apply(6, Core::ProtoBuf::dumpString(command));
+    stateMachine->tree.listDirectory("/", children);
+    EXPECT_EQ((std::vector<std::string> {}), children);
+    ASSERT_EQ(1U, stateMachine->sessions.size());
+    EXPECT_EQ(2U, stateMachine->sessions.at(39).lastModified);
+
+    // session exists but response discarded
+    stateMachine->sessions.insert({1, {}});
+    stateMachine->expireResponses(stateMachine->sessions.at(39), 4);
+    stateMachine->apply(6, Core::ProtoBuf::dumpString(command));
+    stateMachine->tree.listDirectory("/", children);
+    EXPECT_EQ((std::vector<std::string> {}), children);
+    ASSERT_EQ(1U, stateMachine->sessions.size());
+    EXPECT_EQ(2U, stateMachine->sessions.at(39).lastModified);
+}
+
+TEST_F(ServerStateMachineTest, apply_openSession)
+{
+    stateMachine->sessionTimeoutNanos = 1;
+    stateMachine->sessions.insert({1, {}});
+    Protocol::Client::Command command =
+        Core::ProtoBuf::fromString<Protocol::Client::Command>(
+            "nanoseconds_since_epoch: 2, "
+            "open_session: {}");
+    stateMachine->apply(6, Core::ProtoBuf::dumpString(command));
+    ASSERT_EQ((std::vector<uint64_t>{6U}),
+              Core::STLUtil::sorted(
+                  Core::STLUtil::getKeys(stateMachine->sessions)));
+    StateMachine::Session& session = stateMachine->sessions.at(6);
+    EXPECT_EQ(2U, session.lastModified);
+    EXPECT_EQ(0U, session.firstOutstandingRPC);
+    EXPECT_EQ(0U, session.responses.size());
+}
 
 // This tries to test the use of kill() to stop a snapshotting child and exit
 // quickly.
@@ -170,8 +264,41 @@ TEST_F(ServerStateMachineTest, dumpSessionSnapshot)
                     stateMachine->sessions.at(91).responses)));
 }
 
-// loadSessionSnapshot tested along with dumpSessionSnapshot above
+TEST_F(ServerStateMachineTest, expireResponses)
+{
+    stateMachine->sessions.insert({1, {}});
+    StateMachine::Session& session = stateMachine->sessions.at(1);
+    session.responses.insert({1, {}});
+    session.responses.insert({2, {}});
+    session.responses.insert({4, {}});
+    session.responses.insert({5, {}});
+    stateMachine->expireResponses(session, 4);
+    stateMachine->expireResponses(session, 3);
+    EXPECT_EQ(4U, session.firstOutstandingRPC);
+    EXPECT_EQ((std::vector<uint64_t>{4U, 5U}),
+              Core::STLUtil::sorted(
+                  Core::STLUtil::getKeys(session.responses)));
+}
 
+TEST_F(ServerStateMachineTest, expireSessions)
+{
+    stateMachine->sessionTimeoutNanos = 1;
+    stateMachine->sessions.insert({1, {}});
+    stateMachine->sessions.at(1).lastModified = 100;
+    stateMachine->sessions.insert({2, {}});
+    stateMachine->sessions.at(2).lastModified = 400;
+    stateMachine->sessions.insert({3, {}});
+    stateMachine->sessions.at(3).lastModified = 200;
+    stateMachine->sessions.insert({4, {}});
+    stateMachine->sessions.at(4).lastModified = 201;
+    stateMachine->sessions.insert({5, {}});
+    stateMachine->expireSessions(202);
+    EXPECT_EQ((std::vector<uint64_t>{2U, 4U}),
+              Core::STLUtil::sorted(
+                  Core::STLUtil::getKeys(stateMachine->sessions)));
+}
+
+// loadSessionSnapshot tested along with dumpSessionSnapshot above
 
 TEST_F(ServerStateMachineTest, takeSnapshot)
 {
@@ -193,7 +320,8 @@ TEST_F(ServerStateMachineTest, takeSnapshot)
     stateMachine->tree.listDirectory("/", children);
     EXPECT_EQ((std::vector<std::string>{"foo/"}), children);
     EXPECT_EQ((std::vector<std::uint64_t>{4}),
-              Core::STLUtil::getKeys(stateMachine->sessions));
+              Core::STLUtil::sorted(
+                  Core::STLUtil::getKeys(stateMachine->sessions)));
 }
 
 } // namespace LogCabin::Server::<anonymous>
