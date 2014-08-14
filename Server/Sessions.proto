@@ -34,6 +34,7 @@ message Sessions {
  */
 message Session {
     required uint64 client_id = 1;
+    required uint64 last_modified = 4;
     required uint64 first_outstanding_rpc = 2;
     repeated Response rpc_response = 3;
 }

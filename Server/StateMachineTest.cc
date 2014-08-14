@@ -212,6 +212,7 @@ TEST_F(ServerStateMachineTest, dumpSessionSnapshot)
     r1.mutable_tree()->set_status(Protocol::Client::Status::TYPE_ERROR);
 
     StateMachine::Session s1;
+    s1.lastModified = 6;
     s1.firstOutstandingRPC = 5;
     s1.responses.insert({5, r1});
     s1.responses.insert({7, r2});
@@ -243,6 +244,7 @@ TEST_F(ServerStateMachineTest, dumpSessionSnapshot)
     EXPECT_EQ((std::vector<std::uint64_t>{4, 80, 91}),
               Core::STLUtil::sorted(
                 Core::STLUtil::getKeys(stateMachine->sessions)));
+    EXPECT_EQ(6U, stateMachine->sessions.at(4).lastModified);
     EXPECT_EQ(5U, stateMachine->sessions.at(4).firstOutstandingRPC);
     EXPECT_EQ(9U, stateMachine->sessions.at(80).firstOutstandingRPC);
     EXPECT_EQ(6U, stateMachine->sessions.at(91).firstOutstandingRPC);

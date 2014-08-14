@@ -223,6 +223,7 @@ StateMachine::dumpSessionSnapshot(
     for (auto it = sessions.begin(); it != sessions.end(); ++it) {
         SessionsProto::Session& session = *sessionsProto.add_session();
         session.set_client_id(it->first);
+        session.set_last_modified(it->second.lastModified);
         session.set_first_outstanding_rpc(it->second.firstOutstandingRPC);
         for (auto it2 = it->second.responses.begin();
              it2 != it->second.responses.end();
@@ -300,6 +301,7 @@ StateMachine::loadSessionSnapshot(
          ++it) {
         Session& session = sessions.insert({it->client_id(), {}})
                                                         .first->second;
+        session.lastModified = it->last_modified();
         session.firstOutstandingRPC = it->first_outstanding_rpc();
         for (auto it2 = it->rpc_response().begin();
              it2 != it->rpc_response().end();
