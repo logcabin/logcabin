@@ -1154,27 +1154,28 @@ TEST_F(ServerRaftConsensusTest, handleRequestVote)
     Protocol::Raft::RequestVote::Request request;
     Protocol::Raft::RequestVote::Response response;
     request.set_server_id(3);
-    request.set_term(10);
+    request.set_term(12);
     request.set_last_log_term(1);
     request.set_last_log_index(2);
 
-    // as leader, log is ok
+    // as leader, log is ok: don't update term or grant vote
     consensus->append({&entry1});
     consensus->startNewElection();
     drainDiskQueue(*consensus);
     EXPECT_EQ(State::LEADER, consensus->state);
     consensus->handleRequestVote(request, response);
-    EXPECT_EQ("term: 10 "
-              "granted: true ",
+    EXPECT_EQ("term: 1 "
+              "granted: false ",
               response);
-    EXPECT_EQ(State::FOLLOWER, consensus->state);
-    EXPECT_EQ(3U, consensus->votedFor);
+    EXPECT_EQ(State::LEADER, consensus->state);
+    EXPECT_EQ(1U, consensus->currentTerm);
+    EXPECT_EQ(1U, consensus->votedFor);
 
     // as candidate, log is not ok
+    consensus->stepDown(5);
     consensus->append({&entry5});
     consensus->startNewElection();
     EXPECT_EQ(State::CANDIDATE, consensus->state);
-    request.set_term(12);
     TimePoint oldStartElectionAt = consensus->startElectionAt;
     Clock::mockValue += milliseconds(2);
     consensus->handleRequestVote(request, response);
@@ -2178,6 +2179,8 @@ TEST_F(ServerRaftConsensusTest, becomeLeader)
 
     drainDiskQueue(*consensus);
     EXPECT_EQ(2U, consensus->configuration->localServer->lastSyncedIndex);
+
+    // TODO(ongaro): add becomeLeader test when not part of current config?
 }
 
 TEST_F(ServerRaftConsensusTest, discardUnneededEntries)
@@ -2558,7 +2561,7 @@ TEST_F(ServerRaftConsensusTest, startNewElection)
         "}");
     consensus->append({&entry1});
     consensus->startNewElection();
-    EXPECT_EQ(State::FOLLOWER, consensus->state);
+    EXPECT_EQ(State::CANDIDATE, consensus->state);
 }
 
 TEST_F(ServerRaftConsensusTest, stepDown)

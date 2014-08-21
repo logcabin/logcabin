@@ -754,6 +754,7 @@ RaftConsensus::RaftConsensus(Globals& globals)
     , votedFor(0)
     , currentEpoch(0)
     , startElectionAt(TimePoint::max())
+    , withholdVotesUntil(TimePoint::min())
     , leaderDiskThread()
     , timerThread()
     , stepDownThread()
@@ -1010,6 +1011,8 @@ RaftConsensus::handleAppendEntries(
     // and convert to follower if necessary; reset the election timer.
     stepDown(request.term());
     setElectionTimer();
+    withholdVotesUntil = Clock::now() +
+                         std::chrono::milliseconds(ELECTION_TIMEOUT_MS);
 
     // Record the leader ID as a hint for clients.
     if (leaderId == 0) {
@@ -1130,6 +1133,8 @@ RaftConsensus::handleAppendSnapshotChunk(
     // and convert to follower if necessary; reset the election timer.
     stepDown(request.term());
     setElectionTimer();
+    withholdVotesUntil = Clock::now() +
+                         std::chrono::milliseconds(ELECTION_TIMEOUT_MS);
 
     // Record the leader ID as a hint for clients.
     if (leaderId == 0) {
@@ -1187,6 +1192,17 @@ RaftConsensus::handleRequestVote(
 {
     std::unique_lock<Mutex> lockGuard(mutex);
     assert(!exiting);
+
+    if (withholdVotesUntil > Clock::now()) {
+        NOTICE("Rejecting RequestVote for term %lu from server %lu, since "
+               "this server (which is in term %lu) recently heard from a "
+               "leader. Should server %lu be shut down?",
+               request.term(), request.server_id(), currentTerm,
+               request.server_id());
+        response.set_term(currentTerm);
+        response.set_granted(false);
+        return;
+    }
 
     if (request.term() > currentTerm) {
         VERBOSE("Caller(%lu) has newer term, updating. "
@@ -1576,10 +1592,10 @@ RaftConsensus::stepDownThreadMain()
             }
             stateChanged.wait(lockGuard);
         }
-        // Now, if a FOLLOWER_TIMEOUT goes by without confirming leadership,
-        // step down. FOLLOWER_TIMEOUT is a reasonable amount of time, since
-        // it's about when other servers will start elections and bump the
-        // term.
+        // Now, if an election timeout goes by without confirming leadership,
+        // step down. The election timeout is a reasonable amount of time,
+        // since it's about when other servers will start elections and bump
+        // the term.
         TimePoint stepDownAt =
             Clock::now() + std::chrono::milliseconds(ELECTION_TIMEOUT_MS);
         uint64_t term = currentTerm;
@@ -1892,6 +1908,7 @@ RaftConsensus::becomeLeader()
     state = State::LEADER;
     leaderId = serverId;
     startElectionAt = TimePoint::max();
+    withholdVotesUntil = TimePoint::max();
 
     // The ordering is pretty important here: First set nextIndex and
     // lastAgreeIndex for ourselves and each follower, then append the no op.
@@ -2117,12 +2134,12 @@ RaftConsensus::setElectionTimer()
 void
 RaftConsensus::startNewElection()
 {
-    if (!configuration->hasVote(configuration->localServer)) {
-        // Don't have a configuration or not part of the current configuration:
-        // go back to sleep.
+    if (configuration->id == 0) {
+        // Don't have a configuration: go back to sleep.
         setElectionTimer();
         return;
     }
+
     if (state == State::FOLLOWER) {
         // too verbose otherwise when server is partitioned
         NOTICE("Running for election in term %lu", currentTerm + 1);
@@ -2162,8 +2179,10 @@ RaftConsensus::stepDown(uint64_t newTerm)
         }
     }
     state = State::FOLLOWER;
-    if (startElectionAt == TimePoint::max())
+    if (startElectionAt == TimePoint::max()) // was leader
         setElectionTimer();
+    if (withholdVotesUntil == TimePoint::max()) // was leader
+        withholdVotesUntil = TimePoint::min();
     interruptAll();
 
     // If the leader disk thread is currently writing to disk, wait for it to

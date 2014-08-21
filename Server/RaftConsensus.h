@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 Stanford University
+/* Copyright (c) 2012-2014 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -1320,6 +1320,19 @@ class RaftConsensus : public Consensus {
      * as the largest startElectionAt value.
      */
     TimePoint startElectionAt;
+
+    /**
+     * The earliest time at which RequestVote messages should be processed.
+     * Until this time, they are rejected, as processing them risks
+     * causing the cluster leader to needlessly step down.
+     * For more motivation, see the "disruptive servers" issue in membership
+     * changes described in the Raft paper/thesis.
+     *
+     * This is set to the current time + an election timeout when a heartbeat
+     * is received, and it's set to infinity for leaders (who begin processing
+     * RequestVote messages again immediately when they step down).
+     */
+    TimePoint withholdVotesUntil;
 
     /**
      * The thread that executes leaderDiskThreadMain() to flush log entries to

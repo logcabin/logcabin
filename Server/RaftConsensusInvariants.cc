@@ -157,16 +157,6 @@ Invariants::checkBasic()
         expect(consensus.log->getLastLogIndex() == 0);
     }
 
-    // A server should not try to become candidate in a configuration it does
-    // not belong to, and a server should not lead in a committed configuration
-    // it does not belong to.
-    if (!consensus.configuration->hasVote(
-                                consensus.configuration->localServer)) {
-        expect(consensus.state != RaftConsensus::State::CANDIDATE);
-        if (consensus.configuration->id <= consensus.commitIndex)
-            expect(consensus.state != RaftConsensus::State::LEADER);
-    }
-
     // The last snapshot covers a committed range.
     expect(consensus.commitIndex >= consensus.lastSnapshotIndex);
 
