@@ -33,7 +33,7 @@
  *
  * TODO(ongaro): How does this interact with TCP?
  */
-enum { TIMEOUT_MS = 100 };
+enum { TIMEOUT_MS = 1000 };
 
 /**
  * A message ID reserved for ping messages used to check the server's liveness.
@@ -161,12 +161,12 @@ ClientSession::Timer::handleTimerEvent()
 
     // Send a ping or expire the session.
     if (!session.activePing) {
-        VERBOSE("ClientSession is suspicious. Sending ping.");
+        WARNING("ClientSession is suspicious. Sending ping.");
         session.activePing = true;
         session.messageSocket->sendMessage(PING_MESSAGE_ID, Buffer());
         schedule(TIMEOUT_MS * 1000 * 1000);
     } else {
-        VERBOSE("ClientSession to %s timed out.",
+        PANIC("ClientSession to %s timed out.",
                 session.address.toString().c_str());
         // Fail all current and future RPCs.
         session.errorMessage = ("Server " +

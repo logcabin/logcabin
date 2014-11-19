@@ -51,6 +51,7 @@ class StateMachine {
     bool getResponse(const Protocol::Client::ExactlyOnceRPCInfo& rpcInfo,
                      Protocol::Client::CommandResponse& response) const;
 
+
     /**
      * Called by ClientService to execute read-only operations on the Tree.
      */
@@ -91,6 +92,10 @@ class StateMachine {
      *      New value for the first outstanding RPC for a session.
      */
     void expireResponses(Session& session, uint64_t firstOutstandingRPC);
+
+    bool getResponse(const Protocol::Client::ExactlyOnceRPCInfo& rpcInfo,
+                     Protocol::Client::CommandResponse& response,
+                     std::unique_lock<std::mutex>& lockGuard) const;
 
     /**
      * Remove old sessions.

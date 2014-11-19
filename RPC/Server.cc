@@ -38,8 +38,13 @@ Server::registerService(uint16_t serviceId,
                         uint32_t maxThreads)
 {
     std::unique_lock<std::mutex> lockGuard(mutex);
-    services[serviceId] =
-        std::make_shared<ThreadDispatchService>(service, 0, maxThreads);
+#if 0
+    if (serviceId == 1) // client TODO
+        services[serviceId] = service;
+    else
+#endif
+        services[serviceId] =
+            std::make_shared<ThreadDispatchService>(service, 0, maxThreads);
 }
 
 void

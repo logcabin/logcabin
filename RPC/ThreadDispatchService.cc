@@ -18,6 +18,8 @@
 #include "Core/StringUtil.h"
 #include "Core/ThreadId.h"
 #include "RPC/ThreadDispatchService.h"
+#include "Server/Globals.h"
+#include "Server/RaftConsensus.h"
 
 namespace LogCabin {
 namespace RPC {
@@ -68,6 +70,8 @@ ThreadDispatchService::handleRPC(ServerRPC serverRPC)
 {
     std::unique_lock<std::mutex> lockGuard(mutex);
     assert(!exit);
+    if (globals != NULL)
+        ++globals->raft->dispatchQueue;
     rpcQueue.push(std::move(serverRPC));
     if (numFreeWorkers == 0 && threads.size() < maxThreads)
         threads.emplace_back(&ThreadDispatchService::workerMain, this);
@@ -99,6 +103,8 @@ ThreadDispatchService::workerMain()
                 return;
             rpc = std::move(rpcQueue.front());
             rpcQueue.pop();
+            if (globals != NULL)
+                --globals->raft->dispatchQueue;
         }
         // execute RPC handler
         threadSafeService->handleRPC(std::move(rpc));

@@ -16,6 +16,7 @@
 #include "Core/Debug.h"
 #include "Storage/LogFactory.h"
 #include "Storage/MemoryLog.h"
+#include "Storage/SegmentedLog.h"
 #include "Storage/SimpleFileLog.h"
 
 namespace LogCabin {
@@ -27,12 +28,16 @@ makeLog(const Core::Config& config,
         const FilesystemUtil::File& parentDir)
 {
     std::string module =
-        config.read<std::string>("storageModule", "filesystem");
+        config.read<std::string>("storageModule", "newfilesystem");
     std::unique_ptr<Log> log;
     if (module == "memory") {
         log.reset(new MemoryLog());
-    } else if (module == "filesystem") {
+#if 0
+    } else if (module == "oldfilesystem") {
         log.reset(new SimpleFileLog(parentDir));
+#endif
+    } else if (module == "newfilesystem") {
+        log.reset(new SegmentedLog(parentDir));
     } else {
         PANIC("Unknown storage module from config file: %s", module.c_str());
     }

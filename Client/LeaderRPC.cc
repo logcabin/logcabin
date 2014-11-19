@@ -74,14 +74,18 @@ LeaderRPC::call(OpCode opCode,
             case Status::OK:
                 return;
             case Status::SERVICE_SPECIFIC_ERROR:
+                WARNING("service specific error");
                 handleServiceSpecificError(cachedSession,
                                            serviceSpecificError);
                 break;
             case Status::RPC_FAILED:
+                WARNING("RPC failed");
                 // If the session is broken, get a new one and try again.
                 connectRandom(cachedSession);
                 break;
         }
+        WARNING("retry RPC");
+        usleep(10000);
     }
 }
 

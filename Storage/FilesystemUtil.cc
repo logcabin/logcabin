@@ -73,6 +73,8 @@ File::close()
     if (::close(fd) != 0) {
         PANIC("Failed to close file %s: %s",
               path.c_str(), strerror(errno));
+    } else {
+        VERBOSE("closed %d", fd);
     }
     fd = -1;
     path.clear();
@@ -242,6 +244,8 @@ openFile(const File& dir, const std::string& child, int flags)
     if (fd == -1) {
         PANIC("Could not open %s/%s: %s",
               dir.path.c_str(), child.c_str(), strerror(errno));
+    } else {
+        VERBOSE("opened %d", fd);
     }
     return File(fd, dir.path + "/" + child);
 }

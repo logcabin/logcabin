@@ -26,9 +26,6 @@
 namespace LogCabin {
 namespace Storage {
 
-// forward declaration
-class Globals;
-
 /**
  * This interface is used by RaftConsensus to store log entries and metadata.
  * Typically, implementations will persist the log entries and metadata to

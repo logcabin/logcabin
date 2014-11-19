@@ -17,6 +17,11 @@
 #define LOGCABIN_RPC_SERVICE_H
 
 namespace LogCabin {
+
+namespace Server {
+class Globals;
+}
+
 namespace RPC {
 
 // forward declaration
@@ -31,7 +36,7 @@ class Service {
     /**
      * Constructor.
      */
-    Service() {}
+    Service() : globals(NULL) {}
 
     /**
      * Destructor.
@@ -51,6 +56,8 @@ class Service {
      * log messages.
      */
     virtual std::string getName() const = 0;
+
+    Server::Globals* globals;
 
     // Service is non-copyable.
     Service(const Service&) = delete;

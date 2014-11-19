@@ -19,7 +19,6 @@
 #include <string>
 
 #include "Storage/Log.h"
-
 #ifndef LOGCABIN_STORAGE_MEMORYLOG_H
 #define LOGCABIN_STORAGE_MEMORYLOG_H
 

@@ -49,21 +49,32 @@ TEST_F(StorageLogFactoryTest, makeLog_memory)
     EXPECT_TRUE(bool(log));
 }
 
-TEST_F(StorageLogFactoryTest, makeLog_filesystem)
+#if 0
+TEST_F(StorageLogFactoryTest, makeLog_oldfilesystem)
 {
+#if 0
     // expect warning
     Core::Debug::setLogPolicy({
         {"Storage/SimpleFileLog.cc", "ERROR"}
     });
+#endif
 
+    config.set("storageModule", "oldfilesystem");
+    std::unique_ptr<Log> log = LogFactory::makeLog(config, tmpdir);
+    EXPECT_TRUE(bool(log));
+}
+#endif
+
+TEST_F(StorageLogFactoryTest, makeLog_newfilesystem)
+{
     // default
     std::unique_ptr<Log> log = LogFactory::makeLog(config, tmpdir);
     EXPECT_TRUE(bool(log));
     log.reset();
 
-    config.set("storageModule", "filesystem");
+    config.set("storageModule", "newfilesystem");
     log = LogFactory::makeLog(config, tmpdir);
-    EXPECT_TRUE(bool(log));
+    EXPECT_TRUE(log);
 }
 
 TEST_F(StorageLogFactoryTest, makeLog_notfound)

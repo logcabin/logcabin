@@ -89,7 +89,7 @@ setName(const std::string& name)
         Internal::threadNames[id] = name;
     // set system thread name, useful for gdb
     // name is truncated at first 16 characters
-    prctl(PR_SET_NAME, name.c_str(), 0, 0, 0);
+    //prctl(PR_SET_NAME, name.c_str(), 0, 0, 0);
 }
 
 std::string

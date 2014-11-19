@@ -90,6 +90,11 @@ Globals::init(uint64_t serverId)
         rpcServer->registerService(Protocol::Common::ServiceId::CLIENT_SERVICE,
                                    clientService,
                                    maxThreads);
+        for (auto it = rpcServer->services.begin();
+             it != rpcServer->services.begin();
+             ++it) {
+            it->second->globals = this;
+        }
 
 
         std::string configServers = config.read<std::string>("servers", "");

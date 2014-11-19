@@ -30,6 +30,7 @@
 #include "Core/ConditionVariable.h"
 #include "Core/Time.h"
 #include "RPC/ClientRPC.h"
+#include "RPC/ServerRPC.h"
 #include "Server/Consensus.h"
 #include "Storage/Log.h"
 #include "Storage/SnapshotFile.h"
@@ -272,6 +273,7 @@ class Peer : public Server {
     callRPC(Protocol::Raft::OpCode opCode,
             const google::protobuf::Message& request,
             google::protobuf::Message& response,
+            uint64_t peerThreadId,
             std::unique_lock<Mutex>& lockGuard);
 
     /**
@@ -413,12 +415,12 @@ class Peer : public Server {
      * Setting this member and canceling the RPC must be done while holding the
      * Raft lock; waiting on the RPC is done without holding that lock.
      */
-    RPC::ClientRPC rpc;
+    std::deque<RPC::ClientRPC> rpcs;
 
     /**
      * A thread that is used to send RPCs to the follower.
      */
-    std::thread thread;
+    std::deque<std::thread> threads;
 
     // Peer is not copyable.
     Peer(const Peer&) = delete;
@@ -759,6 +761,13 @@ class ConfigurationManager {
  */
 class RaftConsensus : public Consensus {
   public:
+    std::atomic<uint64_t> activeWorkers;
+    std::atomic<uint64_t> workersRaft;
+    std::atomic<uint64_t> workersRaftPreAppend;
+    std::atomic<uint64_t> workersRaftPostAppend;
+    std::atomic<uint64_t> workersSM;
+    std::atomic<uint64_t> workersReply;
+    std::atomic<uint64_t> dispatchQueue;
     enum class ClientResult {
         SUCCESS,
         FAIL,
@@ -860,6 +869,8 @@ class RaftConsensus : public Consensus {
      */
     std::pair<ClientResult, uint64_t> replicate(const std::string& operation);
 
+    void replicate2(const std::string& operation, ClientRequest request);
+
     /**
      * Change the cluster's configuration.
      * Returns once operation completed and old servers are no longer needed.
@@ -939,7 +950,7 @@ class RaftConsensus : public Consensus {
      * Initiate RPCs to a specific server as necessary.
      * One thread for each remote server calls this method (see Peer::thread).
      */
-    void peerThreadMain(std::shared_ptr<Peer> peer);
+    void peerThreadMain(std::shared_ptr<Peer> peer, uint64_t peerThreadId = 0);
 
     /**
      * Return to follower state when, as leader, this server is not able to
@@ -989,7 +1000,8 @@ class RaftConsensus : public Consensus {
      *      State used in communicating with the follower, building the RPC
      *      request, and processing its result.
      */
-    void appendEntries(std::unique_lock<Mutex>& lockGuard, Peer& peer);
+    void appendEntries(std::unique_lock<Mutex>& lockGuard, Peer& peer,
+                       uint64_t peerThreadId = 0);
 
     /**
      * Send an AppendSnapshotChunk RPC to the server (containing part of a
@@ -1001,7 +1013,8 @@ class RaftConsensus : public Consensus {
      *      State used in communicating with the follower, building the RPC
      *      request, and processing its result.
      */
-    void appendSnapshotChunk(std::unique_lock<Mutex>& lockGuard, Peer& peer);
+    void appendSnapshotChunk(std::unique_lock<Mutex>& lockGuard, Peer& peer,
+                             uint64_t peerThreadId = 0);
 
     /**
      * Transition to being a leader. This is called when a candidate has
@@ -1046,6 +1059,10 @@ class RaftConsensus : public Consensus {
     replicateEntry(Storage::Log::Entry& entry,
                    std::unique_lock<Mutex>& lockGuard);
 
+    void replicateEntry2(Storage::Log::Entry& entry,
+                         std::unique_lock<Mutex>& lockGuard,
+                         ClientRequest request);
+
     /**
      * Send a RequestVote RPC to the server. This is used by candidates to
      * request a server's vote and by new leaders to retrieve information about
@@ -1057,7 +1074,8 @@ class RaftConsensus : public Consensus {
      *      State used in communicating with the follower, building the RPC
      *      request, and processing its result.
      */
-    void requestVote(std::unique_lock<Mutex>& lockGuard, Peer& peer);
+    void requestVote(std::unique_lock<Mutex>& lockGuard, Peer& peer,
+                     uint64_t peerThreadId = 0);
 
     /**
      * Set the timer to start a new election and notify #stateChanged.
@@ -1173,6 +1191,12 @@ class RaftConsensus : public Consensus {
     mutable Core::ConditionVariable stateChanged;
 
     /**
+     * CV index % n notified when index is committed.
+     * All CVs notified when term changes or exiting is set.
+     */
+    mutable std::deque<Core::ConditionVariable> entryCommitted;
+
+    /**
      * Set to true when this class is about to be destroyed. When this is true,
      * threads must exit right away and no more RPCs should be sent or
      * processed.
@@ -1211,6 +1235,9 @@ class RaftConsensus : public Consensus {
      * set to true while holding #mutex; set to false without #mutex.
      */
     std::atomic<bool> leaderDiskThreadWorking;
+    std::atomic<uint64_t> wflock;
+    std::map<uint64_t, uint64_t> commitTicks;
+    mutable std::map<uint64_t, std::shared_ptr<ClientRequest>> blocked;
 
     /**
      * Defines the servers that are part of the cluster. See Configuration.

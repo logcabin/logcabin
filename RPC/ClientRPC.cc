@@ -92,8 +92,10 @@ ClientRPC::waitForReply(google::protobuf::Message* response,
 {
     opaqueRPC.waitForReply();
     std::string error = opaqueRPC.getErrorMessage();
-    if (!error.empty())
+    if (!error.empty()) {
+        WARNING("RPC failed: %s", error.c_str());
         return Status::RPC_FAILED;
+    }
     const Buffer& responseBuffer = *opaqueRPC.peekReply();
 
     // Extract the response's status field.

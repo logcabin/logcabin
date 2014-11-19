@@ -56,6 +56,8 @@ ClientService::handleRPC(RPC::ServerRPC rpc)
 {
     using Protocol::Client::OpCode;
 
+    ++globals.raft->activeWorkers;
+
     // TODO(ongaro): If this is not the current cluster leader, need to
     // redirect the client.
 
@@ -82,6 +84,8 @@ ClientService::handleRPC(RPC::ServerRPC rpc)
         default:
             rpc.rejectInvalidRequest();
     }
+
+    --globals.raft->activeWorkers;
 }
 
 std::string
@@ -123,9 +127,11 @@ std::pair<Result, uint64_t>
 ClientService::submit(RPC::ServerRPC& rpc,
                       const google::protobuf::Message& command)
 {
-    // TODO(ongaro): Switch from string to binary format. This is probably
-    // really slow to serialize.
-    std::string cmdStr = Core::ProtoBuf::dumpString(command);
+    RPC::Buffer contents;
+    RPC::ProtoBuf::serialize(command, contents);
+    // TODO: silly copy
+    std::string cmdStr(static_cast<char*>(contents.getData()),
+                       contents.getLength());
     std::pair<Result, uint64_t> result = globals.raft->replicate(cmdStr);
     if (result.first == Result::RETRY || result.first == Result::NOT_LEADER) {
         Protocol::Client::Error error;
@@ -135,6 +141,11 @@ ClientService::submit(RPC::ServerRPC& rpc,
             error.set_leader_hint(leaderHint);
         rpc.returnError(error);
     }
+    if (result.first == Result::SUCCESS) {
+        VERBOSE("%s committed at index %lu",
+               cmdStr.c_str(), result.second);
+    }
+
     return result;
 }
 
@@ -161,6 +172,9 @@ ClientService::getResponse(RPC::ServerRPC& rpc,
                            const Protocol::Client::ExactlyOnceRPCInfo& rpcInfo,
                            Protocol::Client::CommandResponse& response)
 {
+    VERBOSE("index %lu, %s",
+            entryId,
+            Core::ProtoBuf::dumpString(rpcInfo).c_str());
     globals.stateMachine->wait(entryId);
     bool ok = globals.stateMachine->getResponse(rpcInfo, response);
     if (!ok) {
@@ -255,23 +269,63 @@ ClientService::readOnlyTreeRPC(RPC::ServerRPC rpc)
     rpc.reply(response);
 }
 
+#if 1
+void
+ClientService::readWriteTreeRPC(RPC::ServerRPC rpc)
+{
+#if 1
+    PRELUDE(ReadWriteTree);
+    Command command;
+    command.set_nanoseconds_since_epoch(timeNanos());
+    *command.mutable_tree() = request;
+    tstat.ticksQueueStart = rdtsc();
+    ++globals.raft->workersRaft;
+    std::pair<Result, uint64_t> result = submit(rpc, command);
+    --globals.raft->workersRaft;
+    if (result.first != Result::SUCCESS)
+        return;
+    ++globals.raft->workersSM;
+#endif
+    CommandResponse commandResponse;
+#if 1
+    if (!getResponse(rpc, result.second, request.exactly_once(),
+                     commandResponse)) {
+        return;
+    }
+#else
+    commandResponse.mutable_tree()->set_status(Protocol::Client::Status::OK);
+#endif
+    --globals.raft->workersSM;
+    tstat.ticksReply = rdtsc();
+    ++globals.raft->workersReply;
+    rpc.reply(commandResponse.tree());
+    --globals.raft->workersReply;
+
+    uint64_t total = tstat.ticksReply - tstat.ticksQueueStart;
+    uint64_t good = tstat.ticksCommitted - tstat.ticksAppended;
+    uint64_t queued = tstat.ticksReplicateStart - tstat.ticksQueueStart;
+    uint64_t postCommit = tstat.ticksReply - tstat.ticksCommitted;
+    VERBOSE("RPC total %lu ticks, good %lu%%, queued %lu%%, post-commit %lu%%",
+          total,
+          100 * good / total,
+          100 * queued / total,
+          100 * postCommit / total);
+}
+#else
 void
 ClientService::readWriteTreeRPC(RPC::ServerRPC rpc)
 {
     PRELUDE(ReadWriteTree);
     Command command;
-    command.set_nanoseconds_since_epoch(timeNanos());
     *command.mutable_tree() = request;
-    std::pair<Result, uint64_t> result = submit(rpc, command);
-    if (result.first != Result::SUCCESS)
-        return;
-    CommandResponse commandResponse;
-    if (!getResponse(rpc, result.second, request.exactly_once(),
-                     commandResponse)) {
-        return;
-    }
-    rpc.reply(commandResponse.tree());
+    RPC::Buffer contents;
+    RPC::ProtoBuf::serialize(command, contents);
+    std::string cmdStr(static_cast<char*>(contents.getData()),
+                       contents.getLength());
+    globals.raft->replicate2(cmdStr,
+                    ClientRequest { std::move(rpc), std::move(command) });
 }
+#endif
 
 
 

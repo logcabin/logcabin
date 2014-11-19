@@ -19,6 +19,8 @@
 #include <string>
 
 #include "build/Server/SnapshotStats.pb.h"
+#include "build/Protocol/Client.pb.h"
+#include "RPC/ServerRPC.h"
 
 #ifndef LOGCABIN_SERVER_CONSENSUS_H
 #define LOGCABIN_SERVER_CONSENSUS_H
@@ -33,7 +35,50 @@ class Writer;
 }
 }
 
+
+static __inline __attribute__((always_inline))
+uint64_t
+rdtsc()
+{
+        uint32_t lo, hi;
+        __asm__ __volatile__("rdtsc" : "=a" (lo), "=d" (hi));
+        return (((uint64_t)hi << 32) | lo);
+}
+
 namespace Server {
+
+struct ThreadStat {
+    uint64_t ticksQueueStart;
+    uint64_t ticksReplicateStart;
+    uint64_t ticksAppended;
+    uint64_t ticksCommitted;
+    uint64_t ticksReply;
+};
+
+struct ClientRequest {
+    ClientRequest()
+        : rpc()
+        , request() {
+    }
+    ClientRequest(RPC::ServerRPC rpc,
+                  Protocol::Client::Command request)
+        : rpc(std::move(rpc))
+        , request(std::move(request)) {
+    }
+    ClientRequest(ClientRequest&& other)
+        : rpc(std::move(other.rpc))
+        , request(std::move(other.request)) {
+    }
+    ClientRequest& operator=(ClientRequest&& other) {
+        rpc = std::move(other.rpc);
+        request = std::move(other.request);
+        return *this;
+    }
+    RPC::ServerRPC rpc;
+    Protocol::Client::Command request;
+};
+
+extern __thread ThreadStat tstat;
 
 // TODO(ongaro): move this
 class ThreadInterruptedException : std::runtime_error {
@@ -107,6 +152,8 @@ class Consensus {
          * A handle to the snapshot file for entries of type 'SNAPSHOT'.
          */
         std::unique_ptr<Storage::SnapshotFile::Reader> snapshotReader;
+
+        ClientRequest request;
 
         // copy and assign not allowed
         Entry(const Entry&) = delete;

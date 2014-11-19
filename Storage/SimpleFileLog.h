@@ -1,3 +1,4 @@
+#if 0
 /* Copyright (c) 2012-2013 Stanford University
  *
  * Permission to use, copy, modify, and distribute this software for any
@@ -83,3 +84,4 @@ class SimpleFileLog : public Log {
 } // namespace LogCabin
 
 #endif /* LOGCABIN_STORAGE_SIMPLEFILELOG_H */
+#endif

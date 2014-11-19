@@ -19,11 +19,14 @@
 namespace LogCabin {
 namespace Server {
 
+__thread ThreadStat tstat;
+
 Consensus::Entry::Entry()
     : entryId()
     , type(SKIP)
     , data()
     , snapshotReader()
+    , request()
 {
 }
 
@@ -32,6 +35,7 @@ Consensus::Entry::Entry(Entry&& other)
     , type(other.type)
     , data(std::move(other.data))
     , snapshotReader(std::move(other.snapshotReader))
+    , request(std::move(other.request))
 {
 }
 

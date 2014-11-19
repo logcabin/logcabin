@@ -89,6 +89,7 @@ class Server : public OpaqueServer {
      * Maps from service IDs to ThreadDispatchService instances.
      * Protected by #mutex.
      */
+  public:
     std::unordered_map<uint16_t, std::shared_ptr<Service>> services;
 
     // Server is non-copyable.

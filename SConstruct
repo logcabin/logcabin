@@ -15,6 +15,7 @@ opts.AddVariables(
     ("BUILDTYPE", "Build type (RELEASE or DEBUG)", "DEBUG"),
     ("VERBOSE", "Show full build information (0 or 1)", "0"),
     ("NUMCPUS", "Number of CPUs to use for build (0 means auto).", "0"),
+    ("PROTOC", "x", "protoc"),
 )
 
 env = Environment(options = opts,
@@ -41,7 +42,7 @@ env.Prepend(CXXFLAGS = [
 if env["BUILDTYPE"] == "DEBUG":
     env.Append(CPPFLAGS = [ "-g", "-DDEBUG" ])
 elif env["BUILDTYPE"] == "RELEASE":
-    env.Append(CPPFLAGS = [ "-DNDEBUG", "-O2" ])
+    env.Append(CPPFLAGS = [ "-g", "-DNDEBUG", "-O2", "-fno-omit-frame-pointer" ])
 else:
     print "Error BUILDTYPE must be RELEASE or DEBUG"
     sys.exit(-1)
@@ -66,7 +67,7 @@ def Protobuf(env, source):
                     PROTOCOUTDIR = ".")[1]
     # Then build the resulting C++ file with no warnings
     return env.StaticObject(cc,
-                            CXXFLAGS = "-std=c++0x -Ibuild")
+                            CXXFLAGS = "-std=c++0x -Ibuild -isystem/home/ongaro/protobuf/protobuf-2.5.0/install/include")
 env.AddMethod(Protobuf)
 
 def GetNumCPUs():

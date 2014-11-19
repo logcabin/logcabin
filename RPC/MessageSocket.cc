@@ -15,9 +15,9 @@
 
 #include <cassert>
 #include <errno.h>
+#include <string.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
-#include <string.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -52,14 +52,17 @@ MessageSocket::SendSocket::SendSocket(Event::Loop& eventLoop,
     : Event::File(eventLoop, fd, 0)
     , messageSocket(messageSocket)
 {
+#if 1
     int flag = 1;
-    int r = setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
-    if (r < 0) {
-        // This should be a warning, but some unit tests pass weird types of
-        // file descriptors in here. It's not very important, anyhow.
-        NOTICE("Could not set TCP_NODELAY flag on sending socket %d: %s",
-               fd, strerror(errno));
-    }
+    int result = setsockopt(fd,            /* socket affected */
+            IPPROTO_TCP,     /* set option at TCP level */
+            TCP_NODELAY,     /* name of option */
+            (char *) &flag,  /* the cast is historical
+                                cruft */
+            sizeof(int));    /* length of option value */
+    if (result < 0)
+        WARNING("could not set TCP_NODELAY");
+#endif
 }
 
 MessageSocket::SendSocket::~SendSocket()
@@ -80,16 +83,17 @@ MessageSocket::ReceiveSocket::ReceiveSocket(Event::Loop& eventLoop,
     : Event::File(eventLoop, fd, EPOLLIN)
     , messageSocket(messageSocket)
 {
-    // I don't know that TCP_NODELAY has any effect if we're only reading from
-    // this file descriptor, but I guess it can't hurt.
+#if 1
     int flag = 1;
-    int r = setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
-    if (r < 0) {
-        // This should be a warning, but some unit tests pass weird types of
-        // file descriptors in here. It's not very important, anyhow.
-        NOTICE("Could not set TCP_NODELAY flag on receiving socket %d: %s",
-                fd, strerror(errno));
-    }
+    int result = setsockopt(fd,            /* socket affected */
+            IPPROTO_TCP,     /* set option at TCP level */
+            TCP_NODELAY,     /* name of option */
+            (char *) &flag,  /* the cast is historical
+                                cruft */
+            sizeof(int));    /* length of option value */
+    if (result < 0)
+        WARNING("could not set TCP_NODELAY");
+#endif
 }
 
 MessageSocket::ReceiveSocket::~ReceiveSocket()

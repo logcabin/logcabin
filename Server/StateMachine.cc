@@ -85,6 +85,14 @@ StateMachine::getResponse(const PC::ExactlyOnceRPCInfo& rpcInfo,
                           PC::CommandResponse& response) const
 {
     std::unique_lock<std::mutex> lockGuard(mutex);
+    return getResponse(rpcInfo, response, lockGuard);
+}
+
+bool
+StateMachine::getResponse(const PC::ExactlyOnceRPCInfo& rpcInfo,
+                          PC::CommandResponse& response,
+                          std::unique_lock<std::mutex>& lockGuard) const
+{
     auto sessionIt = sessions.find(rpcInfo.client_id());
     if (sessionIt == sessions.end()) {
         WARNING("Client %lu session expired but client still active",
@@ -97,8 +105,16 @@ StateMachine::getResponse(const PC::ExactlyOnceRPCInfo& rpcInfo,
         // The response for this RPC has already been removed: the client is
         // not waiting for it. This request is just a duplicate that is safe to
         // drop.
-        WARNING("Client %lu asking for discarded response to RPC %lu",
-                rpcInfo.client_id(), rpcInfo.rpc_number());
+        WARNING("Client %lu asking for discarded response to RPC %lu "
+                "(firstOutstandingRPC is %lu)",
+                rpcInfo.client_id(), rpcInfo.rpc_number(),
+                session.firstOutstandingRPC);
+        for (responseIt = session.responses.begin();
+             responseIt != session.responses.end();
+             ++responseIt) {
+            VERBOSE("Have RPC %lu response",
+                    responseIt->first);
+        }
         return false;
     }
     response = responseIt->second;
@@ -119,6 +135,7 @@ StateMachine::wait(uint64_t entryId) const
     std::unique_lock<std::mutex> lockGuard(mutex);
     while (lastEntryId < entryId)
         entriesApplied.wait(lockGuard);
+    VERBOSE("wait(index %lu) done", entryId);
 }
 
 
@@ -127,9 +144,12 @@ StateMachine::wait(uint64_t entryId) const
 void
 StateMachine::apply(uint64_t entryId, const std::string& data)
 {
-    // TODO(ongaro): Switch from string to binary format. This is probably
-    // really slow to parse.
-    PC::Command command = Core::ProtoBuf::fromString<PC::Command>(data);
+    RPC::Buffer contents(const_cast<char*>(data.c_str()),
+                         uint32_t(data.size()), NULL);
+    PC::Command command;
+    if (!RPC::ProtoBuf::parse(contents, command)) {
+        PANIC("Failed to parse protobuf");
+    }
     Session* session = NULL;
     if (command.has_tree()) {
         PC::ExactlyOnceRPCInfo rpcInfo = command.tree().exactly_once();
@@ -179,6 +199,7 @@ StateMachine::applyThreadMain()
     try {
         while (true) {
             Consensus::Entry entry = consensus->getNextEntry(lastEntryId);
+            VERBOSE("proc %lu", entry.entryId);
             std::unique_lock<std::mutex> lockGuard(mutex);
             switch (entry.type) {
                 case Consensus::Entry::SKIP:
@@ -197,6 +218,30 @@ StateMachine::applyThreadMain()
             entriesApplied.notify_all();
             if (shouldTakeSnapshot(lastEntryId))
                 snapshotSuggested.notify_all();
+            uint64_t start = rdtsc();
+            if (entry.request.rpc.needsReply()) {
+                PC::ExactlyOnceRPCInfo rpcInfo;
+                if (entry.request.request.has_tree()) {
+                    rpcInfo = entry.request.request.tree().exactly_once();
+                } else {
+                    PANIC("?");
+                }
+                Protocol::Client::CommandResponse response;
+                bool ok = getResponse(rpcInfo, response, lockGuard);
+                lockGuard.unlock();
+                if (!ok) {
+                    Protocol::Client::Error error;
+                    error.set_error_code(Protocol::Client::Error::SESSION_EXPIRED);
+                    entry.request.rpc.returnError(error);
+                }
+                VERBOSE("replying to request %s in index %lu with %s",
+                      Core::ProtoBuf::dumpString(entry.request.request).c_str(),
+                      entry.entryId,
+                      Core::ProtoBuf::dumpString(response).c_str());
+                entry.request.rpc.reply(response.tree());
+                uint64_t end = rdtsc();
+                //WARNING("reply took about %lu us", (end - start) / 2400);
+            }
         }
     } catch (const ThreadInterruptedException& e) {
         NOTICE("exiting");
