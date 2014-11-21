@@ -19,6 +19,7 @@
 #include "Client/ClientImpl.h"
 #include "Core/ProtoBuf.h"
 #include "Core/StringUtil.h"
+#include "Protocol/Common.h"
 #include "RPC/Address.h"
 
 namespace LogCabin {
@@ -155,8 +156,10 @@ ClientImpl::~ClientImpl()
 void
 ClientImpl::initDerived()
 {
-    if (!leaderRPC) // sometimes set in unit tests
-        leaderRPC.reset(new LeaderRPC(RPC::Address(hosts, 0)));
+    if (!leaderRPC) { // sometimes set in unit tests
+        leaderRPC.reset(new LeaderRPC(
+            RPC::Address(hosts, Protocol::Common::DEFAULT_PORT)));
+    }
     rpcProtocolVersion = negotiateRPCVersion();
 }
 
