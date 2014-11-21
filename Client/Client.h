@@ -299,12 +299,13 @@ class Tree {
      *       - TYPE_ERROR if path exists but is a file.
      */
     Result
-    listDirectory(const std::string& path, std::vector<std::string>& children);
+    listDirectory(const std::string& path,
+                  std::vector<std::string>& children) const;
 
     /**
      * Like listDirectory but throws exceptions upon errors.
      */
-    std::vector<std::string> listDirectoryEx(const std::string& path);
+    std::vector<std::string> listDirectoryEx(const std::string& path) const;
 
     /**
      * Make sure a directory does not exist.
@@ -369,13 +370,13 @@ class Tree {
      *       - TYPE_ERROR if path is a directory.
      */
     Result
-    read(const std::string& path, std::string& contents);
+    read(const std::string& path, std::string& contents) const;
 
     /**
      * Like read but throws exceptions upon errors.
      */
     std::string
-    readEx(const std::string& path);
+    readEx(const std::string& path) const;
 
     /**
      * Make sure a file does not exist.
@@ -458,7 +459,7 @@ class Cluster {
      *             Pass this to setConfiguration later.
      *      second: The list of servers in the configuration.
      */
-    std::pair<uint64_t, Configuration> getConfiguration();
+    std::pair<uint64_t, Configuration> getConfiguration() const;
 
     /**
      * Change the cluster's configuration.

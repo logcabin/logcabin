@@ -276,7 +276,7 @@ Tree::makeDirectoryEx(const std::string& path)
 
 Result
 Tree::listDirectory(const std::string& path,
-                       std::vector<std::string>& children)
+                    std::vector<std::string>& children) const
 {
     std::shared_ptr<const TreeDetails> treeDetails = getTreeDetails();
     return treeDetails->clientImpl->listDirectory(
@@ -287,7 +287,7 @@ Tree::listDirectory(const std::string& path,
 }
 
 std::vector<std::string>
-Tree::listDirectoryEx(const std::string& path)
+Tree::listDirectoryEx(const std::string& path) const
 {
     std::vector<std::string> children;
     throwException(listDirectory(path, children));
@@ -327,7 +327,7 @@ Tree::writeEx(const std::string& path, const std::string& contents)
 }
 
 Result
-Tree::read(const std::string& path, std::string& contents)
+Tree::read(const std::string& path, std::string& contents) const
 {
     std::shared_ptr<const TreeDetails> treeDetails = getTreeDetails();
     return treeDetails->clientImpl->read(path,
@@ -337,7 +337,7 @@ Tree::read(const std::string& path, std::string& contents)
 }
 
 std::string
-Tree::readEx(const std::string& path)
+Tree::readEx(const std::string& path) const
 {
     std::string contents;
     throwException(read(path, contents));
@@ -391,7 +391,7 @@ Cluster::~Cluster()
 }
 
 std::pair<uint64_t, Configuration>
-Cluster::getConfiguration()
+Cluster::getConfiguration() const
 {
     return clientImpl->getConfiguration();
 }
