@@ -449,7 +449,8 @@ class Cluster {
      * \param hosts
      *      A string describing the hosts in the cluster. This should be of the
      *      form host:port, where host is usually a DNS name that resolves to
-     *      multiple IP addresses.
+     *      multiple IP addresses. Alternatively, you can pass a list of hosts
+     *      as host1:port1;host2:port2;host3:port3.
      */
     explicit Cluster(const std::string& hosts);
     ~Cluster();

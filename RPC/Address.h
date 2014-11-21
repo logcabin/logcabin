@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2014 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -18,13 +19,15 @@
 
 #include <sys/socket.h>
 #include <string>
+#include <vector>
 
 namespace LogCabin {
 namespace RPC {
 
 /**
- * An Address specifies a host and a port.
- * This class also handles DNS lookups for addressing hosts by name.
+ * This class resolves user-friendly addresses for services into socket-level
+ * addresses. It supports DNS lookups for addressing hosts by name, and it
+ * supports multiple (alternative) addresses.
  */
 class Address {
   public:
@@ -38,6 +41,7 @@ class Address {
      *          - IPv4Address
      *          - [IPv6Address]:port
      *          - [IPv6Address]
+     *      Or a semicolon-delimited list of these to represent multiple hosts.
      * \param defaultPort
      *      The port number to use if none is specified in str.
      */
@@ -88,7 +92,7 @@ class Address {
     std::string toString() const;
 
     /**
-     * Convert the host and port to a sockaddr.
+     * Convert (a random one of) the host(s) and port(s) to a sockaddr.
      * If the host is a name instead of numeric, this will run a DNS query and
      * select a random result. If this query fails, any previous sockaddr will
      * be left intact.
@@ -98,23 +102,20 @@ class Address {
   private:
 
     /**
-     * The host name or numeric address as passed into the constructor.
+     * The host name(s) or numeric address(es) as passed into the constructor.
      */
     std::string originalString;
 
     /**
-     * The host name or numeric address as parsed from the string passed into
-     * the constructor. This has brackets stripped out of IPv6 addresses and is
-     * in the form needed by getaddrinfo().
+     * A list of (host, port) pairs as parsed from originalString.
+     * - First component: the host name or numeric address as parsed from the
+     *   string passed into the constructor. This has brackets stripped out of
+     *   IPv6 addresses and is in the form needed by getaddrinfo().
+     * - Second component: an ASCII representation of the port number to use.
+     *   It is stored in string form because that's sometimes how it comes into
+     *   the constructor and always what refresh() needs to call getaddrinfo().
      */
-    std::string host;
-
-    /**
-     * An ASCII representation of the port number to use. It is stored in
-     * string form because that's sometimes how it comes into the constructor
-     * and always what refresh() needs to call getaddrinfo().
-     */
-    std::string port;
+    std::vector<std::pair<std::string, std::string>> hosts;
 
     /**
      * Storage for the sockaddr returned by getSockAddr.

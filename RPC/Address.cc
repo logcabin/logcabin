@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2014 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -25,6 +26,7 @@
 #include "Core/Debug.h"
 #include "Core/Endian.h"
 #include "Core/Random.h"
+#include "Core/StringUtil.h"
 #include "RPC/Address.h"
 
 namespace LogCabin {
@@ -32,29 +34,37 @@ namespace RPC {
 
 Address::Address(const std::string& str, uint16_t defaultPort)
     : originalString(str)
-    , host(str)
-    , port()
+    , hosts()
     , storage()
     , len(0)
 {
     memset(&storage, 0, sizeof(storage));
-    size_t lastColon = host.rfind(':');
-    if (lastColon != host.npos &&
-        host.find(']', lastColon) == host.npos) {
-        // following lastColon is a port number
-        port = host.substr(lastColon + 1);
-        host.erase(lastColon);
-    } else {
-        // use default port
-        std::stringstream buf;
-        buf << defaultPort;
-        port = buf.str();
-        originalString += ":" + port;
-    }
 
-    // IPv6 hosts are surrounded in brackets. These need to be stripped off.
-    if (!host.empty() && host[0] == '[' && host[host.length() - 1] == ']') {
-        host = host.substr(1, host.length() - 2);
+    std::vector<std::string> hostsList = Core::StringUtil::split(str, ';');
+    for (auto it = hostsList.begin(); it != hostsList.end(); ++it) {
+        std::string host = *it;
+        std::string port;
+        if (host.empty())
+            continue;
+
+        size_t lastColon = host.rfind(':');
+        if (lastColon != host.npos &&
+            host.find(']', lastColon) == host.npos) {
+            // following lastColon is a port number
+            port = host.substr(lastColon + 1);
+            host.erase(lastColon);
+        } else {
+            // use default port
+            port = Core::StringUtil::toString(defaultPort);
+        }
+
+        // IPv6 hosts are surrounded in brackets. These need to be stripped.
+        if (host.at(0) == '[' &&
+            host.at(host.length() - 1) == ']') {
+            host = host.substr(1, host.length() - 2);
+        }
+
+        hosts.push_back({host, port});
     }
 
     refresh();
@@ -62,8 +72,7 @@ Address::Address(const std::string& str, uint16_t defaultPort)
 
 Address::Address(const Address& other)
     : originalString(other.originalString)
-    , host(other.host)
-    , port(other.port)
+    , hosts(other.hosts)
     , storage()
     , len(other.len)
 {
@@ -74,8 +83,7 @@ Address&
 Address::operator=(const Address& other)
 {
     originalString = other.originalString;
-    host = other.host;
-    port = other.port;
+    hosts = other.hosts;
     memcpy(&storage, &other.storage, sizeof(storage));
     len = other.len;
     return *this;
@@ -143,6 +151,11 @@ Address::toString() const
 void
 Address::refresh()
 {
+    if (hosts.empty())
+        return;
+    size_t hostIdx = Core::Random::random32() % hosts.size();
+    const std::string& host = hosts.at(hostIdx).first;
+    const std::string& port = hosts.at(hostIdx).second;
     VERBOSE("Running getaddrinfo for host %s with port %s",
             host.c_str(), port.c_str());
 
@@ -169,7 +182,7 @@ Address::refresh()
             if (!candidates.empty()) {
                 // Select one randomly and hope it works.
                 size_t idx = Core::Random::random32() % candidates.size();
-                addrinfo* addr = candidates[idx];
+                addrinfo* addr = candidates.at(idx);
                 memcpy(&storage, addr->ai_addr, addr->ai_addrlen);
                 len = addr->ai_addrlen;
             }
