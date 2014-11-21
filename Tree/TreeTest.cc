@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2014 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -365,6 +366,13 @@ TEST_F(TreeTreeTest, checkCondition)
     result = tree.checkCondition("/a", "d");
     EXPECT_EQ(Status::CONDITION_NOT_MET, result.status);
     EXPECT_EQ("Path '/a' has value 'b', not 'd' as required",
+              result.error);
+
+    EXPECT_OK(tree.checkCondition("/x", ""));
+    EXPECT_OK(tree.makeDirectory("/c"));
+    result = tree.checkCondition("/c", "");
+    EXPECT_EQ(Status::CONDITION_NOT_MET, result.status);
+    EXPECT_EQ("Could not read value at path '/c': /c is a directory",
               result.error);
 }
 

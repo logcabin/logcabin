@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2014 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -387,23 +388,28 @@ Tree::checkCondition(const std::string& path,
 {
     std::string actualContents;
     Result readResult = read(path, actualContents);
-    if (readResult.status != Status::OK) {
-        Result result;
-        result.status = Status::CONDITION_NOT_MET;
-        result.error = format("Could not read value at path '%s': %s",
-                              path.c_str(), readResult.error.c_str());
-        return result;
+    if (readResult.status == Status::OK) {
+        if (contents == actualContents) {
+            return Result();
+        } else {
+            Result result;
+            result.status = Status::CONDITION_NOT_MET;
+            result.error = format("Path '%s' has value '%s', not '%s' as "
+                                  "required",
+                                  path.c_str(),
+                                  actualContents.c_str(),
+                                  contents.c_str());
+            return result;
+        }
     }
-    if (contents != actualContents) {
-        Result result;
-        result.status = Status::CONDITION_NOT_MET;
-        result.error = format("Path '%s' has value '%s', not '%s' as required",
-                              path.c_str(),
-                              actualContents.c_str(),
-                              contents.c_str());
-        return result;
+    if (readResult.status == Status::LOOKUP_ERROR && contents.empty()) {
+        return Result();
     }
-    return Result();
+    Result result;
+    result.status = Status::CONDITION_NOT_MET;
+    result.error = format("Could not read value at path '%s': %s",
+                          path.c_str(), readResult.error.c_str());
+    return result;
 }
 
 Result

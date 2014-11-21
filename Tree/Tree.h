@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2014 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -299,7 +300,8 @@ class Tree {
      *      'contents'.
      * \param contents
      *      The contents that the file specified by 'path' should have for an
-     *      OK response.
+     *      OK response. An OK response is also returned if 'contents' is the
+     *      empty string and the file specified by 'path' does not exist.
      * \return
      *      Status and error message. Possible errors are:
      *       - CONDITION_NOT_MET upon any error.

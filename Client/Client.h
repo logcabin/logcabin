@@ -1,4 +1,5 @@
 /* Copyright (c) 2011-2014 Stanford University
+ * Copyright (c) 2014 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -247,7 +248,8 @@ class Tree {
      *      condition.
      * \param value
      *      The contents that the file specified by 'path' must have for future
-     *      operations to succeed.
+     *      operations to succeed. If 'value' is the empty string and the
+     *      file does not exist, the condition will also be satisfied.
      * \return
      *      Status and error message. Possible errors are:
      *       - INVALID_ARGUMENT if path is malformed.
