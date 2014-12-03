@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2014 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -35,6 +36,7 @@ class OptionParser {
         : argc(argc)
         , argv(argv)
         , configFilename("logcabin.conf")
+        , debugLogFilename() // empty for default
         , serverId(1)
         , bootstrap(false)
     {
@@ -44,9 +46,10 @@ class OptionParser {
                {"config",  required_argument, NULL, 'c'},
                {"help",  no_argument, NULL, 'h'},
                {"id",  required_argument, NULL, 'i'},
+               {"log",  required_argument, NULL, 'l'},
                {0, 0, 0, 0}
             };
-            int c = getopt_long(argc, argv, "bc:hi:", longOptions, NULL);
+            int c = getopt_long(argc, argv, "bc:hi:l:", longOptions, NULL);
 
             // Detect the end of the options.
             if (c == -1)
@@ -64,6 +67,9 @@ class OptionParser {
                     break;
                 case 'i':
                     serverId = uint64_t(atol(optarg));
+                    break;
+                case 'l':
+                    debugLogFilename = optarg;
                     break;
                 case '?':
                 default:
@@ -96,11 +102,16 @@ class OptionParser {
                   << "Set server id to <id> "
                   << "(default: index of first bindable address + 1)"
                   << std::endl;
+        std::cout << "  -l, --log <file>    "
+                  << "Write debug logs to <file> "
+                  << "(default: stderr)"
+                  << std::endl;
     }
 
     int& argc;
     char**& argv;
     std::string configFilename;
+    std::string debugLogFilename;
     uint64_t serverId;
     bool bootstrap;
 };
@@ -115,6 +126,18 @@ main(int argc, char** argv)
 
     // Parse command line args.
     OptionParser options(argc, argv);
+
+    // Set debug log file
+    if (!options.debugLogFilename.empty()) {
+        FILE* debugLog = fopen(options.debugLogFilename.c_str(), "a");
+        if (debugLog == NULL) {
+            PANIC("Could not open %s for writing debug log messages: %s",
+                  options.debugLogFilename.c_str(),
+                  strerror(errno));
+        }
+        LogCabin::Core::Debug::setLogFile(debugLog);
+    }
+
     NOTICE("Using config file %s", options.configFilename.c_str());
 
     // Initialize and run Globals.
