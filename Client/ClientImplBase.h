@@ -15,7 +15,7 @@
 
 #include <memory>
 #include <string>
-#include "Client/Client.h"
+#include "include/LogCabin/Client.h"
 
 #ifndef LOGCABIN_CLIENT_CLIENTIMPLBASE_H
 #define LOGCABIN_CLIENT_CLIENTIMPLBASE_H

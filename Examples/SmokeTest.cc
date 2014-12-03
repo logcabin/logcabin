@@ -22,7 +22,7 @@
 #include <getopt.h>
 #include <iostream>
 
-#include "Client/Client.h"
+#include <LogCabin/Client.h>
 
 namespace {
 

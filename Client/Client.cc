@@ -15,7 +15,7 @@
 
 #include <string.h>
 
-#include "Client/Client.h"
+#include "include/LogCabin/Client.h"
 #include "Client/ClientImplBase.h"
 #include "Client/ClientImpl.h"
 #include "Client/MockClientImpl.h"

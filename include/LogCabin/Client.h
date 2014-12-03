@@ -25,8 +25,8 @@
 #include <string>
 #include <vector>
 
-#ifndef LOGCABIN_CLIENT_CLIENT_H
-#define LOGCABIN_CLIENT_CLIENT_H
+#ifndef LOGCABIN_INCLUDE_LOGCABIN_CLIENT_H
+#define LOGCABIN_INCLUDE_LOGCABIN_CLIENT_H
 
 namespace LogCabin {
 namespace Client {
@@ -489,4 +489,4 @@ class Cluster {
 } // namespace LogCabin::Client
 } // namespace LogCabin
 
-#endif /* LOGCABIN_CLIENT_CLIENT_H */
+#endif /* LOGCABIN_INCLUDE_LOGCABIN_CLIENT_H */

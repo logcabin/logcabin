@@ -58,6 +58,7 @@ if env["VERBOSE"] == "0":
     env["LINKCOMSTR"] = "Linking $TARGET"
 
 env.Append(CPPPATH = '#')
+env.Append(CPPPATH = '#/include')
 
 # Define protocol buffers builder to simplify SConstruct files
 def Protobuf(env, source):

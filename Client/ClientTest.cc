@@ -17,13 +17,13 @@
 #include <deque>
 #include <queue>
 
-#include "Core/Debug.h"
-#include "Core/StringUtil.h"
-#include "Client/Client.h"
 #include "Client/ClientImpl.h"
 #include "Client/LeaderRPCMock.h"
+#include "Core/Debug.h"
 #include "Core/ProtoBuf.h"
+#include "Core/StringUtil.h"
 #include "build/Protocol/Client.pb.h"
+#include "include/LogCabin/Client.h"
 
 namespace LogCabin {
 namespace {

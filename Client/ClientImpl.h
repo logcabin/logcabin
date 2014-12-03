@@ -16,7 +16,7 @@
 #include <mutex>
 #include <set>
 
-#include "Client/Client.h"
+#include "include/LogCabin/Client.h"
 #include "Client/ClientImplBase.h"
 #include "Client/LeaderRPC.h"
 #include "Core/ConditionVariable.h"

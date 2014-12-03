@@ -30,7 +30,7 @@
 #include <thread>
 #include <unistd.h>
 
-#include "Client/Client.h"
+#include <LogCabin/Client.h>
 
 namespace {
 
