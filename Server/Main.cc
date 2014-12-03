@@ -226,8 +226,8 @@ main(int argc, char** argv)
 {
     using namespace LogCabin;
 
-    LogCabin::Core::ThreadId::setName("evloop");
-    //LogCabin::Core::Debug::setLogPolicy({{"Server", "VERBOSE"}});
+    Core::ThreadId::setName("evloop");
+    //Core::Debug::setLogPolicy({{"Server", "VERBOSE"}});
 
     // Parse command line args.
     OptionParser options(argc, argv);
@@ -240,7 +240,7 @@ main(int argc, char** argv)
                   options.debugLogFilename.c_str(),
                   strerror(errno));
         }
-        LogCabin::Core::Debug::setLogFile(debugLog);
+        Core::Debug::setLogFile(debugLog);
     }
 
     NOTICE("Using config file %s", options.configFilename.c_str());
@@ -269,7 +269,7 @@ main(int argc, char** argv)
     pidFile.writePid(getpid());
 
     // Initialize and run Globals.
-    LogCabin::Server::Globals globals;
+    Server::Globals globals;
     globals.config.readFile(options.configFilename.c_str());
     globals.init(options.serverId);
     if (options.bootstrap) {
