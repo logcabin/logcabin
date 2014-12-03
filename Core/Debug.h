@@ -1,4 +1,5 @@
 /* Copyright (c) 2010-2012 Stanford University
+ * Copyright (c) 2014 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -26,6 +27,16 @@
 namespace LogCabin {
 namespace Core {
 namespace Debug {
+
+/**
+ * Change the file on which debug log messages are written.
+ * \param newFile
+ *      Handle to open file where log messages will be written.
+ * \return
+ *      Handle to previous log file (initialized to stderr on process start).
+ */
+FILE*
+setLogFile(FILE* newFile);
 
 /**
  * Specify the log messages that should be displayed for each filename.

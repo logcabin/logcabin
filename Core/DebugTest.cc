@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2014 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -95,6 +96,11 @@ TEST_F(CoreDebugTest, isLogging) {
                     { "abc", LogLevel::NOTICE },
               }),
               STLUtil::getItems(Internal::isLoggingCache));
+}
+
+TEST_F(CoreDebugTest, setLogFile) {
+    EXPECT_EQ(stderr, setLogFile(stdout));
+    EXPECT_EQ(stdout, setLogFile(stderr));
 }
 
 // log: low cost-benefit in testing
