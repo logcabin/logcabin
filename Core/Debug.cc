@@ -1,4 +1,5 @@
 /* Copyright (c) 2011-2012 Stanford University
+ * Copyright (c) 2014 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -160,6 +161,15 @@ relativeFileName(const char* fileName)
 
 } // namespace Internal
 using namespace Internal; // NOLINT
+
+FILE*
+setLogFile(FILE* newFile)
+{
+    std::unique_lock<std::mutex> lockGuard(mutex);
+    FILE* old = stream;
+    stream = newFile;
+    return old;
+}
 
 void
 setLogPolicy(const std::vector<std::pair<std::string,
