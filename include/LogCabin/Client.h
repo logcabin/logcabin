@@ -31,7 +31,7 @@
 namespace LogCabin {
 namespace Client {
 
-class ClientImplBase; // forward declaration
+class ClientImpl; // forward declaration
 class TreeDetails; // forward declaration
 
 /**
@@ -190,7 +190,7 @@ class ConditionNotMetException : public Exception {
 class Tree {
   private:
     /// Constructor.
-    Tree(std::shared_ptr<ClientImplBase> clientImpl,
+    Tree(std::shared_ptr<ClientImpl> clientImpl,
          const std::string& workingDirectory);
   public:
     /// Copy constructor.
@@ -483,7 +483,7 @@ class Cluster {
     Tree getTree();
 
   private:
-    std::shared_ptr<ClientImplBase> clientImpl;
+    std::shared_ptr<ClientImpl> clientImpl;
 };
 
 } // namespace LogCabin::Client

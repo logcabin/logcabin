@@ -16,7 +16,6 @@
 #include <string.h>
 
 #include "include/LogCabin/Client.h"
-#include "Client/ClientImplBase.h"
 #include "Client/ClientImpl.h"
 #include "Client/MockClientImpl.h"
 #include "Core/StringUtil.h"
@@ -122,7 +121,7 @@ ConditionNotMetException::ConditionNotMetException(const std::string& error)
  */
 class TreeDetails {
   public:
-    TreeDetails(std::shared_ptr<ClientImplBase> clientImpl,
+    TreeDetails(std::shared_ptr<ClientImpl> clientImpl,
                 const std::string& workingDirectory)
         : clientImpl(clientImpl)
         , workingDirectory(workingDirectory)
@@ -132,7 +131,7 @@ class TreeDetails {
     /**
      * Client implementation.
      */
-    std::shared_ptr<ClientImplBase> clientImpl;
+    std::shared_ptr<ClientImpl> clientImpl;
     /**
      * The current working directory for the Tree (an absolute path).
      */
@@ -147,7 +146,7 @@ class TreeDetails {
 
 ////////// Tree //////////
 
-Tree::Tree(std::shared_ptr<ClientImplBase> clientImpl,
+Tree::Tree(std::shared_ptr<ClientImpl> clientImpl,
            const std::string& workingDirectory)
     : mutex()
     , treeDetails(new TreeDetails(clientImpl, workingDirectory))
@@ -373,7 +372,7 @@ Tree::getTreeDetails() const
 Cluster::Cluster(ForTesting t)
     : clientImpl(std::make_shared<MockClientImpl>())
 {
-    clientImpl->init(clientImpl, "-MOCK-");
+    clientImpl->init("-MOCK-");
 }
 
 Cluster::Cluster(const std::string& hosts)
@@ -383,7 +382,7 @@ Cluster::Cluster(const std::string& hosts)
     if (hosts == "-MOCK-SKIP-INIT-")
         return;
 #endif
-    clientImpl->init(clientImpl, hosts);
+    clientImpl->init(hosts);
 }
 
 Cluster::~Cluster()

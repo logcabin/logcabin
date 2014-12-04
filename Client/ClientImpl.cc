@@ -142,7 +142,8 @@ ClientImpl::ExactlyOnceRPCHelper::keepAliveThreadMain()
 ////////// class ClientImpl //////////
 
 ClientImpl::ClientImpl()
-    : leaderRPC()             // set in init()
+    : hosts()
+    , leaderRPC()             // set in init()
     , rpcProtocolVersion(~0U) // set in init()
     , exactlyOnceRPCHelper(this)
 {
@@ -151,6 +152,13 @@ ClientImpl::ClientImpl()
 ClientImpl::~ClientImpl()
 {
     exactlyOnceRPCHelper.exit();
+}
+
+void
+ClientImpl::init(const std::string& hosts)
+{
+    this->hosts = hosts;
+    initDerived();
 }
 
 void

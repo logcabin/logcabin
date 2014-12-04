@@ -29,10 +29,6 @@ namespace Client {
 /**
  * A mock implementation of the client library that operates against a
  * temporary, local, in-memory implementation.
- *
- * TODO(ongaro): This used to derive from ClientImplBase, but we want to make
- * use of the ClientImpl methods for the tree calls. This needs some more
- * thought.
  */
 class MockClientImpl : public ClientImpl {
   public:
@@ -41,7 +37,7 @@ class MockClientImpl : public ClientImpl {
     /// Destructor.
     ~MockClientImpl();
 
-    // Implementations of ClientImplBase methods
+    // Implementations of ClientImpl methods
     void initDerived();
     std::pair<uint64_t, Configuration> getConfiguration();
     ConfigurationResult setConfiguration(

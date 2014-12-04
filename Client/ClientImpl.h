@@ -13,11 +13,12 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <memory>
 #include <mutex>
 #include <set>
+#include <string>
 
 #include "include/LogCabin/Client.h"
-#include "Client/ClientImplBase.h"
 #include "Client/LeaderRPC.h"
 #include "Core/ConditionVariable.h"
 #include "Core/Time.h"
@@ -29,43 +30,89 @@ namespace LogCabin {
 namespace Client {
 
 /**
+ * A predicate on tree operations.
+ * First component: the absolute path corresponding to the 'path'
+ * argument of setCondition(), or empty if no condition is set.
+ * Second component: the file contents given as the 'value' argument of
+ * setCondition().
+ */
+typedef std::pair<std::string, std::string> Condition;
+
+/**
  * The implementation of the client library.
  * This is wrapped by Client::Cluster and Client::Log for usability.
  */
-class ClientImpl : public ClientImplBase {
+class ClientImpl {
   public:
     /// Constructor.
     ClientImpl();
     /// Destructor.
-    ~ClientImpl();
+    virtual ~ClientImpl();
 
-    // Implementations of ClientImplBase methods
-    void initDerived();
+    /**
+     * Initialize this object. This must be called directly after the
+     * constructor.
+     * \param hosts
+     *      A string describing the hosts in the cluster. This should be of the
+     *      form host:port, where host is usually a DNS name that resolves to
+     *      multiple IP addresses, or a semicolon-delimited list.
+     */
+    void init(const std::string& hosts);
+
+    /**
+     * Called by init() to do any necessary initialization of the derived
+     * class.
+     */
+    virtual void initDerived();
+
     std::pair<uint64_t, Configuration> getConfiguration();
     ConfigurationResult setConfiguration(
                             uint64_t oldId,
                             const Configuration& newConfiguration);
+
+    /**
+     * Return the canonicalized path name resulting from accessing path
+     * relative to workingDirectory.
+     * \return
+     *      Status and error message. Possible errors are:
+     *       - INVALID_ARGUMENT if path is relative and workingDirectory is not
+     *         an absolute path.
+     *       - INVALID_ARGUMENT if path attempts to access above the root
+     *         directory.
+     */
     Result canonicalize(const std::string& path,
                         const std::string& workingDirectory,
                         std::string& canonical);
+
+    /// See Tree::makeDirectory.
     Result makeDirectory(const std::string& path,
                          const std::string& workingDirectory,
                          const Condition& condition);
+
+    /// See Tree::listDirectory.
     Result listDirectory(const std::string& path,
                          const std::string& workingDirectory,
                          const Condition& condition,
                          std::vector<std::string>& children);
+
+    /// See Tree::removeDirectory.
     Result removeDirectory(const std::string& path,
                            const std::string& workingDirectory,
                            const Condition& condition);
+
+    /// See Tree::write.
     Result write(const std::string& path,
                  const std::string& workingDirectory,
                  const std::string& contents,
                  const Condition& condition);
+
+    /// See Tree::read.
     Result read(const std::string& path,
                 const std::string& workingDirectory,
                 const Condition& condition,
                 std::string& contents);
+
+    /// See Tree::removeFile.
     Result removeFile(const std::string& path,
                       const std::string& workingDirectory,
                       const Condition& condition);
@@ -84,6 +131,11 @@ class ClientImpl : public ClientImplBase {
      * and server are speaking the same version of the RPC protocol.
      */
     uint32_t negotiateRPCVersion();
+
+    /**
+     * Describes the hosts in the cluster.
+     */
+    std::string hosts;
 
     /**
      * Used to send RPCs to the leader of the LogCabin cluster.

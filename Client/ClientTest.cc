@@ -46,7 +46,7 @@ class ClientClusterTest : public ::testing::Test {
             fromString<Protocol::Client::GetSupportedRPCVersions::Response>(
                         "min_version: 1, max_version: 1"));
         client->leaderRPC = std::unique_ptr<Client::LeaderRPCBase>(mockRPC);
-        cluster->clientImpl->init(cluster->clientImpl, "127.0.0.1:0");
+        cluster->clientImpl->init("127.0.0.1:0");
         mockRPC->popRequest();
 
         client->exactlyOnceRPCHelper.client = NULL;

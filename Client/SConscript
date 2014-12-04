@@ -3,7 +3,6 @@ Import('env', 'object_files')
 src = [
     "Client.cc",
     "ClientImpl.cc",
-    "ClientImplBase.cc",
     "LeaderRPC.cc",
     "MockClientImpl.cc",
 ]
