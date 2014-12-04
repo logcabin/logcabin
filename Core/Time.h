@@ -122,6 +122,11 @@ rdtsc()
     return (((uint64_t)hi << 32) | lo);
 }
 
+/**
+ * Return the time since the Unix epoch in nanoseconds.
+ */
+uint64_t getTimeNanos();
+
 } // namespace LogCabin::Core::Time
 } // namespace LogCabin::Core
 } // namespace LogCabin

@@ -16,6 +16,7 @@
 #include <string.h>
 
 #include "build/Protocol/Client.pb.h"
+#include "Core/Time.h"
 #include "RPC/Buffer.h"
 #include "RPC/ProtoBuf.h"
 #include "RPC/ServerRPC.h"
@@ -23,21 +24,6 @@
 #include "Server/ClientService.h"
 #include "Server/Globals.h"
 #include "Server/StateMachine.h"
-
-namespace {
-
-/**
- * Return the time since the Unix epoch in nanoseconds.
- */
-uint64_t timeNanos()
-{
-    struct timespec now;
-    int r = clock_gettime(CLOCK_REALTIME, &now);
-    assert(r == 0);
-    return uint64_t(now.tv_sec) * 1000 * 1000 * 1000 + now.tv_nsec;
-}
-
-}
 
 namespace LogCabin {
 namespace Server {
@@ -177,7 +163,7 @@ ClientService::openSession(RPC::ServerRPC rpc)
 {
     PRELUDE(OpenSession);
     Command command;
-    command.set_nanoseconds_since_epoch(timeNanos());
+    command.set_nanoseconds_since_epoch(Core::Time::getTimeNanos());
     *command.mutable_open_session() = request;
     std::pair<Result, uint64_t> result = submit(rpc, command);
     if (result.first != Result::SUCCESS)
@@ -260,7 +246,7 @@ ClientService::readWriteTreeRPC(RPC::ServerRPC rpc)
 {
     PRELUDE(ReadWriteTree);
     Command command;
-    command.set_nanoseconds_since_epoch(timeNanos());
+    command.set_nanoseconds_since_epoch(Core::Time::getTimeNanos());
     *command.mutable_tree() = request;
     std::pair<Result, uint64_t> result = submit(rpc, command);
     if (result.first != Result::SUCCESS)
