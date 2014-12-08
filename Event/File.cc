@@ -1,4 +1,5 @@
 /* Copyright (c) 2011-2014 Stanford University
+ * Copyright (c) 2014 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -26,6 +27,7 @@ namespace Event {
 
 File::File(Event::Loop& eventLoop, int fd, int fileEvents)
     : eventLoop(eventLoop)
+    , fdMutex()
     , fd(fd)
 {
     struct epoll_event event;
@@ -41,18 +43,21 @@ File::File(Event::Loop& eventLoop, int fd, int fileEvents)
 
 File::~File()
 {
-    if (fd < 0)
-        return;
     Event::Loop::Lock lock(eventLoop);
-    int fd = release();
-    int r = close(fd);
-    if (r != 0)
-        PANIC("Could not close file %d: %s", fd, strerror(errno));
+    int released = release();
+    if (released >= 0) {
+        int r = close(released);
+        if (r != 0)
+            PANIC("Could not close file %d: %s", released, strerror(errno));
+    }
 }
 
 void
 File::setEvents(int fileEvents)
 {
+    std::unique_lock<std::mutex> mutexGuard(fdMutex);
+    if (fd < 0)
+        return;
     struct epoll_event event;
     memset(&event, 0, sizeof(event));
     event.events = fileEvents;
@@ -67,6 +72,9 @@ File::setEvents(int fileEvents)
 int
 File::release()
 {
+    std::unique_lock<std::mutex> mutexGuard(fdMutex);
+    if (fd < 0)
+        return -1;
     int r = epoll_ctl(eventLoop.epollfd, EPOLL_CTL_DEL, fd, NULL);
     if (r != 0) {
         PANIC("Removing file %d event with epoll_ctl failed: %s",

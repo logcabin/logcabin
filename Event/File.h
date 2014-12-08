@@ -1,4 +1,5 @@
 /* Copyright (c) 2011-2014 Stanford University
+ * Copyright (c) 2014 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -97,6 +98,12 @@ class File {
      * Event::Loop that will manage this file.
      */
     Event::Loop& eventLoop;
+
+    /**
+     * Protects #fd from concurrent access between #release(),
+     * which modifies #fd, and #setEvents(), which uses it.
+     */
+    mutable std::mutex fdMutex;
 
     /**
      * The file descriptor to monitor.

@@ -1,4 +1,5 @@
 /* Copyright (c) 2012-2014 Stanford University
+ * Copyright (c) 2014 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -107,11 +108,18 @@ TEST_F(EventFileTest, setEvents) {
     EXPECT_FALSE(hasPending());
 }
 
+TEST_F(EventFileTest, setEventsAfterRelease) {
+    MyFile file(loop, pipeFds[0], EPOLLIN|EPOLLONESHOT);
+    file.release();
+    file.setEvents(EPOLLOUT|EPOLLONESHOT);
+}
+
 TEST_F(EventFileTest, release) {
     MyFile file(loop, pipeFds[0], EPOLLIN|EPOLLONESHOT);
     file.release();
     EXPECT_EQ(1, write(pipeFds[1], "x", 1));
     EXPECT_FALSE(hasPending());
+    EXPECT_EQ(-1, file.release());
 }
 
 } // namespace LogCabin::Event::<anonymous>
