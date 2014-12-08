@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2014 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,6 +15,7 @@
  */
 
 #include <cinttypes>
+#include <deque>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -147,6 +149,18 @@ class LeaderRPC : public LeaderRPCBase {
                 std::shared_ptr<RPC::ClientSession> cachedSession);
 
     /**
+     * As a backoff mechanism, at most #windowCount connections are allowed in
+     * any #windowNanos period of time.
+     */
+    const uint64_t windowCount;
+
+    /**
+     * As a backoff mechanism, at most #windowCount connections are allowed in
+     * any #windowNanos period of time.
+     */
+    const uint64_t windowNanos;
+
+    /**
      * An address referring to the hosts in the LogCabin cluster. A random host
      * is selected from here when this class doesn't know who the cluster
      * leader is.
@@ -164,9 +178,9 @@ class LeaderRPC : public LeaderRPCBase {
     std::thread eventLoopThread;
 
     /**
-     * Protects #leaderSession. Threads hang on to this mutex while initiating
-     * new sessions to possible cluster leaders, in case other threads are
-     * already handling the problem.
+     * Protects #leaderSession and #lastConnectTimes.
+     * Threads hang on to this mutex while initiating new sessions to possible
+     * cluster leaders, in case other threads are already handling the problem.
      */
     std::mutex mutex;
 
@@ -175,6 +189,14 @@ class LeaderRPC : public LeaderRPCBase {
      * This is never null, but it might sometimes point to the wrong host.
      */
     std::shared_ptr<RPC::ClientSession> leaderSession;
+
+    /**
+     * The time in nanoseconds since the Unix epoch when the last #windowCount
+     * connections were initiated. If fewer than #windowCount connections have
+     * been initiated, this is padded with zeros. The first time is the
+     * oldest, and the last is the most recent.
+     */
+    std::deque<uint64_t> lastConnectTimes;
 };
 
 } // namespace LogCabin::Client

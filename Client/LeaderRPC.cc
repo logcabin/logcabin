@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2014 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -17,6 +18,7 @@
 
 #include "Client/LeaderRPC.h"
 #include "Core/Debug.h"
+#include "Core/Time.h"
 #include "Protocol/Common.h"
 #include "RPC/ClientSession.h"
 #include "RPC/ClientRPC.h"
@@ -25,13 +27,18 @@ namespace LogCabin {
 namespace Client {
 
 LeaderRPC::LeaderRPC(const RPC::Address& hosts)
-    : hosts(hosts)
+    : windowCount(5)
+    , windowNanos(1000 * 1000 * 100)
+    , hosts(hosts)
     , eventLoop()
     , eventLoopThread(&Event::Loop::runForever, &eventLoop)
     , mutex()
     , leaderSession() // set by connect()
+    , lastConnectTimes()
 {
     std::unique_lock<std::mutex> lockGuard(mutex);
+    for (uint64_t i = 0; i < windowCount; ++i)
+        lastConnectTimes.push_back(0);
     connect(hosts, lockGuard);
 }
 
@@ -123,6 +130,15 @@ void
 LeaderRPC::connect(const RPC::Address& address,
                    std::unique_lock<std::mutex>& lockGuard)
 {
+    uint64_t nowNanos = Core::Time::getTimeNanos();
+    if (lastConnectTimes.front() >  nowNanos - windowNanos) {
+        usleep(unsigned(
+            std::min(lastConnectTimes.front() + windowNanos - nowNanos,
+                     windowNanos) / 1000));
+        nowNanos = Core::Time::getTimeNanos();
+    }
+    lastConnectTimes.pop_front();
+    lastConnectTimes.push_back(nowNanos);
     leaderSession = RPC::ClientSession::makeSession(
                         eventLoop,
                         address,
