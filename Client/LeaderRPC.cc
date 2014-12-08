@@ -57,8 +57,6 @@ LeaderRPC::call(OpCode opCode,
 {
     typedef RPC::ClientRPC::Status Status;
 
-    // TODO(ongaro): Rate limit the retries so as not to overwhelm servers
-    // while they're choosing a new leader, etc.
     while (true) {
         // Save a reference to the leaderSession
         std::shared_ptr<RPC::ClientSession> cachedSession;
