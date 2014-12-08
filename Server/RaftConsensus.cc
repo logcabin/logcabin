@@ -259,7 +259,7 @@ Peer::callRPC(Protocol::Raft::OpCode opCode,
             return true;
         case RPCStatus::SERVICE_SPECIFIC_ERROR:
             PANIC("unexpected service-specific error");
-        default:
+        case RPCStatus::RPC_FAILED:
             ++rpcFailuresSinceLastWarning;
             if (rpcFailuresSinceLastWarning == 1) {
                 WARNING("RPC to server failed: %s",
@@ -270,7 +270,10 @@ Peer::callRPC(Protocol::Raft::OpCode opCode,
                         rpc.getErrorMessage().c_str());
             }
             return false;
+        case RPCStatus::RPC_CANCELED:
+            return false;
     }
+    PANIC("Unexpected RPC status");
 }
 
 void

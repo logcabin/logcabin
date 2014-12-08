@@ -325,21 +325,22 @@ ClientSession::update(OpaqueClientRPC& rpc)
     auto it = responses.find(rpc.responseToken);
     if (it == responses.end()) {
         // RPC was cancelled, fields set already
-        assert(rpc.ready);
+        assert(rpc.status == OpaqueClientRPC::Status::CANCELED);
         return;
     }
     Response* response = it->second;
     if (response->status == Response::HAS_REPLY) {
         rpc.reply = std::move(response->reply);
+        rpc.status = OpaqueClientRPC::Status::OK;
     } else if (!errorMessage.empty()) {
         rpc.errorMessage = errorMessage;
+        rpc.status = OpaqueClientRPC::Status::ERROR;
     } else {
         // If the RPC was canceled, then it'd be marked ready and update()
         // wouldn't be called again.
         assert(response->status != Response::CANCELED);
         return; // not ready
     }
-    rpc.ready = true;
     rpc.session.reset();
 
     delete response;

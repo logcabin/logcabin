@@ -127,7 +127,7 @@ TEST_F(RPCClientRPCTest, constructor) {
 TEST_F(RPCClientRPCTest, cancel) {
     ClientRPC rpc(session, 2, 3, 4, payload);
     rpc.cancel();
-    EXPECT_EQ(ClientRPC::Status::RPC_FAILED, rpc.waitForReply(NULL, NULL));
+    EXPECT_EQ(ClientRPC::Status::RPC_CANCELED, rpc.waitForReply(NULL, NULL));
     EXPECT_EQ("RPC canceled by user", rpc.getErrorMessage());
 }
 

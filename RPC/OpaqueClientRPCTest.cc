@@ -26,17 +26,17 @@ TEST(RPCOpaqueClientRPCTest, constructor_default) {
     // make sure a default-constructed RPC object behaves sensibly
     OpaqueClientRPC rpc;
     EXPECT_EQ("", rpc.getErrorMessage());
-    EXPECT_FALSE(rpc.isReady());
+    EXPECT_EQ(OpaqueClientRPC::Status::NOT_READY, rpc.getStatus());
     EXPECT_THROW(rpc.extractReply(),
                  OpaqueClientRPC::Error);
     rpc.waitForReply();
-    EXPECT_TRUE(rpc.isReady());
+    EXPECT_EQ(OpaqueClientRPC::Status::ERROR, rpc.getStatus());
     EXPECT_EQ("This RPC was never associated with a ClientSession.",
               rpc.getErrorMessage());
 
     rpc = OpaqueClientRPC();
     rpc.cancel();
-    EXPECT_TRUE(rpc.isReady());
+    EXPECT_EQ(OpaqueClientRPC::Status::CANCELED, rpc.getStatus());
     EXPECT_EQ("RPC canceled by user",
               rpc.getErrorMessage());
 }
@@ -59,10 +59,11 @@ TEST(RPCOpaqueClientRPCTest, cancel) {
 
 TEST(RPCOpaqueClientRPCTest, extractReply) {
     OpaqueClientRPC rpc;
-    rpc.ready = true;
+    rpc.status = OpaqueClientRPC::Status::ERROR;
     rpc.errorMessage = "error";
     EXPECT_THROW(rpc.extractReply(),
                  OpaqueClientRPC::Error);
+    rpc.status = OpaqueClientRPC::Status::OK;
     rpc.errorMessage = "";
     rpc.reply = Buffer(NULL, 3, NULL);
     EXPECT_EQ(3U, rpc.extractReply().getLength());
@@ -71,23 +72,27 @@ TEST(RPCOpaqueClientRPCTest, extractReply) {
 
 TEST(RPCOpaqueClientRPCTest, getErrorMessage) {
     OpaqueClientRPC rpc;
-    rpc.ready = true;
+    rpc.status = OpaqueClientRPC::Status::ERROR;
     rpc.errorMessage = "error";
     EXPECT_EQ("error", rpc.getErrorMessage());
 }
 
-TEST(RPCOpaqueClientRPCTest, isReady) {
+TEST(RPCOpaqueClientRPCTest, getStatus) {
     OpaqueClientRPC rpc;
-    rpc.ready = true;
-    EXPECT_TRUE(rpc.isReady());
+    EXPECT_EQ(OpaqueClientRPC::Status::NOT_READY, rpc.getStatus());
+    rpc.status = OpaqueClientRPC::Status::ERROR;
+    EXPECT_EQ(OpaqueClientRPC::Status::ERROR, rpc.getStatus());
 }
 
 TEST(RPCOpaqueClientRPCTest, peekReply) {
     OpaqueClientRPC rpc;
-    rpc.ready = true;
+    rpc.status = OpaqueClientRPC::Status::OK;
     rpc.reply = Buffer(NULL, 3, NULL);
     EXPECT_EQ(3U, rpc.peekReply()->getLength());
+    rpc.status = OpaqueClientRPC::Status::ERROR;
     rpc.errorMessage = "foo";
+    EXPECT_TRUE(rpc.peekReply() == NULL);
+    rpc.status = OpaqueClientRPC::Status::CANCELED;
     EXPECT_TRUE(rpc.peekReply() == NULL);
 }
 

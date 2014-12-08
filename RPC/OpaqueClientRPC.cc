@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2014 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -24,7 +25,7 @@ OpaqueClientRPC::OpaqueClientRPC()
     : mutex()
     , session()
     , responseToken(~0UL)
-    , ready(false)
+    , status(Status::NOT_READY)
     , reply()
     , errorMessage()
 {
@@ -34,7 +35,7 @@ OpaqueClientRPC::OpaqueClientRPC(OpaqueClientRPC&& other)
     : mutex()
     , session(std::move(other.session))
     , responseToken(std::move(other.responseToken))
-    , ready(std::move(other.ready))
+    , status(std::move(other.status))
     , reply(std::move(other.reply))
     , errorMessage(std::move(other.errorMessage))
 {
@@ -51,7 +52,7 @@ OpaqueClientRPC::operator=(OpaqueClientRPC&& other)
     std::unique_lock<std::mutex> mutexGuard(mutex);
     session = std::move(other.session);
     responseToken = std::move(other.responseToken);
-    ready = std::move(other.ready);
+    status = std::move(other.status);
     reply = std::move(other.reply);
     errorMessage = std::move(other.errorMessage);
     return *this;
@@ -61,11 +62,11 @@ void
 OpaqueClientRPC::cancel()
 {
     std::unique_lock<std::mutex> mutexGuard(mutex);
-    if (ready)
+    if (status != Status::NOT_READY)
         return;
     if (session)
         session->cancel(*this);
-    ready = true;
+    status = Status::CANCELED;
     session.reset();
     reply.reset();
     errorMessage = "RPC canceled by user";
@@ -76,7 +77,7 @@ OpaqueClientRPC::extractReply()
 {
     waitForReply(); // called without the lock held to avoid deadlock with self
     std::unique_lock<std::mutex> mutexGuard(mutex);
-    if (!errorMessage.empty())
+    if (status != Status::OK)
         throw Error(errorMessage);
     return std::move(reply);
 }
@@ -89,12 +90,12 @@ OpaqueClientRPC::getErrorMessage() const
     return errorMessage;
 }
 
-bool
-OpaqueClientRPC::isReady()
+OpaqueClientRPC::Status
+OpaqueClientRPC::getStatus() const
 {
     std::unique_lock<std::mutex> mutexGuard(mutex);
-    update();
-    return ready;
+    const_cast<OpaqueClientRPC*>(this)->update();
+    return status;
 }
 
 Buffer*
@@ -102,7 +103,7 @@ OpaqueClientRPC::peekReply()
 {
     std::unique_lock<std::mutex> mutexGuard(mutex);
     update();
-    if (ready && errorMessage.empty())
+    if (status == Status::OK)
         return &reply;
     else
         return NULL;
@@ -112,7 +113,7 @@ void
 OpaqueClientRPC::waitForReply()
 {
     std::unique_lock<std::mutex> mutexGuard(mutex);
-    if (ready)
+    if (status != Status::NOT_READY)
         return;
     if (session) {
         {
@@ -122,8 +123,8 @@ OpaqueClientRPC::waitForReply()
         }
         update();
     } else {
-        ready = true;
         errorMessage = "This RPC was never associated with a ClientSession.";
+        status = Status::ERROR;
     }
 }
 
@@ -132,8 +133,28 @@ OpaqueClientRPC::waitForReply()
 void
 OpaqueClientRPC::update()
 {
-    if (!ready && session)
+    if (status == Status::NOT_READY && session)
         session->update(*this);
+}
+
+///// exported functions /////
+
+::std::ostream&
+operator<<(::std::ostream& os, OpaqueClientRPC::Status status)
+{
+    typedef OpaqueClientRPC::Status Status;
+    switch (status) {
+        case Status::NOT_READY:
+            return os << "NOT_READY";
+        case Status::OK:
+            return os << "OK";
+        case Status::ERROR:
+            return os << "ERROR";
+        case Status::CANCELED:
+            return os << "CANCELED";
+        default:
+            return os << "(INVALID VALUE)";
+    }
 }
 
 } // namespace LogCabin::RPC

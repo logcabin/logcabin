@@ -177,7 +177,7 @@ TEST_F(RPCClientSessionTest, sendRequest) {
     EXPECT_TRUE(session->timer.isScheduled());
     EXPECT_EQ(session, rpc.session);
     EXPECT_EQ(1U, rpc.responseToken);
-    EXPECT_FALSE(rpc.ready);
+    EXPECT_EQ(OpaqueClientRPC::Status::NOT_READY, rpc.getStatus());
     EXPECT_EQ(2U, session->nextMessageId);
     auto it = session->responses.find(1);
     ASSERT_TRUE(it != session->responses.end());
@@ -203,7 +203,7 @@ TEST_F(RPCClientSessionTest, cancel) {
     rpc.cancel();
     rpc.cancel(); // intentionally duplicated
     EXPECT_EQ(0U, session->numActiveRPCs);
-    EXPECT_TRUE(rpc.ready);
+    EXPECT_EQ(OpaqueClientRPC::Status::CANCELED, rpc.getStatus());
     EXPECT_FALSE(rpc.session);
     EXPECT_EQ(0U, rpc.reply.getLength());
     EXPECT_EQ("RPC canceled by user", rpc.errorMessage);
@@ -217,7 +217,7 @@ TEST_F(RPCClientSessionTest, updateCanceled) {
     OpaqueClientRPC rpc = session->sendRequest(buf("hi"));
     rpc.cancel();
     rpc.update();
-    EXPECT_TRUE(rpc.ready);
+    EXPECT_EQ(OpaqueClientRPC::Status::CANCELED, rpc.getStatus());
     EXPECT_EQ(0U, rpc.reply.getLength());
     EXPECT_EQ("RPC canceled by user", rpc.errorMessage);
     EXPECT_EQ(0U, session->responses.size());
@@ -226,7 +226,7 @@ TEST_F(RPCClientSessionTest, updateCanceled) {
 TEST_F(RPCClientSessionTest, updateNotReady) {
     OpaqueClientRPC rpc = session->sendRequest(buf("hi"));
     rpc.update();
-    EXPECT_FALSE(rpc.ready);
+    EXPECT_EQ(OpaqueClientRPC::Status::NOT_READY, rpc.getStatus());
     EXPECT_EQ(0U, rpc.reply.getLength());
     EXPECT_EQ("", rpc.errorMessage);
     EXPECT_EQ(1U, session->responses.size());
@@ -240,7 +240,7 @@ TEST_F(RPCClientSessionTest, updateReady) {
     response.status = ClientSession::Response::HAS_REPLY;
     response.reply = buf("bye");
     rpc.update();
-    EXPECT_TRUE(rpc.ready);
+    EXPECT_EQ(OpaqueClientRPC::Status::OK, rpc.getStatus());
     EXPECT_FALSE(rpc.session);
     EXPECT_EQ("bye", str(rpc.reply));
     EXPECT_EQ("", rpc.errorMessage);
@@ -251,7 +251,7 @@ TEST_F(RPCClientSessionTest, updateError) {
     OpaqueClientRPC rpc = session->sendRequest(buf("hi"));
     session->errorMessage = "some error";
     rpc.update();
-    EXPECT_TRUE(rpc.ready);
+    EXPECT_EQ(OpaqueClientRPC::Status::ERROR, rpc.getStatus());
     EXPECT_FALSE(rpc.session);
     EXPECT_EQ("", str(rpc.reply));
     EXPECT_EQ("some error", rpc.errorMessage);
@@ -267,7 +267,7 @@ TEST_F(RPCClientSessionTest, waitCanceled) {
     OpaqueClientRPC rpc = session->sendRequest(buf("hi"));
     rpc.cancel();
     rpc.waitForReply();
-    EXPECT_TRUE(rpc.ready);
+    EXPECT_EQ(OpaqueClientRPC::Status::CANCELED, rpc.getStatus());
 }
 
 TEST_F(RPCClientSessionTest, waitCanceledWhileWaiting) {
@@ -277,7 +277,7 @@ TEST_F(RPCClientSessionTest, waitCanceledWhileWaiting) {
         response.ready.callback = std::bind(&OpaqueClientRPC::cancel, &rpc);
         rpc.waitForReply();
     }
-    EXPECT_TRUE(rpc.ready);
+    EXPECT_EQ(OpaqueClientRPC::Status::CANCELED, rpc.getStatus());
     EXPECT_EQ("RPC canceled by user", rpc.errorMessage);
     EXPECT_EQ(0U, session->responses.size());
 }
@@ -290,7 +290,7 @@ TEST_F(RPCClientSessionTest, waitReady) {
     response.status = ClientSession::Response::HAS_REPLY;
     response.reply = buf("bye");
     rpc.waitForReply();
-    EXPECT_TRUE(rpc.ready);
+    EXPECT_EQ(OpaqueClientRPC::Status::OK, rpc.getStatus());
     EXPECT_FALSE(rpc.session);
     EXPECT_EQ("bye", str(rpc.reply));
     EXPECT_EQ("", rpc.errorMessage);
@@ -301,7 +301,7 @@ TEST_F(RPCClientSessionTest, waitError) {
     OpaqueClientRPC rpc = session->sendRequest(buf("hi"));
     session->errorMessage = "some error";
     rpc.waitForReply();
-    EXPECT_TRUE(rpc.ready);
+    EXPECT_EQ(OpaqueClientRPC::Status::ERROR, rpc.getStatus());
     EXPECT_FALSE(rpc.session);
     EXPECT_EQ("", str(rpc.reply));
     EXPECT_EQ("some error", rpc.errorMessage);

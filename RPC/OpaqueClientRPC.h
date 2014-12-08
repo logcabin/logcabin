@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2014 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -42,6 +43,28 @@ class OpaqueClientRPC {
     struct Error : public std::runtime_error {
         explicit Error(const std::string& message)
             : std::runtime_error(message) {}
+    };
+
+    /**
+     * State of the RPC.
+     */
+    enum class Status {
+        /**
+         * The RPC is still in progress.
+         */
+        NOT_READY,
+        /**
+         * The RPC has completed successfully.
+         */
+        OK,
+        /**
+         * The RPC has failed with an error (see #getErrorMessage()).
+         */
+        ERROR,
+        /**
+         * The RPC was aborted using #cancel().
+         */
+        CANCELED,
     };
 
     /**
@@ -106,12 +129,9 @@ class OpaqueClientRPC {
     std::string getErrorMessage() const;
 
     /**
-     * Indicate whether a response or error has been received for
-     * the RPC.
-     * \return
-     *      True means the reply is ready or an error has occurred.
+     * See #Status.
      */
-    bool isReady();
+    Status getStatus() const;
 
     /**
      * Look at the reply buffer.
@@ -159,14 +179,13 @@ class OpaqueClientRPC {
     uint64_t responseToken;
 
     /**
-     * True means that the RPC has completed (either with or without an
-     * error), so the next call to waitForReply() should return immediately.
+     * See #Status.
      */
-    bool ready;
+    Status status;
 
     /**
      * The payload of a successful reply, once available.
-     * This becomes valid when #ready is set and #errorMessage is empty.
+     * This becomes valid when #status is OK.
      * Then, extractReply() may later reset this buffer.
      */
     Buffer reply;
@@ -185,6 +204,14 @@ class OpaqueClientRPC {
     OpaqueClientRPC& operator=(const OpaqueClientRPC&) = delete;
 
 }; // class OpaqueClientRPC
+
+/**
+ * Output an OpaqueClientRPC::Status to a stream.
+ * This is helpful for google test output.
+ */
+::std::ostream&
+operator<<(::std::ostream& os, OpaqueClientRPC::Status status);
+
 
 } // namespace LogCabin::RPC
 } // namespace LogCabin

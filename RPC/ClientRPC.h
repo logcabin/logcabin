@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2014 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -121,6 +122,11 @@ class ClientRPC {
          * available with getErrorMessage().
          */
         RPC_FAILED,
+        /**
+         * The RPC was aborted using #cancel(). It is unknown whether the
+         * server executed or will execute the RPC.
+         */
+        RPC_CANCELED,
     };
 
     /**

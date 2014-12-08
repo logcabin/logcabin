@@ -86,6 +86,8 @@ LeaderRPC::call(OpCode opCode,
                 // If the session is broken, get a new one and try again.
                 connectRandom(cachedSession);
                 break;
+            case Status::RPC_CANCELED:
+                PANIC("RPC unexpectedly canceled");
         }
     }
 }

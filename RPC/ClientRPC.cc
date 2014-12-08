@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2014 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -83,7 +84,7 @@ ClientRPC::cancel()
 bool
 ClientRPC::isReady()
 {
-    return opaqueRPC.isReady();
+    return opaqueRPC.getStatus() != OpaqueClientRPC::Status::NOT_READY;
 }
 
 ClientRPC::Status
@@ -91,9 +92,16 @@ ClientRPC::waitForReply(google::protobuf::Message* response,
                         google::protobuf::Message* serviceSpecificError)
 {
     opaqueRPC.waitForReply();
-    std::string error = opaqueRPC.getErrorMessage();
-    if (!error.empty())
-        return Status::RPC_FAILED;
+    switch (opaqueRPC.getStatus()) {
+        case OpaqueClientRPC::Status::NOT_READY:
+            PANIC("Waited for RPC but not ready");
+        case OpaqueClientRPC::Status::OK:
+            break;
+        case OpaqueClientRPC::Status::ERROR:
+            return Status::RPC_FAILED;
+        case OpaqueClientRPC::Status::CANCELED:
+            return Status::RPC_CANCELED;
+    }
     const Buffer& responseBuffer = *opaqueRPC.peekReply();
 
     // Extract the response's status field.
@@ -185,6 +193,8 @@ operator<<(::std::ostream& os, ClientRPC::Status status)
             return os << "SERVICE_SPECIFIC_ERROR";
         case Status::RPC_FAILED:
             return os << "RPC_FAILED";
+        case Status::RPC_CANCELED:
+            return os << "RPC_CANCELED";
         default:
             return os << "(INVALID VALUE)";
     }
