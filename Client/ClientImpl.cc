@@ -35,7 +35,60 @@ const uint32_t MIN_RPC_PROTOCOL_VERSION = 1;
  * The newest RPC protocol version that this client library supports.
  */
 const uint32_t MAX_RPC_PROTOCOL_VERSION = 1;
+
+/**
+ * Parse an error response out of a ProtoBuf and into a Result object.
+ */
+template<typename Message>
+Result
+treeError(const Message& response)
+{
+    Result result;
+    result.status = static_cast<Status>(response.status());
+    result.error = response.error();
+    return result;
 }
+
+/**
+ * If the client has specified a condition for the operation, serialize it into
+ * the request message.
+ */
+template<typename Message>
+void
+setCondition(Message& request, const Condition& condition)
+{
+    if (!condition.first.empty()) {
+        request.mutable_condition()->set_path(condition.first);
+        request.mutable_condition()->set_contents(condition.second);
+    }
+}
+
+/**
+ * Split a path into its components. Helper for ClientImpl::canonicalize.
+ * \param[in] path
+ *      Forward slash-delimited path (relative or absolute).
+ * \param[out] components
+ *      The components of path are appended to this vector.
+ */
+void
+split(const std::string& path, std::vector<std::string>& components)
+{
+    std::string word;
+    for (auto it = path.begin(); it != path.end(); ++it) {
+        if (*it == '/') {
+            if (!word.empty()) {
+                components.push_back(word);
+                word.clear();
+            }
+        } else {
+            word += *it;
+        }
+    }
+    if (!word.empty())
+        components.push_back(word);
+}
+
+} // anonymous namespace
 
 using Protocol::Client::OpCode;
 
@@ -221,61 +274,6 @@ ClientImpl::setConfiguration(uint64_t oldId,
     PANIC("Did not understand server response to append RPC:\n%s",
           Core::ProtoBuf::dumpString(response).c_str());
 }
-
-namespace {
-/**
- * Parse an error response out of a ProtoBuf and into a Result object.
- */
-template<typename Message>
-Result
-treeError(const Message& response)
-{
-    Result result;
-    result.status = static_cast<Status>(response.status());
-    result.error = response.error();
-    return result;
-}
-
-/**
- * If the client has specified a condition for the operation, serialize it into
- * the request message.
- */
-template<typename Message>
-void
-setCondition(Message& request, const Condition& condition)
-{
-    if (!condition.first.empty()) {
-        request.mutable_condition()->set_path(condition.first);
-        request.mutable_condition()->set_contents(condition.second);
-    }
-}
-
-/**
- * Split a path into its components. Helper for ClientImpl::canonicalize.
- * \param[in] path
- *      Forward slash-delimited path (relative or absolute).
- * \param[out] components
- *      The components of path are appended to this vector.
- */
-void
-split(const std::string& path, std::vector<std::string>& components)
-{
-    std::string word;
-    for (auto it = path.begin(); it != path.end(); ++it) {
-        if (*it == '/') {
-            if (!word.empty()) {
-                components.push_back(word);
-                word.clear();
-            }
-        } else {
-            word += *it;
-        }
-    }
-    if (!word.empty())
-        components.push_back(word);
-}
-
-} // anonymous namespace
 
 Result
 ClientImpl::canonicalize(const std::string& path,
