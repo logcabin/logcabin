@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2014 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -57,7 +58,22 @@ class LeaderRPCMock : public LeaderRPCBase {
     void call(OpCode opCode,
               const google::protobuf::Message& request,
               google::protobuf::Message& response);
+
+    /// See LeaderRPCBase::makeCall.
+    std::unique_ptr<LeaderRPCBase::Call> makeCall();
+
   private:
+    /// See LeaderRPCBase::Call.
+    class Call : public LeaderRPCBase::Call {
+      public:
+        explicit Call(LeaderRPCMock& leaderRPC);
+        void start(OpCode opCode, const google::protobuf::Message& request);
+        void cancel();
+        bool wait(google::protobuf::Message& response);
+        LeaderRPCMock& leaderRPC;
+        bool canceled;
+    };
+
     /**
      * A queue of requests that have come in from call().
      */

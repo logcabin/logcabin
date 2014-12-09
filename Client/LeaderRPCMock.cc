@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2014 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -54,17 +55,55 @@ LeaderRPCMock::call(OpCode opCode,
           const google::protobuf::Message& request,
           google::protobuf::Message& response)
 {
+    Call c(*this);
+    c.start(opCode, request);
+    c.wait(response);
+}
+
+LeaderRPCMock::Call::Call(LeaderRPCMock& leaderRPC)
+    : leaderRPC(leaderRPC)
+    , canceled(false)
+{
+}
+
+void
+LeaderRPCMock::Call::start(OpCode opCode,
+                           const google::protobuf::Message& request)
+{
     MessagePtr requestCopy(request.New());
     requestCopy->CopyFrom(request);
-    requestLog.push_back({opCode, std::move(requestCopy)});
-    ASSERT_LT(0U, responseQueue.size())
+    leaderRPC.requestLog.push_back({opCode, std::move(requestCopy)});
+    ASSERT_LT(0U, leaderRPC.responseQueue.size())
         << "The client sent an unexpected RPC:\n"
         << request.GetTypeName() << ":\n"
         << Core::ProtoBuf::dumpString(request);
-    auto& opCodeMsgPair = responseQueue.front();
+    auto& opCodeMsgPair = leaderRPC.responseQueue.front();
     EXPECT_EQ(opCode, opCodeMsgPair.first);
+}
+
+void
+LeaderRPCMock::Call::cancel()
+{
+    canceled = true;
+}
+
+bool
+LeaderRPCMock::Call::wait(google::protobuf::Message& response)
+{
+    if (canceled) {
+        leaderRPC.responseQueue.pop();
+        return false;
+    }
+    auto& opCodeMsgPair = leaderRPC.responseQueue.front();
     response.CopyFrom(*opCodeMsgPair.second);
-    responseQueue.pop();
+    leaderRPC.responseQueue.pop();
+    return true;
+}
+
+std::unique_ptr<LeaderRPCBase::Call>
+LeaderRPCMock::makeCall()
+{
+    return std::unique_ptr<LeaderRPCBase::Call>(new Call(*this));
 }
 
 } // namespace LogCabin::Client

@@ -1,4 +1,5 @@
 /* Copyright (c) 2012-2014 Stanford University
+ * Copyright (c) 2014 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -106,6 +107,7 @@ ClientImpl::ExactlyOnceRPCHelper::ExactlyOnceRPCHelper(ClientImpl* client)
     , lastKeepAliveStart(TimePoint::min())
       // TODO(ongaro): set dynamically based on cluster configuration
     , keepAliveIntervalMs(60 * 1000)
+    , keepAliveCall()
     , keepAliveThread()
 {
 }
@@ -118,10 +120,11 @@ void
 ClientImpl::ExactlyOnceRPCHelper::exit()
 {
     {
-        std::unique_lock<std::mutex> lockGuard(mutex);
+        std::unique_lock<Core::Mutex> lockGuard(mutex);
         exiting = true;
         keepAliveCV.notify_all();
-        // TODO(ongaro): would be better if we could cancel keep-alive calls
+        if (keepAliveCall)
+            keepAliveCall->cancel();
     }
     if (keepAliveThread.joinable())
         keepAliveThread.join();
@@ -130,7 +133,22 @@ ClientImpl::ExactlyOnceRPCHelper::exit()
 Protocol::Client::ExactlyOnceRPCInfo
 ClientImpl::ExactlyOnceRPCHelper::getRPCInfo()
 {
-    std::unique_lock<std::mutex> lockGuard(mutex);
+    std::unique_lock<Core::Mutex> lockGuard(mutex);
+    return getRPCInfo(lockGuard);
+}
+
+void
+ClientImpl::ExactlyOnceRPCHelper::doneWithRPC(
+        const Protocol::Client::ExactlyOnceRPCInfo& rpcInfo)
+{
+    std::unique_lock<Core::Mutex> lockGuard(mutex);
+    doneWithRPC(rpcInfo, lockGuard);
+}
+
+Protocol::Client::ExactlyOnceRPCInfo
+ClientImpl::ExactlyOnceRPCHelper::getRPCInfo(
+        std::unique_lock<Core::Mutex>& lockGuard)
+{
     Protocol::Client::ExactlyOnceRPCInfo rpcInfo;
     if (client == NULL) {
         // Filling in rpcInfo is disabled for some unit tests, since it's
@@ -162,19 +180,17 @@ ClientImpl::ExactlyOnceRPCHelper::getRPCInfo()
 
 void
 ClientImpl::ExactlyOnceRPCHelper::doneWithRPC(
-                    const Protocol::Client::ExactlyOnceRPCInfo& rpcInfo)
+                    const Protocol::Client::ExactlyOnceRPCInfo& rpcInfo,
+                    std::unique_lock<Core::Mutex>& lockGuard)
 {
-    std::unique_lock<std::mutex> lockGuard(mutex);
     outstandingRPCNumbers.erase(rpcInfo.rpc_number());
 }
 
 void
 ClientImpl::ExactlyOnceRPCHelper::keepAliveThreadMain()
 {
-    std::unique_lock<std::mutex> lockGuard(mutex);
-    while (true) {
-        if (exiting)
-            return;
+    std::unique_lock<Core::Mutex> lockGuard(mutex);
+    while (!exiting) {
         TimePoint nextKeepAlive;
         if (keepAliveIntervalMs > 0) {
             nextKeepAlive = (lastKeepAliveStart +
@@ -183,9 +199,34 @@ ClientImpl::ExactlyOnceRPCHelper::keepAliveThreadMain()
             nextKeepAlive = TimePoint::max();
         }
         if (Clock::now() > nextKeepAlive) {
-            // release lock to avoid deadlock
-            Core::MutexUnlock<std::mutex> unlockGuard(lockGuard);
-            client->keepAlive(); // will set nextKeepAlive
+            Protocol::Client::ReadWriteTree::Request request;
+            *request.mutable_exactly_once() = getRPCInfo(lockGuard);
+            setCondition(request,
+                 {"keepalive",
+                 "this is just a no-op to keep the client's session active; "
+                 "the condition is expected to fail"});
+            request.mutable_write()->set_path("keepalive");
+            request.mutable_write()->set_contents("you shouldn't see this!");
+            Protocol::Client::ReadWriteTree::Response response;
+            keepAliveCall = client->leaderRPC->makeCall();
+            keepAliveCall->start(OpCode::READ_WRITE_TREE, request);
+            bool ok;
+            {
+                // release lock to allow concurrent cancellation
+                Core::MutexUnlock<Core::Mutex> unlockGuard(lockGuard);
+                ok = keepAliveCall->wait(response);
+            }
+            keepAliveCall.reset();
+            if (!ok)
+                continue;
+            doneWithRPC(request.exactly_once(), lockGuard);
+            if (response.status() !=
+                Protocol::Client::Status::CONDITION_NOT_MET) {
+                WARNING("Keep-alive write should have failed its condition. "
+                        "Unexpected status was %d: %s",
+                        response.status(),
+                        response.error().c_str());
+            }
             continue;
         }
         keepAliveCV.wait_until(lockGuard, nextKeepAlive);
@@ -461,27 +502,6 @@ ClientImpl::removeFile(const std::string& path,
     if (response.status() != Protocol::Client::Status::OK)
         return treeError(response);
     return Result();
-}
-
-void
-ClientImpl::keepAlive()
-{
-    Protocol::Client::ReadWriteTree::Request request;
-    *request.mutable_exactly_once() = exactlyOnceRPCHelper.getRPCInfo();
-    setCondition(request,
-                 {"keepalive",
-                 "this is just a no-op to keep the client's session active; "
-                 "the condition is expected to fail"});
-    request.mutable_write()->set_path("keepalive");
-    request.mutable_write()->set_contents("you shouldn't see this!");
-    Protocol::Client::ReadWriteTree::Response response;
-    leaderRPC->call(OpCode::READ_WRITE_TREE, request, response);
-    exactlyOnceRPCHelper.doneWithRPC(request.exactly_once());
-    if (response.status() != Protocol::Client::Status::CONDITION_NOT_MET) {
-        WARNING("Keep-alive write should have failed its condition. "
-                "Unexpected status was: %s",
-                response.error().c_str());
-    }
 }
 
 uint32_t

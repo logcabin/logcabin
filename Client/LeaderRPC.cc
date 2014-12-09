@@ -26,6 +26,68 @@
 namespace LogCabin {
 namespace Client {
 
+//// class LeaderRPC::Call ////
+
+LeaderRPC::Call::Call(LeaderRPC& leaderRPC)
+    : leaderRPC(leaderRPC)
+    , cachedSession()
+    , rpc()
+{
+}
+
+LeaderRPC::Call::~Call()
+{
+}
+
+void
+LeaderRPC::Call::start(OpCode opCode, const google::protobuf::Message& request)
+{
+    { // Save a reference to the leaderSession
+        std::unique_lock<std::mutex> lockGuard(leaderRPC.mutex);
+        cachedSession = leaderRPC.leaderSession;
+    }
+    rpc = RPC::ClientRPC(cachedSession,
+                         Protocol::Common::ServiceId::CLIENT_SERVICE,
+                         1,
+                         opCode,
+                         request);
+}
+
+void
+LeaderRPC::Call::cancel()
+{
+    rpc.cancel();
+    cachedSession.reset();
+}
+
+bool
+LeaderRPC::Call::wait(google::protobuf::Message& response)
+{
+    typedef RPC::ClientRPC::Status Status;
+    Protocol::Client::Error serviceSpecificError;
+    Status status = rpc.waitForReply(&response, &serviceSpecificError);
+
+    // Decode the response
+    switch (status) {
+        case Status::OK:
+            return true;
+        case Status::SERVICE_SPECIFIC_ERROR:
+            leaderRPC.handleServiceSpecificError(cachedSession,
+                                                 serviceSpecificError);
+            return false;
+        case Status::RPC_FAILED:
+            // If the session is broken, get a new one and try again.
+            leaderRPC.connectRandom(cachedSession);
+            return false;
+        case Status::RPC_CANCELED:
+            return false;
+    }
+    PANIC("Unexpected RPC status");
+}
+
+
+//// class LeaderRPC ////
+
 LeaderRPC::LeaderRPC(const RPC::Address& hosts)
     : windowCount(5)
     , windowNanos(1000 * 1000 * 100)
@@ -55,41 +117,18 @@ LeaderRPC::call(OpCode opCode,
                 const google::protobuf::Message& request,
                 google::protobuf::Message& response)
 {
-    typedef RPC::ClientRPC::Status Status;
-
     while (true) {
-        // Save a reference to the leaderSession
-        std::shared_ptr<RPC::ClientSession> cachedSession;
-        {
-            std::unique_lock<std::mutex> lockGuard(mutex);
-            cachedSession = leaderSession;
-        }
-
-        // Execute the RPC
-        RPC::ClientRPC rpc(cachedSession,
-                           Protocol::Common::ServiceId::CLIENT_SERVICE,
-                           1,
-                           opCode,
-                           request);
-        Protocol::Client::Error serviceSpecificError;
-        Status status = rpc.waitForReply(&response, &serviceSpecificError);
-
-        // Decode the response
-        switch (status) {
-            case Status::OK:
-                return;
-            case Status::SERVICE_SPECIFIC_ERROR:
-                handleServiceSpecificError(cachedSession,
-                                           serviceSpecificError);
-                break;
-            case Status::RPC_FAILED:
-                // If the session is broken, get a new one and try again.
-                connectRandom(cachedSession);
-                break;
-            case Status::RPC_CANCELED:
-                PANIC("RPC unexpectedly canceled");
-        }
+        Call c(*this);
+        c.start(opCode, request);
+        if (c.wait(response))
+            return;
     }
+}
+
+std::unique_ptr<LeaderRPCBase::Call>
+LeaderRPC::makeCall()
+{
+    return std::unique_ptr<LeaderRPCBase::Call>(new LeaderRPC::Call(*this));
 }
 
 void

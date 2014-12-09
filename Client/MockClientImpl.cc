@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2014 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -59,6 +60,40 @@ class TreeLeaderRPC : public LeaderRPCBase {
                   Core::ProtoBuf::dumpString(request).c_str());
         }
     }
+
+    class Call : public LeaderRPCBase::Call {
+      public:
+        explicit Call(TreeLeaderRPC& leaderRPC)
+            : leaderRPC(leaderRPC)
+            , opCode()
+            , request()
+        {
+        }
+        void start(OpCode _opCode, const google::protobuf::Message& _request) {
+            opCode = _opCode;
+            request.reset(_request.New());
+            request->CopyFrom(_request);
+        }
+        void cancel() {
+            // no op
+        }
+        bool wait(google::protobuf::Message& response) {
+            leaderRPC.call(opCode, *request, response);
+            return true;
+        }
+        TreeLeaderRPC& leaderRPC;
+        OpCode opCode;
+        std::unique_ptr<google::protobuf::Message> request;
+
+        // Call is not copyable.
+        Call(const Call&) = delete;
+        Call& operator=(const Call&) = delete;
+    };
+
+    std::unique_ptr<LeaderRPCBase::Call> makeCall() {
+        return std::unique_ptr<LeaderRPCBase::Call>(new Call(*this));
+    }
+
     std::mutex mutex; ///< prevents concurrent access to 'tree'
     LogCabin::Tree::Tree tree;
 };

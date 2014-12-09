@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2014 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -76,6 +77,39 @@ class ClientLeaderRPCTest : public ::testing::Test {
     Protocol::Client::ReadOnlyTree::Response response;
     Protocol::Client::ReadOnlyTree::Response expResponse;
 };
+
+TEST_F(ClientLeaderRPCTest, CallOK) {
+    init();
+    service->reply(OpCode::READ_ONLY_TREE, request, expResponse);
+    std::unique_ptr<LeaderRPCBase::Call> call = leaderRPC->makeCall();
+    call->start(OpCode::READ_ONLY_TREE, request);
+    EXPECT_TRUE(call->wait(response));
+    EXPECT_EQ(expResponse, response);
+}
+
+TEST_F(ClientLeaderRPCTest, CallCanceled) {
+    init();
+    std::unique_ptr<LeaderRPCBase::Call> call = leaderRPC->makeCall();
+    call->start(OpCode::READ_ONLY_TREE, request);
+    call->cancel();
+    EXPECT_FALSE(call->wait(response));
+    EXPECT_FALSE(call->wait(response));
+    call->cancel();
+    EXPECT_FALSE(call->wait(response));
+}
+
+TEST_F(ClientLeaderRPCTest, CallRPCFailed) {
+    init();
+    service->closeSession(OpCode::READ_ONLY_TREE, request);
+    service->reply(OpCode::READ_ONLY_TREE, request, expResponse);
+    std::unique_ptr<LeaderRPCBase::Call> call = leaderRPC->makeCall();
+    call->start(OpCode::READ_ONLY_TREE, request);
+    EXPECT_FALSE(call->wait(response));
+    call->start(OpCode::READ_ONLY_TREE, request);
+    EXPECT_TRUE(call->wait(response));
+    EXPECT_EQ(expResponse, response);
+}
+
 
 // constructor and destructor tested adequately in tests for call()
 

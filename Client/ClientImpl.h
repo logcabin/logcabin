@@ -1,4 +1,5 @@
 /* Copyright (c) 2012-2014 Stanford University
+ * Copyright (c) 2014 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,13 +15,13 @@
  */
 
 #include <memory>
-#include <mutex>
 #include <set>
 #include <string>
 
 #include "include/LogCabin/Client.h"
 #include "Client/LeaderRPC.h"
 #include "Core/ConditionVariable.h"
+#include "Core/Mutex.h"
 #include "Core/Time.h"
 
 #ifndef LOGCABIN_CLIENT_CLIENTIMPL_H
@@ -121,11 +122,6 @@ class ClientImpl {
   protected:
 
     /**
-     * Make no-op request to the cluster to keep the client's session active.
-     */
-    void keepAlive();
-
-    /**
      * Asks the cluster leader for the range of supported RPC protocol
      * versions, and select the best one. This is used to make sure the client
      * and server are speaking the same version of the RPC protocol.
@@ -181,6 +177,17 @@ class ClientImpl {
         void doneWithRPC(const Protocol::Client::ExactlyOnceRPCInfo&);
 
       private:
+
+        /**
+         * Internal version of getRPCInfo() to avoid deadlock with self.
+         */
+        Protocol::Client::ExactlyOnceRPCInfo getRPCInfo(
+            std::unique_lock<Core::Mutex>& lockGuard);
+        /**
+         * Internal version of doneWithRPC() to avoid deadlock with self.
+         */
+        void doneWithRPC(const Protocol::Client::ExactlyOnceRPCInfo&,
+                         std::unique_lock<Core::Mutex>& lockGuard);
         /**
          * Main function for keep-alive thread. Periodically makes
          * requests to the cluster to keep the client's session active.
@@ -204,7 +211,7 @@ class ClientImpl {
         /**
          * Protects all the members of this class.
          */
-        mutable std::mutex mutex;
+        mutable Core::Mutex mutex;
         /**
          * The numbers of the RPCs for which this client is still awaiting a
          * response.
@@ -239,6 +246,13 @@ class ClientImpl {
          * inactivity, in milliseconds.
          */
         uint64_t keepAliveIntervalMs;
+
+        /**
+         * If set, this is an ongoing keep-alive RPC. This call is canceled to
+         * interrupt #keepAliveThread when exiting.
+         */
+        std::unique_ptr<LeaderRPCBase::Call> keepAliveCall;
+
         /**
          * Runs keepAliveThreadMain().
          * Since this thread would be unexpected/wasteful for clients that only

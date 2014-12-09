@@ -23,6 +23,7 @@
 #include "build/Protocol/Client.pb.h"
 #include "Event/Loop.h"
 #include "RPC/Address.h"
+#include "RPC/ClientRPC.h"
 
 #ifndef LOGCABIN_CLIENT_LEADERRPC_H
 #define LOGCABIN_CLIENT_LEADERRPC_H
@@ -74,10 +75,61 @@ class LeaderRPCBase {
                       const google::protobuf::Message& request,
                       google::protobuf::Message& response) = 0;
 
+    /**
+     * An asynchronous version of call(). This allows multiple RPCs to be
+     * executed concurrently, or canceling an RPC that is running on a separate
+     * thread.
+     */
+    class Call {
+      public:
+        /**
+         * Constructor.
+         */
+        Call() {}
+        /**
+         * Destructor.
+         */
+        virtual ~Call() {}
+        /**
+         * Invoke the RPC.
+         * \param opCode
+         *      RPC operation code. The caller must guarantee that this is a
+         *      valid opCode. (If the server rejects it, this will PANIC.)
+         * \param request
+         *      The parameters for the operation. The caller must guarantee
+         *      that this is a well-formed request. (If the server rejects it,
+         *      this will PANIC.)
+         */
+        virtual void start(OpCode opCode,
+                           const google::protobuf::Message& request) = 0;
+        /**
+         * Cancel the RPC. This may only be called after start(), but it may
+         * be called safely from a separate thread.
+         */
+        virtual void cancel() = 0;
+        /**
+         * Wait for the RPC to complete.
+         * \param[out] response
+         *      If successful, the response to the operation will be filled in
+         *      here.
+         * \return
+         *      True if the RPC completed successfully, false otherwise. If
+         *      this returns false, it is the callers responsibility to start
+         *      over to achieve the same at-most-once semantics as #call().
+         */
+        virtual bool wait(google::protobuf::Message& response) = 0;
+    };
+
+    /**
+     * Return a new Call object.
+     */
+    virtual std::unique_ptr<Call> makeCall() = 0;
+
     // LeaderRPCBase is not copyable
     LeaderRPCBase(const LeaderRPCBase&) = delete;
     LeaderRPCBase& operator=(const LeaderRPCBase&) = delete;
 };
+
 
 /**
  * This is the implementation of LeaderRPCBase that uses the RPC system.
@@ -97,10 +149,36 @@ class LeaderRPC : public LeaderRPCBase {
     /// Destructor.
     ~LeaderRPC();
 
+    /// See LeaderRPCBase::call().
     void call(OpCode opCode,
               const google::protobuf::Message& request,
               google::protobuf::Message& response);
+
+    /// See LeaderRPCBase::makeCall().
+    std::unique_ptr<LeaderRPCBase::Call> makeCall();
+
   private:
+
+    /// See LeaderRPCBase::Call.
+    class Call : public LeaderRPCBase::Call {
+      public:
+        explicit Call(LeaderRPC& leaderRPC);
+        ~Call();
+        void start(OpCode opCode, const google::protobuf::Message& request);
+        void cancel();
+        bool wait(google::protobuf::Message& response);
+        LeaderRPC& leaderRPC;
+        /**
+         * Copy of leaderSession when the RPC was started (might have changed
+         * since).
+         */
+        std::shared_ptr<RPC::ClientSession> cachedSession;
+        /**
+         * RPC object which may be canceled.
+         */
+        RPC::ClientRPC rpc;
+    };
+
 
     /**
      * A helper for call() that decodes errors thrown by the service.

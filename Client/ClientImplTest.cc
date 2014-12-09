@@ -122,7 +122,42 @@ TEST_F(ClientClientImplExactlyOnceTest, keepAliveThreadMain) {
     EXPECT_EQ(6U, mockRPC->requestLog.size()) << disclaimer;
     usleep(6000);
     EXPECT_EQ(7U, mockRPC->requestLog.size()) << disclaimer;
+}
 
+class KeepAliveThreadMain_cancel_Helper {
+    explicit KeepAliveThreadMain_cancel_Helper(
+            Client::ClientImpl::ExactlyOnceRPCHelper& exactlyOnceRPCHelper)
+        : exactlyOnceRPCHelper(exactlyOnceRPCHelper)
+        , iter(0)
+    {
+    }
+    void operator()() {
+        ++iter;
+        if (iter == 2) {
+            EXPECT_TRUE(exactlyOnceRPCHelper.keepAliveCall.get() != NULL);
+            exactlyOnceRPCHelper.keepAliveCall->cancel();
+            exactlyOnceRPCHelper.exiting = true;
+        }
+    }
+    Client::ClientImpl::ExactlyOnceRPCHelper& exactlyOnceRPCHelper;
+    uint64_t iter;
+};
+
+
+TEST_F(ClientClientImplExactlyOnceTest, keepAliveThreadMain_cancel) {
+    client.exactlyOnceRPCHelper.exit();
+    client.exactlyOnceRPCHelper.exiting = false;
+    mockRPC->expect(OpCode::READ_WRITE_TREE,
+        fromString<Protocol::Client::ReadWriteTree::Response>(
+                    ""));
+    client.exactlyOnceRPCHelper.lastKeepAliveStart =
+        Client::ClientImpl::ExactlyOnceRPCHelper::TimePoint::min();
+    client.exactlyOnceRPCHelper.keepAliveIntervalMs = 200;
+    KeepAliveThreadMain_cancel_Helper helper(client.exactlyOnceRPCHelper);
+    client.exactlyOnceRPCHelper.mutex.callback = std::ref(helper);
+    client.exactlyOnceRPCHelper.keepAliveThreadMain();
+    client.exactlyOnceRPCHelper.mutex.callback = std::function<void()>();
+    EXPECT_EQ(4U, helper.iter);
 }
 
 using Client::Result;
