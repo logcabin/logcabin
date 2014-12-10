@@ -142,7 +142,7 @@ class CoreConditionVariableTest : public ::testing::Test {
 };
 
 
-TEST_F(CoreConditionVariableTest, notify_one) {
+TEST_F(CoreConditionVariableTest, notify_one_TimingSensitive) {
     cv.notify_one();
     EXPECT_EQ(1U, cv.notificationCount);
     thread1 = std::thread(&CoreConditionVariableTest::wait, this);
@@ -170,7 +170,7 @@ TEST_F(CoreConditionVariableTest, notify_one) {
     thread2.join();
 }
 
-TEST_F(CoreConditionVariableTest, notify_all) {
+TEST_F(CoreConditionVariableTest, notify_all_TimingSensitive) {
     cv.notify_all();
     EXPECT_EQ(1U, cv.notificationCount);
     thread1 = std::thread(&CoreConditionVariableTest::wait, this);
@@ -197,7 +197,7 @@ TEST_F(CoreConditionVariableTest, wait_stdmutex_callback) {
     EXPECT_EQ(1U, counter1);
 }
 
-TEST_F(CoreConditionVariableTest, wait_stdmutex_real) {
+TEST_F(CoreConditionVariableTest, wait_stdmutex_real_TimingSensitive) {
     thread1 = std::thread(&CoreConditionVariableTest::waitStdMutex, this);
     spinForReady(1);
     EXPECT_EQ(0U, done);
@@ -221,7 +221,7 @@ TEST_F(CoreConditionVariableTest, wait_CoreMutex_callback) {
     EXPECT_EQ(4U, mutexCounter); // 2 from lock guard, 2 from wait
 }
 
-TEST_F(CoreConditionVariableTest, wait_CoreMutex_real) {
+TEST_F(CoreConditionVariableTest, wait_CoreMutex_real_TimingSensitive) {
     thread1 = std::thread(&CoreConditionVariableTest::wait, this);
     spinForReady(1);
     EXPECT_EQ(0U, done);
@@ -257,7 +257,7 @@ TEST_F(CoreConditionVariableTest, wait_until_stdmutex_callback) {
     EXPECT_EQ(5U, counter1);
 }
 
-TEST_F(CoreConditionVariableTest, wait_until_stdmutex_real) {
+TEST_F(CoreConditionVariableTest, wait_until_stdmutex_real_TimingSensitive) {
     std::unique_lock<std::mutex> lockGuard(stdmutex);
     EXPECT_LT(timedWaitUntil(lockGuard, Time::SteadyClock::time_point::min()),
               ms(1));
@@ -310,7 +310,7 @@ TEST_F(CoreConditionVariableTest, wait_until_CoreMutex_callback) {
     EXPECT_EQ(22U, mutexCounter); // 2 from lock guard, 20 from wait_until
 }
 
-TEST_F(CoreConditionVariableTest, wait_until_CoreMutex_real) {
+TEST_F(CoreConditionVariableTest, wait_until_CoreMutex_real_TimingSensitive) {
     std::unique_lock<Core::Mutex> lockGuard(mutex);
     EXPECT_LT(timedWaitUntil(lockGuard, Time::SteadyClock::time_point::min()),
               ms(1));

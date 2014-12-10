@@ -178,7 +178,7 @@ TEST_F(ServerStateMachineTest, apply_openSession)
 
 // This tries to test the use of kill() to stop a snapshotting child and exit
 // quickly.
-TEST_F(ServerStateMachineTest, applyThreadMain_exiting)
+TEST_F(ServerStateMachineTest, applyThreadMain_exiting_TimingSensitive)
 {
     // instruct the child process to sleep for 10s
     stateMachineChildSleepMs = 10000;

@@ -91,7 +91,7 @@ TEST_F(ClientClientImplExactlyOnceTest, doneWithRPC) {
 }
 
 // This test is timing-sensitive. Not sure how else to do it.
-TEST_F(ClientClientImplExactlyOnceTest, keepAliveThreadMain) {
+TEST_F(ClientClientImplExactlyOnceTest, keepAliveThreadMain_TimingSensitive) {
     std::string disclaimer("This test depends on timing, so failures are "
                            "likely under heavy load, valgrind, etc.");
     EXPECT_EQ(1U, mockRPC->requestLog.size());
