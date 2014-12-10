@@ -1199,9 +1199,9 @@ RaftConsensus::handleRequestVote(
     if (withholdVotesUntil > Clock::now()) {
         NOTICE("Rejecting RequestVote for term %lu from server %lu, since "
                "this server (which is in term %lu) recently heard from a "
-               "leader. Should server %lu be shut down?",
+               "leader (%lu). Should server %lu be shut down?",
                request.term(), request.server_id(), currentTerm,
-               request.server_id());
+               request.server_id(), leaderId);
         response.set_term(currentTerm);
         response.set_granted(false);
         return;
