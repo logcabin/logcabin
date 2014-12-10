@@ -18,6 +18,9 @@ This README will walk you through how to compile and run LogCabin.
 Building
 ========
 
+.. image:: https://travis-ci.org/logcabin/logcabin.svg?branch=travis
+    :target: https://travis-ci.org/logcabin/logcabin
+
 Pre-requisites:
 
 - git (v1.7 is known to work)
