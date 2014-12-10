@@ -8,11 +8,10 @@ management issues. Although its key functionality is in place, LogCabin is not
 yet recommended for actual use. LogCabin is released under the permissive ISC
 license (which is equivalent to the Simplified BSD License).
 
-For more info, visit the project page at
-https://ramcloud.stanford.edu/wiki/display/logcabin/LogCabin
+LogCabin uses the Raft consensus algorithm internally, which is described at
+https://raftconsensus.github.io
 
-LogCabin uses the Raft consensus algorithm internally, which is described in
-https://ramcloud.stanford.edu/raft.pdf
+Code-level documentation can be found at https://logcabin.github.io
 
 This README will walk you through how to compile and run LogCabin.
 
@@ -211,8 +210,7 @@ To build the documentation from the source code, run::
 
 The resulting HTML files will be placed in ``docs/doxygen``.
 
-The Raft consensus algorithm is described in
-https://ramcloud.stanford.edu/raft.pdf
+You can also find this documentation at https://logcabin.github.io
 
 Contributing
 ============
