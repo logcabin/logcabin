@@ -158,6 +158,16 @@ TEST_F(RPCClientSessionTest, constructor) {
               "(resolved to 127.0.0.1:0)",
               session2->toString());
     EXPECT_FALSE(session2->messageSocket);
+
+    auto session3 = ClientSession::makeSession(eventLoop,
+                                               Address("i n v a l i d", 0),
+                                               1024);
+    EXPECT_EQ("Failed to resolve i n v a l i d (resolved to Unspecified)",
+              session3->errorMessage);
+    EXPECT_EQ("Closed session: Failed to resolve i n v a l i d "
+              "(resolved to Unspecified)",
+              session3->toString());
+    EXPECT_FALSE(session3->messageSocket);
 }
 
 TEST_F(RPCClientSessionTest, makeSession) {

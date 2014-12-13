@@ -204,6 +204,15 @@ ClientSession::ClientSession(Event::Loop& eventLoop,
         errorMessage = "Failed to create socket";
         return;
     }
+    // Be careful not to pass a sockaddr of length 0 to conect(). Although it
+    // should return -1 EINVAL, on some systems (e.g., RHEL6) it instead
+    // returns OK but leaves the socket unconnected! See
+    // https://github.com/logcabin/logcabin/issues/66 for more details.
+    if (!address.isValid()) {
+        errorMessage = "Failed to resolve " + address.toString();
+        close(fd);
+        return;
+    }
     int r = connect(fd,
                     address.getSockAddr(),
                     address.getSockAddrLen());
