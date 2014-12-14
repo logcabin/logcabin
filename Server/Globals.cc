@@ -67,6 +67,14 @@ Globals::~Globals()
 void
 Globals::init(uint64_t serverId)
 {
+    if (!Core::Time::SteadyClock::is_steady) {
+        WARNING("Available C++11 clock is not monotonic/steady, so any "
+                "changes to the system clock (such as from NTP) may affect "
+                "timeouts and availability. See "
+                "https://github.com/logcabin/logcabin/issues/24 for more "
+                "detail.");
+    }
+
     if (!raft) {
         raft.reset(new RaftConsensus(*this));
     }

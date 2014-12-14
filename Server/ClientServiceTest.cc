@@ -47,7 +47,9 @@ class ServerClientServiceTest : public ::testing::Test {
             globals->config.set("storageModule", "memory");
             globals->config.set("uuid", "my-fake-uuid-123");
             globals->config.set("servers", "127.0.0.1");
+            Core::Debug::setLogPolicy({{"", "ERROR"}});
             globals->init();
+            Core::Debug::setLogPolicy({{"", "WARNING"}});
             session = RPC::ClientSession::makeSession(
                 globals->eventLoop,
                 RPC::Address("127.0.0.1", Protocol::Common::DEFAULT_PORT),

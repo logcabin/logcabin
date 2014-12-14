@@ -68,6 +68,7 @@ struct MockableClock
 // libstdc++ 4.7 renamed monotonic_clock to steady_clock to conform with C++11.
 #if __GNUC__ == 4 && __GNUC_MINOR__ < 7
   static const bool is_monotonic = BaseClock::is_monotonic;
+  static const bool is_steady = BaseClock::is_monotonic;
 #else
   static const bool is_steady = BaseClock::is_steady;
 #endif
