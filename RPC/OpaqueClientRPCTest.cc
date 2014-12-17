@@ -22,12 +22,14 @@ namespace LogCabin {
 namespace RPC {
 namespace {
 
+typedef OpaqueClientRPC::TimePoint TimePoint;
+
 TEST(RPCOpaqueClientRPCTest, constructor_default) {
     // make sure a default-constructed RPC object behaves sensibly
     OpaqueClientRPC rpc;
     EXPECT_EQ("", rpc.getErrorMessage());
     EXPECT_EQ(OpaqueClientRPC::Status::NOT_READY, rpc.getStatus());
-    rpc.waitForReply();
+    rpc.waitForReply(TimePoint::max());
     EXPECT_EQ(OpaqueClientRPC::Status::ERROR, rpc.getStatus());
     EXPECT_EQ("This RPC was never associated with a ClientSession.",
               rpc.getErrorMessage());

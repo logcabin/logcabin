@@ -100,7 +100,7 @@ OpaqueClientRPC::peekReply()
 }
 
 void
-OpaqueClientRPC::waitForReply()
+OpaqueClientRPC::waitForReply(TimePoint timeout)
 {
     std::unique_lock<std::mutex> mutexGuard(mutex);
     if (status != Status::NOT_READY)
@@ -109,7 +109,7 @@ OpaqueClientRPC::waitForReply()
         {
             // release the mutex while calling wait()
             Core::MutexUnlock<std::mutex> unlockGuard(mutexGuard);
-            session->wait(*this);
+            session->wait(*this, timeout);
         }
         update();
     } else {

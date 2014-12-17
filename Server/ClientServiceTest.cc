@@ -30,6 +30,7 @@ namespace {
 
 using Protocol::Client::OpCode;
 typedef RPC::ClientRPC::Status Status;
+typedef RPC::ClientRPC::TimePoint TimePoint;
 
 class ServerClientServiceTest : public ::testing::Test {
     ServerClientServiceTest()
@@ -72,7 +73,8 @@ class ServerClientServiceTest : public ::testing::Test {
         RPC::ClientRPC rpc(session,
                            Protocol::Common::ServiceId::CLIENT_SERVICE,
                            1, opCode, request);
-        EXPECT_EQ(Status::OK, rpc.waitForReply(&response, NULL))
+        EXPECT_EQ(Status::OK, rpc.waitForReply(&response, NULL,
+                                               TimePoint::max()))
             << rpc.getErrorMessage();
     }
 

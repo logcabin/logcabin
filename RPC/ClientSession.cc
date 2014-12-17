@@ -357,7 +357,7 @@ ClientSession::update(OpaqueClientRPC& rpc)
 }
 
 void
-ClientSession::wait(const OpaqueClientRPC& rpc)
+ClientSession::wait(const OpaqueClientRPC& rpc, TimePoint timeout)
 {
     // The RPC may be holding the last reference to this session. This
     // temporary reference makes sure this object isn't destroyed until after
@@ -379,9 +379,11 @@ ClientSession::wait(const OpaqueClientRPC& rpc)
             return;
         } else if (!errorMessage.empty()) {
             return; // session has error
+        } else if (timeout < Clock::now()) {
+            return; // timeout
         }
         response->hasWaiter = true;
-        response->ready.wait(mutexGuard);
+        response->ready.wait_until(mutexGuard, timeout);
         response->hasWaiter = false;
     }
 }

@@ -65,7 +65,8 @@ LeaderRPC::Call::wait(google::protobuf::Message& response)
 {
     typedef RPC::ClientRPC::Status Status;
     Protocol::Client::Error serviceSpecificError;
-    Status status = rpc.waitForReply(&response, &serviceSpecificError);
+    Status status = rpc.waitForReply(&response, &serviceSpecificError,
+                                     RPC::ClientRPC::TimePoint::max());
 
     // Decode the response
     switch (status) {
@@ -81,6 +82,8 @@ LeaderRPC::Call::wait(google::protobuf::Message& response)
             return false;
         case Status::RPC_CANCELED:
             return false;
+        case Status::TIMEOUT:
+            PANIC("Unexpected RPC timeout");
     }
     PANIC("Unexpected RPC status");
 }

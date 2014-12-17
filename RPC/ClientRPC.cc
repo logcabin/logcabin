@@ -89,12 +89,20 @@ ClientRPC::isReady()
 
 ClientRPC::Status
 ClientRPC::waitForReply(google::protobuf::Message* response,
-                        google::protobuf::Message* serviceSpecificError)
+                        google::protobuf::Message* serviceSpecificError,
+                        TimePoint timeout)
 {
-    opaqueRPC.waitForReply();
+    opaqueRPC.waitForReply(timeout);
     switch (opaqueRPC.getStatus()) {
         case OpaqueClientRPC::Status::NOT_READY:
-            PANIC("Waited for RPC but not ready");
+            if (Clock::now() > timeout) {
+                return Status::TIMEOUT;
+            } else {
+                PANIC("Waited for RPC but not ready and "
+                      "timeout hasn't elapsed (timeout=%s, now=%s)",
+                      Core::StringUtil::toString(timeout).c_str(),
+                      Core::StringUtil::toString(Clock::now()).c_str());
+            }
         case OpaqueClientRPC::Status::OK:
             break;
         case OpaqueClientRPC::Status::ERROR:
@@ -106,8 +114,9 @@ ClientRPC::waitForReply(google::protobuf::Message* response,
 
     // Extract the response's status field.
     if (responseBuffer.getLength() < sizeof(ResponseHeaderPrefix)) {
-        PANIC("The response from the server was too short to be valid. "
-              "This probably indicates network or memory corruption.");
+        PANIC("The response from the server was too short to be valid "
+              "(%u bytes). This probably indicates network or memory "
+              "corruption.", responseBuffer.getLength());
     }
     ResponseHeaderPrefix responseHeaderPrefix =
         *static_cast<const ResponseHeaderPrefix*>(responseBuffer.getData());
@@ -195,6 +204,8 @@ operator<<(::std::ostream& os, ClientRPC::Status status)
             return os << "RPC_FAILED";
         case Status::RPC_CANCELED:
             return os << "RPC_CANCELED";
+        case Status::TIMEOUT:
+            return os << "TIMEOUT";
         default:
             return os << "(INVALID VALUE)";
     }

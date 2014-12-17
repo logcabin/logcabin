@@ -20,6 +20,7 @@
 #include <stdexcept>
 #include <string>
 
+#include "Core/Time.h"
 #include "RPC/Buffer.h"
 
 #ifndef LOGCABIN_RPC_OPAQUECLIENTRPC_H
@@ -37,6 +38,11 @@ class ClientSession; // forward declaration
  */
 class OpaqueClientRPC {
   public:
+    /// Clock used for timeouts.
+    typedef Core::Time::SteadyClock Clock;
+    /// Type for absolute time values used for timeouts.
+    typedef Clock::time_point TimePoint;
+
     /**
      * State of the RPC.
      */
@@ -116,13 +122,19 @@ class OpaqueClientRPC {
     Buffer* peekReply();
 
     /**
-     * Block until the reply is ready or an error has occurred.
+     * Block until the reply is ready, an error has occurred, or the given
+     * timeout elapses.
      *
      * This may be used from worker threads only, because OpaqueClientRPC
      * objects rely on the event loop servicing their ClientSession in order to
      * make progress.
+     *
+     * \param timeout
+     *      After this time has elapsed, stop waiting and return. The RPC's
+     *      results will probably not be available yet in this case (status
+     *      will be NOT_READY).
      */
-    void waitForReply();
+    void waitForReply(TimePoint timeout);
 
   private:
 

@@ -41,6 +41,10 @@ class ClientSession; // forward declaration
  */
 class ClientRPC {
   public:
+    /// Clock used for timeouts.
+    typedef OpaqueClientRPC::Clock Clock;
+    /// Type for absolute time values used for timeouts.
+    typedef OpaqueClientRPC::TimePoint TimePoint;
 
     /**
      * Issue an RPC to a remote service.
@@ -127,6 +131,11 @@ class ClientRPC {
          * server executed or will execute the RPC.
          */
         RPC_CANCELED,
+        /**
+         * The RPC did not complete before the given timeout elapsed. It is
+         * unknown whether or not the server executed the RPC (yet).
+         */
+        TIMEOUT,
     };
 
     /**
@@ -138,11 +147,16 @@ class ClientRPC {
      * \param[out] serviceSpecificError
      *      If not NULL, this will be filled in if this method returns
      *      SERVICE_SPECIFIC_ERROR.
+     * \param[in] timeout
+     *      After this time has elapsed, stop waiting and return TIMEOUT.
+     *      In this case, response and serviceSpecificError will be left
+     *      unmodified.
      * \return
      *      See the individual values of #Status.
      */
     Status waitForReply(google::protobuf::Message* response,
-                        google::protobuf::Message* serviceSpecificError);
+                        google::protobuf::Message* serviceSpecificError,
+                        TimePoint timeout);
 
     /**
      * If an RPC failure occurred, return a message describing that error.

@@ -38,6 +38,8 @@
 namespace LogCabin {
 namespace {
 
+typedef RPC::OpaqueClientRPC::TimePoint TimePoint;
+
 class ReplyTimer : public Event::Timer {
     ReplyTimer(Event::Loop& eventLoop,
                RPC::OpaqueServerRPC serverRPC,
@@ -108,7 +110,7 @@ TEST_F(RPCClientServerTest, echo) {
             buf[i] = char(i);
         RPC::OpaqueClientRPC rpc = clientSession->sendRequest(
                                         RPC::Buffer(buf, bufLen, NULL));
-        rpc.waitForReply();
+        rpc.waitForReply(TimePoint::max());
         EXPECT_EQ(RPC::OpaqueClientRPC::Status::OK, rpc.getStatus());
         RPC::Buffer& reply = *rpc.peekReply();
         EXPECT_EQ(bufLen, reply.getLength());
@@ -124,14 +126,14 @@ TEST_F(RPCClientServerTest, timeout) {
     // The server should not time out, since the serverEventLoopThread should
     // respond to pings.
     RPC::OpaqueClientRPC rpc = clientSession->sendRequest(RPC::Buffer());
-    rpc.waitForReply();
+    rpc.waitForReply(TimePoint::max());
     EXPECT_EQ("", rpc.getErrorMessage());
 
     // This time, if we don't let the server event loop run, the RPC should
     // time out.
     Event::Loop::Lock blockPings(serverEventLoop);
     RPC::OpaqueClientRPC rpc2 = clientSession->sendRequest(RPC::Buffer());
-    rpc2.waitForReply();
+    rpc2.waitForReply(TimePoint::max());
     EXPECT_EQ("Server 127.0.0.1 (resolved to 127.0.0.1:61023) timed out",
               rpc2.getErrorMessage());
 

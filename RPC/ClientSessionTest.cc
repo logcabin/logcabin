@@ -30,6 +30,8 @@ namespace LogCabin {
 namespace RPC {
 namespace {
 
+typedef RPC::ClientSession::TimePoint TimePoint;
+
 class RPCClientSessionTest : public ::testing::Test {
     RPCClientSessionTest()
         : eventLoop()
@@ -277,7 +279,7 @@ TEST_F(RPCClientSessionTest, waitNotReady) {
 TEST_F(RPCClientSessionTest, waitCanceled) {
     OpaqueClientRPC rpc = session->sendRequest(buf("hi"));
     rpc.cancel();
-    rpc.waitForReply();
+    rpc.waitForReply(TimePoint::max());
     EXPECT_EQ(OpaqueClientRPC::Status::CANCELED, rpc.getStatus());
 }
 
@@ -286,7 +288,7 @@ TEST_F(RPCClientSessionTest, waitCanceledWhileWaiting) {
     {
         ClientSession::Response& response = *session->responses.at(1);
         response.ready.callback = std::bind(&OpaqueClientRPC::cancel, &rpc);
-        rpc.waitForReply();
+        rpc.waitForReply(TimePoint::max());
     }
     EXPECT_EQ(OpaqueClientRPC::Status::CANCELED, rpc.getStatus());
     EXPECT_EQ("RPC canceled by user", rpc.errorMessage);
@@ -300,7 +302,7 @@ TEST_F(RPCClientSessionTest, waitReady) {
     ClientSession::Response& response = *it->second;
     response.status = ClientSession::Response::HAS_REPLY;
     response.reply = buf("bye");
-    rpc.waitForReply();
+    rpc.waitForReply(TimePoint::max());
     EXPECT_EQ(OpaqueClientRPC::Status::OK, rpc.getStatus());
     EXPECT_FALSE(rpc.session);
     EXPECT_EQ("bye", str(rpc.reply));
@@ -311,13 +313,43 @@ TEST_F(RPCClientSessionTest, waitReady) {
 TEST_F(RPCClientSessionTest, waitError) {
     OpaqueClientRPC rpc = session->sendRequest(buf("hi"));
     session->errorMessage = "some error";
-    rpc.waitForReply();
+    rpc.waitForReply(TimePoint::max());
     EXPECT_EQ(OpaqueClientRPC::Status::ERROR, rpc.getStatus());
     EXPECT_FALSE(rpc.session);
     EXPECT_EQ("", str(rpc.reply));
     EXPECT_EQ("some error", rpc.errorMessage);
     EXPECT_EQ(0U, session->responses.size());
 }
+
+TEST_F(RPCClientSessionTest, waitTimeout_now) {
+    OpaqueClientRPC rpc = session->sendRequest(buf("hi"));
+    rpc.waitForReply(RPC::ClientSession::Clock::now());
+    EXPECT_EQ(OpaqueClientRPC::Status::NOT_READY, rpc.getStatus());
+}
+
+TEST_F(RPCClientSessionTest, waitTimeout_future) {
+    OpaqueClientRPC rpc = session->sendRequest(buf("hi"));
+    rpc.waitForReply(RPC::ClientSession::Clock::now() +
+                     std::chrono::milliseconds(2));
+    EXPECT_EQ(OpaqueClientRPC::Status::NOT_READY, rpc.getStatus());
+}
+
+TEST_F(RPCClientSessionTest, waitTimeout_futureThenOk) {
+    OpaqueClientRPC rpc = session->sendRequest(buf("hi"));
+    rpc.waitForReply(RPC::ClientSession::Clock::now() +
+                     std::chrono::milliseconds(2));
+    EXPECT_EQ(OpaqueClientRPC::Status::NOT_READY, rpc.getStatus());
+
+    auto it = session->responses.find(1);
+    ASSERT_TRUE(it != session->responses.end());
+    ClientSession::Response& response = *it->second;
+    response.status = ClientSession::Response::HAS_REPLY;
+    response.reply = buf("bye");
+    rpc.waitForReply(RPC::ClientSession::Clock::now() +
+                     std::chrono::seconds(10));
+    EXPECT_EQ(OpaqueClientRPC::Status::OK, rpc.getStatus());
+}
+
 
 } // namespace LogCabin::RPC::<anonymous>
 } // namespace LogCabin::RPC

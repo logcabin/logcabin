@@ -43,6 +43,12 @@ namespace RPC {
  * clients should keep them around.
  */
 class ClientSession {
+  public:
+    /// Clock used for timeouts.
+    typedef Core::Time::SteadyClock Clock;
+    /// Type for absolute time values used for timeouts.
+    typedef Clock::time_point TimePoint;
+
   private:
     /**
      * This constructor is private because the class must be allocated in a
@@ -219,8 +225,13 @@ class ClientSession {
      * call update() after this returns to learn of the response.
      *
      * This must not be called while holding the RPC's lock.
+     * \param rpc
+     *      Wait for response to this.
+     * \param timeout
+     *      After this time has elapsed, stop waiting and return. The RPC's
+     *      results will probably not be available yet in this case.
      */
-    void wait(const OpaqueClientRPC& rpc);
+    void wait(const OpaqueClientRPC& rpc, TimePoint timeout);
 
     /**
      * This is used to keep this object alive while there are outstanding RPCs.

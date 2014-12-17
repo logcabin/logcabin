@@ -249,7 +249,7 @@ Peer::callRPC(Protocol::Raft::OpCode opCode,
                          request);
     // release lock for concurrency
     Core::MutexUnlock<Mutex> unlockGuard(lockGuard);
-    switch (rpc.waitForReply(&response, NULL)) {
+    switch (rpc.waitForReply(&response, NULL, TimePoint::max())) {
         case RPCStatus::OK:
             if (rpcFailuresSinceLastWarning > 0) {
                 WARNING("RPC to server succeeded after %lu failures",
@@ -259,6 +259,8 @@ Peer::callRPC(Protocol::Raft::OpCode opCode,
             return true;
         case RPCStatus::SERVICE_SPECIFIC_ERROR:
             PANIC("unexpected service-specific error");
+        case RPCStatus::TIMEOUT:
+            PANIC("unexpected RPC timeout");
         case RPCStatus::RPC_FAILED:
             ++rpcFailuresSinceLastWarning;
             if (rpcFailuresSinceLastWarning == 1) {
