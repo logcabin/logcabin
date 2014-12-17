@@ -108,7 +108,9 @@ TEST_F(RPCClientServerTest, echo) {
             buf[i] = char(i);
         RPC::OpaqueClientRPC rpc = clientSession->sendRequest(
                                         RPC::Buffer(buf, bufLen, NULL));
-        RPC::Buffer reply = rpc.extractReply();
+        rpc.waitForReply();
+        EXPECT_EQ(RPC::OpaqueClientRPC::Status::OK, rpc.getStatus());
+        RPC::Buffer& reply = *rpc.peekReply();
         EXPECT_EQ(bufLen, reply.getLength());
         EXPECT_EQ(0, memcmp(reply.getData(), buf, bufLen));
     }

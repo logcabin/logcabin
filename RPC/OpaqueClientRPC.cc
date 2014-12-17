@@ -72,16 +72,6 @@ OpaqueClientRPC::cancel()
     errorMessage = "RPC canceled by user";
 }
 
-Buffer
-OpaqueClientRPC::extractReply()
-{
-    waitForReply(); // called without the lock held to avoid deadlock with self
-    std::unique_lock<std::mutex> mutexGuard(mutex);
-    if (status != Status::OK)
-        throw Error(errorMessage);
-    return std::move(reply);
-}
-
 std::string
 OpaqueClientRPC::getErrorMessage() const
 {

@@ -38,14 +38,6 @@ class ClientSession; // forward declaration
 class OpaqueClientRPC {
   public:
     /**
-     * This may be thrown by #extractReply.
-     */
-    struct Error : public std::runtime_error {
-        explicit Error(const std::string& message)
-            : std::runtime_error(message) {}
-    };
-
-    /**
      * State of the RPC.
      */
     enum class Status {
@@ -93,26 +85,6 @@ class OpaqueClientRPC {
      * The caller is no longer interested in its reply.
      */
     void cancel();
-
-    /**
-     * Destructively return the RPC's response.
-     *
-     * This will wait for the RPC response to arrive (if it hasn't already) and
-     * throw an exception if there were any problems. If the reply is received
-     * successfully, this will return the reply, leaving the RPC with an empty
-     * reply buffer.
-     *
-     * This may be used from worker threads only, because OpaqueClientRPC
-     * objects rely on the event loop servicing their ClientSession in order to
-     * make progress.
-     *
-     * \return
-     *      The reply, leaving the RPC with an empty reply buffer.
-     *
-     * \throw Error
-     *      There was an error executing the RPC. See #getErrorMessage().
-     */
-    Buffer extractReply();
 
     /**
      * If an error has occurred, return a message describing that error.
@@ -186,7 +158,6 @@ class OpaqueClientRPC {
     /**
      * The payload of a successful reply, once available.
      * This becomes valid when #status is OK.
-     * Then, extractReply() may later reset this buffer.
      */
     Buffer reply;
 

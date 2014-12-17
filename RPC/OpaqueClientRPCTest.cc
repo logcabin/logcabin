@@ -27,8 +27,6 @@ TEST(RPCOpaqueClientRPCTest, constructor_default) {
     OpaqueClientRPC rpc;
     EXPECT_EQ("", rpc.getErrorMessage());
     EXPECT_EQ(OpaqueClientRPC::Status::NOT_READY, rpc.getStatus());
-    EXPECT_THROW(rpc.extractReply(),
-                 OpaqueClientRPC::Error);
     rpc.waitForReply();
     EXPECT_EQ(OpaqueClientRPC::Status::ERROR, rpc.getStatus());
     EXPECT_EQ("This RPC was never associated with a ClientSession.",
@@ -55,19 +53,6 @@ TEST(RPCOpaqueClientRPCTest, assignment_move) {
 
 TEST(RPCOpaqueClientRPCTest, cancel) {
     // tested in RPCClientSessionTest
-}
-
-TEST(RPCOpaqueClientRPCTest, extractReply) {
-    OpaqueClientRPC rpc;
-    rpc.status = OpaqueClientRPC::Status::ERROR;
-    rpc.errorMessage = "error";
-    EXPECT_THROW(rpc.extractReply(),
-                 OpaqueClientRPC::Error);
-    rpc.status = OpaqueClientRPC::Status::OK;
-    rpc.errorMessage = "";
-    rpc.reply = Buffer(NULL, 3, NULL);
-    EXPECT_EQ(3U, rpc.extractReply().getLength());
-    EXPECT_EQ(0U, rpc.extractReply().getLength());
 }
 
 TEST(RPCOpaqueClientRPCTest, getErrorMessage) {
