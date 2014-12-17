@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2014 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,18 +15,45 @@
  */
 
 #include <cassert>
+#include <cstring>
+
+#include "Core/Debug.h"
 #include "Core/Time.h"
 
 namespace LogCabin {
 namespace Core {
 namespace Time {
 
+CSystemClock::time_point
+CSystemClock::now()
+{
+    return time_point(std::chrono::nanoseconds(getTimeNanos()));
+}
+
+
+CSteadyClock::time_point
+CSteadyClock::now()
+{
+    struct timespec now;
+    int r = clock_gettime(STEADY_CLOCK_ID, &now);
+    if (r != 0) {
+        PANIC("clock_gettime(STEADY_CLOCK_ID=%d) failed: %s",
+              STEADY_CLOCK_ID, strerror(errno));
+    }
+    return time_point(std::chrono::nanoseconds(
+                uint64_t(now.tv_sec) * 1000 * 1000 * 1000 +
+                now.tv_nsec));
+}
+
 uint64_t
 getTimeNanos()
 {
     struct timespec now;
     int r = clock_gettime(CLOCK_REALTIME, &now);
-    assert(r == 0);
+    if (r != 0) {
+        PANIC("clock_gettime(CLOCK_REALTIME) failed: %s",
+              strerror(errno));
+    }
     return uint64_t(now.tv_sec) * 1000 * 1000 * 1000 + now.tv_nsec;
 }
 

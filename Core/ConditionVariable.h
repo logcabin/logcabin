@@ -1,4 +1,5 @@
 /* Copyright (c) 2012-2014 Stanford University
+ * Copyright (c) 2014 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -18,10 +19,12 @@
 #else
 #include <cstdatomic>
 #endif
-#include <condition_variable>
+
 #include <functional>
+#include <pthread.h>
 
 #include "Core/Mutex.h"
+#include "Core/Time.h"
 
 #ifndef LOGCABIN_CORE_CONDITIONVARIABLE_H
 #define LOGCABIN_CORE_CONDITIONVARIABLE_H
@@ -30,100 +33,69 @@ namespace LogCabin {
 namespace Core {
 
 /**
- * A wrapper around std::condition_variable that is useful for testing
- * purposes and works around a bug in libstdc++.
+ * Similar to std::condition_variable but with improvements for testing,
+ * support for monotonic clocks, and less buggy.
  *
- * You can set a callback to be called when the condition variable is
- * waited on; instead of waiting, this callback will be called. This callback
- * can, for example, change some shared state so that the calling thread's
- * condition is satisfied. It also counts how many times the condition variable
- * has been notified.
+ * For testing, you can set a callback to be called when the condition variable
+ * is waited on; instead of waiting, this callback will be called. This
+ * callback can, for example, change some shared state so that the calling
+ * thread's condition is satisfied. It also counts how many times the condition
+ * variable has been notified.
  *
- * The interface to this class is the same as std::condition_variable.
+ * The interface to this class is a subset of std::condition_variable:
+ * - wait_for isn't exposed since it doesn't make much sense to me in light
+ *   of spurious interrupts.
+ * - wait_until returns void instead of cv_status since it's almost always
+ *   clearer to check whether timeout has elapsed explicitly. Also, gcc 4.4
+ *   doesn't have cv_status and uses bool instead.
+ *
  * This class also goes through some trouble so that it can be used with
- * std::unique_lock<Mutex>, since normal condition variables may only be used
- * with std::unique_lock<std::mutex>.
+ * std::unique_lock<Core::Mutex>, since normal condition variables may only be
+ * used with std::unique_lock<std::mutex>.
+ *
+ * All waiting on this class is done using a monotonic clock internally, so it
+ * will not be affected by time jumps from, e.g., NTP. This implies that, if
+ * you're actually waiting for a specific system time to come around, you might
+ * end up with surprising behavior. If you're wondering why, Linux/POSIX
+ * condition variables use a single clock for all waiters, whereas C++11 uses
+ * an impossible-to-implement interface where different waiters can use
+ * different clocks.
  */
 class ConditionVariable {
   public:
-    ConditionVariable()
-        : cv()
-        , callback()
-        , notificationCount(0)
-        , lastWaitUntilTimeSinceEpoch()
-    {
-    }
+    ConditionVariable();
+    ~ConditionVariable();
+    void notify_one();
+    void notify_all();
+    void wait(std::unique_lock<std::mutex>& lockGuard);
+    void wait(std::unique_lock<Core::Mutex>& lockGuard);
 
+    // std::mutex and SteadyClock
     void
-    notify_one() {
-        ++notificationCount;
-        cv.notify_one();
-    }
+    wait_until(std::unique_lock<std::mutex>& lockGuard,
+               const Core::Time::SteadyClock::time_point& abs_time);
 
-    void
-    notify_all() {
-        ++notificationCount;
-        cv.notify_all();
-    }
-
-    void
-    wait(std::unique_lock<std::mutex>& lockGuard) {
-        if (callback) {
-            lockGuard.unlock();
-            callback();
-            lockGuard.lock();
-        } else {
-            cv.wait(lockGuard);
-        }
-    }
-
-    void
-    wait(std::unique_lock<Core::Mutex>& lockGuard) {
-        Core::Mutex& mutex(*lockGuard.mutex());
-        if (mutex.callback)
-            mutex.callback();
-        assert(lockGuard);
-        std::unique_lock<std::mutex> stdLockGuard(mutex.m,
-                                                  std::adopt_lock_t());
-        lockGuard.release();
-        wait(stdLockGuard);
-        assert(stdLockGuard);
-        lockGuard = std::unique_lock<Core::Mutex>(mutex, std::adopt_lock_t());
-        stdLockGuard.release();
-        if (mutex.callback)
-            mutex.callback();
-    }
-
-
-    // wait_for isn't exposed since it doesn't make much sense to me in light
-    // of spurious interrupts.
-
-    // Returns void instead of cv_status since it's almost always clearer to
-    // check whether timeout has elapsed explicitly. Also, gcc 4.4 doesn't have
-    // cv_status and uses bool instead.
+    // std::mutex and any clock: calls std::mutex and SteadyClock variant
     template<typename Clock, typename Duration>
     void
     wait_until(std::unique_lock<std::mutex>& lockGuard,
                const std::chrono::time_point<Clock, Duration>& abs_time) {
-        lastWaitUntilTimeSinceEpoch =
-            std::chrono::duration_cast<std::chrono::milliseconds>(
-                                            abs_time.time_since_epoch());
-        if (callback) {
-            lockGuard.unlock();
-            callback();
-            lockGuard.lock();
-        } else {
-            // Work-around for bug in libstdc++: wait for no more than an hour
-            // to avoid overflow. See
-            // http://gcc.gnu.org/bugzilla/show_bug.cgi?id=58931
-            std::chrono::time_point<Clock, Duration> now = Clock::now();
-            if (abs_time < now + std::chrono::hours(1))
-                cv.wait_until(lockGuard, abs_time);
-            else
-                cv.wait_until(lockGuard, now + std::chrono::hours(1));
-        }
+        std::chrono::time_point<Clock, Duration> now = Clock::now();
+        std::chrono::time_point<Clock, Duration> wake = abs_time;
+        // Clamp to wake to [now, now + hour] to avoid overflow.
+        // See related http://gcc.gnu.org/bugzilla/show_bug.cgi?id=58931
+        if (abs_time < now)
+            wake = now - std::chrono::hours(1);
+        else if (abs_time > now + std::chrono::hours(1))
+            wake = now + std::chrono::hours(1);
+        Core::Time::SteadyClock::time_point steadyNow =
+            Core::Time::SteadyClock::now();
+        Core::Time::SteadyClock::time_point steadyWake =
+            steadyNow + (wake - now);
+        wait_until(lockGuard, steadyWake);
     }
 
+    // Core::Mutex and any clock: calls std::mutex and any clock variant
     template<typename Clock, typename Duration>
     void
     wait_until(std::unique_lock<Core::Mutex>& lockGuard,
@@ -145,7 +117,7 @@ class ConditionVariable {
 
   private:
     /// Underlying condition variable.
-    std::condition_variable cv; // NOLINT
+    pthread_cond_t cv;
     /**
      * This function will be called with the lock released during every
      * invocation of wait/wait_until. No wait will actually occur; this is only

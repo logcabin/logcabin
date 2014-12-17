@@ -2,6 +2,7 @@ Import('env', 'object_files')
 
 src = [
     "Checksum.cc",
+    "ConditionVariable.cc",
     "Config.cc",
     "Debug.cc",
     "ProtoBuf.cc",
