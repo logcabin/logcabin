@@ -17,6 +17,7 @@
 #include <signal.h>
 
 #include "Core/Debug.h"
+#include "Event/Loop.h"
 #include "Event/Signal.h"
 
 namespace LogCabin {

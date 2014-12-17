@@ -20,6 +20,7 @@
 #include <sys/types.h>
 
 #include "Core/Debug.h"
+#include "Event/Loop.h"
 #include "RPC/MessageSocket.h"
 
 namespace LogCabin {

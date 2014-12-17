@@ -16,6 +16,7 @@
 #include <gtest/gtest.h>
 
 #include "Core/Debug.h"
+#include "Event/Loop.h"
 #include "Protocol/Common.h"
 #include "RPC/OpaqueServer.h"
 #include "RPC/OpaqueServerRPC.h"

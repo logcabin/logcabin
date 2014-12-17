@@ -17,10 +17,12 @@
 #define LOGCABIN_EVENT_SIGNAL_H
 
 #include "Event/File.h"
-#include "Event/Loop.h"
 
 namespace LogCabin {
 namespace Event {
+
+// forward declaration
+class Loop;
 
 /**
  * A Signal is called by the Event::Loop when a Unix signal is received.

@@ -16,11 +16,13 @@
 #ifndef LOGCABIN_EVENT_TIMER_H
 #define LOGCABIN_EVENT_TIMER_H
 
-#include "Event/Loop.h"
 #include "Event/File.h"
 
 namespace LogCabin {
 namespace Event {
+
+// forward declaration
+class Loop;
 
 /**
  * A Timer is called by the Event::Loop when time has elapsed.

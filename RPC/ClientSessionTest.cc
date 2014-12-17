@@ -22,6 +22,7 @@
 #endif
 
 #include "Core/Debug.h"
+#include "Event/Loop.h"
 #include "Event/Timer.h"
 #include "RPC/ClientSession.h"
 

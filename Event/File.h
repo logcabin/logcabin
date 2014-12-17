@@ -14,13 +14,16 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <mutex>
+
 #ifndef LOGCABIN_EVENT_FILE_H
 #define LOGCABIN_EVENT_FILE_H
 
-#include "Event/Loop.h"
-
 namespace LogCabin {
 namespace Event {
+
+// forward declaration
+class Loop;
 
 /**
  * A File is called by the Event::Loop when a file becomes readable or

@@ -25,6 +25,7 @@
 #include <thread>
 
 #include "Core/Debug.h"
+#include "Event/Loop.h"
 #include "Event/Timer.h"
 #include "Protocol/Common.h"
 #include "RPC/ClientSession.h"

@@ -17,7 +17,6 @@
 #include <vector>
 
 #include "Core/Mutex.h"
-#include "Event/Loop.h"
 #include "Event/File.h"
 #include "RPC/Buffer.h"
 
@@ -25,6 +24,12 @@
 #define LOGCABIN_RPC_MESSAGESOCKET_H
 
 namespace LogCabin {
+
+// forward declaration
+namespace Event {
+class Loop;
+}
+
 namespace RPC {
 
 /**

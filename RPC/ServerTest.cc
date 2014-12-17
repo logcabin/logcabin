@@ -18,6 +18,7 @@
 
 #include "build/Core/ProtoBufTest.pb.h"
 #include "Core/Debug.h"
+#include "Event/Loop.h"
 #include "Protocol/Common.h"
 #include "RPC/Buffer.h"
 #include "RPC/ClientRPC.h"

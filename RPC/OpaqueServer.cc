@@ -18,6 +18,7 @@
 #include <unistd.h>
 
 #include "Core/Debug.h"
+#include "Event/Loop.h"
 #include "RPC/OpaqueServer.h"
 #include "RPC/OpaqueServerRPC.h"
 
