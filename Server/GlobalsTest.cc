@@ -29,9 +29,7 @@ TEST(ServerGlobalsTest, basics) {
     globals.config.set("storageModule", "memory");
     globals.config.set("uuid", "my-fake-uuid-123");
     globals.config.set("servers", "127.0.0.1");
-    Core::Debug::setLogPolicy({{"", "ERROR"}});
     globals.init();
-    Core::Debug::setLogPolicy({{"", "WARNING"}});
     globals.eventLoop.exit();
     globals.run();
 }
@@ -75,7 +73,6 @@ TEST(ServerGlobalsTest, initBindToOneOnly) {
     globals.config.set("storageModule", "memory");
     globals.config.set("uuid", "my-fake-uuid-123");
     globals.config.set("servers", "127.0.0.1:61023;127.0.0.1:61024");
-    Core::Debug::setLogPolicy({{"", "ERROR"}});
     globals.init();
 }
 
