@@ -77,6 +77,33 @@ Timer::schedule(uint64_t nanoseconds)
 }
 
 void
+Timer::scheduleAbsolute(Core::Time::SteadyClock::time_point timeout)
+{
+    static_assert(Core::Time::STEADY_CLOCK_ID == CLOCK_MONOTONIC,
+                  "scheduleAbsolute assumes SteadyClock uses CLOCK_MONOTONIC");
+    struct itimerspec newValue;
+    memset(&newValue, 0, sizeof(newValue));
+    newValue.it_value = Core::Time::makeTimeSpec(timeout);
+    // Will get EINVAL on negative times, might as well use 0.000000001.
+    if (newValue.it_value.tv_sec < 0) {
+        newValue.it_value.tv_sec = 0;
+        newValue.it_value.tv_nsec = 1;
+    }
+    // avoid accidental de-schedules: epoll's semantics are that a timer for 0
+    // seconds and 0 nanoseconds will never fire.
+    if (newValue.it_value.tv_sec == 0 && newValue.it_value.tv_nsec == 0)
+        newValue.it_value.tv_nsec = 1;
+
+    int r = timerfd_settime(fd, TFD_TIMER_ABSTIME, &newValue, NULL);
+    if (r != 0) {
+        PANIC("Could not set timer to %ld.%09ld: %s",
+              newValue.it_value.tv_sec,
+              newValue.it_value.tv_nsec,
+              strerror(errno));
+    }
+}
+
+void
 Timer::deschedule()
 {
     struct itimerspec newValue;
@@ -89,6 +116,8 @@ Timer::deschedule()
 bool
 Timer::isScheduled() const
 {
+    // Unfortunately, timerfd_gettime seems to return 0 when an absolute time
+    // has already elapsed. See note on isScheduled() in header file.
     struct itimerspec currentValue;
     int r = timerfd_gettime(fd, &currentValue);
     if (r != 0)
