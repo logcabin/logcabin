@@ -40,6 +40,27 @@ TEST(CoreTime, output_timepoint) {
     EXPECT_LT(0.0, std::stold(toString(Time::SystemClock::now())));
 }
 
+TEST(CoreTime, makeTimeSpec) {
+    struct timespec s;
+    s = Time::makeTimeSpec(Time::SystemClock::time_point::max());
+    EXPECT_EQ(9223372036, s.tv_sec);
+    EXPECT_EQ(854775807, s.tv_nsec);
+    s = Time::makeTimeSpec(Time::SystemClock::time_point::min());
+    EXPECT_EQ(-9223372037, s.tv_sec);
+    EXPECT_EQ(145224192, s.tv_nsec);
+    s = Time::makeTimeSpec(Time::SystemClock::now());
+    EXPECT_LT(1417720382U, s.tv_sec); // 2014-12-04
+    EXPECT_GT(1893456000U, s.tv_sec); // 2030-01-01
+    s = Time::makeTimeSpec(Time::SystemClock::time_point() +
+                           std::chrono::nanoseconds(50));
+    EXPECT_EQ(0, s.tv_sec);
+    EXPECT_EQ(50, s.tv_nsec);
+    s = Time::makeTimeSpec(Time::SystemClock::time_point() -
+                           std::chrono::nanoseconds(50));
+    EXPECT_EQ(-1, s.tv_sec);
+    EXPECT_EQ(999999950, s.tv_nsec);
+}
+
 TEST(CoreTime, SystemClock_nanosecondGranularity) {
     std::chrono::nanoseconds::rep nanos =
         std::chrono::duration_cast<std::chrono::nanoseconds>(

@@ -19,6 +19,7 @@
 
 #include "Core/Debug.h"
 #include "Core/StringUtil.h"
+#include "Core/Time.h"
 #include "Storage/SnapshotFile.h"
 
 namespace LogCabin {
@@ -66,8 +67,8 @@ Writer::Writer(const FilesystemUtil::File& parentDir)
     , fileStream()
     , codedStream()
 {
-    struct timespec now;
-    clock_gettime(CLOCK_REALTIME, &now);
+    struct timespec now =
+        Core::Time::makeTimeSpec(Core::Time::SystemClock::now());
     stagingName = Core::StringUtil::format("partial.%010lu.%06lu",
                                            now.tv_sec, now.tv_nsec / 1000);
     file = FilesystemUtil::openFile(parentDir, stagingName,

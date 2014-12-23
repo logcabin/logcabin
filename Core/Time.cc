@@ -41,7 +41,7 @@ CSteadyClock::now()
               STEADY_CLOCK_ID, strerror(errno));
     }
     return time_point(std::chrono::nanoseconds(
-                uint64_t(now.tv_sec) * 1000 * 1000 * 1000 +
+                int64_t(now.tv_sec) * 1000 * 1000 * 1000 +
                 now.tv_nsec));
 }
 
@@ -54,7 +54,7 @@ getTimeNanos()
         PANIC("clock_gettime(CLOCK_REALTIME) failed: %s",
               strerror(errno));
     }
-    return uint64_t(now.tv_sec) * 1000 * 1000 * 1000 + now.tv_nsec;
+    return int64_t(now.tv_sec) * 1000 * 1000 * 1000 + now.tv_nsec;
 }
 
 } // namespace LogCabin::Core::Time

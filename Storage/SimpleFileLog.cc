@@ -23,6 +23,7 @@
 #include "Core/Debug.h"
 #include "Core/ProtoBuf.h"
 #include "Core/StringUtil.h"
+#include "Core/Time.h"
 #include "Core/Util.h"
 #include "RPC/Buffer.h"
 #include "RPC/ProtoBuf.h"
@@ -185,8 +186,8 @@ SimpleFileLog::SimpleFileLog(const FilesystemUtil::File& parentDir)
 
     std::string time;
     {
-        struct timespec now;
-        clock_gettime(CLOCK_REALTIME, &now);
+        struct timespec now =
+            Core::Time::makeTimeSpec(Core::Time::SystemClock::now());
         time = format("%010lu.%06lu", now.tv_sec, now.tv_nsec / 1000);
     }
     for (auto it = found.begin(); it != found.end(); ++it) {

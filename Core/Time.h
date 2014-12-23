@@ -59,13 +59,8 @@ operator<<(std::ostream& os,
     if (timePoint == TimePoint::max())
         return os << "TimePoint::max()";
 
-    TimePoint epoch = TimePoint();
-    uint64_t nanosSinceEpoch =
-        std::chrono::duration_cast<std::chrono::nanoseconds>(
-                timePoint - epoch).count();
-    return os << format("%lu.%09lu",
-                        nanosSinceEpoch / 1000000000UL,
-                        nanosSinceEpoch % 1000000000UL);
+    struct timespec ts = makeTimeSpec(timePoint);
+    return os << format("%ld.%09ld", ts.tv_sec, ts.tv_nsec);
 }
 
 }
@@ -73,6 +68,31 @@ operator<<(std::ostream& os,
 namespace LogCabin {
 namespace Core {
 namespace Time {
+
+/**
+ * Convert a C++11 time point into a POSIX timespec.
+ * \param when
+ *      Time point to convert.
+ * \return
+ *      Time in seconds and nanoseconds relative to the Clock's epoch.
+ */
+template<typename Clock, typename Duration>
+struct timespec
+makeTimeSpec(const std::chrono::time_point<Clock, Duration>& when)
+{
+    std::chrono::nanoseconds::rep nanosSinceEpoch =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+           when.time_since_epoch()).count();
+    struct timespec ts;
+    ts.tv_sec  = nanosSinceEpoch / 1000000000L;
+    ts.tv_nsec = nanosSinceEpoch % 1000000000L;
+    // tv_nsec must always be in range [0, 1e9)
+    if (nanosSinceEpoch < 0) {
+        ts.tv_sec  -= 1;
+        ts.tv_nsec += 1000000000L;
+    }
+    return ts;
+}
 
 /**
  * Wall clock in nanosecond granularity.
