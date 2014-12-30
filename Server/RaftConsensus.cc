@@ -297,7 +297,8 @@ Peer::getSession(std::unique_lock<Mutex>& lockGuard)
         session = RPC::ClientSession::makeSession(
             eventLoop,
             RPC::Address(address, Protocol::Common::DEFAULT_PORT),
-            Protocol::Common::MAX_MESSAGE_LENGTH);
+            Protocol::Common::MAX_MESSAGE_LENGTH,
+            RPC::ClientSession::TimePoint::max());
     }
     return session;
 }

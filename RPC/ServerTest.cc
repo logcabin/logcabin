@@ -52,7 +52,8 @@ class RPCServerTest : public ::testing::Test {
         session = ClientSession::makeSession(
                         eventLoop,
                         address,
-                        MAX_MESSAGE_LENGTH);
+                        MAX_MESSAGE_LENGTH,
+                        RPC::ClientSession::TimePoint::max());
         request.set_field_a(3);
         request.set_field_b(4);
         reply.set_field_a(5);

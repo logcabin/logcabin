@@ -1,4 +1,5 @@
 /* Copyright (c) 2012-2014 Stanford University
+ * Copyright (c) 2014 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -13,8 +14,12 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <fcntl.h>
 #include <gtest/gtest.h>
+#include <sys/stat.h>
 #include <thread>
+#include <unistd.h>
+
 #if __GNUC__ >= 4 && __GNUC_MINOR__ >= 5
 #include <atomic>
 #else
@@ -39,8 +44,10 @@ class RPCClientSessionTest : public ::testing::Test {
         , session()
         , remote(-1)
     {
+        ClientSession::connectFn = ::connect;
         Address address("127.0.0.1", 0);
-        session = ClientSession::makeSession(eventLoop, address, 1024);
+        session = ClientSession::makeSession(eventLoop, address, 1024,
+                                             TimePoint::max());
         int socketPair[2];
         EXPECT_EQ(0, socketpair(AF_UNIX, SOCK_STREAM, 0, socketPair));
         remote = socketPair[1];
@@ -52,6 +59,7 @@ class RPCClientSessionTest : public ::testing::Test {
 
     ~RPCClientSessionTest()
     {
+        ClientSession::connectFn = ::connect;
         session.reset();
         eventLoop.exit();
         eventLoopThread.join();
@@ -151,26 +159,73 @@ TEST_F(RPCClientSessionTest, handleTimerEvent) {
 TEST_F(RPCClientSessionTest, constructor) {
     auto session2 = ClientSession::makeSession(eventLoop,
                                                Address("127.0.0.1", 0),
-                                               1024);
+                                               1024,
+                                               TimePoint::max());
     EXPECT_EQ("127.0.0.1 (resolved to 127.0.0.1:0)",
               session2->address.toString());
     EXPECT_EQ("Failed to connect socket to 127.0.0.1 "
-              "(resolved to 127.0.0.1:0)",
+              "(resolved to 127.0.0.1:0): Connection refused",
               session2->errorMessage);
     EXPECT_EQ("Closed session: Failed to connect socket to 127.0.0.1 "
-              "(resolved to 127.0.0.1:0)",
+              "(resolved to 127.0.0.1:0): Connection refused",
               session2->toString());
     EXPECT_FALSE(session2->messageSocket);
 
     auto session3 = ClientSession::makeSession(eventLoop,
                                                Address("i n v a l i d", 0),
-                                               1024);
+                                               1024,
+                                               TimePoint::max());
     EXPECT_EQ("Failed to resolve i n v a l i d (resolved to Unspecified)",
               session3->errorMessage);
     EXPECT_EQ("Closed session: Failed to resolve i n v a l i d "
               "(resolved to Unspecified)",
               session3->toString());
     EXPECT_FALSE(session3->messageSocket);
+}
+
+struct ConnectInProgress
+{
+    ConnectInProgress()
+        : pipeFds()
+    {
+        int r = pipe(pipeFds);
+        if (r != 0)
+            PANIC("failed to create pipe: %s", strerror(errno));
+    }
+    ~ConnectInProgress() {
+        if (pipeFds[0] >= 0)
+            close(pipeFds[0]);
+        if (pipeFds[1] >= 0)
+            close(pipeFds[1]);
+    }
+    int operator()(int sockfd,
+                    const struct sockaddr *addr,
+                    socklen_t addrlen) {
+        // Unfortunately, the unconnected socket generates epoll events if left
+        // alone. Replace it with a pipe. Use the read end of the pipe so that
+        // it's never writable
+        int r = dup2(pipeFds[0], sockfd);
+        EXPECT_LE(0, r);
+        errno = EINPROGRESS;
+        return -1;
+    }
+    int pipeFds[2]; // = {read, write}
+};
+
+TEST_F(RPCClientSessionTest, constructor_timeout_TimingSensitive) {
+    ConnectInProgress c;
+    ClientSession::connectFn = std::ref(c);
+    uint64_t start = Core::Time::getTimeNanos();
+    auto session2 = ClientSession::makeSession(
+        eventLoop,
+        Address("127.0.0.1", 0),
+        1024,
+        Core::Time::SteadyClock::now() + std::chrono::milliseconds(5));
+    uint64_t end = Core::Time::getTimeNanos();
+    uint64_t elapsedMs = (end - start) / 1000000;
+    EXPECT_LE(5U, elapsedMs);
+    EXPECT_GE(100U, elapsedMs);
+    ClientSession::connectFn = ::connect;
 }
 
 TEST_F(RPCClientSessionTest, makeSession) {

@@ -1,4 +1,5 @@
 /* Copyright (c) 2012-2014 Stanford University
+ * Copyright (c) 2014 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -15,10 +16,14 @@
 
 #include <assert.h>
 #include <string.h>
+#include <sys/epoll.h>
 #include <unistd.h>
 
 #include "Core/Debug.h"
 #include "Core/StringUtil.h"
+#include "Event/File.h"
+#include "Event/Loop.h"
+#include "Event/Timer.h"
 #include "RPC/ClientSession.h"
 
 /**
@@ -43,6 +48,40 @@ enum { PING_MESSAGE_ID = 0 };
 
 namespace LogCabin {
 namespace RPC {
+
+namespace {
+
+/**
+ * Exits an event loop when a file event occurs.
+ * Helper for ClientSession constructor.
+ */
+struct FileNotifier : public Event::File {
+    FileNotifier(Event::Loop& eventLoop, int fd, int events)
+        : Event::File(eventLoop, fd, events)
+        , count(0)
+    {
+    }
+    void handleFileEvent(int events) {
+        ++count;
+        eventLoop.exit();
+    }
+    uint64_t count;
+};
+
+/**
+ * Exits an event loop when a timer event occurs.
+ * Helper for ClientSession constructor.
+ */
+struct TimerNotifier : public Event::Timer {
+    explicit TimerNotifier(Event::Loop& eventLoop)
+        : Event::Timer(eventLoop) {
+    }
+    void handleTimerEvent() {
+        eventLoop.exit();
+    }
+};
+
+} // anonymous namespace
 
 ////////// ClientSession::ClientMessageSocket //////////
 
@@ -184,9 +223,15 @@ ClientSession::Timer::handleTimerEvent()
 
 ////////// ClientSession //////////
 
+std::function<
+    int(int sockfd,
+        const struct sockaddr *addr,
+        socklen_t addrlen)> ClientSession::connectFn = ::connect;
+
 ClientSession::ClientSession(Event::Loop& eventLoop,
                              const Address& address,
-                             uint32_t maxMessageLength)
+                             uint32_t maxMessageLength,
+                             TimePoint timeout)
     : self() // makeSession will fill this in shortly
     , eventLoop(eventLoop)
     , address(address)
@@ -199,38 +244,99 @@ ClientSession::ClientSession(Event::Loop& eventLoop,
     , numActiveRPCs(0)
     , activePing(false)
 {
-    int fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (fd < 0) {
-        errorMessage = "Failed to create socket";
-        return;
-    }
     // Be careful not to pass a sockaddr of length 0 to conect(). Although it
     // should return -1 EINVAL, on some systems (e.g., RHEL6) it instead
     // returns OK but leaves the socket unconnected! See
     // https://github.com/logcabin/logcabin/issues/66 for more details.
     if (!address.isValid()) {
         errorMessage = "Failed to resolve " + address.toString();
-        close(fd);
         return;
     }
-    int r = connect(fd,
-                    address.getSockAddr(),
-                    address.getSockAddrLen());
+
+    // Some TCP connection timeouts appear to be ridiculously long in the wild.
+    // Limit this to 10 seconds, after which you'd most likely want to retry.
+    timeout = std::min(timeout, Clock::now() + std::chrono::seconds(10));
+
+    // Setting NONBLOCK here makes connect return right away with EINPROGRESS.
+    // Then we can monitor the fd until it's writable to know when it's done,
+    // along with a timeout. See man page for connect under EINPROGRESS.
+    int fd = socket(AF_INET, SOCK_STREAM|SOCK_NONBLOCK, 0);
+    if (fd < 0) {
+        errorMessage = "Failed to create socket";
+        return;
+    }
+
+    // According to the spec, connect() could return OK done here, but in
+    // practice it'll return EINPROGRESS.
+    bool waiting = false;
+    int r = connectFn(fd,
+                      address.getSockAddr(),
+                      address.getSockAddrLen());
     if (r != 0) {
-        errorMessage = "Failed to connect socket to " + address.toString();
-        close(fd);
-        return;
+        switch (errno) {
+            case EINPROGRESS:
+                waiting = true;
+                break;
+            default:
+                errorMessage = Core::StringUtil::format(
+                    "Failed to connect socket to %s: %s",
+                    address.toString().c_str(),
+                    strerror(errno));
+                close(fd);
+                return;
+        }
     }
+
+    if (waiting) {
+        // This is a pretty heavy-weight method of watching a file descriptor
+        // for a given period of time. On the other hand, it's only a few lines
+        // of code with the LogCabin::Event classes, so it's easier for now.
+        Event::Loop loop;
+        FileNotifier fileNotifier(loop, fd, EPOLLOUT);
+        TimerNotifier timerNotifier(loop);
+        timerNotifier.scheduleAbsolute(timeout);
+        while (true) {
+            loop.runForever();
+            if (fileNotifier.count > 0) {
+                int error = 0;
+                socklen_t errorlen = sizeof(error);
+                r = getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &errorlen);
+                if (r != 0)
+                    PANIC("getsockopt failed: %s", strerror(errno));
+                if (error != 0) {
+                    errorMessage = Core::StringUtil::format(
+                        "Failed to connect socket to %s: %s",
+                        address.toString().c_str(),
+                        strerror(error));
+                    // fileNotifier destructor closes fd
+                    return;
+                }
+                break;
+            }
+            if (Clock::now() > timeout) {
+                errorMessage = Core::StringUtil::format(
+                    "Failed to connect socket to %s: timeout expired",
+                    address.toString().c_str());
+                // fileNotifier destructor closes fd
+                return;
+            }
+            WARNING("spurious exit from event loop?");
+        }
+        // don't want fileNotifier destructor to close fd
+        fileNotifier.release();
+    }
+
     messageSocket.reset(new ClientMessageSocket(*this, fd, maxMessageLength));
 }
 
 std::shared_ptr<ClientSession>
 ClientSession::makeSession(Event::Loop& eventLoop,
                            const Address& address,
-                           uint32_t maxMessageLength)
+                           uint32_t maxMessageLength,
+                           TimePoint timeout)
 {
     std::shared_ptr<ClientSession> session(
-        new ClientSession(eventLoop, address, maxMessageLength));
+        new ClientSession(eventLoop, address, maxMessageLength, timeout));
     session->self = session;
     return session;
 }

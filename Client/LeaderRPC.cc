@@ -184,7 +184,8 @@ LeaderRPC::connect(const RPC::Address& address,
     leaderSession = RPC::ClientSession::makeSession(
                         eventLoop,
                         address,
-                        Protocol::Common::MAX_MESSAGE_LENGTH);
+                        Protocol::Common::MAX_MESSAGE_LENGTH,
+                        RPC::ClientSession::TimePoint::max());
 }
 
 void

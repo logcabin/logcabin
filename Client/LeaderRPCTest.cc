@@ -178,7 +178,7 @@ TEST_F(ClientLeaderRPCTest, connectHost) {
     init();
     leaderRPC->connectHost("127.0.0.2:0", leaderRPC->leaderSession);
     EXPECT_EQ("Closed session: Failed to connect socket to 127.0.0.2:0 "
-              "(resolved to 127.0.0.2:0)",
+              "(resolved to 127.0.0.2:0): Connection refused",
               leaderRPC->leaderSession->toString());
 }
 

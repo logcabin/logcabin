@@ -52,7 +52,8 @@ class ServerClientServiceTest : public ::testing::Test {
             session = RPC::ClientSession::makeSession(
                 globals->eventLoop,
                 RPC::Address("127.0.0.1", Protocol::Common::DEFAULT_PORT),
-                1024 * 1024);
+                1024 * 1024,
+                TimePoint::max());
             thread = std::thread(&Globals::run, globals.get());
         }
     }
