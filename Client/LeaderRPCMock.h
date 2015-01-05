@@ -55,9 +55,10 @@ class LeaderRPCMock : public LeaderRPCBase {
      * You should have called expect prior to this to prime a response.
      * The request will be logged so you can pop it.
      */
-    void call(OpCode opCode,
-              const google::protobuf::Message& request,
-              google::protobuf::Message& response);
+    Status call(OpCode opCode,
+                const google::protobuf::Message& request,
+                google::protobuf::Message& response,
+                TimePoint timeout);
 
     /// See LeaderRPCBase::makeCall.
     std::unique_ptr<LeaderRPCBase::Call> makeCall();
@@ -67,9 +68,12 @@ class LeaderRPCMock : public LeaderRPCBase {
     class Call : public LeaderRPCBase::Call {
       public:
         explicit Call(LeaderRPCMock& leaderRPC);
-        void start(OpCode opCode, const google::protobuf::Message& request);
+        void start(OpCode opCode,
+                   const google::protobuf::Message& request,
+                   TimePoint timeout);
         void cancel();
-        bool wait(google::protobuf::Message& response);
+        Status wait(google::protobuf::Message& response,
+                    TimePoint timeout);
         LeaderRPCMock& leaderRPC;
         bool canceled;
     };

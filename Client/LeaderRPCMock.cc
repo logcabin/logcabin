@@ -50,14 +50,18 @@ LeaderRPCMock::popRequest()
     return std::move(request);
 }
 
-void
+LeaderRPCMock::Status
 LeaderRPCMock::call(OpCode opCode,
           const google::protobuf::Message& request,
-          google::protobuf::Message& response)
+          google::protobuf::Message& response,
+          TimePoint timeout)
 {
+    if (timeout < Clock::now())
+        return Status::TIMEOUT;
     Call c(*this);
-    c.start(opCode, request);
-    c.wait(response);
+    c.start(opCode, request, timeout);
+    c.wait(response, timeout);
+    return Status::OK;
 }
 
 LeaderRPCMock::Call::Call(LeaderRPCMock& leaderRPC)
@@ -68,15 +72,18 @@ LeaderRPCMock::Call::Call(LeaderRPCMock& leaderRPC)
 
 void
 LeaderRPCMock::Call::start(OpCode opCode,
-                           const google::protobuf::Message& request)
+                           const google::protobuf::Message& request,
+                           TimePoint timeout)
 {
     MessagePtr requestCopy(request.New());
     requestCopy->CopyFrom(request);
     leaderRPC.requestLog.push_back({opCode, std::move(requestCopy)});
-    ASSERT_LT(0U, leaderRPC.responseQueue.size())
+    EXPECT_LT(0U, leaderRPC.responseQueue.size())
         << "The client sent an unexpected RPC:\n"
         << request.GetTypeName() << ":\n"
         << Core::ProtoBuf::dumpString(request);
+    if (leaderRPC.responseQueue.empty())
+        throw std::runtime_error("unexpected RPC");
     auto& opCodeMsgPair = leaderRPC.responseQueue.front();
     EXPECT_EQ(opCode, opCodeMsgPair.first);
 }
@@ -87,17 +94,18 @@ LeaderRPCMock::Call::cancel()
     canceled = true;
 }
 
-bool
-LeaderRPCMock::Call::wait(google::protobuf::Message& response)
+LeaderRPCMock::Call::Status
+LeaderRPCMock::Call::wait(google::protobuf::Message& response,
+                          TimePoint timeout)
 {
     if (canceled) {
         leaderRPC.responseQueue.pop();
-        return false;
+        return Status::RETRY;
     }
     auto& opCodeMsgPair = leaderRPC.responseQueue.front();
     response.CopyFrom(*opCodeMsgPair.second);
     leaderRPC.responseQueue.pop();
-    return true;
+    return Status::OK;
 }
 
 std::unique_ptr<LeaderRPCBase::Call>

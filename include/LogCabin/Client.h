@@ -1,5 +1,5 @@
 /* Copyright (c) 2011-2014 Stanford University
- * Copyright (c) 2014 Diego Ongaro
+ * Copyright (c) 2014-2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -104,6 +104,14 @@ enum class Status {
      * Tree::setCondition() was not satisfied.
      */
     CONDITION_NOT_MET = 4,
+
+    /**
+     * A timeout specified by Tree::setTimeout() elapsed while waiting for
+     * an operation to complete. It is not known whether the operation has or
+     * will complete, only that a positive acknowledgment was not received
+     * before the timeout elapsed.
+     */
+    TIMEOUT = 5,
 };
 
 /**
@@ -170,6 +178,14 @@ class TypeException : public Exception {
 class ConditionNotMetException : public Exception {
   public:
     explicit ConditionNotMetException(const std::string& error);
+};
+
+/**
+ * See Status::TIMEOUT.
+ */
+class TimeoutException : public Exception {
+  public:
+    explicit TimeoutException(const std::string& error);
 };
 
 /**
@@ -262,6 +278,26 @@ class Tree {
      * Like setCondition but throws exceptions upon errors.
      */
     void setConditionEx(const std::string& path, const std::string& value);
+
+    /**
+     * Return the timeout set by a previous call to setTimeout().
+     * \return
+     *      The maximum duration of each operation (in nanoseconds), or 0
+     *      for no timeout.
+     */
+    uint64_t getTimeout() const;
+
+    /**
+     * Abort each future operation if it may not have completed within the
+     * specified period of time.
+     * \warning
+     *      The client library does not currently implement timeouts for DNS
+     *      lookups. See https://github.com/logcabin/logcabin/issues/75
+     * \param nanoseconds
+     *      The maximum duration of each operation (in nanoseconds). Set to 0
+     *      for no timeout.
+     */
+    void setTimeout(uint64_t nanoseconds);
 
     /**
      * Make sure a directory exists at the given path.

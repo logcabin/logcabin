@@ -64,6 +64,7 @@ message Error {
 message ExactlyOnceRPCInfo {
     /**
      * A session ID returned from the OpenSession RPC.
+     * Valid client IDs will always be strictly greater than 0.
      */
     required uint64 client_id = 1;
     /**
@@ -200,6 +201,11 @@ enum Status {
     LOOKUP_ERROR = 2;
     TYPE_ERROR = 3;
     CONDITION_NOT_MET = 4;
+    /**
+     * This is only used internally in the client library; it is never sent
+     * over the network.
+     */
+    TIMEOUT = 5;
 };
 
 /**
