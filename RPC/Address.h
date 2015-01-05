@@ -21,6 +21,8 @@
 #include <string>
 #include <vector>
 
+#include "Core/Time.h"
+
 namespace LogCabin {
 namespace RPC {
 
@@ -31,8 +33,14 @@ namespace RPC {
  */
 class Address {
   public:
+    /// Clock used for timeouts.
+    typedef Core::Time::SteadyClock Clock;
+    /// Type for absolute time values used for timeouts.
+    typedef Clock::time_point TimePoint;
+
     /**
-     * Constructor. This calls refresh() automatically.
+     * Constructor. You will usually need to call #refresh() before using this
+     * class.
      * \param str
      *      A string representation of the host and, optionally, a port number.
      *          - hostname:port
@@ -46,6 +54,9 @@ class Address {
      *      The port number to use if none is specified in str.
      */
     Address(const std::string& str, uint16_t defaultPort);
+
+    /// Default constructor.
+    Address();
 
     /// Copy constructor.
     Address(const Address& other);
@@ -96,8 +107,13 @@ class Address {
      * If the host is a name instead of numeric, this will run a DNS query and
      * select a random result. If this query fails, any previous sockaddr will
      * be left intact.
+     * \param timeout
+     *      Not yet implemented.
+     * \warning
+     *      Timeouts have not been implemented.
+     *      See https://github.com/logcabin/logcabin/issues/75
      */
-    void refresh();
+    void refresh(TimePoint timeout);
 
   private:
 

@@ -46,6 +46,7 @@ class RPCClientSessionTest : public ::testing::Test {
     {
         ClientSession::connectFn = ::connect;
         Address address("127.0.0.1", 0);
+        address.refresh(Address::TimePoint::max());
         session = ClientSession::makeSession(eventLoop, address, 1024,
                                              TimePoint::max());
         int socketPair[2];
@@ -157,8 +158,10 @@ TEST_F(RPCClientSessionTest, handleTimerEvent) {
 }
 
 TEST_F(RPCClientSessionTest, constructor) {
+    Address address("127.0.0.1", 0);
+    address.refresh(Address::TimePoint::max());
     auto session2 = ClientSession::makeSession(eventLoop,
-                                               Address("127.0.0.1", 0),
+                                               address,
                                                1024,
                                                TimePoint::max());
     EXPECT_EQ("127.0.0.1 (resolved to 127.0.0.1:0)",
@@ -215,10 +218,12 @@ struct ConnectInProgress
 TEST_F(RPCClientSessionTest, constructor_timeout_TimingSensitive) {
     ConnectInProgress c;
     ClientSession::connectFn = std::ref(c);
+    Address address("127.0.0.1", 0);
+    address.refresh(Address::TimePoint::max());
     uint64_t start = Core::Time::getTimeNanos();
     auto session2 = ClientSession::makeSession(
         eventLoop,
-        Address("127.0.0.1", 0),
+        address,
         1024,
         Core::Time::SteadyClock::now() + std::chrono::milliseconds(5));
     uint64_t end = Core::Time::getTimeNanos();

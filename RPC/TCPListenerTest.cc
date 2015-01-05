@@ -63,12 +63,17 @@ class Listener : public TCPListener {
 TEST(RPCTCPListener, basics) {
     Event::Loop loop;
     Listener listener(loop);
-    EXPECT_EQ("", listener.bind(Address("127.0.0.1", 61022)));
-    Address address("127.0.0.1", Protocol::Common::DEFAULT_PORT);
-    EXPECT_EQ("", listener.bind(address));
-    EXPECT_EQ("", listener.bind(Address("127.0.0.1", 61024)));
+    Address address1("127.0.0.1", 61022);
+    address1.refresh(Address::TimePoint::max());
+    EXPECT_EQ("", listener.bind(address1));
+    Address address2("127.0.0.1", Protocol::Common::DEFAULT_PORT);
+    address2.refresh(Address::TimePoint::max());
+    EXPECT_EQ("", listener.bind(address2));
+    Address address3("127.0.0.1", 61024);
+    address3.refresh(Address::TimePoint::max());
+    EXPECT_EQ("", listener.bind(address3));
     int connectError = -1;
-    std::thread thread(connectThreadMain, address, &connectError);
+    std::thread thread(connectThreadMain, address2, &connectError);
     loop.runForever();
     EXPECT_EQ(1U, listener.count);
     thread.join();
@@ -88,6 +93,7 @@ TEST(RPCTCPListener, portTaken) {
     Event::Loop loop;
     Listener listener(loop);
     Address address("127.0.0.1", Protocol::Common::DEFAULT_PORT);
+    address.refresh(Address::TimePoint::max());
     EXPECT_EQ("", listener.bind(address));
     std::string error = listener.bind(address);
     EXPECT_TRUE(error.find("in use") != error.npos)

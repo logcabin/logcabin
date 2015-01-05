@@ -105,6 +105,7 @@ Globals::init(uint64_t serverId)
                 continue;
             RPC::Address address(listenAddresses[i],
                                  Protocol::Common::DEFAULT_PORT);
+            address.refresh(RPC::Address::TimePoint::max());
             error = rpcServer->bind(address);
             if (error.empty()) {
                 NOTICE("Serving on %s", address.toString().c_str());

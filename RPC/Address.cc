@@ -66,8 +66,14 @@ Address::Address(const std::string& str, uint16_t defaultPort)
 
         hosts.push_back({host, port});
     }
+}
 
-    refresh();
+Address::Address()
+    : originalString("")
+    , hosts()
+    , storage()
+    , len(0)
+{
 }
 
 Address::Address(const Address& other)
@@ -144,12 +150,18 @@ Address::getResolvedString() const
 std::string
 Address::toString() const
 {
-    return (originalString +
-            " (resolved to " + getResolvedString() + ")");
+    if (originalString.empty()) {
+        return "No address given";
+    } else {
+        return Core::StringUtil::format(
+                    "%s (resolved to %s)",
+                    originalString.c_str(),
+                    getResolvedString().c_str());
+    }
 }
 
 void
-Address::refresh()
+Address::refresh(TimePoint timeout)
 {
     if (hosts.empty())
         return;

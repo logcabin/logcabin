@@ -46,9 +46,9 @@ namespace RPC {
 class ClientSession {
   public:
     /// Clock used for timeouts.
-    typedef Core::Time::SteadyClock Clock;
+    typedef Address::Clock Clock;
     /// Type for absolute time values used for timeouts.
-    typedef Clock::time_point TimePoint;
+    typedef Address::TimePoint TimePoint;
 
   private:
     /**

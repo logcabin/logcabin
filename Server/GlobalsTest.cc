@@ -54,8 +54,10 @@ TEST(ServerGlobalsTest, initEmptyServers) {
 TEST(ServerGlobalsTest, initAddressTaken) {
     Event::Loop eventLoop;
     RPC::Server server(eventLoop, 1);
-    EXPECT_EQ("", server.bind(RPC::Address("127.0.0.1",
-                                           Protocol::Common::DEFAULT_PORT)));
+    RPC::Address address("127.0.0.1",
+                         Protocol::Common::DEFAULT_PORT);
+    address.refresh(RPC::Address::TimePoint::max());
+    EXPECT_EQ("", server.bind(address));
 
     Globals globals;
     globals.config.set("storageModule", "memory");
@@ -68,7 +70,9 @@ TEST(ServerGlobalsTest, initAddressTaken) {
 TEST(ServerGlobalsTest, initBindToOneOnly) {
     Event::Loop eventLoop;
     RPC::Server server(eventLoop, 1);
-    EXPECT_EQ("", server.bind(RPC::Address("127.0.0.1", 61023)));
+    RPC::Address address("127.0.0.1", 61023);
+    address.refresh(RPC::Address::TimePoint::max());
+    EXPECT_EQ("", server.bind(address));
     Globals globals;
     globals.config.set("storageModule", "memory");
     globals.config.set("uuid", "my-fake-uuid-123");

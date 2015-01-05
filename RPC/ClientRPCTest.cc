@@ -70,6 +70,7 @@ class RPCClientRPCTest : public ::testing::Test {
         , payload()
     {
         Address address("127.0.0.1", ProtocolCommon::DEFAULT_PORT);
+        address.refresh(Address::TimePoint::max());
         EXPECT_EQ("", server.bind(address));
         session = ClientSession::makeSession(eventLoop, address,
                                    ProtocolCommon::MAX_MESSAGE_LENGTH,

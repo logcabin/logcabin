@@ -47,6 +47,7 @@ class ClientLeaderRPCTest : public ::testing::Test {
         server.reset(new RPC::Server(serverEventLoop,
                                      Protocol::Common::MAX_MESSAGE_LENGTH));
         RPC::Address address("127.0.0.1", Protocol::Common::DEFAULT_PORT);
+        address.refresh(RPC::Address::TimePoint::max());
         EXPECT_EQ("", server->bind(address));
         server->registerService(Protocol::Common::ServiceId::CLIENT_SERVICE,
                                 service, 1);

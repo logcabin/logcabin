@@ -294,9 +294,11 @@ Peer::getSession(std::unique_lock<Mutex>& lockGuard)
     if (!session || !session->getErrorMessage().empty()) {
         // release lock for concurrency
         Core::MutexUnlock<Mutex> unlockGuard(lockGuard);
+        RPC::Address target(address, Protocol::Common::DEFAULT_PORT);
+        target.refresh(RPC::Address::TimePoint::max());
         session = RPC::ClientSession::makeSession(
             eventLoop,
-            RPC::Address(address, Protocol::Common::DEFAULT_PORT),
+            target,
             Protocol::Common::MAX_MESSAGE_LENGTH,
             RPC::ClientSession::TimePoint::max());
     }

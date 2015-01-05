@@ -48,6 +48,7 @@ class RPCServerTest : public ::testing::Test {
         , request()
         , reply()
     {
+        address.refresh(Address::TimePoint::max());
         EXPECT_EQ("", server.bind(address));
         session = ClientSession::makeSession(
                         eventLoop,

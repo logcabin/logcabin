@@ -104,7 +104,8 @@ LeaderRPC::LeaderRPC(const RPC::Address& hosts)
     std::unique_lock<std::mutex> lockGuard(mutex);
     for (uint64_t i = 0; i < windowCount; ++i)
         lastConnectTimes.push_back(0);
-    connect(hosts, lockGuard);
+    this->hosts.refresh(RPC::Address::TimePoint::max());
+    connect(this->hosts, lockGuard);
 }
 
 LeaderRPC::~LeaderRPC()
@@ -195,7 +196,7 @@ LeaderRPC::connectRandom(std::shared_ptr<RPC::ClientSession> cachedSession)
     if (cachedSession == leaderSession) {
         // Hope the next random host is the leader.
         // If that turns out to be false, we will soon find out.
-        hosts.refresh();
+        hosts.refresh(RPC::Address::TimePoint::max());
         connect(hosts, lockGuard);
     }
 }
@@ -206,8 +207,9 @@ LeaderRPC::connectHost(const std::string& host,
 {
     std::unique_lock<std::mutex> lockGuard(mutex);
     if (cachedSession == leaderSession) {
-        connect(RPC::Address(host, Protocol::Common::DEFAULT_PORT),
-                lockGuard);
+        RPC::Address address(host, Protocol::Common::DEFAULT_PORT);
+        address.refresh(RPC::Address::TimePoint::max());
+        connect(address, lockGuard);
     }
 }
 

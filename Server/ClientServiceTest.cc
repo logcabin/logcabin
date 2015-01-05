@@ -49,9 +49,11 @@ class ServerClientServiceTest : public ::testing::Test {
             globals->config.set("uuid", "my-fake-uuid-123");
             globals->config.set("servers", "127.0.0.1");
             globals->init();
+            RPC::Address address("127.0.0.1", Protocol::Common::DEFAULT_PORT);
+            address.refresh(RPC::Address::TimePoint::max());
             session = RPC::ClientSession::makeSession(
                 globals->eventLoop,
-                RPC::Address("127.0.0.1", Protocol::Common::DEFAULT_PORT),
+                address,
                 1024 * 1024,
                 TimePoint::max());
             thread = std::thread(&Globals::run, globals.get());
