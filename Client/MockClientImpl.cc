@@ -37,9 +37,10 @@ class TreeLeaderRPC : public LeaderRPCBase {
         , tree()
     {
     }
-    void call(OpCode opCode,
+    Status call(OpCode opCode,
               const google::protobuf::Message& request,
-              google::protobuf::Message& response) {
+              google::protobuf::Message& response,
+              TimePoint timeout) {
         if (opCode == OpCode::OPEN_SESSION) {
             PC::OpenSession::Response& openSessionResponse =
                 static_cast<PC::OpenSession::Response&>(response);
@@ -59,6 +60,7 @@ class TreeLeaderRPC : public LeaderRPCBase {
                   opCode,
                   Core::ProtoBuf::dumpString(request).c_str());
         }
+        return Status::OK;
     }
 
     class Call : public LeaderRPCBase::Call {
@@ -69,7 +71,9 @@ class TreeLeaderRPC : public LeaderRPCBase {
             , request()
         {
         }
-        void start(OpCode _opCode, const google::protobuf::Message& _request) {
+        void start(OpCode _opCode,
+                   const google::protobuf::Message& _request,
+                   TimePoint _timeout) {
             opCode = _opCode;
             request.reset(_request.New());
             request->CopyFrom(_request);
@@ -77,9 +81,10 @@ class TreeLeaderRPC : public LeaderRPCBase {
         void cancel() {
             // no op
         }
-        bool wait(google::protobuf::Message& response) {
-            leaderRPC.call(opCode, *request, response);
-            return true;
+        Status wait(google::protobuf::Message& response,
+                    TimePoint timeout) {
+            leaderRPC.call(opCode, *request, response, timeout);
+            return Status::OK;
         }
         TreeLeaderRPC& leaderRPC;
         OpCode opCode;

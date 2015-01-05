@@ -522,6 +522,7 @@ class ServerRaftConsensusPTest : public ServerRaftConsensusTest {
         peerServer.reset(new RPC::Server(globals.eventLoop,
                                      Protocol::Common::MAX_MESSAGE_LENGTH));
         RPC::Address address("127.0.0.1:61024", 0);
+        address.refresh(RPC::Address::TimePoint::max());
         EXPECT_EQ("", peerServer->bind(address));
         peerServer->registerService(
                             Protocol::Common::ServiceId::RAFT_SERVICE,

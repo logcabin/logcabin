@@ -16,6 +16,7 @@
 #ifndef LOGCABIN_EVENT_TIMER_H
 #define LOGCABIN_EVENT_TIMER_H
 
+#include "Core/Time.h"
 #include "Event/File.h"
 
 namespace LogCabin {
@@ -69,6 +70,15 @@ class Timer : public File {
     void schedule(uint64_t nanoseconds);
 
     /**
+     * Start the timer for an absolute point in time. If the timeout is in the
+     * past, the timer will trigger immediately once the event loop runs.
+     * \param timeout
+     *     The timer will trigger once this timeout has past.
+     *     If the timer was already scheduled, the old time is forgotten.
+     */
+    void scheduleAbsolute(Core::Time::SteadyClock::time_point timeout);
+
+    /**
      * Stop the timer from calling handleTimerEvent().
      * This will cancel the current timer, if any, so that handleTimerEvent()
      * is not called until the next time it is scheduled.
@@ -86,7 +96,12 @@ class Timer : public File {
 
     /**
      * Returns true if the timer has been scheduled and has not yet fired.
-     * This is prone to races; it's primarily useful for unit tests.
+     * \warning
+     *      This is prone to races; it's primarily useful for unit tests.
+     *      It also improperly returns false after scheduleAbsolute() is called
+     *      with a time that has expired.
+     *      TODO(ongaro): remove entirely or add additional state to this
+     *      class to make this work correctly?
      * \return
      *      True if the timer has been scheduled and will eventually call
      *      handleTimerEvent().

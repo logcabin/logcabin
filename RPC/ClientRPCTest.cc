@@ -33,21 +33,31 @@ namespace RPC {
 namespace {
 
 namespace ProtocolCommon = LogCabin::Protocol::Common;
+typedef ClientRPC::TimePoint TimePoint;
 
 class MyServer : public OpaqueServer {
     MyServer(Event::Loop& eventLoop, uint32_t maxMessageLength)
         : OpaqueServer(eventLoop, maxMessageLength)
         , lastRequest()
         , nextResponse()
+        , currentRPC()
+        , autoReply(true)
     {
     }
     void handleRPC(OpaqueServerRPC serverRPC) {
-        lastRequest = std::move(serverRPC.request);
-        serverRPC.response = std::move(nextResponse);
-        serverRPC.sendReply();
+        currentRPC = std::move(serverRPC);
+        lastRequest = std::move(currentRPC.request);
+        if (autoReply)
+            reply();
+    }
+    void reply() {
+        currentRPC.response = std::move(nextResponse);
+        currentRPC.sendReply();
     }
     Buffer lastRequest;
     Buffer nextResponse;
+    OpaqueServerRPC currentRPC;
+    bool autoReply;
 };
 
 
@@ -60,9 +70,11 @@ class RPCClientRPCTest : public ::testing::Test {
         , payload()
     {
         Address address("127.0.0.1", ProtocolCommon::DEFAULT_PORT);
+        address.refresh(Address::TimePoint::max());
         EXPECT_EQ("", server.bind(address));
         session = ClientSession::makeSession(eventLoop, address,
-                                   ProtocolCommon::MAX_MESSAGE_LENGTH);
+                                   ProtocolCommon::MAX_MESSAGE_LENGTH,
+                                   TimePoint::max());
         payload.set_field_a(3);
         payload.set_field_b(4);
     }
@@ -127,9 +139,26 @@ TEST_F(RPCClientRPCTest, constructor) {
 TEST_F(RPCClientRPCTest, cancel) {
     ClientRPC rpc(session, 2, 3, 4, payload);
     rpc.cancel();
-    EXPECT_EQ(ClientRPC::Status::RPC_CANCELED, rpc.waitForReply(NULL, NULL));
+    EXPECT_EQ(ClientRPC::Status::RPC_CANCELED,
+              rpc.waitForReply(NULL, NULL, TimePoint::max()));
     EXPECT_EQ("RPC canceled by user", rpc.getErrorMessage());
 }
+
+TEST_F(RPCClientRPCTest, waitForReply_timeout) {
+    server.autoReply = false;
+    ClientRPC rpc(session, 2, 3, 4, payload);
+    EXPECT_EQ(ClientRPC::Status::TIMEOUT,
+              rpc.waitForReply(NULL, NULL,
+                               ClientRPC::Clock::now() +
+                               std::chrono::milliseconds(1)));
+    makeServerRPC().reply(payload);
+    server.reply();
+    EXPECT_EQ(ClientRPC::Status::OK,
+              rpc.waitForReply(NULL, NULL,
+                               ClientRPC::Clock::now() +
+                               std::chrono::seconds(10)));
+}
+
 
 // waitForReply_rpcFailed tested adequately in cancel()
 
@@ -137,20 +166,23 @@ TEST_F(RPCClientRPCTest, waitForReply_tooShort) {
     ClientRPC rpc(session, 2, 3, 4, payload);
     deinit();
     EXPECT_DEATH({childDeathInit();
-                  rpc.waitForReply(NULL, NULL);
+                  rpc.waitForReply(NULL, NULL, TimePoint::max());
                  }, "too short");
 }
 
 TEST_F(RPCClientRPCTest, waitForReply_ok) {
     makeServerRPC().reply(payload);
     ClientRPC rpc(session, 2, 3, 4, payload);
-    EXPECT_EQ(ClientRPC::Status::OK, rpc.waitForReply(NULL, NULL));
+    EXPECT_EQ(ClientRPC::Status::OK,
+              rpc.waitForReply(NULL, NULL, TimePoint::max()));
     LogCabin::ProtoBuf::TestMessage actual;
-    EXPECT_EQ(ClientRPC::Status::OK, rpc.waitForReply(&actual, NULL));
+    EXPECT_EQ(ClientRPC::Status::OK,
+              rpc.waitForReply(&actual, NULL, TimePoint::max()));
     EXPECT_EQ(payload, actual);
     // should be able to call waitForReply multiple times
     LogCabin::ProtoBuf::TestMessage actual2;
-    EXPECT_EQ(ClientRPC::Status::OK, rpc.waitForReply(&actual2, NULL));
+    EXPECT_EQ(ClientRPC::Status::OK,
+              rpc.waitForReply(&actual2, NULL, TimePoint::max()));
     EXPECT_EQ(payload, actual2);
 }
 
@@ -158,15 +190,15 @@ TEST_F(RPCClientRPCTest, waitForReply_serviceSpecificError) {
     makeServerRPC().returnError(payload);
     ClientRPC rpc(session, 2, 3, 4, payload);
     EXPECT_EQ(ClientRPC::Status::SERVICE_SPECIFIC_ERROR,
-              rpc.waitForReply(NULL, NULL));
+              rpc.waitForReply(NULL, NULL, TimePoint::max()));
     LogCabin::ProtoBuf::TestMessage actual;
     EXPECT_EQ(ClientRPC::Status::SERVICE_SPECIFIC_ERROR,
-              rpc.waitForReply(NULL, &actual));
+              rpc.waitForReply(NULL, &actual, TimePoint::max()));
     EXPECT_EQ(payload, actual);
     // should be able to call waitForReply multiple times
     LogCabin::ProtoBuf::TestMessage actual2;
     EXPECT_EQ(ClientRPC::Status::SERVICE_SPECIFIC_ERROR,
-              rpc.waitForReply(NULL, &actual2));
+              rpc.waitForReply(NULL, &actual2, TimePoint::max()));
     EXPECT_EQ(payload, actual2);
 }
 
@@ -175,7 +207,7 @@ TEST_F(RPCClientRPCTest, waitForReply_invalidVersion) {
     ClientRPC rpc(session, 2, 3, 4, payload);
     deinit();
     EXPECT_DEATH({childDeathInit();
-                  rpc.waitForReply(NULL, NULL);
+                  rpc.waitForReply(NULL, NULL, TimePoint::max());
                  }, "client is too old");
 }
 
@@ -184,7 +216,7 @@ TEST_F(RPCClientRPCTest, waitForReply_invalidService) {
     ClientRPC rpc(session, 2, 3, 4, payload);
     deinit();
     EXPECT_DEATH({childDeathInit();
-                  rpc.waitForReply(NULL, NULL);
+                  rpc.waitForReply(NULL, NULL, TimePoint::max());
                  }, "not running the requested service");
 }
 
@@ -193,7 +225,7 @@ TEST_F(RPCClientRPCTest, waitForReply_invalidRequest) {
     ClientRPC rpc(session, 2, 3, 4, payload);
     deinit();
     EXPECT_DEATH({childDeathInit();
-                  rpc.waitForReply(NULL, NULL);
+                  rpc.waitForReply(NULL, NULL, TimePoint::max());
                  }, "request.*invalid");
 }
 
@@ -203,7 +235,7 @@ TEST_F(RPCClientRPCTest, waitForReply_unknownStatus) {
     ClientRPC rpc(session, 2, 3, 4, payload);
     deinit();
     EXPECT_DEATH({childDeathInit();
-                  rpc.waitForReply(NULL, NULL);
+                  rpc.waitForReply(NULL, NULL, TimePoint::max());
                  }, "Unknown status");
 }
 

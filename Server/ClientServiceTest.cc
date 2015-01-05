@@ -30,6 +30,7 @@ namespace {
 
 using Protocol::Client::OpCode;
 typedef RPC::ClientRPC::Status Status;
+typedef RPC::ClientRPC::TimePoint TimePoint;
 
 class ServerClientServiceTest : public ::testing::Test {
     ServerClientServiceTest()
@@ -48,10 +49,13 @@ class ServerClientServiceTest : public ::testing::Test {
             globals->config.set("uuid", "my-fake-uuid-123");
             globals->config.set("servers", "127.0.0.1");
             globals->init();
+            RPC::Address address("127.0.0.1", Protocol::Common::DEFAULT_PORT);
+            address.refresh(RPC::Address::TimePoint::max());
             session = RPC::ClientSession::makeSession(
                 globals->eventLoop,
-                RPC::Address("127.0.0.1", Protocol::Common::DEFAULT_PORT),
-                1024 * 1024);
+                address,
+                1024 * 1024,
+                TimePoint::max());
             thread = std::thread(&Globals::run, globals.get());
         }
     }
@@ -72,7 +76,8 @@ class ServerClientServiceTest : public ::testing::Test {
         RPC::ClientRPC rpc(session,
                            Protocol::Common::ServiceId::CLIENT_SERVICE,
                            1, opCode, request);
-        EXPECT_EQ(Status::OK, rpc.waitForReply(&response, NULL))
+        EXPECT_EQ(Status::OK, rpc.waitForReply(&response, NULL,
+                                               TimePoint::max()))
             << rpc.getErrorMessage();
     }
 

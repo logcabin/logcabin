@@ -45,6 +45,7 @@ class RPCOpaqueServerTest : public ::testing::Test {
         , fd1(-1)
         , fd2(-1)
     {
+        address.refresh(RPC::Address::TimePoint::max());
         EXPECT_EQ("", server.bind(address));
         int fds[2];
         EXPECT_EQ(0, pipe(fds));

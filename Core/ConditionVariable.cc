@@ -122,14 +122,9 @@ ConditionVariable::wait_until(
             Core::Time::SteadyClock::now();
         Core::Time::SteadyClock::time_point wake =
             std::min(abs_time, now + std::chrono::hours(1));
-        std::chrono::nanoseconds::rep nanosSinceEpoch =
-            std::chrono::duration_cast<std::chrono::nanoseconds>(
-               wake.time_since_epoch()).count();
-        if (nanosSinceEpoch < 0)
+        if (wake < now)
             return;
-        struct timespec wakespec;
-        wakespec.tv_sec  = nanosSinceEpoch / 1000000000UL;
-        wakespec.tv_nsec = nanosSinceEpoch % 1000000000UL;
+        struct timespec wakespec = Core::Time::makeTimeSpec(wake);
         pthread_mutex_t* mutex = lockGuard.mutex()->native_handle();
         int r = pthread_cond_timedwait(&cv, mutex, &wakespec);
         switch (r) {

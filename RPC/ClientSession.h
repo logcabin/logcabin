@@ -1,4 +1,5 @@
 /* Copyright (c) 2012-2014 Stanford University
+ * Copyright (c) 2014 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -43,6 +44,12 @@ namespace RPC {
  * clients should keep them around.
  */
 class ClientSession {
+  public:
+    /// Clock used for timeouts.
+    typedef Address::Clock Clock;
+    /// Type for absolute time values used for timeouts.
+    typedef Address::TimePoint TimePoint;
+
   private:
     /**
      * This constructor is private because the class must be allocated in a
@@ -50,7 +57,8 @@ class ClientSession {
      */
     ClientSession(Event::Loop& eventLoop,
                   const Address& address,
-                  uint32_t maxMessageLength);
+                  uint32_t maxMessageLength,
+                  TimePoint timeout);
   public:
     /**
      * Return a new ClientSession object. This object is managed by a
@@ -70,11 +78,15 @@ class ClientSession {
      *      exists to limit the amount of buffer space a single RPC can use.
      *      Attempting to send longer requests will PANIC; attempting to
      *      receive longer requests will disconnect the underlying socket.
+     * \param timeout
+     *      After this time has elapsed, stop trying to initiate the connection
+     *      and leave the session in an error state.
      */
     static std::shared_ptr<ClientSession>
     makeSession(Event::Loop& eventLoop,
                 const Address& address,
-                uint32_t maxMessageLength);
+                uint32_t maxMessageLength,
+                TimePoint timeout);
 
     /**
      * Destructor.
@@ -219,8 +231,13 @@ class ClientSession {
      * call update() after this returns to learn of the response.
      *
      * This must not be called while holding the RPC's lock.
+     * \param rpc
+     *      Wait for response to this.
+     * \param timeout
+     *      After this time has elapsed, stop waiting and return. The RPC's
+     *      results will probably not be available yet in this case.
      */
-    void wait(const OpaqueClientRPC& rpc);
+    void wait(const OpaqueClientRPC& rpc, TimePoint timeout);
 
     /**
      * This is used to keep this object alive while there are outstanding RPCs.
@@ -292,6 +309,14 @@ class ClientSession {
      * When numActiveRPCs = 0, this field is undefined.
      */
     bool activePing;
+
+    /**
+     * Usually set to connect() but mocked out in some unit tests.
+     */
+    static std::function<
+        int(int sockfd,
+            const struct sockaddr *addr,
+            socklen_t addrlen)> connectFn;
 
     // ClientSession is non-copyable.
     ClientSession(const ClientSession&) = delete;

@@ -1,4 +1,5 @@
 /* Copyright (c) 2012-2014 Stanford University
+ * Copyright (c) 2014 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -13,8 +14,12 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <fcntl.h>
 #include <gtest/gtest.h>
+#include <sys/stat.h>
 #include <thread>
+#include <unistd.h>
+
 #if __GNUC__ >= 4 && __GNUC_MINOR__ >= 5
 #include <atomic>
 #else
@@ -30,6 +35,8 @@ namespace LogCabin {
 namespace RPC {
 namespace {
 
+typedef RPC::ClientSession::TimePoint TimePoint;
+
 class RPCClientSessionTest : public ::testing::Test {
     RPCClientSessionTest()
         : eventLoop()
@@ -37,8 +44,11 @@ class RPCClientSessionTest : public ::testing::Test {
         , session()
         , remote(-1)
     {
+        ClientSession::connectFn = ::connect;
         Address address("127.0.0.1", 0);
-        session = ClientSession::makeSession(eventLoop, address, 1024);
+        address.refresh(Address::TimePoint::max());
+        session = ClientSession::makeSession(eventLoop, address, 1024,
+                                             TimePoint::max());
         int socketPair[2];
         EXPECT_EQ(0, socketpair(AF_UNIX, SOCK_STREAM, 0, socketPair));
         remote = socketPair[1];
@@ -50,6 +60,7 @@ class RPCClientSessionTest : public ::testing::Test {
 
     ~RPCClientSessionTest()
     {
+        ClientSession::connectFn = ::connect;
         session.reset();
         eventLoop.exit();
         eventLoopThread.join();
@@ -147,28 +158,79 @@ TEST_F(RPCClientSessionTest, handleTimerEvent) {
 }
 
 TEST_F(RPCClientSessionTest, constructor) {
+    Address address("127.0.0.1", 0);
+    address.refresh(Address::TimePoint::max());
     auto session2 = ClientSession::makeSession(eventLoop,
-                                               Address("127.0.0.1", 0),
-                                               1024);
+                                               address,
+                                               1024,
+                                               TimePoint::max());
     EXPECT_EQ("127.0.0.1 (resolved to 127.0.0.1:0)",
               session2->address.toString());
     EXPECT_EQ("Failed to connect socket to 127.0.0.1 "
-              "(resolved to 127.0.0.1:0)",
+              "(resolved to 127.0.0.1:0): Connection refused",
               session2->errorMessage);
     EXPECT_EQ("Closed session: Failed to connect socket to 127.0.0.1 "
-              "(resolved to 127.0.0.1:0)",
+              "(resolved to 127.0.0.1:0): Connection refused",
               session2->toString());
     EXPECT_FALSE(session2->messageSocket);
 
     auto session3 = ClientSession::makeSession(eventLoop,
                                                Address("i n v a l i d", 0),
-                                               1024);
+                                               1024,
+                                               TimePoint::max());
     EXPECT_EQ("Failed to resolve i n v a l i d (resolved to Unspecified)",
               session3->errorMessage);
     EXPECT_EQ("Closed session: Failed to resolve i n v a l i d "
               "(resolved to Unspecified)",
               session3->toString());
     EXPECT_FALSE(session3->messageSocket);
+}
+
+struct ConnectInProgress
+{
+    ConnectInProgress()
+        : pipeFds()
+    {
+        int r = pipe(pipeFds);
+        if (r != 0)
+            PANIC("failed to create pipe: %s", strerror(errno));
+    }
+    ~ConnectInProgress() {
+        if (pipeFds[0] >= 0)
+            close(pipeFds[0]);
+        if (pipeFds[1] >= 0)
+            close(pipeFds[1]);
+    }
+    int operator()(int sockfd,
+                    const struct sockaddr *addr,
+                    socklen_t addrlen) {
+        // Unfortunately, the unconnected socket generates epoll events if left
+        // alone. Replace it with a pipe. Use the read end of the pipe so that
+        // it's never writable
+        int r = dup2(pipeFds[0], sockfd);
+        EXPECT_LE(0, r);
+        errno = EINPROGRESS;
+        return -1;
+    }
+    int pipeFds[2]; // = {read, write}
+};
+
+TEST_F(RPCClientSessionTest, constructor_timeout_TimingSensitive) {
+    ConnectInProgress c;
+    ClientSession::connectFn = std::ref(c);
+    Address address("127.0.0.1", 0);
+    address.refresh(Address::TimePoint::max());
+    uint64_t start = Core::Time::getTimeNanos();
+    auto session2 = ClientSession::makeSession(
+        eventLoop,
+        address,
+        1024,
+        Core::Time::SteadyClock::now() + std::chrono::milliseconds(5));
+    uint64_t end = Core::Time::getTimeNanos();
+    uint64_t elapsedMs = (end - start) / 1000000;
+    EXPECT_LE(5U, elapsedMs);
+    EXPECT_GE(100U, elapsedMs);
+    ClientSession::connectFn = ::connect;
 }
 
 TEST_F(RPCClientSessionTest, makeSession) {
@@ -277,7 +339,7 @@ TEST_F(RPCClientSessionTest, waitNotReady) {
 TEST_F(RPCClientSessionTest, waitCanceled) {
     OpaqueClientRPC rpc = session->sendRequest(buf("hi"));
     rpc.cancel();
-    rpc.waitForReply();
+    rpc.waitForReply(TimePoint::max());
     EXPECT_EQ(OpaqueClientRPC::Status::CANCELED, rpc.getStatus());
 }
 
@@ -286,7 +348,7 @@ TEST_F(RPCClientSessionTest, waitCanceledWhileWaiting) {
     {
         ClientSession::Response& response = *session->responses.at(1);
         response.ready.callback = std::bind(&OpaqueClientRPC::cancel, &rpc);
-        rpc.waitForReply();
+        rpc.waitForReply(TimePoint::max());
     }
     EXPECT_EQ(OpaqueClientRPC::Status::CANCELED, rpc.getStatus());
     EXPECT_EQ("RPC canceled by user", rpc.errorMessage);
@@ -300,7 +362,7 @@ TEST_F(RPCClientSessionTest, waitReady) {
     ClientSession::Response& response = *it->second;
     response.status = ClientSession::Response::HAS_REPLY;
     response.reply = buf("bye");
-    rpc.waitForReply();
+    rpc.waitForReply(TimePoint::max());
     EXPECT_EQ(OpaqueClientRPC::Status::OK, rpc.getStatus());
     EXPECT_FALSE(rpc.session);
     EXPECT_EQ("bye", str(rpc.reply));
@@ -311,13 +373,43 @@ TEST_F(RPCClientSessionTest, waitReady) {
 TEST_F(RPCClientSessionTest, waitError) {
     OpaqueClientRPC rpc = session->sendRequest(buf("hi"));
     session->errorMessage = "some error";
-    rpc.waitForReply();
+    rpc.waitForReply(TimePoint::max());
     EXPECT_EQ(OpaqueClientRPC::Status::ERROR, rpc.getStatus());
     EXPECT_FALSE(rpc.session);
     EXPECT_EQ("", str(rpc.reply));
     EXPECT_EQ("some error", rpc.errorMessage);
     EXPECT_EQ(0U, session->responses.size());
 }
+
+TEST_F(RPCClientSessionTest, waitTimeout_now) {
+    OpaqueClientRPC rpc = session->sendRequest(buf("hi"));
+    rpc.waitForReply(RPC::ClientSession::Clock::now());
+    EXPECT_EQ(OpaqueClientRPC::Status::NOT_READY, rpc.getStatus());
+}
+
+TEST_F(RPCClientSessionTest, waitTimeout_future) {
+    OpaqueClientRPC rpc = session->sendRequest(buf("hi"));
+    rpc.waitForReply(RPC::ClientSession::Clock::now() +
+                     std::chrono::milliseconds(2));
+    EXPECT_EQ(OpaqueClientRPC::Status::NOT_READY, rpc.getStatus());
+}
+
+TEST_F(RPCClientSessionTest, waitTimeout_futureThenOk) {
+    OpaqueClientRPC rpc = session->sendRequest(buf("hi"));
+    rpc.waitForReply(RPC::ClientSession::Clock::now() +
+                     std::chrono::milliseconds(2));
+    EXPECT_EQ(OpaqueClientRPC::Status::NOT_READY, rpc.getStatus());
+
+    auto it = session->responses.find(1);
+    ASSERT_TRUE(it != session->responses.end());
+    ClientSession::Response& response = *it->second;
+    response.status = ClientSession::Response::HAS_REPLY;
+    response.reply = buf("bye");
+    rpc.waitForReply(RPC::ClientSession::Clock::now() +
+                     std::chrono::seconds(10));
+    EXPECT_EQ(OpaqueClientRPC::Status::OK, rpc.getStatus());
+}
+
 
 } // namespace LogCabin::RPC::<anonymous>
 } // namespace LogCabin::RPC

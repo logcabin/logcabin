@@ -33,6 +33,7 @@ namespace {
 
 using LogCabin::Protocol::Common::DEFAULT_PORT;
 using LogCabin::Protocol::Common::MAX_MESSAGE_LENGTH;
+typedef ClientSession::TimePoint TimePoint;
 
 class RPCServerTest : public ::testing::Test {
     RPCServerTest()
@@ -47,11 +48,13 @@ class RPCServerTest : public ::testing::Test {
         , request()
         , reply()
     {
+        address.refresh(Address::TimePoint::max());
         EXPECT_EQ("", server.bind(address));
         session = ClientSession::makeSession(
                         eventLoop,
                         address,
-                        MAX_MESSAGE_LENGTH);
+                        MAX_MESSAGE_LENGTH,
+                        RPC::ClientSession::TimePoint::max());
         request.set_field_a(3);
         request.set_field_b(4);
         reply.set_field_a(5);
@@ -94,10 +97,10 @@ TEST_F(RPCServerTest, registerService) {
     service2->reply(0, request, reply);
     ClientRPC rpc(session, 1, 1, 0, request);
     EXPECT_EQ(ClientRPC::Status::OK,
-              rpc.waitForReply(NULL, NULL));
+              rpc.waitForReply(NULL, NULL, TimePoint::max()));
     rpc = ClientRPC(session, 2, 1, 0, request);
     EXPECT_EQ(ClientRPC::Status::OK,
-              rpc.waitForReply(NULL, NULL));
+              rpc.waitForReply(NULL, NULL, TimePoint::max()));
 }
 
 TEST_F(RPCServerTest, handleRPC_normal) {
@@ -105,7 +108,7 @@ TEST_F(RPCServerTest, handleRPC_normal) {
     service1->reply(0, request, reply);
     ClientRPC rpc(session, 1, 1, 0, request);
     EXPECT_EQ(ClientRPC::Status::OK,
-              rpc.waitForReply(NULL, NULL));
+              rpc.waitForReply(NULL, NULL, TimePoint::max()));
 }
 
 TEST_F(RPCServerTest, handleRPC_badHeader) {
@@ -114,7 +117,7 @@ TEST_F(RPCServerTest, handleRPC_badHeader) {
     ClientRPC rpc;
     rpc.opaqueRPC = session->sendRequest(Buffer());
     EXPECT_DEATH({ childDeathInit();
-                   rpc.waitForReply(NULL, NULL);
+                   rpc.waitForReply(NULL, NULL, TimePoint::max());
                  }, "request.*invalid");
 }
 
@@ -122,7 +125,7 @@ TEST_F(RPCServerTest, handleRPC_badService) {
     deinit();
     ClientRPC rpc(session, 1, 1, 0, request);
     EXPECT_DEATH({ childDeathInit();
-                   rpc.waitForReply(NULL, NULL);
+                   rpc.waitForReply(NULL, NULL, TimePoint::max());
                  }, "not running.*service");
 }
 

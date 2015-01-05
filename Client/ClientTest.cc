@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2014-2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -26,10 +27,30 @@
 #include "include/LogCabin/Client.h"
 
 namespace LogCabin {
+
+namespace Client {
+namespace Internal {
+
+ClientImpl::TimePoint absTimeout(uint64_t relTimeoutNanos);
+
+} // namespace LogCabin::Client::Internal
+} // namespace LogCabin::Client
+
 namespace {
 
 using Core::ProtoBuf::fromString;
 using Core::StringUtil::format;
+
+TEST(ClientInternalTest, absTimeout)
+{
+    using Client::Internal::absTimeout;
+    EXPECT_EQ(Client::ClientImpl::TimePoint::max(), absTimeout(0));
+    EXPECT_EQ(Client::ClientImpl::TimePoint::max(), absTimeout(~0UL));
+    auto t = absTimeout(35UL * 1000 * 1000 * 1000);
+    EXPECT_LT(Client::ClientImpl::Clock::now() + std::chrono::seconds(30), t);
+    EXPECT_GT(Client::ClientImpl::Clock::now() + std::chrono::seconds(40), t);
+}
+
 
 #if DEBUG
 class ClientClusterTest : public ::testing::Test {
@@ -146,6 +167,21 @@ TEST_F(ClientTreeTest, setCondition)
                    "x"
                }),
                tree.getCondition());
+}
+
+TEST_F(ClientTreeTest, getTimeout)
+{
+    EXPECT_EQ(0UL, tree.getTimeout());
+    tree.setTimeout(43UL);
+    EXPECT_EQ(43UL, tree.getTimeout());
+}
+
+TEST_F(ClientTreeTest, setTimeout)
+{
+    tree.setTimeout(43UL);
+    EXPECT_EQ(43UL, tree.getTimeout());
+    tree.setTimeout(0UL);
+    EXPECT_EQ(0UL, tree.getTimeout());
 }
 
 TEST_F(ClientTreeTest, makeDirectory)

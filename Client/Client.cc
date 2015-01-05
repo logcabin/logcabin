@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2014-2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -23,6 +24,26 @@
 namespace LogCabin {
 namespace Client {
 
+namespace Internal {
+/**
+ * Return the absolute time when the calling operation should timeout.
+ */
+ClientImpl::TimePoint
+absTimeout(uint64_t relTimeoutNanos)
+{
+    if (relTimeoutNanos == 0)
+        return ClientImpl::TimePoint::max();
+    ClientImpl::TimePoint now = ClientImpl::Clock::now();
+    ClientImpl::TimePoint then =
+        now + std::chrono::nanoseconds(relTimeoutNanos);
+    if (then < now) // overflow
+        return ClientImpl::TimePoint::max();
+    else
+        return then;
+}
+} // LogCabin::Client::Internal
+using Internal::absTimeout;
+
 namespace {
 void throwException(const Result& result)
 {
@@ -37,6 +58,8 @@ void throwException(const Result& result)
             throw TypeException(result.error);
         case Status::CONDITION_NOT_MET:
             throw ConditionNotMetException(result.error);
+        case Status::TIMEOUT:
+            throw TimeoutException(result.error);
     }
 }
 } // anonymous namespace
@@ -74,6 +97,9 @@ operator<<(std::ostream& os, Status status)
             break;
         case Status::CONDITION_NOT_MET:
             os << "Status::CONDITION_NOT_MET";
+            break;
+        case Status::TIMEOUT:
+            os << "Status::TIMEOUT";
             break;
     }
     return os;
@@ -114,6 +140,11 @@ ConditionNotMetException::ConditionNotMetException(const std::string& error)
 {
 }
 
+TimeoutException::TimeoutException(const std::string& error)
+    : Exception(error)
+{
+}
+
 ////////// TreeDetails //////////
 
 /**
@@ -126,6 +157,7 @@ class TreeDetails {
         : clientImpl(clientImpl)
         , workingDirectory(workingDirectory)
         , condition()
+        , timeoutNanos(0)
     {
     }
     /**
@@ -141,6 +173,10 @@ class TreeDetails {
      * effect.
      */
     Condition condition;
+    /**
+     * If nonzero, a relative timeout in nanoseconds for all Tree operations.
+     */
+    uint64_t timeoutNanos;
 };
 
 
@@ -178,6 +214,8 @@ Tree::setWorkingDirectory(const std::string& newWorkingDirectory)
     // will result in errors instead of operating on the prior working
     // directory.
 
+    ClientImpl::TimePoint timeout = absTimeout(treeDetails->timeoutNanos);
+
     std::unique_lock<std::mutex> lockGuard(mutex);
     std::string realPath;
     Result result = treeDetails->clientImpl->canonicalize(
@@ -197,7 +235,8 @@ Tree::setWorkingDirectory(const std::string& newWorkingDirectory)
     newTreeDetails->workingDirectory = realPath;
     treeDetails = newTreeDetails;
     return treeDetails->clientImpl->makeDirectory(realPath, "",
-                                                  treeDetails->condition);
+                                                  treeDetails->condition,
+                                                  timeout);
 }
 
 void
@@ -257,14 +296,31 @@ Tree::getCondition() const
     return treeDetails->condition;
 }
 
+uint64_t
+Tree::getTimeout() const
+{
+    std::shared_ptr<const TreeDetails> treeDetails = getTreeDetails();
+    return treeDetails->timeoutNanos;
+}
+
+void
+Tree::setTimeout(uint64_t nanoseconds)
+{
+    std::unique_lock<std::mutex> lockGuard(mutex);
+    std::shared_ptr<TreeDetails> newTreeDetails(new TreeDetails(*treeDetails));
+    newTreeDetails->timeoutNanos = nanoseconds;
+    treeDetails = newTreeDetails;
+}
+
 Result
 Tree::makeDirectory(const std::string& path)
 {
     std::shared_ptr<const TreeDetails> treeDetails = getTreeDetails();
     return treeDetails->clientImpl->makeDirectory(
-                                        path,
-                                        treeDetails->workingDirectory,
-                                        treeDetails->condition);
+        path,
+        treeDetails->workingDirectory,
+        treeDetails->condition,
+        absTimeout(treeDetails->timeoutNanos));
 }
 
 void
@@ -279,10 +335,11 @@ Tree::listDirectory(const std::string& path,
 {
     std::shared_ptr<const TreeDetails> treeDetails = getTreeDetails();
     return treeDetails->clientImpl->listDirectory(
-                                        path,
-                                        treeDetails->workingDirectory,
-                                        treeDetails->condition,
-                                        children);
+        path,
+        treeDetails->workingDirectory,
+        treeDetails->condition,
+        absTimeout(treeDetails->timeoutNanos),
+        children);
 }
 
 std::vector<std::string>
@@ -298,9 +355,10 @@ Tree::removeDirectory(const std::string& path)
 {
     std::shared_ptr<const TreeDetails> treeDetails = getTreeDetails();
     return treeDetails->clientImpl->removeDirectory(
-                                        path,
-                                        treeDetails->workingDirectory,
-                                        treeDetails->condition);
+        path,
+        treeDetails->workingDirectory,
+        treeDetails->condition,
+        absTimeout(treeDetails->timeoutNanos));
 }
 
 void
@@ -313,10 +371,12 @@ Result
 Tree::write(const std::string& path, const std::string& contents)
 {
     std::shared_ptr<const TreeDetails> treeDetails = getTreeDetails();
-    return treeDetails->clientImpl->write(path,
-                                          treeDetails->workingDirectory,
-                                          contents,
-                                          treeDetails->condition);
+    return treeDetails->clientImpl->write(
+        path,
+        treeDetails->workingDirectory,
+        contents,
+        treeDetails->condition,
+        absTimeout(treeDetails->timeoutNanos));
 }
 
 void
@@ -329,10 +389,12 @@ Result
 Tree::read(const std::string& path, std::string& contents) const
 {
     std::shared_ptr<const TreeDetails> treeDetails = getTreeDetails();
-    return treeDetails->clientImpl->read(path,
-                                         treeDetails->workingDirectory,
-                                         treeDetails->condition,
-                                         contents);
+    return treeDetails->clientImpl->read(
+        path,
+        treeDetails->workingDirectory,
+        treeDetails->condition,
+        absTimeout(treeDetails->timeoutNanos),
+        contents);
 }
 
 std::string
@@ -347,9 +409,11 @@ Result
 Tree::removeFile(const std::string& path)
 {
     std::shared_ptr<const TreeDetails> treeDetails = getTreeDetails();
-    return treeDetails->clientImpl->removeFile(path,
-                                               treeDetails->workingDirectory,
-                                               treeDetails->condition);
+    return treeDetails->clientImpl->removeFile(
+        path,
+        treeDetails->workingDirectory,
+        treeDetails->condition,
+        absTimeout(treeDetails->timeoutNanos));
 }
 
 void

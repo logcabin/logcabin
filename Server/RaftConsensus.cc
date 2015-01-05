@@ -249,7 +249,7 @@ Peer::callRPC(Protocol::Raft::OpCode opCode,
                          request);
     // release lock for concurrency
     Core::MutexUnlock<Mutex> unlockGuard(lockGuard);
-    switch (rpc.waitForReply(&response, NULL)) {
+    switch (rpc.waitForReply(&response, NULL, TimePoint::max())) {
         case RPCStatus::OK:
             if (rpcFailuresSinceLastWarning > 0) {
                 WARNING("RPC to server succeeded after %lu failures",
@@ -259,6 +259,8 @@ Peer::callRPC(Protocol::Raft::OpCode opCode,
             return true;
         case RPCStatus::SERVICE_SPECIFIC_ERROR:
             PANIC("unexpected service-specific error");
+        case RPCStatus::TIMEOUT:
+            PANIC("unexpected RPC timeout");
         case RPCStatus::RPC_FAILED:
             ++rpcFailuresSinceLastWarning;
             if (rpcFailuresSinceLastWarning == 1) {
@@ -292,10 +294,13 @@ Peer::getSession(std::unique_lock<Mutex>& lockGuard)
     if (!session || !session->getErrorMessage().empty()) {
         // release lock for concurrency
         Core::MutexUnlock<Mutex> unlockGuard(lockGuard);
+        RPC::Address target(address, Protocol::Common::DEFAULT_PORT);
+        target.refresh(RPC::Address::TimePoint::max());
         session = RPC::ClientSession::makeSession(
             eventLoop,
-            RPC::Address(address, Protocol::Common::DEFAULT_PORT),
-            Protocol::Common::MAX_MESSAGE_LENGTH);
+            target,
+            Protocol::Common::MAX_MESSAGE_LENGTH,
+            RPC::ClientSession::TimePoint::max());
     }
     return session;
 }
