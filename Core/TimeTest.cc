@@ -78,7 +78,7 @@ TEST(CoreTime, CSystemClock_now_increasing) {
     EXPECT_LT(a, b);
 }
 
-TEST(CoreTime, CSystemClock_now_progressTimingSensistive) {
+TEST(CoreTime, CSystemClock_now_progressTimingSensitive) {
     Time::CSystemClock::time_point a = Time::CSystemClock::now();
     usleep(1000);
     Time::CSystemClock::time_point b = Time::CSystemClock::now();
@@ -94,7 +94,7 @@ TEST(CoreTime, SystemClock_now_increasing) {
     EXPECT_LT(a, b);
 }
 
-TEST(CoreTime, SystemClock_now_progressTimingSensistive) {
+TEST(CoreTime, SystemClock_now_progressTimingSensitive) {
     Time::SystemClock::time_point a = Time::SystemClock::now();
     usleep(1000);
     Time::SystemClock::time_point b = Time::SystemClock::now();
@@ -120,7 +120,7 @@ TEST(CoreTime, CSteadyClock_now_increasing) {
     EXPECT_LT(a, b);
 }
 
-TEST(CoreTime, CSteadyClock_now_progressTimingSensistive) {
+TEST(CoreTime, CSteadyClock_now_progressTimingSensitive) {
     Time::CSteadyClock::time_point a = Time::CSteadyClock::now();
     usleep(1000);
     Time::CSteadyClock::time_point b = Time::CSteadyClock::now();
@@ -136,7 +136,7 @@ TEST(CoreTime, SteadyClock_now_increasing) {
     EXPECT_LT(a, b);
 }
 
-TEST(CoreTime, SteadyClock_now_progressTimingSensistive) {
+TEST(CoreTime, SteadyClock_now_progressTimingSensitive) {
     Time::SteadyClock::time_point a = Time::SteadyClock::now();
     usleep(1000);
     Time::SteadyClock::time_point b = Time::SteadyClock::now();
