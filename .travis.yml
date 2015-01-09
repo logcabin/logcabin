@@ -26,5 +26,5 @@ script:
 - if [ $? -eq 0 -a "$TRAVIS_BRANCH" = "master" -a "$TRAVIS_PULL_REQUEST" = "false" ]; then
       ./scripts/publish-doxygen;
   else
-      echo "Not pushing doxygen: sons docs=$?, TRAVIS_BRANCH=$TRAVIS_BRANCH, TRAVIS_PULL_REQUEST=$TRAVIS_PULL_REQUEST";
+      echo "Not pushing doxygen, sons docs=$?, TRAVIS_BRANCH=$TRAVIS_BRANCH, TRAVIS_PULL_REQUEST=$TRAVIS_PULL_REQUEST";
   fi
