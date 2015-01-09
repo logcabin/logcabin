@@ -1,5 +1,5 @@
 /* Copyright (c) 2012-2014 Stanford University
- * Copyright (c) 2014 Diego Ongaro
+ * Copyright (c) 2014-2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -78,6 +78,11 @@ class ClientImpl {
     ConfigurationResult setConfiguration(
                             uint64_t oldId,
                             const Configuration& newConfiguration);
+
+    /// See Cluster::getServerStats.
+    Result getServerStats(const std::string& host,
+                          TimePoint timeout,
+                          Protocol::ServerStats& stats);
 
     /**
      * Return the canonicalized path name resulting from accessing path

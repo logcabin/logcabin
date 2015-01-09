@@ -1,5 +1,5 @@
 /* Copyright (c) 2012-2014 Stanford University
- * Copyright (c) 2014 Diego Ongaro
+ * Copyright (c) 2014-2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -22,6 +22,8 @@
 #include "Core/StringUtil.h"
 #include "Protocol/Common.h"
 #include "RPC/Address.h"
+#include "RPC/ClientRPC.h"
+#include "RPC/ClientSession.h"
 
 namespace LogCabin {
 namespace Client {
@@ -399,6 +401,67 @@ ClientImpl::setConfiguration(uint64_t oldId,
     }
     PANIC("Did not understand server response to append RPC:\n%s",
           Core::ProtoBuf::dumpString(response).c_str());
+}
+
+Result
+ClientImpl::getServerStats(const std::string& host,
+                           TimePoint timeout,
+                           Protocol::ServerStats& stats)
+{
+    Result timeoutResult;
+    timeoutResult.status = Client::Status::TIMEOUT;
+    timeoutResult.error = "Client-specified timeout elapsed";
+
+    while (true) {
+        sessionCreationBackoff.delayAndBegin(timeout);
+
+        RPC::Address address(host, Protocol::Common::DEFAULT_PORT);
+        address.refresh(timeout);
+
+        std::shared_ptr<RPC::ClientSession> session =
+            RPC::ClientSession::makeSession(
+                            eventLoop,
+                            address,
+                            Protocol::Common::MAX_MESSAGE_LENGTH,
+                            timeout);
+
+        Protocol::Client::GetServerStats::Request request;
+        RPC::ClientRPC rpc(session,
+                           Protocol::Common::ServiceId::CLIENT_SERVICE,
+                           1,
+                           OpCode::GET_SERVER_STATS,
+                           request);
+
+        typedef RPC::ClientRPC::Status RPCStatus;
+        Protocol::Client::GetServerStats::Response response;
+        Protocol::Client::Error error;
+        RPCStatus status = rpc.waitForReply(&response, &error, timeout);
+
+        // Decode the response
+        switch (status) {
+            case RPCStatus::OK:
+                stats = response.server_stats();
+                return Result();
+            case RPCStatus::RPC_FAILED:
+                break;
+            case RPCStatus::TIMEOUT:
+                return timeoutResult;
+            case RPCStatus::SERVICE_SPECIFIC_ERROR:
+                // Hmm, we don't know what this server is trying to tell us,
+                // but something is wrong. The server shouldn't reply back with
+                // error codes we don't understand. That's why we gave it a
+                // serverSpecificErrorVersion number in the request header.
+                PANIC("Unknown error code %u returned in service-specific "
+                      "error. This probably indicates a bug in the server",
+                      error.error_code());
+            case RPCStatus::RPC_CANCELED:
+                PANIC("RPC canceled unexpectedly");
+        }
+        if (timeout < Clock::now())
+            return timeoutResult;
+        else
+            continue;
+    }
 }
 
 Result

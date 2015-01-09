@@ -466,6 +466,26 @@ Cluster::setConfiguration(uint64_t oldId,
     return clientImpl->setConfiguration(oldId, newConfiguration);
 }
 
+Result
+Cluster::getServerStats(const std::string& host,
+                        uint64_t timeoutNanoseconds,
+                        Protocol::ServerStats& stats)
+{
+    return clientImpl->getServerStats(
+                host,
+                absTimeout(timeoutNanoseconds),
+                stats);
+}
+
+Protocol::ServerStats
+Cluster::getServerStatsEx(const std::string& host,
+                          uint64_t timeoutNanoseconds)
+{
+    Protocol::ServerStats stats;
+    throwException(getServerStats(host, timeoutNanoseconds, stats));
+    return stats;
+}
+
 Tree
 Cluster::getTree()
 {
