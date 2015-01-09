@@ -33,14 +33,16 @@ class OptionParser {
         : argc(argc)
         , argv(argv)
         , cluster("logcabin:61023")
+        , timeout(0)
     {
         while (true) {
             static struct option longOptions[] = {
                {"cluster",  required_argument, NULL, 'c'},
+               {"timeout",  required_argument, NULL, 't'},
                {"help",  no_argument, NULL, 'h'},
                {0, 0, 0, 0}
             };
-            int c = getopt_long(argc, argv, "c:h", longOptions, NULL);
+            int c = getopt_long(argc, argv, "c:t:h", longOptions, NULL);
 
             // Detect the end of the options.
             if (c == -1)
@@ -50,6 +52,12 @@ class OptionParser {
                 case 'c':
                     cluster = optarg;
                     break;
+                case 't':
+                {
+                    char* end;
+                    timeout = strtoull(optarg, &end, 10);
+                    break;
+                }
                 case 'h':
                     usage();
                     exit(0);
@@ -69,6 +77,9 @@ class OptionParser {
         std::cout << "  -c, --cluster <address> "
                   << "The network address of the LogCabin cluster "
                   << "(default: logcabin:61023)" << std::endl;
+        std::cout << "  -t, --timeout           "
+                  << "Set timeout in seconds (default: 0, wait forever)"
+                  << std::endl;
         std::cout << "  -h, --help              "
                   << "Print this usage information" << std::endl;
     }
@@ -76,6 +87,7 @@ class OptionParser {
     int& argc;
     char**& argv;
     std::string cluster;
+    uint64_t timeout;
 };
 
 } // anonymous namespace
@@ -86,6 +98,7 @@ main(int argc, char** argv)
     OptionParser options(argc, argv);
     Cluster cluster(options.cluster);
     Tree tree = cluster.getTree();
+    tree.setTimeout(options.timeout * 1000000000);
     tree.makeDirectoryEx("/etc");
     tree.writeEx("/etc/passwd", "ha");
     std::string contents = tree.readEx("/etc/passwd");
