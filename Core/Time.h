@@ -1,5 +1,5 @@
 /* Copyright (c) 2011-2012 Stanford University
- * Copyright (c) 2014 Diego Ongaro
+ * Copyright (c) 2014-2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -187,7 +187,45 @@ rdtsc()
 /**
  * Return the system time since the Unix epoch in nanoseconds.
  */
-uint64_t getTimeNanos();
+int64_t getTimeNanos();
+
+/**
+ * Used to convert one or more SteadyClock::time_point values into values of
+ * the SystemClock. Using the same instance for many conversions is more
+ * efficient, since the current time only has to be queried once for each clock
+ * in the constructor.
+ */
+class SteadyTimeConverter {
+  public:
+    /**
+     * Constructor.
+     */
+    SteadyTimeConverter();
+
+    /**
+     * Return the given time according the system clock (assuming no time
+     * jumps).
+     */
+    SystemClock::time_point
+    convert(SteadyClock::time_point when);
+
+    /**
+     * Return the given time in nanoseconds since the Unix epoch according the
+     * system clock (assuming no time jumps).
+     */
+    int64_t
+    unixNanos(SteadyClock::time_point when);
+
+  private:
+    /**
+     * Time this object was constructed according to the SteadyClock.
+     */
+    SteadyClock::time_point steadyNow;
+    /**
+     * Time this object was constructed according to the SystemClock.
+     */
+    SystemClock::time_point systemNow;
+};
 
 } // namespace LogCabin::Core::Time
 } // namespace LogCabin::Core

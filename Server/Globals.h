@@ -16,8 +16,10 @@
 #include <memory>
 
 #include "Core/Config.h"
+#include "Core/Mutex.h"
 #include "Event/Loop.h"
 #include "Event/Signal.h"
+#include "Server/ServerStats.h"
 
 #ifndef LOGCABIN_SERVER_GLOBALS_H
 #define LOGCABIN_SERVER_GLOBALS_H
@@ -86,6 +88,12 @@ class Globals {
      * The event loop that runs the RPC system.
      */
     Event::Loop eventLoop;
+
+    /**
+     * Statistics and information about the server's current state. Useful for
+     * diagnostics.
+     */
+    Server::ServerStats serverStats;
 
   private:
     /**

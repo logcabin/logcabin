@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -19,6 +20,7 @@
 #include <string>
 
 #include "build/Server/SnapshotStats.pb.h"
+#include "build/Protocol/ServerStats.pb.h"
 
 #ifndef LOGCABIN_SERVER_CONSENSUS_H
 #define LOGCABIN_SERVER_CONSENSUS_H
@@ -141,6 +143,11 @@ class Consensus {
      * Return statistics that may be useful in deciding when to snapshot.
      */
     virtual SnapshotStats::SnapshotStats getSnapshotStats() const = 0;
+
+    /**
+     * Add information about the consensus state to the given structure.
+     */
+    virtual void updateServerStats(Protocol::ServerStats&) const = 0;
 
     /**
      * Start taking a snapshot. Called by the state machine when it wants to

@@ -1,5 +1,5 @@
 /* Copyright (c) 2012 Stanford University
- * Copyright (c) 2014 Diego Ongaro
+ * Copyright (c) 2014-2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -45,7 +45,7 @@ CSteadyClock::now()
                 now.tv_nsec));
 }
 
-uint64_t
+int64_t
 getTimeNanos()
 {
     struct timespec now;
@@ -56,6 +56,30 @@ getTimeNanos()
     }
     return int64_t(now.tv_sec) * 1000 * 1000 * 1000 + now.tv_nsec;
 }
+
+SteadyTimeConverter::SteadyTimeConverter()
+    : steadyNow(SteadyClock::now())
+    , systemNow(SystemClock::now())
+{
+}
+
+SystemClock::time_point
+SteadyTimeConverter::convert(SteadyClock::time_point when)
+{
+    std::chrono::nanoseconds diff = when - steadyNow;
+    SystemClock::time_point then = systemNow + diff;
+    if (when > steadyNow && then < systemNow) // overflow
+        return SystemClock::time_point::max();
+    return then;
+}
+
+int64_t
+SteadyTimeConverter::unixNanos(SteadyClock::time_point when)
+{
+    return std::chrono::nanoseconds(
+        convert(when).time_since_epoch()).count();
+}
+
 
 } // namespace LogCabin::Core::Time
 } // namespace LogCabin::Core

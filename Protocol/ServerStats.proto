@@ -1,0 +1,100 @@
+// Copyright (c) 2015 Diego Ongaro
+//
+// Permission to use, copy, modify, and distribute this software for any
+// purpose with or without fee is hereby granted, provided that the above
+// copyright notice and this permission notice appear in all copies.
+//
+// THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR(S) DISCLAIM ALL WARRANTIES
+// WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+// MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL AUTHORS BE LIABLE FOR
+// ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+// WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+// ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+// OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+package LogCabin.Protocol;
+
+/**
+ * The format for server statistics, useful for diagnostic purposes.
+ */
+message ServerStats {
+    message Raft {
+        enum State {
+            FOLLOWER = 1;
+            CANDIDATE = 2;
+            LEADER = 3;
+        };
+
+        // See RaftConsensus::Server.
+        message Peer {
+            optional uint64 server_id = 1;
+            optional string address = 2;
+
+            optional bool old_member = 21;
+            optional bool new_member = 22;
+            optional bool staging_member = 23;
+
+            // localhost
+            optional uint64 last_synced_index = 31;
+
+            // remote peer
+            optional bool request_vote_done = 41;
+            optional bool have_vote = 42;
+            optional bool force_heartbeat = 43;
+            optional uint64 next_index = 44;
+            optional uint64 last_agree_index = 45;
+            optional bool is_caught_up = 46;
+
+            optional int64 next_heartbeat_at = 51;
+            optional int64 backoff_until = 52;
+        };
+
+
+        // See RaftConsensus.
+
+        optional uint64 current_term = 11;
+        optional State state = 12;
+        optional uint64 commit_index = 13;
+        optional uint64 last_log_index = 14;
+        optional uint64 leader_id = 15;
+        optional uint64 voted_for = 16;
+
+        optional int64 start_election_at = 21;
+        optional int64 withhold_votes_until = 22;
+
+        optional uint64 last_snapshot_index = 31;
+        optional uint64 last_snapshot_bytes = 32;
+        optional uint64 log_start_index = 33;
+        optional uint64 log_bytes = 34;
+
+        repeated Peer peer = 91;
+    };
+
+    /**
+     * The ID of the server.
+     */
+    optional uint64 server_id = 1;
+    /**
+     * The network address of the server.
+     */
+    optional string address = 2;
+
+    /**
+     * The time in nanoseconds since the Unix epoch when the collection of these
+     * statistics began.
+     */
+    optional int64 start_at = 3;
+
+    /**
+     * The time in nanoseconds since the Unix epoch when the collection of these
+     * statistics completed.
+     */
+    optional int64 end_at = 4;
+
+    /**
+     * Raft-related stats.
+     */
+    optional Raft raft = 11;
+
+};
+

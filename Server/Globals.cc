@@ -47,6 +47,7 @@ Globals::ExitHandler::handleSignalEvent()
 Globals::Globals()
     : config()
     , eventLoop()
+    , serverStats(*this)
     , sigIntHandler(eventLoop, SIGINT)
     , sigTermHandler(eventLoop, SIGTERM)
     , raft()
@@ -67,6 +68,11 @@ Globals::~Globals()
 void
 Globals::init(uint64_t serverId)
 {
+    {
+        ServerStats::Lock serverStatsLock(serverStats);
+        serverStatsLock->set_server_id(serverId);
+        // TODO(ongaro): write entire 'config' into serverStats
+    }
     if (!raft) {
         raft.reset(new RaftConsensus(*this));
     }
@@ -111,6 +117,11 @@ Globals::init(uint64_t serverId)
                 NOTICE("Serving on %s", address.toString().c_str());
                 raft->serverId = i + 1;
                 raft->serverAddress = listenAddresses[i];
+                {
+                    ServerStats::Lock serverStatsLock(serverStats);
+                    serverStatsLock->set_server_id(raft->serverId);
+                    serverStatsLock->set_address(raft->serverAddress);
+                }
                 Core::Debug::processName =
                     Core::StringUtil::format("%lu", raft->serverId);
                 raft->init();
@@ -129,6 +140,7 @@ Globals::init(uint64_t serverId)
         stateMachine.reset(new StateMachine(raft, config));
     }
 
+    serverStats.enable();
 }
 
 void

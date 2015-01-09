@@ -1,4 +1,5 @@
 /* Copyright (c) 2012-2014 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -164,6 +165,13 @@ class Server {
      * The condition variable in RaftConsensus will be notified separately.
      */
     virtual void scheduleHeartbeat() = 0;
+    /**
+     * Write this Server's state into the given structure. Used for
+     * diagnostics.
+     */
+    virtual void
+    updatePeerStats(Protocol::ServerStats::Raft::Peer& peerStats,
+                    Core::Time::SteadyTimeConverter& time) const = 0;
 
     /**
      * Print out a Server for debugging purposes.
@@ -210,6 +218,8 @@ class LocalServer : public Server {
     bool isCaughtUp() const;
     void scheduleHeartbeat();
     std::ostream& dumpToStream(std::ostream& os) const;
+    void updatePeerStats(Protocol::ServerStats::Raft::Peer& peerStats,
+                         Core::Time::SteadyTimeConverter& time) const;
     RaftConsensus& consensus;
     /**
      * The index of the last log entry that has been flushed to disk.
@@ -283,6 +293,8 @@ class Peer : public Server {
      */
     void startThread(std::shared_ptr<Peer> self);
     std::ostream& dumpToStream(std::ostream& os) const;
+    void updatePeerStats(Protocol::ServerStats::Raft::Peer& peerStats,
+                         Core::Time::SteadyTimeConverter& time) const;
 
   private:
 
@@ -572,6 +584,13 @@ class Configuration {
      *      set is empty.
      */
     uint64_t stagingMin(const GetValue& getValue) const;
+
+    /**
+     * Write the configuration servers' state into the given structure. Used
+     * for diagnostics.
+     */
+    void updateServerStats(Protocol::ServerStats& serverStats,
+                           Core::Time::SteadyTimeConverter& time) const;
 
     /**
      * Print out a State for debugging purposes.
@@ -881,6 +900,9 @@ class RaftConsensus : public Consensus {
     // See Consensus::snapshotDone().
     void snapshotDone(uint64_t lastIncludedIndex,
                       std::unique_ptr<Storage::SnapshotFile::Writer> writer);
+
+    // See Consensus::updateServerStats().
+    void updateServerStats(Protocol::ServerStats& serverStats) const;
 
     /**
      * Print out the contents of this class for debugging purposes.

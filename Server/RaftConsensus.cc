@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -135,6 +136,13 @@ LocalServer::dumpToStream(std::ostream& os) const
 {
     // Nothing interesting to dump.
     return os;
+}
+
+void
+LocalServer::updatePeerStats(Protocol::ServerStats::Raft::Peer& peerStats,
+                             Core::Time::SteadyTimeConverter& time) const
+{
+    peerStats.set_last_synced_index(lastSyncedIndex);
 }
 
 ////////// Peer //////////
@@ -333,6 +341,21 @@ Peer::dumpToStream(std::ostream& os) const
     }
     os << "address: " << address << std::endl;
     return os;
+}
+
+void
+Peer::updatePeerStats(Protocol::ServerStats::Raft::Peer& peerStats,
+                      Core::Time::SteadyTimeConverter& time) const
+{
+    peerStats.set_request_vote_done(requestVoteDone);
+    peerStats.set_have_vote(haveVote_);
+    peerStats.set_force_heartbeat(forceHeartbeat);
+    peerStats.set_next_index(nextIndex);
+    peerStats.set_last_agree_index(lastAgreeIndex);
+    peerStats.set_is_caught_up(isCaughtUp_);
+
+    peerStats.set_next_heartbeat_at(time.unixNanos(nextHeartbeatTime));
+    peerStats.set_backoff_until(time.unixNanos(backoffUntil));
 }
 
 ////////// Configuration::SimpleConfiguration //////////
@@ -590,6 +613,26 @@ Configuration::stagingMin(const GetValue& getValue) const
         return newServers.min(getValue);
     else
         return 0;
+}
+
+void
+Configuration::updateServerStats(Protocol::ServerStats& serverStats,
+                                 Core::Time::SteadyTimeConverter& time) const
+{
+    for (auto it = knownServers.begin();
+         it != knownServers.end();
+         ++it) {
+        Protocol::ServerStats::Raft::Peer& peerStats =
+            *serverStats.mutable_raft()->add_peer();
+        peerStats.set_server_id(it->first);
+        const ServerRef& peer = it->second;
+        peerStats.set_old_member(oldServers.contains(peer));
+        peerStats.set_new_member(state == State::TRANSITIONAL &&
+                                 newServers.contains(peer));
+        peerStats.set_staging_member(state == State::STAGING &&
+                                     newServers.contains(peer));
+        peer->updatePeerStats(peerStats, time);
+    }
 }
 
 std::ostream&
@@ -1445,6 +1488,40 @@ RaftConsensus::snapshotDone(
     // a little bit slow, to avoid having to send them a snapshot when a few
     // entries would do the trick. Best to avoid premature optimization though.
     discardUnneededEntries();
+}
+
+void
+RaftConsensus::updateServerStats(Protocol::ServerStats& serverStats) const
+{
+    std::unique_lock<Mutex> lockGuard(mutex);
+    Core::Time::SteadyTimeConverter time;
+    serverStats.clear_raft();
+    Protocol::ServerStats::Raft& raftStats = *serverStats.mutable_raft();
+
+    raftStats.set_current_term(currentTerm);
+    switch (state) {
+        case State::FOLLOWER:
+            raftStats.set_state(Protocol::ServerStats::Raft::FOLLOWER);
+            break;
+        case State::CANDIDATE:
+            raftStats.set_state(Protocol::ServerStats::Raft::CANDIDATE);
+            break;
+        case State::LEADER:
+            raftStats.set_state(Protocol::ServerStats::Raft::LEADER);
+            break;
+    }
+    raftStats.set_commit_index(commitIndex);
+    raftStats.set_last_log_index(log->getLastLogIndex());
+    raftStats.set_leader_id(leaderId);
+    raftStats.set_voted_for(votedFor);
+    raftStats.set_start_election_at(time.unixNanos(startElectionAt));
+    raftStats.set_withhold_votes_until(time.unixNanos(withholdVotesUntil));
+
+    raftStats.set_last_snapshot_index(lastSnapshotIndex);
+    raftStats.set_last_snapshot_bytes(lastSnapshotBytes);
+    raftStats.set_log_start_index(log->getLogStartIndex());
+    raftStats.set_log_bytes(log->getSizeBytes());
+    configuration->updateServerStats(serverStats, time);
 }
 
 std::ostream&
