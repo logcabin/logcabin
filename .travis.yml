@@ -2,13 +2,16 @@ language: cpp
 compiler:
 - gcc
 before_install:
+- echo "TRAVIS_BRANCH=$TRAVIS_BRANCH"
+- echo "TRAVIS_PULL_REQUEST=$TRAVIS_PULL_REQUEST"
 - openssl aes-256-cbc
   -K $encrypted_74e7c0811ff1_key
   -iv $encrypted_74e7c0811ff1_iv
   -in travisci_rsa.enc
-  -out travisci_rsa -d
-- chmod 0600 travisci_rsa
-- mv travisci_rsa ~/.ssh/id_rsa
+  -out travisci_rsa -d &&
+  chmod 0600 travisci_rsa &&
+  mv travisci_rsa ~/.ssh/id_rsa ||
+  echo "Failed to set up SSH key for doxygen output"
 - sudo apt-get install -y protobuf-compiler libprotobuf-dev
 - sudo apt-get install -y libcrypto++-dev
 - sudo apt-get --no-install-recommends install -y doxygen
@@ -19,4 +22,7 @@ script:
 - VERBOSE=1 build/test/test --gtest_filter='*TimingSensitive*' || true
 - ./build/Examples/SmokeTest --mock
 - scons check
-- scons docs && ./scripts/publish-doxygen
+- scons docs
+- if [ $? -eq 0 -a "$TRAVIS_BRANCH" = "master" -a "$TRAVIS_PULL_REQUEST" = "false" ]; then
+      ./scripts/publish-doxygen;
+  fi
