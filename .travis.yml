@@ -22,9 +22,9 @@ script:
 - VERBOSE=1 build/test/test --gtest_filter='*TimingSensitive*' || true
 - ./build/Examples/SmokeTest --mock
 - scons check
-- scons docs
-- if [ $? -eq 0 -a "$TRAVIS_BRANCH" = "master" -a "$TRAVIS_PULL_REQUEST" = "false" ]; then
+- scons docs; DOCS_STATUS=$?; (exit $DOCS_STATUS)
+- if [ $DOCS_STATUS -eq 0 -a "$TRAVIS_BRANCH" = "master" -a "$TRAVIS_PULL_REQUEST" = "false" ]; then
       ./scripts/publish-doxygen;
   else
-      echo "Not pushing doxygen, sons docs=$?, TRAVIS_BRANCH=$TRAVIS_BRANCH, TRAVIS_PULL_REQUEST=$TRAVIS_PULL_REQUEST";
+      echo "Not pushing doxygen, sons docs=$DOCS_STATUS, TRAVIS_BRANCH=$TRAVIS_BRANCH, TRAVIS_PULL_REQUEST=$TRAVIS_PULL_REQUEST";
   fi
