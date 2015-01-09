@@ -42,9 +42,6 @@ ClientService::handleRPC(RPC::ServerRPC rpc)
 {
     using Protocol::Client::OpCode;
 
-    // TODO(ongaro): If this is not the current cluster leader, need to
-    // redirect the client.
-
     // Call the appropriate RPC handler based on the request's opCode.
     switch (rpc.getOpCode()) {
         case OpCode::GET_SUPPORTED_RPC_VERSIONS:
