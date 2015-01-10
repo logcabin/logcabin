@@ -6,6 +6,10 @@ env.Program("Benchmark",
             ["Benchmark.cc", "#build/liblogcabin.a"],
             LIBS = libs)
 
+env.Program("DumpTree",
+            ["DumpTree.cc", "#build/liblogcabin.a"],
+            LIBS = libs)
+
 env.Program("HelloWorld",
             ["HelloWorld.cc", "#build/liblogcabin.a"],
             LIBS = libs)
