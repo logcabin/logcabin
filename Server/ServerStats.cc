@@ -33,6 +33,9 @@ ServerStats::ServerStats(Globals& globals)
     , signalHandler()
     , timerHandler()
 {
+    // Enable signal handler early so that it blocks signals on the main thread
+    // before other threads are started.
+    signalHandler.reset(new SignalHandler(globals.eventLoop, *this));
 }
 
 ServerStats::~ServerStats()
@@ -44,9 +47,8 @@ ServerStats::enable()
 {
     Lock lock(*this);
     if (!enabled) {
-        // defer construction so that TimerHandler can access config,
-        // and that raft, etc are constructed
-        signalHandler.reset(new SignalHandler(globals.eventLoop, *this));
+        // Defer construction of timer so that TimerHandler constructor can
+        // access globals.config.
         timerHandler.reset(new TimerHandler(globals.eventLoop, *this));
         enabled = true;
     }
