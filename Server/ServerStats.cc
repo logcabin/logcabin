@@ -58,14 +58,15 @@ Protocol::ServerStats
 ServerStats::getCurrent()
 {
     Protocol::ServerStats copy;
-    copy.set_start_at(std::chrono::nanoseconds(
-        Core::Time::SystemClock::now().time_since_epoch()).count());
+    int64_t startTime = std::chrono::nanoseconds(
+        Core::Time::SystemClock::now().time_since_epoch()).count();
     bool enabledCopy;
     {
         Lock lock(*this);
         copy = *lock;
         enabledCopy = enabled;
     }
+    copy.set_start_at(startTime);
     if (enabledCopy) {
         globals.raft->updateServerStats(copy);
     }
