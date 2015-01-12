@@ -2476,6 +2476,10 @@ def CheckLanguage(filename, clean_lines, linenum, file_extension, include_state,
       not Search(r'\bNOLINT\b', line)):
       error(filename, linenum, 'logcabin/condition_variable', 5,
             'Use Core::ConditionVariable rather than std::condition_variable.')
+  if (Search(r'\bsigprocmask\b', line) and
+      not Search(r'\bNOLINT\b', line)):
+      error(filename, linenum, 'logcabin/sigprocmask', 5,
+            'Use pthread_sigmask rather than sigprocmask.')
 
   # Check if some verboten operator overloading is going on
   # TODO(unknown): catch out-of-line unary operator&:

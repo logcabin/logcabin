@@ -53,9 +53,10 @@ Signal::Signal(Event::Loop& eventLoop, int signalNumber)
     sigset_t mask;
     sigemptyset(&mask);
     sigaddset(&mask, signalNumber);
-    if (sigprocmask(SIG_BLOCK, &mask, NULL) == -1) {
+    int r = pthread_sigmask(SIG_BLOCK, &mask, NULL);
+    if (r != 0) {
         PANIC("Could not block signal %d: %s",
-              signalNumber, strerror(errno));
+              signalNumber, strerror(r));
     }
 }
 
@@ -68,12 +69,13 @@ Signal::~Signal()
     sigset_t mask;
     sigemptyset(&mask);
     sigaddset(&mask, signalNumber);
-    if (sigprocmask(SIG_UNBLOCK, &mask, NULL) == -1) {
+    int r = pthread_sigmask(SIG_UNBLOCK, &mask, NULL);
+    if (r != 0) {
         PANIC("Could not unblock signal %d: %s",
-              signalNumber, strerror(errno));
+              signalNumber, strerror(r));
     }
 
-    int r = close(fd);
+    r = close(fd);
     if (r != 0)
         PANIC("Could not close signalfd %d: %s", fd, strerror(errno));
 }
