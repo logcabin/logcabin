@@ -50,7 +50,7 @@ class OptionParser {
                {"help",  no_argument, NULL, 'h'},
                {"id",  required_argument, NULL, 'i'},
                {"log",  required_argument, NULL, 'l'},
-               {"pid",  required_argument, NULL, 'p'},
+               {"pidfile",  required_argument, NULL, 'p'},
                {0, 0, 0, 0}
             };
             int c = getopt_long(argc, argv, "bc:dhi:l:p:", longOptions, NULL);
@@ -99,27 +99,27 @@ class OptionParser {
     void usage() {
         std::cout << "Usage: " << argv[0] << " [options]" << std::endl;
         std::cout << "Options: " << std::endl;
-        std::cout << "  -h, --help          "
+        std::cout << "  -h, --help            "
                   << "Print this usage information" << std::endl;
-        std::cout << "  --bootstrap         "
+        std::cout << "  --bootstrap           "
                   << "Write a cluster configuration into the very first "
                   << "server's log and exit. This should only be run once "
                   << "ever in each cluster" << std::endl;
-        std::cout << "  -c, --config <file> "
+        std::cout << "  -c, --config <file>   "
                   << "Specify the configuration file "
                   << "(default: logcabin.conf)" << std::endl;
-        std::cout << "  -d, --daemon        "
+        std::cout << "  -d, --daemon          "
                   << "Detach and run in the background (requires --log)"
                   << std::endl;
-        std::cout << "  -i, --id <id>       "
+        std::cout << "  -i, --id <id>         "
                   << "Set server id to <id> "
                   << "(default: index of first bindable address + 1)"
                   << std::endl;
-        std::cout << "  -l, --log <file>    "
+        std::cout << "  -l, --log <file>      "
                   << "Write debug logs to <file> "
                   << "(default: stderr)"
                   << std::endl;
-        std::cout << "  -p, --pid <file>    "
+        std::cout << "  -p, --pidfile <file>  "
                   << "Write process ID to <file>"
                   << std::endl;
     }
