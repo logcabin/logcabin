@@ -35,7 +35,22 @@ class Loop;
 class Signal : public Event::File {
   public:
     /**
+     * Blocks asynchronous signal delivery on the current thread for the given
+     * signal. This should normally be called before any secondary threads are
+     * started, so that all subsequent threads also have the signal blocked.
+     */
+    class Blocker {
+      public:
+        /// Constructor. Masks asynchronous signal delivery for signalNumber.
+        explicit Blocker(int signalNumber);
+        /// Destructor. Unmasks asynchronous signal delivery for signalNumber.
+        ~Blocker();
+        const int signalNumber;
+    };
+
+    /**
      * Construct and enable a signal handler.
+     * See also Blocker, which you'll generally need to create first.
      * \param eventLoop
      *      Event::Loop that will manage this signal handler.
      * \param signalNumber

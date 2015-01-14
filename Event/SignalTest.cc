@@ -46,6 +46,7 @@ struct EventSignalTest : public ::testing::Test {
 };
 
 TEST_F(EventSignalTest, constructor) {
+    Event::Signal::Blocker block(SIGTERM);
     ExitOnSigTerm signal(loop);
 }
 
@@ -54,6 +55,7 @@ TEST_F(EventSignalTest, destructor) {
 }
 
 TEST_F(EventSignalTest, fires) {
+    Event::Signal::Blocker block(SIGTERM);
     ExitOnSigTerm signal(loop);
     // Warning: if you run this in gdb, you'll need to pass the signal through
     // to the application.

@@ -28,7 +28,7 @@ namespace Event {
 
 namespace {
 
-/// Helper for constructor.
+/// Helper for Signal constructor.
 int
 createSignalFd(int signalNumber)
 {
@@ -45,11 +45,12 @@ createSignalFd(int signalNumber)
 
 } // anonymous namespace
 
-Signal::Signal(Event::Loop& eventLoop, int signalNumber)
-    : Event::File(eventLoop, createSignalFd(signalNumber), EPOLLIN)
-    , signalNumber(signalNumber)
+//// class Signal::Blocker ////
+
+Signal::Blocker::Blocker(int signalNumber)
+    : signalNumber(signalNumber)
 {
-    // Block signals so that they only come through signalfd
+    // Block signal
     sigset_t mask;
     sigemptyset(&mask);
     sigaddset(&mask, signalNumber);
@@ -60,12 +61,9 @@ Signal::Signal(Event::Loop& eventLoop, int signalNumber)
     }
 }
 
-Signal::~Signal()
+Signal::Blocker::~Blocker()
 {
-    Event::Loop::Lock lock(eventLoop);
-    int fd = release();
-
-    // Unblock normal signals
+    // Unblock signal
     sigset_t mask;
     sigemptyset(&mask);
     sigaddset(&mask, signalNumber);
@@ -74,10 +72,18 @@ Signal::~Signal()
         PANIC("Could not unblock signal %d: %s",
               signalNumber, strerror(r));
     }
+}
 
-    r = close(fd);
-    if (r != 0)
-        PANIC("Could not close signalfd %d: %s", fd, strerror(errno));
+//// class Signal ////
+
+Signal::Signal(Event::Loop& eventLoop, int signalNumber)
+    : Event::File(eventLoop, createSignalFd(signalNumber), EPOLLIN)
+    , signalNumber(signalNumber)
+{
+}
+
+Signal::~Signal()
+{
 }
 
 void

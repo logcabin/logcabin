@@ -33,8 +33,6 @@ ServerStats::ServerStats(Globals& globals)
     , signalHandler()
     , timerHandler()
 {
-    // Enable signal handler early so that it blocks signals on the main thread
-    // before other threads are started.
     signalHandler.reset(new SignalHandler(globals.eventLoop, *this));
 }
 

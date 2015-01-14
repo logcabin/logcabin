@@ -89,13 +89,28 @@ class Globals {
      */
     Event::Loop eventLoop;
 
-    /**
-     * Statistics and information about the server's current state. Useful for
-     * diagnostics.
-     */
-    Server::ServerStats serverStats;
-
   private:
+    /**
+     * Block SIGINT, which is handled by sigIntHandler.
+     * Signals are blocked early on in the startup process so that newly
+     * spawned threads also have them blocked.
+     */
+    Event::Signal::Blocker sigIntBlocker;
+
+    /**
+     * Block SIGTERM, which is handled by sigTermHandler.
+     * Signals are blocked early on in the startup process so that newly
+     * spawned threads also have them blocked.
+     */
+    Event::Signal::Blocker sigTermBlocker;
+
+    /**
+     * Block SIGUSR1, which is handled by serverStats.
+     * Signals are blocked early on in the startup process so that newly
+     * spawned threads also have them blocked.
+     */
+    Event::Signal::Blocker sigUsr1Blocker;
+
     /**
      * Exits the event loop upon receiving SIGINT (keyboard interrupt).
      */
@@ -107,6 +122,11 @@ class Globals {
     ExitHandler sigTermHandler;
 
   public:
+    /**
+     * Statistics and information about the server's current state. Useful for
+     * diagnostics.
+     */
+    Server::ServerStats serverStats;
 
     /**
      * Consensus module.
