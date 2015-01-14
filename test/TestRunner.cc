@@ -18,6 +18,7 @@
 #include <memory>
 
 #include "Core/Debug.h"
+#include <google/protobuf/stubs/common.h>
 
 namespace {
 
@@ -135,5 +136,7 @@ main(int argc, char *argv[])
                                    listeners.default_result_printer())));
     }
 
-    return RUN_ALL_TESTS();
+    int ret = RUN_ALL_TESTS();
+    google::protobuf::ShutdownProtobufLibrary();
+    return ret;
 }
