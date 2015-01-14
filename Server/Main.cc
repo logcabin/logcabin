@@ -278,5 +278,7 @@ main(int argc, char** argv)
     } else {
         globals.run();
     }
+
+    google::protobuf::ShutdownProtobufLibrary();
     return 0;
 }
