@@ -1051,9 +1051,9 @@ RaftConsensus::handleAppendEntries(
         return; // response was set to a rejection above
     }
     if (request.term() > currentTerm) {
-        VERBOSE("Caller(%lu) has newer term, updating. "
-                "Ours was %lu, theirs is %lu",
-                request.server_id(), currentTerm, request.term());
+        NOTICE("Received AppendEntries request from server %lu in term %lu "
+               "(this server's term was %lu)",
+                request.server_id(), request.term(), currentTerm);
         // We're about to bump our term in the stepDown below: update
         // 'response' accordingly.
         response.set_term(request.term());
@@ -1173,9 +1173,9 @@ RaftConsensus::handleAppendSnapshotChunk(
         return;
     }
     if (request.term() > currentTerm) {
-        VERBOSE("Caller(%lu) has newer term, updating. "
-                "Ours was %lu, theirs is %lu",
-                request.server_id(), currentTerm, request.term());
+        NOTICE("Received AppendSnapshotChunk request from server %lu in "
+               "term %lu (this server's term was %lu)",
+                request.server_id(), request.term(), currentTerm);
         // We're about to bump our term in the stepDown below: update
         // 'response' accordingly.
         response.set_term(request.term());
@@ -1256,9 +1256,9 @@ RaftConsensus::handleRequestVote(
     }
 
     if (request.term() > currentTerm) {
-        VERBOSE("Caller(%lu) has newer term, updating. "
-                "Ours was %lu, theirs is %lu",
-                request.server_id(), currentTerm, request.term());
+        NOTICE("Received RequestVote request from server %lu in term %lu "
+               "(this server's term was %lu)",
+                request.server_id(), request.term(), currentTerm);
         stepDown(request.term());
     }
 
@@ -1273,14 +1273,16 @@ RaftConsensus::handleRequestVote(
                     (request.last_log_term() == lastLogTerm &&
                      request.last_log_index() >= lastLogIndex));
 
-    if (request.term() == currentTerm && logIsOk && votedFor == 0) {
-        // Give caller our vote
-        VERBOSE("Voting for %lu in term %lu",
-                request.server_id(), currentTerm);
-        stepDown(currentTerm);
-        setElectionTimer();
-        votedFor = request.server_id();
-        updateLogMetadata();
+    if (request.term() == currentTerm) {
+        if (logIsOk && votedFor == 0) {
+            // Give caller our vote
+            NOTICE("Voting for %lu in term %lu",
+                   request.server_id(), currentTerm);
+            stepDown(currentTerm);
+            setElectionTimer();
+            votedFor = request.server_id();
+            updateLogMetadata();
+        }
     }
 
     // Fill in response.
@@ -1693,7 +1695,9 @@ RaftConsensus::stepDownThreadMain()
             if (configuration->quorumMin(&Server::getLastAckEpoch) >= epoch)
                 break;
             if (Clock::now() >= stepDownAt) {
-                NOTICE("No broadcast for a timeout, stepping down");
+                NOTICE("No broadcast for a timeout, stepping down from leader "
+                       "of term %lu (converting to follower in term %lu)",
+                       currentTerm, currentTerm + 1);
                 stepDown(currentTerm + 1);
                 break;
             }
@@ -1735,6 +1739,8 @@ RaftConsensus::advanceCommittedId()
         // Upon committing a configuration that excludes itself, the leader
         // steps down.
         if (!configuration->hasVote(configuration->localServer)) {
+            NOTICE("Newly committed configuration does not include self. "
+                   "Stepping down as leader");
             stepDown(currentTerm + 1);
             return;
         }
@@ -1860,6 +1866,9 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
     // this term.
     assert(state == State::LEADER);
     if (response.term() > currentTerm) {
+        NOTICE("Received AppendEntries response from server %lu in term %lu "
+               "(this server's term was %lu)",
+                peer.serverId, response.term(), currentTerm);
         stepDown(response.term());
     } else {
         assert(response.term() == currentTerm);
@@ -1962,6 +1971,9 @@ RaftConsensus::appendSnapshotChunk(std::unique_lock<Mutex>& lockGuard,
     // this term.
     assert(state == State::LEADER);
     if (response.term() > currentTerm) {
+        NOTICE("Received AppendSnapshotChunk response from server %lu in "
+               "term %lu (this server's term was %lu)",
+                peer.serverId, response.term(), currentTerm);
         stepDown(response.term());
     } else {
         assert(response.term() == currentTerm);
@@ -2189,6 +2201,9 @@ RaftConsensus::requestVote(std::unique_lock<Mutex>& lockGuard, Peer& peer)
     }
 
     if (response.term() > currentTerm) {
+        NOTICE("Received RequestVote response from server %lu in "
+               "term %lu (this server's term was %lu)",
+                peer.serverId, response.term(), currentTerm);
         stepDown(response.term());
     } else {
         peer.requestVoteDone = true;
@@ -2197,11 +2212,13 @@ RaftConsensus::requestVote(std::unique_lock<Mutex>& lockGuard, Peer& peer)
 
         if (response.granted()) {
             peer.haveVote_ = true;
-            VERBOSE("Got vote for term %lu", currentTerm);
+            NOTICE("Got vote from server %lu for term %lu",
+                   peer.serverId, currentTerm);
             if (configuration->quorumAll(&Server::haveVote))
                 becomeLeader();
         } else {
-            VERBOSE("vote not granted");
+            NOTICE("Vote denied by server %lu for term %lu",
+                   peer.serverId, currentTerm);
         }
     }
 }
@@ -2225,10 +2242,7 @@ RaftConsensus::startNewElection()
         return;
     }
 
-    if (state == State::FOLLOWER) {
-        // too verbose otherwise when server is partitioned
-        NOTICE("Running for election in term %lu", currentTerm + 1);
-    }
+    NOTICE("Running for election in term %lu", currentTerm + 1);
     ++currentTerm;
     state = State::CANDIDATE;
     leaderId = 0;
