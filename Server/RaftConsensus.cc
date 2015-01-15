@@ -1249,7 +1249,7 @@ RaftConsensus::handleRequestVote(
                "this server (which is in term %lu) recently heard from a "
                "leader (%lu). Should server %lu be shut down?",
                request.term(), request.server_id(), currentTerm,
-               request.server_id(), leaderId);
+               leaderId, request.server_id());
         response.set_term(currentTerm);
         response.set_granted(false);
         return;
