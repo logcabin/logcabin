@@ -31,7 +31,8 @@ namespace Server {
 ////////// Globals::SigIntHandler //////////
 
 Globals::ExitHandler::ExitHandler(Event::Loop& eventLoop, int signalNumber)
-    : Signal(eventLoop, signalNumber)
+    : Signal(signalNumber)
+    , eventLoop(eventLoop)
 {
 }
 
@@ -51,7 +52,9 @@ Globals::Globals()
     , sigTermBlocker(SIGTERM)
     , sigUsr1Blocker(SIGUSR1)
     , sigIntHandler(eventLoop, SIGINT)
+    , sigIntMonitor(eventLoop, sigIntHandler)
     , sigTermHandler(eventLoop, SIGTERM)
+    , sigTermMonitor(eventLoop, sigTermHandler)
     , serverStats(*this)
     , raft()
     , stateMachine()

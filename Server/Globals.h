@@ -57,6 +57,7 @@ class Globals {
       public:
         ExitHandler(Event::Loop& eventLoop, int signalNumber);
         void handleSignalEvent();
+        Event::Loop& eventLoop;
     };
 
   public:
@@ -117,9 +118,19 @@ class Globals {
     ExitHandler sigIntHandler;
 
     /**
+     * Registers sigIntHandler with the event loop.
+     */
+    Event::Signal::Monitor sigIntMonitor;
+
+    /**
      * Exits the event loop upon receiving SIGTERM (kill).
      */
     ExitHandler sigTermHandler;
+
+    /**
+     * Registers sigTermHandler with the event loop.
+     */
+    Event::Signal::Monitor sigTermMonitor;
 
   public:
     /**

@@ -1,4 +1,5 @@
 /* Copyright (c) 2011-2014 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -30,16 +31,15 @@ namespace Event {
 
 namespace {
 
-// Used in breakTimer, whose purpose is not to handle events but to break
-// runForever() out of epoll.
-class NullTimer : public Event::Timer {
-  public:
-    explicit NullTimer(Event::Loop& eventLoop)
-        : Event::Timer(eventLoop) {
-    }
-    void handleTimerEvent() {
-    }
-};
+/// Helper for Loop constructor.
+int
+createEpollFd()
+{
+    int epollfd = epoll_create1(0);
+    if (epollfd < 0)
+        PANIC("epoll_create1 failed: %s", strerror(errno));
+    return epollfd;
+}
 
 } // anonymous namespace
 
@@ -55,7 +55,7 @@ Loop::Lock::Lock(Event::Loop& eventLoop)
         // This is an actual lock: we're not running inside the event loop, and
         //                         we're not recursively locking.
         if (eventLoop.runningThread != Core::ThreadId::NONE)
-            eventLoop.breakTimer->schedule(0);
+            eventLoop.breakTimer.schedule(0);
         while (eventLoop.runningThread != Core::ThreadId::NONE ||
                eventLoop.lockOwner != Core::ThreadId::NONE) {
             eventLoop.safeToLock.wait(lockGuard);
@@ -80,10 +80,18 @@ Loop::Lock::~Lock()
     }
 }
 
+////////// Loop::NullTimer //////////
+
+void
+Loop::NullTimer::handleTimerEvent()
+{
+    // do nothing
+}
+
 ////////// Loop //////////
 
 Loop::Loop()
-    : epollfd(-1)
+    : epollfd(createEpollFd())
     , breakTimer()
     , shouldExit(false)
     , mutex()
@@ -93,18 +101,13 @@ Loop::Loop()
     , lockOwner(Core::ThreadId::NONE)
     , safeToLock()
     , unlocked()
+    , breakTimerMonitor(*this, breakTimer)
 {
-    epollfd = epoll_create1(0);
-    if (epollfd < 0) {
-        PANIC("epoll_create1 failed: %s", strerror(errno));
-    }
-
-    breakTimer.reset(new NullTimer(*this));
 }
 
 Loop::~Loop()
 {
-    breakTimer.reset();
+    breakTimerMonitor.disableForever();
     if (epollfd >= 0) {
         int r = close(epollfd);
         if (r != 0)

@@ -1,4 +1,5 @@
 /* Copyright (c) 2011-2014 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -74,10 +75,22 @@ Signal::Blocker::~Blocker()
     }
 }
 
+//// class Signal::Monitor ////
+
+Signal::Monitor::Monitor(Event::Loop& eventLoop, Signal& signal)
+    : File::Monitor(eventLoop, signal, EPOLLIN)
+{
+}
+
+Signal::Monitor::~Monitor()
+{
+}
+
+
 //// class Signal ////
 
-Signal::Signal(Event::Loop& eventLoop, int signalNumber)
-    : Event::File(eventLoop, createSignalFd(signalNumber), EPOLLIN)
+Signal::Signal(int signalNumber)
+    : Event::File(createSignalFd(signalNumber))
     , signalNumber(signalNumber)
 {
 }

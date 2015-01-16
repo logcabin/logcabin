@@ -25,7 +25,8 @@ namespace {
 
 struct MyTimer : public Event::Timer {
     explicit MyTimer(Event::Loop& loop)
-        : Timer(loop)
+        : Timer()
+        , eventLoop(loop)
         , triggerCount(0)
     {
     }
@@ -34,6 +35,7 @@ struct MyTimer : public Event::Timer {
         ++triggerCount;
         eventLoop.exit();
     }
+    Event::Loop& eventLoop;
     uint32_t triggerCount;
 };
 
@@ -41,10 +43,12 @@ struct EventTimerTest : public ::testing::Test {
     EventTimerTest()
         : loop()
         , timer1(loop)
+        , monitor(loop, timer1)
     {
     }
     Event::Loop loop;
     MyTimer timer1;
+    Event::Timer::Monitor monitor;
 };
 
 TEST_F(EventTimerTest, constructor) {
@@ -140,6 +144,7 @@ TEST_F(EventTimerTest, deschedule) {
     timer1.deschedule();
     EXPECT_FALSE(timer1.isScheduled());
     MyTimer timer2(loop);
+    Event::Timer::Monitor monitor2(loop, timer2);
     timer2.schedule(10);
     loop.runForever();
     EXPECT_EQ(0U, timer1.triggerCount);

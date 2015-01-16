@@ -87,7 +87,7 @@ class ServerStats {
     class SignalHandler : public Event::Signal {
       public:
         /// Constructor. Registers itself as SIGUSR1 handler.
-        SignalHandler(Event::Loop& eventLoop, ServerStats& serverStats);
+        explicit SignalHandler(ServerStats& serverStats);
         /// Fires when SIGUSR1 is received. Prints the stats to the log.
         void handleSignalEvent();
         /// Handle to containing class.
@@ -100,7 +100,7 @@ class ServerStats {
     class TimerHandler : public Event::Timer {
       public:
         /// Constructor. Begins periodic timer.
-        TimerHandler(Event::Loop& eventLoop, ServerStats& serverStats);
+        explicit TimerHandler(ServerStats& serverStats);
         /// Fires when timer expires. Prints the stats to the log.
         void handleTimerEvent();
         /// Handle to containing class.
@@ -111,6 +111,25 @@ class ServerStats {
     };
 
     /**
+     * Members that are constructed later, during enable().
+     * Whereas the ServerStats is constructed early in the server startup
+     * process, these members get to access globals and globals.config in their
+     * constructors.
+     */
+    struct Deferred {
+        /// Constructor. Called during enable().
+        explicit Deferred(ServerStats& serverStats);
+        /// See SignalHandler.
+        SignalHandler signalHandler;
+        /// Registers signalHandler with event loop.
+        Event::Signal::Monitor signalMonitor;
+        /// See TimerHandler.
+        TimerHandler timerHandler;
+        /// Registers timerHandler with event loop.
+        Event::Timer::Monitor timerMonitor;
+    };
+
+    /**
      * Server-wide objects.
      */
     Globals& globals;
@@ -118,20 +137,18 @@ class ServerStats {
      * Protects all of the following members of this class.
      */
     Core::Mutex mutex;
-    /**
-     * If true, enabled() has already been called, and other modules should be
-     * queried for stats during getCurrent().
-     */
-    bool enabled;
+
     /**
      * Partially filled-in structure that is copied as the basis of all calls
      * to getCurrent().
      */
     Protocol::ServerStats stats;
-    /// See SignalHandler.
-    std::unique_ptr<SignalHandler> signalHandler;
-    /// See TimerHandler.
-    std::unique_ptr<TimerHandler> timerHandler;
+
+    /**
+     * See Deferred. If non-NULL, enabled() has already been called, and other
+     * modules should be queried for stats during getCurrent().
+     */
+    std::unique_ptr<Deferred> deferred;
 };
 
 } // namespace LogCabin::Server

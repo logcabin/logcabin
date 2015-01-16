@@ -1,5 +1,5 @@
 /* Copyright (c) 2012-2014 Stanford University
- * Copyright (c) 2014 Diego Ongaro
+ * Copyright (c) 2014-2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -28,8 +28,9 @@ namespace {
 struct MyFile : public Event::File {
     explicit MyFile(Event::Loop& loop,
                     int fd,
-                    int events)
-        : File(loop, fd, events)
+                    Ownership ownership = CLOSE_ON_DESTROY)
+        : File(fd, ownership)
+        , eventLoop(loop)
         , triggerCount(0)
     {
     }
@@ -37,6 +38,7 @@ struct MyFile : public Event::File {
         ++triggerCount;
         eventLoop.exit();
     }
+    Event::Loop& eventLoop;
     uint32_t triggerCount;
 };
 
@@ -77,50 +79,66 @@ struct EventFileTest : public ::testing::Test {
     int pipeFds[2];
 };
 
-TEST_F(EventFileTest, destructor) {
-    {
-        MyFile file(loop, pipeFds[0], EPOLLIN|EPOLLONESHOT);
-        pipeFds[0] = -1;
-    }
-    {
-        MyFile file(loop, pipeFds[1], EPOLLIN|EPOLLONESHOT);
-        file.release();
-    }
-}
 
-TEST_F(EventFileTest, fires) {
-    MyFile file(loop, pipeFds[0], EPOLLIN|EPOLLONESHOT);
+TEST_F(EventFileTest, basics) {
+    MyFile file(loop, pipeFds[0]);
     pipeFds[0] = -1;
+    File::Monitor monitor(loop, file, EPOLLIN|EPOLLONESHOT);
     EXPECT_EQ(1, write(pipeFds[1], "x", 1));
     loop.runForever();
     EXPECT_EQ(1U, file.triggerCount);
 }
 
-TEST_F(EventFileTest, setEvents) {
-    MyFile file(loop, pipeFds[0], 0);
+TEST_F(EventFileTest, Monitor_disableForever) {
+    MyFile file(loop, pipeFds[0]);
+    pipeFds[0] = -1;
+    File::Monitor monitor(loop, file, EPOLLIN|EPOLLONESHOT);
+    monitor.disableForever();
+    monitor.disableForever();
+    EXPECT_TRUE(NULL == monitor.file);
+    EXPECT_EQ(1, write(pipeFds[1], "x", 1));
+    EXPECT_FALSE(hasPending());
+}
+
+TEST_F(EventFileTest, Monitor_setEvents) {
+    MyFile file(loop, pipeFds[0]);
+    File::Monitor monitor(loop, file, 0);
     pipeFds[0] = -1;
     EXPECT_EQ(1, write(pipeFds[1], "x", 1));
     EXPECT_FALSE(hasPending());
-    file.setEvents(EPOLLIN|EPOLLONESHOT);
+    monitor.setEvents(EPOLLIN|EPOLLONESHOT);
     loop.runForever();
     EXPECT_EQ(1U, file.triggerCount);
     file.triggerCount = 0;
-    file.setEvents(0);
+    monitor.setEvents(0);
     EXPECT_FALSE(hasPending());
 }
 
-TEST_F(EventFileTest, setEventsAfterRelease) {
-    MyFile file(loop, pipeFds[0], EPOLLIN|EPOLLONESHOT);
-    file.release();
-    file.setEvents(EPOLLOUT|EPOLLONESHOT);
+TEST_F(EventFileTest, Monitor_setEventsAfterDestroy) {
+    std::unique_ptr<MyFile> file(new MyFile(loop, pipeFds[0]));
+    pipeFds[0] = -1;
+    File::Monitor monitor(loop, *file, EPOLLIN|EPOLLONESHOT);
+    monitor.disableForever();
+    file.reset();
+    monitor.setEvents(EPOLLOUT|EPOLLONESHOT);
 }
 
-TEST_F(EventFileTest, release) {
-    MyFile file(loop, pipeFds[0], EPOLLIN|EPOLLONESHOT);
-    file.release();
-    EXPECT_EQ(1, write(pipeFds[1], "x", 1));
-    EXPECT_FALSE(hasPending());
-    EXPECT_EQ(-1, file.release());
+TEST_F(EventFileTest, File_destructor_close_on_destroy) {
+    {
+        MyFile file(loop, pipeFds[0]);
+        File::Monitor monitor(loop, file, EPOLLIN|EPOLLONESHOT);
+    }
+    EXPECT_EQ(-1, close(pipeFds[0]));
+    EXPECT_EQ(EBADF, errno);
+    pipeFds[0] = -1;
+}
+
+TEST_F(EventFileTest, File_destructor_caller_closes_fd) {
+    {
+        MyFile file(loop, pipeFds[0], MyFile::CALLER_CLOSES_FD);
+        File::Monitor monitor(loop, file, EPOLLIN|EPOLLONESHOT);
+    }
+    // closePipeFds() makes sure pipeFds[0] can be closed without errors
 }
 
 } // namespace LogCabin::Event::<anonymous>

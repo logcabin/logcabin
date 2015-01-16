@@ -268,6 +268,11 @@ class ClientSession {
     Timer timer;
 
     /**
+     * Registers timer with the event loop.
+     */
+    Event::Timer::Monitor timerMonitor;
+
+    /**
      * This mutex protects all of the members of this class defined below this
      * point.
      */

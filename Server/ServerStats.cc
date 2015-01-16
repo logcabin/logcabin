@@ -25,53 +25,7 @@
 namespace LogCabin {
 namespace Server {
 
-ServerStats::ServerStats(Globals& globals)
-    : globals(globals)
-    , mutex()
-    , enabled(false)
-    , stats()
-    , signalHandler()
-    , timerHandler()
-{
-    signalHandler.reset(new SignalHandler(globals.eventLoop, *this));
-}
-
-ServerStats::~ServerStats()
-{
-}
-
-void
-ServerStats::enable()
-{
-    Lock lock(*this);
-    if (!enabled) {
-        // Defer construction of timer so that TimerHandler constructor can
-        // access globals.config.
-        timerHandler.reset(new TimerHandler(globals.eventLoop, *this));
-        enabled = true;
-    }
-}
-
-Protocol::ServerStats
-ServerStats::getCurrent()
-{
-    Protocol::ServerStats copy;
-    int64_t startTime = std::chrono::nanoseconds(
-        Core::Time::SystemClock::now().time_since_epoch()).count();
-    bool enabledCopy;
-    {
-        Lock lock(*this);
-        copy = *lock;
-        enabledCopy = enabled;
-    }
-    copy.set_start_at(startTime);
-    if (enabledCopy) {
-        globals.raft->updateServerStats(copy);
-    }
-    copy.set_end_at(std::chrono::nanoseconds(
-        Core::Time::SystemClock::now().time_since_epoch()).count());
-    return copy;
-}
+//// class ServerStats::Lock ////
 
 ServerStats::Lock::Lock(ServerStats& wrapper)
     : wrapper(wrapper)
@@ -95,9 +49,10 @@ ServerStats::Lock::operator*()
     return wrapper.stats;
 }
 
-ServerStats::SignalHandler::SignalHandler(Event::Loop& eventLoop,
-                                          ServerStats& serverStats)
-    : Signal(eventLoop, SIGUSR1)
+//// class ServerStats::SignalHandler ////
+
+ServerStats::SignalHandler::SignalHandler(ServerStats& serverStats)
+    : Signal(SIGUSR1)
     , serverStats(serverStats)
 {
 }
@@ -109,9 +64,10 @@ ServerStats::SignalHandler::handleSignalEvent()
            Core::ProtoBuf::dumpString(serverStats.getCurrent()).c_str());
 }
 
-ServerStats::TimerHandler::TimerHandler(Event::Loop& eventLoop,
-                                        ServerStats& serverStats)
-    : Timer(eventLoop)
+//// class ServerStats::TimerHandler ////
+
+ServerStats::TimerHandler::TimerHandler(ServerStats& serverStats)
+    : Timer()
     , serverStats(serverStats)
     , intervalNanos(1000 * 1000 *
                     serverStats.globals.config.read<uint64_t>(
@@ -128,6 +84,62 @@ ServerStats::TimerHandler::handleTimerEvent()
            Core::ProtoBuf::dumpString(serverStats.getCurrent()).c_str());
     if (intervalNanos != 0)
         schedule(intervalNanos);
+}
+
+//// class ServerStats::Deferred ////
+
+ServerStats::Deferred::Deferred(ServerStats& serverStats)
+    : signalHandler(serverStats)
+    , signalMonitor(serverStats.globals.eventLoop, signalHandler)
+    , timerHandler(serverStats)
+    , timerMonitor(serverStats.globals.eventLoop, timerHandler)
+{
+}
+
+//// class ServerStats ////
+
+ServerStats::ServerStats(Globals& globals)
+    : globals(globals)
+    , mutex()
+    , stats()
+    , deferred()
+{
+}
+
+ServerStats::~ServerStats()
+{
+}
+
+void
+ServerStats::enable()
+{
+    Lock lock(*this);
+    if (!deferred) {
+        // Defer construction of timer so that TimerHandler constructor can
+        // access globals.config.
+        deferred.reset(new Deferred(*this));
+    }
+}
+
+Protocol::ServerStats
+ServerStats::getCurrent()
+{
+    Protocol::ServerStats copy;
+    int64_t startTime = std::chrono::nanoseconds(
+        Core::Time::SystemClock::now().time_since_epoch()).count();
+    bool enabled;
+    {
+        Lock lock(*this);
+        copy = *lock;
+        enabled = (deferred.get() != NULL);
+    }
+    copy.set_start_at(startTime);
+    if (enabled) {
+        globals.raft->updateServerStats(copy);
+    }
+    copy.set_end_at(std::chrono::nanoseconds(
+        Core::Time::SystemClock::now().time_since_epoch()).count());
+    return copy;
 }
 
 

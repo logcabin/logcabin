@@ -46,10 +46,9 @@ dupOrPanic(int oldfd)
 
 ////////// MessageSocket::SendSocket //////////
 
-MessageSocket::SendSocket::SendSocket(Event::Loop& eventLoop,
-                                      int fd,
+MessageSocket::SendSocket::SendSocket(int fd,
                                       MessageSocket& messageSocket)
-    : Event::File(eventLoop, fd, 0)
+    : Event::File(fd)
     , messageSocket(messageSocket)
 {
     int flag = 1;
@@ -74,10 +73,9 @@ MessageSocket::SendSocket::handleFileEvent(int events)
 
 ////////// MessageSocket::ReceiveSocket //////////
 
-MessageSocket::ReceiveSocket::ReceiveSocket(Event::Loop& eventLoop,
-                                            int fd,
+MessageSocket::ReceiveSocket::ReceiveSocket(int fd,
                                             MessageSocket& messageSocket)
-    : Event::File(eventLoop, fd, EPOLLIN)
+    : Event::File(fd)
     , messageSocket(messageSocket)
 {
     // I don't know that TCP_NODELAY has any effect if we're only reading from
@@ -171,8 +169,10 @@ MessageSocket::MessageSocket(Event::Loop& eventLoop, int fd,
     , inbound()
     , outboundQueueMutex()
     , outboundQueue()
-    , receiveSocket(eventLoop, dupOrPanic(fd), *this)
-    , sendSocket(eventLoop, fd, *this)
+    , receiveSocket(dupOrPanic(fd), *this)
+    , receiveSocketMonitor(eventLoop, receiveSocket, EPOLLIN)
+    , sendSocket(fd, *this)
+    , sendSocketMonitor(eventLoop, sendSocket, 0)
 {
 }
 
@@ -198,18 +198,14 @@ MessageSocket::sendMessage(MessageId messageId, Buffer contents)
     }
     // Make sure the SendSocket is set up to call writable().
     if (kick)
-        sendSocket.setEvents(EPOLLOUT|EPOLLONESHOT);
+        sendSocketMonitor.setEvents(EPOLLOUT|EPOLLONESHOT);
 }
 
 void
 MessageSocket::disconnect()
 {
-    int r = close(receiveSocket.release());
-    if (r != 0)
-        PANIC("Could not close receive socket: %s", strerror(errno));
-    r = close(sendSocket.release());
-    if (r != 0)
-        PANIC("Could not close send socket: %s", strerror(errno));
+    receiveSocketMonitor.disableForever();
+    sendSocketMonitor.disableForever();
     // TODO(ongaro): to make it safe for epoll_wait to return  multiple events,
     // need to somehow queue the onDisconnect for later.
     onDisconnect();
@@ -218,8 +214,6 @@ MessageSocket::disconnect()
 void
 MessageSocket::readable()
 {
-    if (receiveSocket.fd < 0)
-        return;
     // Try to read data from the kernel until there is no more left.
     while (true) {
         if (inbound.bytesRead < sizeof(Header)) {
@@ -295,8 +289,6 @@ MessageSocket::read(void* buf, size_t maxBytes)
 void
 MessageSocket::writable()
 {
-    if (receiveSocket.fd < 0)
-        return;
     // Each iteration of this loop tries to write one message
     // from outboundQueue.
     while (true) {
@@ -367,7 +359,7 @@ MessageSocket::writable()
         outbound.bytesSent += bytesSent;
         if (outbound.bytesSent != (sizeof(Header) +
                                    outbound.message.getLength())) {
-            sendSocket.setEvents(EPOLLOUT|EPOLLONESHOT);
+            sendSocketMonitor.setEvents(EPOLLOUT|EPOLLONESHOT);
             std::unique_lock<Core::Mutex> lockGuard(outboundQueueMutex);
             outboundQueue.emplace_front(std::move(outbound));
             return;

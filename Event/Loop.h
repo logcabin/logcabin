@@ -1,4 +1,5 @@
 /* Copyright (c) 2011-2014 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -21,13 +22,13 @@
 
 #include "Core/ConditionVariable.h"
 #include "Core/Mutex.h"
+#include "Event/Timer.h"
 
 namespace LogCabin {
 namespace Event {
 
 // forward declarations
 class File;
-class Timer;
 
 /**
  * This class contains an event loop based on Linux's epoll interface.
@@ -94,15 +95,23 @@ class Loop {
   private:
 
     /**
+     * Used in breakTimer, whose purpose is not to handle events but to break
+     * runForever() out of epoll_wait.
+     */
+    class NullTimer : public Event::Timer {
+      public:
+        void handleTimerEvent();
+    };
+
+    /**
      * The file descriptor used in epoll calls to monitor other files.
      */
     int epollfd;
 
     /**
-     * Used by other threads to break runForever() out of epoll_wait. It is
-     * heap-allocated so that it can be constructed once epollfd is set up.
+     * Used by Event::Loop::Lock to break runForever() out of epoll_wait.
      */
-    std::unique_ptr<Event::Timer> breakTimer;
+    NullTimer breakTimer;
 
     /**
      * This is a flag to runForever() to exit, set by exit().
@@ -112,7 +121,7 @@ class Loop {
 
     /**
      * This mutex protects all of the members of this class defined below this
-     * point.
+     * point, except breakTimerMonitor.
      */
     std::mutex mutex;
 
@@ -157,6 +166,11 @@ class Loop {
      * Signaled when there are no longer any Locks active.
      */
     Core::ConditionVariable unlocked;
+
+    /**
+     * Watches breakTimer for events.
+     */
+    Event::Timer::Monitor breakTimerMonitor;
 
     friend class Event::File;
 

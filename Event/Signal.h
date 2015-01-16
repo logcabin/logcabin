@@ -1,4 +1,5 @@
 /* Copyright (c) 2011-2014 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -32,7 +33,7 @@ class Loop;
  * Signal handlers can be created from any thread, but they will always fire on
  * the thread running the Event::Loop.
  */
-class Signal : public Event::File {
+class Signal : private Event::File {
   public:
     /**
      * Blocks asynchronous signal delivery on the current thread for the given
@@ -49,25 +50,37 @@ class Signal : public Event::File {
     };
 
     /**
-     * Construct and enable a signal handler.
-     * See also Blocker, which you'll generally need to create first.
-     * \param eventLoop
-     *      Event::Loop that will manage this signal handler.
+     * Registers a Signal handler to be monitored by the Event::Loop. Once this
+     * is constructed, the Event::Loop will call the Signal's event handler
+     * appropriately.
+     *
+     * This object must be destroyed or disableForever() called BEFORE the
+     * Signal object can be destroyed safely.
+     */
+    class Monitor : private File::Monitor {
+      public:
+        /// See File::Monitor::Monitor.
+        Monitor(Event::Loop& eventLoop, Signal& signal);
+        /// See File::Monitor::~Monitor.
+        ~Monitor();
+        /// See File::Monitor::disableForever.
+        using File::Monitor::disableForever;
+    };
+
+    /**
+     * Construct a signal handler.
+     * See also Blocker, which you'll generally need to create first,
+     * and Monitor, which you'll need to create after.
      * \param signalNumber
      *      The signal number identifying which signal to receive
      *      (man signal.h).
      */
-    explicit Signal(Event::Loop& eventLoop, int signalNumber);
+    explicit Signal(int signalNumber);
 
     /**
      * Destructor.
      */
     virtual ~Signal();
-
-    /**
-     * Generic event handler for files. Calls handleSignalEvent().
-     */
-    void handleFileEvent(int events);
 
     /**
      * This method is overridden by a subclass and invoked when the signal
@@ -80,6 +93,12 @@ class Signal : public Event::File {
      * The signal number identifying which signal to receive (man signal.h).
      */
     const int signalNumber;
+
+  private:
+    /**
+     * Generic event handler for files. Calls handleSignalEvent().
+     */
+    void handleFileEvent(int events);
 
     // Signal is not copyable.
     Signal(const Signal&) = delete;

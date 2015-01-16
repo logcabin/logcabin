@@ -26,8 +26,9 @@ namespace {
 
 struct ExitOnSigTerm : public Event::Signal {
     explicit ExitOnSigTerm(Event::Loop& loop)
-        : Signal(loop, SIGTERM)
+        : Signal(SIGTERM)
         , triggerCount(0)
+        , eventLoop(loop)
     {
     }
     void handleSignalEvent() {
@@ -35,6 +36,7 @@ struct ExitOnSigTerm : public Event::Signal {
         eventLoop.exit();
     }
     uint32_t triggerCount;
+    Event::Loop& eventLoop;
 };
 
 struct EventSignalTest : public ::testing::Test {
@@ -48,6 +50,7 @@ struct EventSignalTest : public ::testing::Test {
 TEST_F(EventSignalTest, constructor) {
     Event::Signal::Blocker block(SIGTERM);
     ExitOnSigTerm signal(loop);
+    Event::Signal::Monitor monitor(loop, signal);
 }
 
 TEST_F(EventSignalTest, destructor) {
@@ -57,6 +60,7 @@ TEST_F(EventSignalTest, destructor) {
 TEST_F(EventSignalTest, fires) {
     Event::Signal::Blocker block(SIGTERM);
     ExitOnSigTerm signal(loop);
+    Event::Signal::Monitor monitor(loop, signal);
     // Warning: if you run this in gdb, you'll need to pass the signal through
     // to the application.
     EXPECT_EQ(0, kill(getpid(), SIGTERM));

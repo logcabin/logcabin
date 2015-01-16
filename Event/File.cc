@@ -1,5 +1,5 @@
 /* Copyright (c) 2011-2014 Stanford University
- * Copyright (c) 2014 Diego Ongaro
+ * Copyright (c) 2014-2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -25,64 +25,77 @@
 namespace LogCabin {
 namespace Event {
 
-File::File(Event::Loop& eventLoop, int fd, int fileEvents)
+//// class File::Monitor ////
+
+File::Monitor::Monitor(Event::Loop& eventLoop, File& file, int fileEvents)
     : eventLoop(eventLoop)
-    , fdMutex()
-    , fd(fd)
+    , mutex()
+    , file(&file)
 {
     struct epoll_event event;
     memset(&event, 0, sizeof(event));
     event.events = fileEvents;
-    event.data.ptr = this;
-    int r = epoll_ctl(eventLoop.epollfd, EPOLL_CTL_ADD, fd, &event);
+    event.data.ptr = this->file;
+    int r = epoll_ctl(eventLoop.epollfd, EPOLL_CTL_ADD,
+                      this->file->fd, &event);
     if (r != 0) {
         PANIC("Adding file %d event with epoll_ctl failed: %s",
-              fd, strerror(errno));
+              this->file->fd, strerror(errno));
     }
 }
 
-File::~File()
+File::Monitor::~Monitor()
 {
-    Event::Loop::Lock lock(eventLoop);
-    int released = release();
-    if (released >= 0) {
-        int r = close(released);
-        if (r != 0)
-            PANIC("Could not close file %d: %s", released, strerror(errno));
-    }
+    disableForever();
 }
 
 void
-File::setEvents(int fileEvents)
+File::Monitor::disableForever()
 {
-    std::unique_lock<std::mutex> mutexGuard(fdMutex);
-    if (fd < 0)
+    std::unique_lock<std::mutex> mutexGuard(mutex);
+    if (file == NULL)
+        return;
+    Event::Loop::Lock lock(eventLoop);
+    int r = epoll_ctl(eventLoop.epollfd, EPOLL_CTL_DEL, file->fd, NULL);
+    if (r != 0) {
+        PANIC("Removing file %d event with epoll_ctl failed: %s",
+              file->fd, strerror(errno));
+    }
+    file = NULL;
+}
+
+void
+File::Monitor::setEvents(int fileEvents)
+{
+    std::unique_lock<std::mutex> mutexGuard(mutex);
+    if (file == NULL)
         return;
     struct epoll_event event;
     memset(&event, 0, sizeof(event));
     event.events = fileEvents;
-    event.data.ptr = this;
-    int r = epoll_ctl(eventLoop.epollfd, EPOLL_CTL_MOD, fd, &event);
+    event.data.ptr = file;
+    int r = epoll_ctl(eventLoop.epollfd, EPOLL_CTL_MOD, file->fd, &event);
     if (r != 0) {
         PANIC("Modifying file %d event with epoll_ctl failed: %s",
-              fd, strerror(errno));
+              file->fd, strerror(errno));
     }
 }
 
-int
-File::release()
+//// class File ////
+
+File::File(int fd, Ownership ownership)
+    : fd(fd)
+    , ownership(ownership)
 {
-    std::unique_lock<std::mutex> mutexGuard(fdMutex);
-    if (fd < 0)
-        return -1;
-    int r = epoll_ctl(eventLoop.epollfd, EPOLL_CTL_DEL, fd, NULL);
-    if (r != 0) {
-        PANIC("Removing file %d event with epoll_ctl failed: %s",
-              fd, strerror(errno));
+}
+
+File::~File()
+{
+    if (ownership == CLOSE_ON_DESTROY) {
+        int r = close(fd);
+        if (r != 0)
+            PANIC("Could not close file %d: %s", fd, strerror(errno));
     }
-    int released = fd;
-    fd = -1;
-    return released;
 }
 
 } // namespace LogCabin::Event
