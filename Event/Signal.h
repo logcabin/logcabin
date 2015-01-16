@@ -28,7 +28,8 @@ class Loop;
 /**
  * A Signal is called by the Event::Loop when a Unix signal is received.
  * The client should inherit from this and implement the handleSignalEvent()
- * method for when the signal is received.
+ * method for when the signal is received. This is persistent; it will handle
+ * repeated delivery of the signal.
  *
  * Signal handlers can be created from any thread, but they will always fire on
  * the thread running the Event::Loop.
