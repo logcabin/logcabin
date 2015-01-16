@@ -24,10 +24,11 @@ namespace Event {
 namespace {
 
 class Counter : public Event::Timer {
-    Counter(Event::Loop& eventLoop, uint64_t exitAfter = 0)
-        : Timer(eventLoop)
+    explicit Counter(Event::Loop& eventLoop)
+        : Timer()
+        , eventLoop(eventLoop)
         , count(0)
-        , exitAfter(exitAfter)
+        , exitAfter(0)
     {
     }
     void handleTimerEvent() {
@@ -37,6 +38,7 @@ class Counter : public Event::Timer {
         else
             schedule(0);
     }
+    Event::Loop& eventLoop;
     uint64_t count;
     uint64_t exitAfter;
 };
@@ -55,6 +57,7 @@ lockAndIncrement100(Event::Loop& eventLoop, uint64_t& count)
 TEST(EventLoopTest, lock) {
     Loop loop;
     Counter counter(loop);
+    Timer::Monitor counterMonitor(loop, counter);
     counter.schedule(0);
 
     // acquire lock while the event loop is not running
@@ -78,6 +81,12 @@ TEST(EventLoopTest, lock) {
     }
     loop.exit();
     thread.join();
+}
+
+TEST(EventLoopTest, lock_mutex) {
+    Loop loop;
+    Counter counter(loop);
+    Timer::Monitor counterMonitor(loop, counter);
 
     // Locks mutually exclude each other
     uint64_t count = 0;
@@ -107,7 +116,9 @@ TEST(EventLoopTest, destructor) {
 
 TEST(EventLoopTest, runForever) {
     Loop loop;
-    Counter counter(loop, 9);
+    Counter counter(loop);
+    counter.exitAfter = 9;
+    Timer::Monitor counterMonitor(loop, counter);
     counter.schedule(0);
     loop.runForever();
     EXPECT_EQ(10U, counter.count);
@@ -118,6 +129,7 @@ TEST(EventLoopTest, exit) {
 
     Loop loop;
     Counter counter(loop);
+    Timer::Monitor counterMonitor(loop, counter);
     counter.schedule(0);
 
     // exit before run

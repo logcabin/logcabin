@@ -1,4 +1,5 @@
 /* Copyright (c) 2011-2014 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -40,19 +41,26 @@ createTimerFd()
 
 } // anonymous namespace
 
-Timer::Timer(Event::Loop& eventLoop)
-    : Event::File(eventLoop, createTimerFd(), EPOLLIN|EPOLLET)
+//// class Timer::Monitor ////
+
+Timer::Monitor::Monitor(Event::Loop& eventLoop, Timer& timer)
+    : File::Monitor(eventLoop, timer, EPOLLIN|EPOLLET)
+{
+}
+
+Timer::Monitor::~Monitor()
+{
+}
+
+//// class Timer ////
+
+Timer::Timer()
+    : Event::File(createTimerFd())
 {
 }
 
 Timer::~Timer()
 {
-}
-
-void
-Timer::handleFileEvent(int events)
-{
-    handleTimerEvent();
 }
 
 void
@@ -124,6 +132,12 @@ Timer::isScheduled() const
         PANIC("Could not get timer: %s", strerror(errno));
     return (currentValue.it_value.tv_sec != 0 ||
             currentValue.it_value.tv_nsec != 0);
+}
+
+void
+Timer::handleFileEvent(int events)
+{
+    handleTimerEvent();
 }
 
 } // namespace LogCabin::Event

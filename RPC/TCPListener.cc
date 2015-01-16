@@ -31,9 +31,8 @@ namespace RPC {
 ////////// class TCPListener::BoundListener //////////
 
 TCPListener::BoundListener::BoundListener(TCPListener& tcpListener,
-                                          Event::Loop& eventLoop,
                                           int fd)
-    : Event::File(eventLoop, fd, EPOLLIN)
+    : Event::File(fd)
     , tcpListener(tcpListener)
 {
 }
@@ -55,12 +54,14 @@ TCPListener::TCPListener(Event::Loop& eventLoop)
     : eventLoop(eventLoop)
     , mutex()
     , boundListeners()
+    , boundListenerMonitors()
 {
 }
 
 TCPListener::~TCPListener()
 {
     std::unique_lock<Core::Mutex> lock(mutex);
+    boundListenerMonitors.clear();
     boundListeners.clear();
 }
 
@@ -112,7 +113,10 @@ TCPListener::bind(const Address& listenAddress)
     }
 
     std::unique_lock<Core::Mutex> lock(mutex);
-    boundListeners.emplace_back(*this, eventLoop, fd);
+    boundListeners.emplace_back(*this, fd);
+    boundListenerMonitors.emplace_back(eventLoop,
+                                       boundListeners.back(),
+                                       EPOLLIN);
     return "";
 }
 

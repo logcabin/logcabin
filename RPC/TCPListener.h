@@ -81,9 +81,7 @@ class TCPListener {
      */
     class BoundListener : public Event::File {
       public:
-        explicit BoundListener(TCPListener& tcpListener,
-                               Event::Loop& eventLoop,
-                               int fd);
+        explicit BoundListener(TCPListener& tcpListener, int fd);
         void handleFileEvent(int events);
         TCPListener& tcpListener;
     };
@@ -94,7 +92,8 @@ class TCPListener {
     Event::Loop& eventLoop;
 
     /**
-     * Lock to prevent concurrent modification of boundListeners.
+     * Lock to prevent concurrent modification of boundListeners and
+     * boundListenerMonitors.
      */
     Core::Mutex mutex;
 
@@ -104,6 +103,12 @@ class TCPListener {
      * location (otherwise their handlers would blow up).
      */
     std::deque<BoundListener> boundListeners;
+
+    /**
+     * For each socket in boundListeners, a corresponding monitor that
+     * registers it with the event loop.
+     */
+    std::deque<Event::File::Monitor> boundListenerMonitors;
 
     // TCPListener is not copyable.
     TCPListener(const TCPListener&) = delete;

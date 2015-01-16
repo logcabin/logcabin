@@ -1,4 +1,5 @@
 /* Copyright (c) 2011-2014 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -28,7 +29,7 @@ namespace Event {
 
 namespace {
 
-/// Helper for constructor.
+/// Helper for Signal constructor.
 int
 createSignalFd(int signalNumber)
 {
@@ -45,11 +46,12 @@ createSignalFd(int signalNumber)
 
 } // anonymous namespace
 
-Signal::Signal(Event::Loop& eventLoop, int signalNumber)
-    : Event::File(eventLoop, createSignalFd(signalNumber), EPOLLIN)
-    , signalNumber(signalNumber)
+//// class Signal::Blocker ////
+
+Signal::Blocker::Blocker(int signalNumber)
+    : signalNumber(signalNumber)
 {
-    // Block signals so that they only come through signalfd
+    // Block signal
     sigset_t mask;
     sigemptyset(&mask);
     sigaddset(&mask, signalNumber);
@@ -60,12 +62,9 @@ Signal::Signal(Event::Loop& eventLoop, int signalNumber)
     }
 }
 
-Signal::~Signal()
+Signal::Blocker::~Blocker()
 {
-    Event::Loop::Lock lock(eventLoop);
-    int fd = release();
-
-    // Unblock normal signals
+    // Unblock signal
     sigset_t mask;
     sigemptyset(&mask);
     sigaddset(&mask, signalNumber);
@@ -74,10 +73,30 @@ Signal::~Signal()
         PANIC("Could not unblock signal %d: %s",
               signalNumber, strerror(r));
     }
+}
 
-    r = close(fd);
-    if (r != 0)
-        PANIC("Could not close signalfd %d: %s", fd, strerror(errno));
+//// class Signal::Monitor ////
+
+Signal::Monitor::Monitor(Event::Loop& eventLoop, Signal& signal)
+    : File::Monitor(eventLoop, signal, EPOLLIN)
+{
+}
+
+Signal::Monitor::~Monitor()
+{
+}
+
+
+//// class Signal ////
+
+Signal::Signal(int signalNumber)
+    : Event::File(createSignalFd(signalNumber))
+    , signalNumber(signalNumber)
+{
+}
+
+Signal::~Signal()
+{
 }
 
 void

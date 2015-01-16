@@ -56,8 +56,9 @@ namespace {
  * Helper for ClientSession constructor.
  */
 struct FileNotifier : public Event::File {
-    FileNotifier(Event::Loop& eventLoop, int fd, int events)
-        : Event::File(eventLoop, fd, events)
+    FileNotifier(Event::Loop& eventLoop, int fd, Ownership ownership)
+        : Event::File(fd, ownership)
+        , eventLoop(eventLoop)
         , count(0)
     {
     }
@@ -65,6 +66,7 @@ struct FileNotifier : public Event::File {
         ++count;
         eventLoop.exit();
     }
+    Event::Loop& eventLoop;
     uint64_t count;
 };
 
@@ -74,11 +76,14 @@ struct FileNotifier : public Event::File {
  */
 struct TimerNotifier : public Event::Timer {
     explicit TimerNotifier(Event::Loop& eventLoop)
-        : Event::Timer(eventLoop) {
+        : Event::Timer()
+        , eventLoop(eventLoop)
+    {
     }
     void handleTimerEvent() {
         eventLoop.exit();
     }
+    Event::Loop& eventLoop;
 };
 
 } // anonymous namespace
@@ -181,7 +186,7 @@ ClientSession::Response::Response()
 ////////// ClientSession::Timer //////////
 
 ClientSession::Timer::Timer(ClientSession& session)
-    : Event::Timer(session.eventLoop)
+    : Event::Timer()
     , session(session)
 {
 }
@@ -237,6 +242,7 @@ ClientSession::ClientSession(Event::Loop& eventLoop,
     , address(address)
     , messageSocket()
     , timer(*this)
+    , timerMonitor(eventLoop, timer)
     , mutex()
     , nextMessageId(1) // 0 is reserved for PING_MESSAGE_ID
     , responses()
@@ -292,8 +298,10 @@ ClientSession::ClientSession(Event::Loop& eventLoop,
         // for a given period of time. On the other hand, it's only a few lines
         // of code with the LogCabin::Event classes, so it's easier for now.
         Event::Loop loop;
-        FileNotifier fileNotifier(loop, fd, EPOLLOUT);
+        FileNotifier fileNotifier(loop, fd, Event::File::CALLER_CLOSES_FD);
         TimerNotifier timerNotifier(loop);
+        Event::File::Monitor fileMonitor(loop, fileNotifier, EPOLLOUT);
+        Event::Timer::Monitor timerMonitor(loop, timerNotifier);
         timerNotifier.scheduleAbsolute(timeout);
         while (true) {
             loop.runForever();
@@ -308,8 +316,6 @@ ClientSession::ClientSession(Event::Loop& eventLoop,
                         "Failed to connect socket to %s: %s",
                         address.toString().c_str(),
                         strerror(error));
-                    // fileNotifier destructor closes fd
-                    return;
                 }
                 break;
             }
@@ -317,13 +323,14 @@ ClientSession::ClientSession(Event::Loop& eventLoop,
                 errorMessage = Core::StringUtil::format(
                     "Failed to connect socket to %s: timeout expired",
                     address.toString().c_str());
-                // fileNotifier destructor closes fd
-                return;
+                break;
             }
             WARNING("spurious exit from event loop?");
         }
-        // don't want fileNotifier destructor to close fd
-        fileNotifier.release();
+    }
+    if (!errorMessage.empty()) {
+        close(fd);
+        return;
     }
 
     messageSocket.reset(new ClientMessageSocket(*this, fd, maxMessageLength));
@@ -344,7 +351,7 @@ ClientSession::makeSession(Event::Loop& eventLoop,
 
 ClientSession::~ClientSession()
 {
-    timer.deschedule();
+    timerMonitor.disableForever();
     for (auto it = responses.begin(); it != responses.end(); ++it)
         delete it->second;
 }

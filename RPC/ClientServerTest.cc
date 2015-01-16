@@ -44,10 +44,14 @@ class ReplyTimer : public Event::Timer {
     ReplyTimer(Event::Loop& eventLoop,
                RPC::OpaqueServerRPC serverRPC,
                uint32_t delayMicros)
-        : Timer(eventLoop)
+        : Timer()
         , serverRPC(std::move(serverRPC))
+        , monitor(eventLoop, *this)
     {
         schedule(delayMicros * 1000);
+    }
+    ~ReplyTimer() {
+        monitor.disableForever();
     }
     void handleTimerEvent() {
         VERBOSE("Ok responding");
@@ -55,6 +59,10 @@ class ReplyTimer : public Event::Timer {
         delete this;
     }
     RPC::OpaqueServerRPC serverRPC;
+    // You aren't really supposed to put a monitor in an Event::Timer, but the
+    // memory management here is weird. Just make sure to call
+    // monitor.disableForever() as the first thing in the destructor.
+    Event::Timer::Monitor monitor;
 };
 
 class EchoServer : public RPC::OpaqueServer {
@@ -65,6 +73,7 @@ class EchoServer : public RPC::OpaqueServer {
     }
     void handleRPC(RPC::OpaqueServerRPC serverRPC) {
         serverRPC.response = std::move(serverRPC.request);
+        serverRPC.sendReply();
         VERBOSE("Delaying response for %u microseconds", delayMicros);
         new ReplyTimer(eventLoop, std::move(serverRPC), delayMicros);
     }

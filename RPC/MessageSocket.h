@@ -125,8 +125,7 @@ class MessageSocket {
      */
     struct SendSocket : public Event::File {
       public:
-        SendSocket(Event::Loop& eventLoop, int fd,
-                  MessageSocket& messageSocket);
+        SendSocket(int fd, MessageSocket& messageSocket);
         ~SendSocket();
         void handleFileEvent(int events);
       private:
@@ -140,8 +139,7 @@ class MessageSocket {
      */
     struct ReceiveSocket : public Event::File {
       public:
-        ReceiveSocket(Event::Loop& eventLoop, int fd,
-                  MessageSocket& messageSocket);
+        ReceiveSocket(int fd, MessageSocket& messageSocket);
         ~ReceiveSocket();
         void handleFileEvent(int events);
       private:
@@ -291,10 +289,20 @@ class MessageSocket {
     ReceiveSocket receiveSocket;
 
     /**
+     * Registers receiveSocket with the event loop.
+     */
+    Event::File::Monitor receiveSocketMonitor;
+
+    /**
      * Notifies MessageSocket when the socket can be transmitted on without
      * blocking.
      */
     SendSocket sendSocket;
+
+    /**
+     * Registers sendSocket with the event loop.
+     */
+    Event::File::Monitor sendSocketMonitor;
 
     // MessageSocket is non-copyable.
     MessageSocket(const MessageSocket&) = delete;

@@ -33,9 +33,9 @@ TEST(ServerServerStatsTest, getCurrent) {
     EXPECT_LT(stat.start_at(),
               stat.end_at());
     EXPECT_FALSE(stat.has_raft());
-    EXPECT_FALSE(globals.serverStats.enabled);
+    EXPECT_TRUE(NULL == globals.serverStats.deferred.get());
     globals.init(1); // calls globals.ServerStats.enable()
-    EXPECT_TRUE(globals.serverStats.enabled);
+    EXPECT_TRUE(NULL != globals.serverStats.deferred.get());
     stat = globals.serverStats.getCurrent();
     EXPECT_TRUE(stat.has_raft());
 }
