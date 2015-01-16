@@ -268,15 +268,19 @@ main(int argc, char** argv)
     PidFile pidFile(options.pidFilename);
     pidFile.writePid(getpid());
 
-    // Initialize and run Globals.
-    Server::Globals globals;
-    globals.config.readFile(options.configFilename.c_str());
-    globals.init(options.serverId);
-    if (options.bootstrap) {
-        globals.raft->bootstrapConfiguration();
-        NOTICE("Done bootstrapping configuration. Exiting.");
-    } else {
-        globals.run();
+    {
+        // Initialize and run Globals.
+        Server::Globals globals;
+        globals.config.readFile(options.configFilename.c_str());
+        globals.init(options.serverId);
+        if (options.bootstrap) {
+            globals.raft->bootstrapConfiguration();
+            NOTICE("Done bootstrapping configuration. Exiting.");
+        } else {
+            globals.run();
+        }
     }
+
+    google::protobuf::ShutdownProtobufLibrary();
     return 0;
 }
