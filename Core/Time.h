@@ -190,6 +190,11 @@ rdtsc()
 int64_t getTimeNanos();
 
 /**
+ * Block the calling thread until the given time.
+ */
+void sleep(SteadyClock::time_point wake);
+
+/**
  * Used to convert one or more SteadyClock::time_point values into values of
  * the SystemClock. Using the same instance for many conversions is more
  * efficient, since the current time only has to be queried once for each clock
