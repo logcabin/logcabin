@@ -18,10 +18,8 @@
 #include <deque>
 #include <memory>
 #include <mutex>
-#include <thread>
 
 #include "build/Protocol/Client.pb.h"
-#include "Event/Loop.h"
 #include "RPC/Address.h"
 #include "RPC/ClientRPC.h"
 
@@ -29,6 +27,11 @@
 #define LOGCABIN_CLIENT_LEADERRPC_H
 
 namespace LogCabin {
+
+// forward declaration
+namespace Event {
+class Loop;
+}
 
 // forward declaration
 namespace RPC {
@@ -206,8 +209,10 @@ class LeaderRPC : public LeaderRPCBase {
      *      Describe the servers to connect to. This class assumes that
      *      refreshing 'hosts' will result in a random host that might be the
      *      current cluster leader.
+     * \param eventLoop
+     *      Used to invoke RPCs.
      */
-    explicit LeaderRPC(const RPC::Address& hosts);
+    LeaderRPC(const RPC::Address& hosts, Event::Loop& eventLoop);
 
     /// Destructor.
     ~LeaderRPC();
@@ -296,14 +301,9 @@ class LeaderRPC : public LeaderRPCBase {
     const uint64_t windowNanos;
 
     /**
-     * The Event::Loop used to drive the underlying RPC mechanism.
+     * Used to drive the underlying RPC mechanism.
      */
-    Event::Loop eventLoop;
-
-    /**
-     * A thread that runs the Event::Loop.
-     */
-    std::thread eventLoopThread;
+    Event::Loop& eventLoop;
 
     /**
      * Protects all of the following member variables in this class.

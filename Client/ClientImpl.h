@@ -17,12 +17,14 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <thread>
 
 #include "include/LogCabin/Client.h"
 #include "Client/LeaderRPC.h"
 #include "Core/ConditionVariable.h"
 #include "Core/Mutex.h"
 #include "Core/Time.h"
+#include "Event/Loop.h"
 
 #ifndef LOGCABIN_CLIENT_CLIENTIMPL_H
 #define LOGCABIN_CLIENT_CLIENTIMPL_H
@@ -138,6 +140,11 @@ class ClientImpl {
      * and server are speaking the same version of the RPC protocol.
      */
     uint32_t negotiateRPCVersion();
+
+    /**
+     * The Event::Loop used to drive the underlying RPC mechanism.
+     */
+    Event::Loop eventLoop;
 
     /**
      * Describes the hosts in the cluster.
@@ -277,6 +284,11 @@ class ClientImpl {
         ExactlyOnceRPCHelper(const ExactlyOnceRPCHelper&) = delete;
         ExactlyOnceRPCHelper& operator=(const ExactlyOnceRPCHelper&) = delete;
     } exactlyOnceRPCHelper;
+
+    /**
+     * A thread that runs the Event::Loop.
+     */
+    std::thread eventLoopThread;
 
     // ClientImpl is not copyable
     ClientImpl(const ClientImpl&) = delete;

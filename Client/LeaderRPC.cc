@@ -153,11 +153,10 @@ LeaderRPC::Call::wait(google::protobuf::Message& response,
 
 //// class LeaderRPC ////
 
-LeaderRPC::LeaderRPC(const RPC::Address& hosts)
+LeaderRPC::LeaderRPC(const RPC::Address& hosts, Event::Loop& eventLoop)
     : windowCount(5)
     , windowNanos(1000 * 1000 * 100)
-    , eventLoop()
-    , eventLoopThread(&Event::Loop::runForever, &eventLoop)
+    , eventLoop(eventLoop)
     , mutex()
     , hosts(hosts)
     , leaderHint()
@@ -172,9 +171,6 @@ LeaderRPC::LeaderRPC(const RPC::Address& hosts)
 LeaderRPC::~LeaderRPC()
 {
     leaderSession.reset();
-    eventLoop.exit();
-    if (eventLoopThread.joinable())
-        eventLoopThread.join();
 }
 
 LeaderRPC::Status

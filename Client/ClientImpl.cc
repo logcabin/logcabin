@@ -306,15 +306,20 @@ ClientImpl::ExactlyOnceRPCHelper::keepAliveThreadMain()
 ////////// class ClientImpl //////////
 
 ClientImpl::ClientImpl()
-    : hosts()
+    : eventLoop()
+    , hosts()
     , leaderRPC()             // set in init()
     , rpcProtocolVersion(~0U) // set in init()
     , exactlyOnceRPCHelper(this)
+    , eventLoopThread()
 {
 }
 
 ClientImpl::~ClientImpl()
 {
+    eventLoop.exit();
+    if (eventLoopThread.joinable())
+        eventLoopThread.join();
     exactlyOnceRPCHelper.exit();
 }
 
@@ -322,6 +327,7 @@ void
 ClientImpl::init(const std::string& hosts)
 {
     this->hosts = hosts;
+    eventLoopThread = std::thread(&Event::Loop::runForever, &eventLoop);
     initDerived();
 }
 
@@ -330,7 +336,8 @@ ClientImpl::initDerived()
 {
     if (!leaderRPC) { // sometimes set in unit tests
         leaderRPC.reset(new LeaderRPC(
-            RPC::Address(hosts, Protocol::Common::DEFAULT_PORT)));
+            RPC::Address(hosts, Protocol::Common::DEFAULT_PORT),
+            eventLoop));
     }
     if (rpcProtocolVersion == ~0U)
         rpcProtocolVersion = negotiateRPCVersion();
