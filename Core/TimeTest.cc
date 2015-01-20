@@ -170,17 +170,17 @@ TEST(CoreTime, getTimeNanos) {
 
 TEST(CoreTime, sleep_immediate_TimingSensitive) {
     Time::SteadyClock::time_point start = Time::SteadyClock::now();
-    sleep(Time::SteadyClock::time_point::min());
-    sleep(Time::SteadyClock::time_point());
-    sleep(Time::SteadyClock::now() - std::chrono::milliseconds(1));
-    sleep(Time::SteadyClock::now());
+    Time::sleep(Time::SteadyClock::time_point::min());
+    Time::sleep(Time::SteadyClock::time_point());
+    Time::sleep(Time::SteadyClock::now() - std::chrono::milliseconds(1));
+    Time::sleep(Time::SteadyClock::now());
     EXPECT_GT(start + std::chrono::milliseconds(5),
               Time::SteadyClock::now());
 }
 
 TEST(CoreTime, sleep_later_TimingSensitive) {
     Time::SteadyClock::time_point start = Time::SteadyClock::now();
-    sleep(start + std::chrono::milliseconds(12));
+    Time::sleep(start + std::chrono::milliseconds(12));
     Time::SteadyClock::time_point end = Time::SteadyClock::now();
     EXPECT_LT(start + std::chrono::milliseconds(12), end);
     EXPECT_GT(start + std::chrono::milliseconds(17), end);
