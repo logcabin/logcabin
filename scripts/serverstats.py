@@ -85,9 +85,25 @@ try:
 except AttributeError:
     subprocess.check_output = check_output_compat
 
-FOLLOWER = ServerStats.Raft.State.Value('FOLLOWER')
+
+# Protobuf 2.4.x support for enums in Python is lacking
+def fix_enums(cls):
+    import enum_type_wrapper
+    descriptor = cls.DESCRIPTOR
+    for enum_type in descriptor.enum_types:
+        setattr(cls, enum_type.name, enum_type_wrapper.EnumTypeWrapper(enum_type))
+        for enum_value in enum_type.values:
+          setattr(cls, enum_value.name, enum_value.number)
+
+try:
+    FOLLOWER  = ServerStats.Raft.State.Value('FOLLOWER')
+except AttributeError:
+    fix_enums(ServerStats.Raft)
+
+FOLLOWER  = ServerStats.Raft.State.Value('FOLLOWER')
 CANDIDATE = ServerStats.Raft.State.Value('CANDIDATE')
-LEADER = ServerStats.Raft.State.Value('LEADER')
+LEADER    = ServerStats.Raft.State.Value('LEADER')
+
 STATECOLOR = {
     FOLLOWER: None,
     CANDIDATE: 'yellow',
@@ -120,7 +136,7 @@ def reltime(t, base):
         return '-infinity'
     if t > nowish + 365 * 24 * 60 * 60 * 1e9:
         return '+infinity'
-    return '{:+0.3f} ms'.format((t - base) / 1e6)
+    return '{0:+0.3f} ms'.format((t - base) / 1e6)
 
 def printraft(print, raft, stats, leaders):
     statecolor = STATECOLOR[raft.state]
@@ -164,15 +180,15 @@ def printraft(print, raft, stats, leaders):
             if peer.last_synced_index == raft.last_log_index:
                 print('All log entries flushed to disk')
             else:
-                print(colored('Log flushed to disk up through entry {}'.format(
+                print(colored('Log flushed to disk up through entry {0}'.format(
                     peer.last_synced_index),
                     'yellow'))
     print('Voted for server {0.voted_for}'.format(
         raft))
     if raft.state == CANDIDATE:
-        print('Starting next election in {}'.format(
+        print('Starting next election in {0}'.format(
             reltime(raft.start_election_at, stats.end_at)))
-    print('Withholding votes for {}'.format(
+    print('Withholding votes for {0}'.format(
         reltime(raft.withhold_votes_until, stats.end_at)))
 
     old_servers = []
@@ -189,11 +205,11 @@ def printraft(print, raft, stats, leaders):
     new_servers.sort()
     staging_servers.sort()
     if new_servers or staging_servers:
-        print(colored('Configuration: old/curr={}, new={}, staging={}'.format(
+        print(colored('Configuration: old/curr={0}, new={1}, staging={2}'.format(
             old_servers, new_servers, staging_servers),
             'yellow'))
     else:
-        print(colored('Configuration: {}'.format(old_servers)))
+        print(colored('Configuration: {0}'.format(old_servers)))
 
     for peer in raft.peer:
         if (peer.server_id == stats.server_id or
@@ -228,10 +244,10 @@ def printraft(print, raft, stats, leaders):
                     print('Caught up')
                 else:
                     print('Not caught up')
-            print('Next heartbeat in {}'.format(
+            print('Next heartbeat in {0}'.format(
                 reltime(peer.next_heartbeat_at, stats.end_at)))
         if peer.backoff_until >= stats.end_at:
-            print('Backoff for {}'.format(
+            print('Backoff for {0}'.format(
                 reltime(peer.backoff_until, stats.end_at)))
         print.unindent()
 
@@ -256,8 +272,8 @@ def printstats(allstats):
         print.indent()
         elapsed = stats.end_at - stats.start_at
         printraft(print, stats.raft, stats, leaders)
-        print('Stats collected at {}'.format(abstime(stats.end_at)))
-        print(colored('Took {:0.3f} ms to generate stats'.format(
+        print('Stats collected at {0}'.format(abstime(stats.end_at)))
+        print(colored('Took {0:0.3f} ms to generate stats'.format(
             elapsed / 1e6),
               'red' if elapsed > 10e6 else None))
         print.unindent()
@@ -301,7 +317,7 @@ def main():
         stats = ServerStats()
         stats.ParseFromString(binproto)
         if not stats.ListFields():
-            print('failed to get stats for {}'.format(server))
+            print('failed to get stats for {0}'.format(server))
             print()
         else:
             allstats.append(stats)
