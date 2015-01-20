@@ -66,7 +66,7 @@ def Protobuf(env, source):
     cc = env.Protoc(os.path.splitext(source)[0] + '.pb.cc',
                     source,
                     PROTOCPROTOPATH = ["."],
-                    PROTOCPYTHONOUTDIR = None,
+                    PROTOCPYTHONOUTDIR = ".",
                     PROTOCOUTDIR = ".")[1]
     # Then build the resulting C++ file with no warnings
     return env.StaticObject(cc,
