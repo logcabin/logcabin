@@ -168,6 +168,24 @@ TEST(CoreTime, getTimeNanos) {
     EXPECT_LT(first, later);
 }
 
+TEST(CoreTime, sleep_immediate_TimingSensitive) {
+    Time::SteadyClock::time_point start = Time::SteadyClock::now();
+    Time::sleep(Time::SteadyClock::time_point::min());
+    Time::sleep(Time::SteadyClock::time_point());
+    Time::sleep(Time::SteadyClock::now() - std::chrono::milliseconds(1));
+    Time::sleep(Time::SteadyClock::now());
+    EXPECT_GT(start + std::chrono::milliseconds(5),
+              Time::SteadyClock::now());
+}
+
+TEST(CoreTime, sleep_later_TimingSensitive) {
+    Time::SteadyClock::time_point start = Time::SteadyClock::now();
+    Time::sleep(start + std::chrono::milliseconds(12));
+    Time::SteadyClock::time_point end = Time::SteadyClock::now();
+    EXPECT_LT(start + std::chrono::milliseconds(12), end);
+    EXPECT_GT(start + std::chrono::milliseconds(17), end);
+}
+
 TEST(CoreTimeSteadyTimeConverter, convert) {
     Time::SteadyTimeConverter conv;
     EXPECT_EQ(conv.systemNow,

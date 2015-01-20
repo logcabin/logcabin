@@ -17,9 +17,11 @@
 #include <gtest/gtest.h>
 #include <thread>
 
+#include "Client/Backoff.h"
 #include "Client/LeaderRPC.h"
 #include "Core/Debug.h"
 #include "Core/ProtoBuf.h"
+#include "Event/Loop.h"
 #include "Protocol/Common.h"
 #include "RPC/ClientSession.h"
 #include "RPC/Server.h"
@@ -35,24 +37,27 @@ typedef LeaderRPCBase::TimePoint TimePoint;
 class ClientLeaderRPCTest : public ::testing::Test {
   public:
     ClientLeaderRPCTest()
-        : serverEventLoop()
+        : eventLoop()
+        , sessionCreationBackoff(1, 1)
         , service()
         , server()
-        , serverThread()
+        , eventLoopThread()
         , leaderRPC()
         , request()
         , response()
         , expResponse()
     {
         service = std::make_shared<RPC::ServiceMock>();
-        server.reset(new RPC::Server(serverEventLoop,
+        server.reset(new RPC::Server(eventLoop,
                                      Protocol::Common::MAX_MESSAGE_LENGTH));
         RPC::Address address("127.0.0.1", Protocol::Common::DEFAULT_PORT);
         address.refresh(RPC::Address::TimePoint::max());
         EXPECT_EQ("", server->bind(address));
         server->registerService(Protocol::Common::ServiceId::CLIENT_SERVICE,
                                 service, 1);
-        leaderRPC.reset(new LeaderRPC(address));
+        leaderRPC.reset(new LeaderRPC(address,
+                                      eventLoop,
+                                      sessionCreationBackoff));
 
 
         request.mutable_read()->set_path("foo");
@@ -62,19 +67,20 @@ class ClientLeaderRPCTest : public ::testing::Test {
     ~ClientLeaderRPCTest()
     {
         RPC::ClientSession::connectFn = ::connect;
-        serverEventLoop.exit();
-        if (serverThread.joinable())
-            serverThread.join();
+        eventLoop.exit();
+        if (eventLoopThread.joinable())
+            eventLoopThread.join();
     }
 
     void init() {
-        serverThread = std::thread(&Event::Loop::runForever, &serverEventLoop);
+        eventLoopThread = std::thread(&Event::Loop::runForever, &eventLoop);
     }
 
-    Event::Loop serverEventLoop;
+    Event::Loop eventLoop;
+    Backoff sessionCreationBackoff;
     std::shared_ptr<RPC::ServiceMock> service;
     std::unique_ptr<RPC::Server> server;
-    std::thread serverThread;
+    std::thread eventLoopThread;
     std::unique_ptr<LeaderRPC> leaderRPC;
     Protocol::Client::ReadOnlyTree::Request request;
     Protocol::Client::ReadOnlyTree::Response response;
@@ -233,12 +239,7 @@ TEST_F(ClientLeaderRPCTest, Call_wait_sessionExpired) {
     Protocol::Client::Error error;
     error.set_error_code(Protocol::Client::Error::SESSION_EXPIRED);
 
-    leaderRPC->eventLoop.exit();
-    leaderRPC->eventLoopThread.join();
-
     EXPECT_DEATH({
-            leaderRPC->eventLoopThread = std::thread(&Event::Loop::runForever,
-                                                     &leaderRPC->eventLoop);
             init();
             service->serviceSpecificError(OpCode::READ_ONLY_TREE,
                                           request, error);

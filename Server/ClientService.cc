@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -44,6 +45,9 @@ ClientService::handleRPC(RPC::ServerRPC rpc)
 
     // Call the appropriate RPC handler based on the request's opCode.
     switch (rpc.getOpCode()) {
+        case OpCode::GET_SERVER_STATS:
+            getServerStats(std::move(rpc));
+            break;
         case OpCode::GET_SUPPORTED_RPC_VERSIONS:
             getSupportedRPCVersions(std::move(rpc));
             break;
@@ -89,6 +93,14 @@ ClientService::getName() const
 
 
 void
+ClientService::getServerStats(RPC::ServerRPC rpc)
+{
+    PRELUDE(GetServerStats);
+    *response.mutable_server_stats() = globals.serverStats.getCurrent();
+    rpc.reply(response);
+}
+
+void
 ClientService::getSupportedRPCVersions(RPC::ServerRPC rpc)
 {
     PRELUDE(GetSupportedRPCVersions);
@@ -96,6 +108,7 @@ ClientService::getSupportedRPCVersions(RPC::ServerRPC rpc)
     response.set_max_version(1);
     rpc.reply(response);
 }
+
 
 typedef RaftConsensus::ClientResult Result;
 typedef Protocol::Client::Command Command;

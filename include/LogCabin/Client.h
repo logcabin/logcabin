@@ -29,6 +29,11 @@
 #define LOGCABIN_INCLUDE_LOGCABIN_CLIENT_H
 
 namespace LogCabin {
+
+namespace Protocol {
+class ServerStats; // forward declaration
+} // namespace LogCabin::Protocol
+
 namespace Client {
 
 class ClientImpl; // forward declaration
@@ -510,6 +515,36 @@ class Cluster {
     ConfigurationResult setConfiguration(
                                 uint64_t oldId,
                                 const Configuration& newConfiguration);
+
+    /**
+     * Retrieve statistics from the given server, which are useful for
+     * diagnostics.
+     * \param host
+     *      The hostname or IP address of the server to retrieve stats from. It
+     *      is recommended that you do not use a DNS name that resolves to
+     *      multiple hosts here.
+     * \param timeoutNanoseconds
+     *      Abort the operation if it has not completed within the specified
+     *      period of time. Time is specified in nanoseconds, and the special
+     *      value of 0 indicates no timeout.
+     * \warning
+     *      The client library does not currently implement timeouts for DNS
+     *      lookups. See https://github.com/logcabin/logcabin/issues/75
+     * \param[out] stats
+     *      Protocol buffer of Stats as retrieved from the server.
+     * \return
+     *      Either OK or TIMEOUT.
+     */
+    Result
+    getServerStats(const std::string& host,
+                   uint64_t timeoutNanoseconds,
+                   Protocol::ServerStats& stats);
+    /**
+     * Like getServerStats but throws exceptions upon errors.
+     */
+    Protocol::ServerStats
+    getServerStatsEx(const std::string& host,
+                     uint64_t timeoutNanoseconds);
 
     /**
      * Return an object to access the hierarchical key-value store.

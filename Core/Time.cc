@@ -57,6 +57,24 @@ getTimeNanos()
     return int64_t(now.tv_sec) * 1000 * 1000 * 1000 + now.tv_nsec;
 }
 
+void
+sleep(SteadyClock::time_point wake)
+{
+    struct timespec wakeSpec = makeTimeSpec(wake);
+    if (wakeSpec.tv_sec < 0)
+        return;
+    int r = clock_nanosleep(STEADY_CLOCK_ID,
+                            TIMER_ABSTIME,
+                            &wakeSpec,
+                            NULL);
+    if (r != 0) {
+        PANIC("clock_nanosleep(STEADY_CLOCK_ID=%d, %s) failed: %s",
+              STEADY_CLOCK_ID,
+              Core::StringUtil::toString(wake).c_str(),
+              strerror(r));
+    }
+}
+
 SteadyTimeConverter::SteadyTimeConverter()
     : steadyNow(SteadyClock::now())
     , systemNow(SystemClock::now())

@@ -1,5 +1,5 @@
 /* Copyright (c) 2012-2014 Stanford University
- * Copyright (c) 2014 Diego Ongaro
+ * Copyright (c) 2014-2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -17,12 +17,15 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <thread>
 
 #include "include/LogCabin/Client.h"
+#include "Client/Backoff.h"
 #include "Client/LeaderRPC.h"
 #include "Core/ConditionVariable.h"
 #include "Core/Mutex.h"
 #include "Core/Time.h"
+#include "Event/Loop.h"
 
 #ifndef LOGCABIN_CLIENT_CLIENTIMPL_H
 #define LOGCABIN_CLIENT_CLIENTIMPL_H
@@ -75,6 +78,11 @@ class ClientImpl {
     ConfigurationResult setConfiguration(
                             uint64_t oldId,
                             const Configuration& newConfiguration);
+
+    /// See Cluster::getServerStats.
+    Result getServerStats(const std::string& host,
+                          TimePoint timeout,
+                          Protocol::ServerStats& stats);
 
     /**
      * Return the canonicalized path name resulting from accessing path
@@ -138,6 +146,17 @@ class ClientImpl {
      * and server are speaking the same version of the RPC protocol.
      */
     uint32_t negotiateRPCVersion();
+
+    /**
+     * The Event::Loop used to drive the underlying RPC mechanism.
+     */
+    Event::Loop eventLoop;
+
+    /**
+     * Used to rate-limit the creation of ClientSession objects (TCP
+     * connections).
+     */
+    Backoff sessionCreationBackoff;
 
     /**
      * Describes the hosts in the cluster.
@@ -277,6 +296,11 @@ class ClientImpl {
         ExactlyOnceRPCHelper(const ExactlyOnceRPCHelper&) = delete;
         ExactlyOnceRPCHelper& operator=(const ExactlyOnceRPCHelper&) = delete;
     } exactlyOnceRPCHelper;
+
+    /**
+     * A thread that runs the Event::Loop.
+     */
+    std::thread eventLoopThread;
 
     // ClientImpl is not copyable
     ClientImpl(const ClientImpl&) = delete;

@@ -1,4 +1,5 @@
 /* Copyright (c) 2012-2014 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -19,6 +20,9 @@
 #include "Client/LeaderRPCMock.h"
 #include "Core/ProtoBuf.h"
 #include "Core/StringUtil.h"
+#include "Protocol/Common.h"
+#include "RPC/Server.h"
+#include "RPC/ServiceMock.h"
 #include "build/Protocol/Client.pb.h"
 
 // Most of the tests for ClientImpl are in ClientTest.cc.
@@ -153,7 +157,59 @@ class ClientClientImplTest : public ::testing::Test {
     Client::ClientImpl client;
 };
 
-TEST_F(ClientClientImplTest, makeDirectory_getRPCInfotimeout) {
+class ClientClientImplServiceMockTest : public ClientClientImplTest {
+  public:
+    ClientClientImplServiceMockTest()
+        : service()
+        , server()
+    {
+        service = std::make_shared<RPC::ServiceMock>();
+        server.reset(new RPC::Server(client.eventLoop,
+                                     Protocol::Common::MAX_MESSAGE_LENGTH));
+        RPC::Address address("127.0.0.1", Protocol::Common::DEFAULT_PORT);
+        address.refresh(RPC::Address::TimePoint::max());
+        EXPECT_EQ("", server->bind(address));
+        server->registerService(Protocol::Common::ServiceId::CLIENT_SERVICE,
+                                service, 1);
+    }
+    ~ClientClientImplServiceMockTest()
+    {
+    }
+
+    std::shared_ptr<RPC::ServiceMock> service;
+    std::unique_ptr<RPC::Server> server;
+};
+
+TEST_F(ClientClientImplServiceMockTest, getServerStats) {
+    Protocol::Client::GetServerStats::Request request;
+    Protocol::Client::GetServerStats::Response response;
+    Protocol::ServerStats& ret = *response.mutable_server_stats();
+    ret.set_server_id(3);
+
+    service->closeSession(Protocol::Client::OpCode::GET_SERVER_STATS,
+                          request);
+    service->reply(Protocol::Client::OpCode::GET_SERVER_STATS,
+                   request, response);
+    Protocol::ServerStats stats;
+    Client::Result result = client.getServerStats("127.0.0.1",
+                                                  TimePoint::max(),
+                                                  stats);
+    EXPECT_EQ(Client::Status::OK, result.status);
+    EXPECT_EQ("server_id: 3",
+              stats);
+}
+
+TEST_F(ClientClientImplTest, getServerStats_timeout) {
+    Protocol::ServerStats stats;
+    Client::Result result = client.getServerStats("127.0.0.1",
+                                                  TimePoint::min(),
+                                                  stats);
+    EXPECT_EQ(Client::Status::TIMEOUT, result.status);
+    EXPECT_EQ("Client-specified timeout elapsed", result.error);
+    EXPECT_EQ("", stats);
+}
+
+TEST_F(ClientClientImplTest, makeDirectory_getRPCInfo_timeout) {
     EXPECT_EQ(0U, client.exactlyOnceRPCHelper.clientId);
     Client::Result result =
         client.makeDirectory("/foo",

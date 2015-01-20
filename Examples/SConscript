@@ -18,6 +18,10 @@ env.Program("Reconfigure",
             ["Reconfigure.cc", "#build/liblogcabin.a"],
             LIBS = libs)
 
+env.Program("ServerStats",
+            ["ServerStats.cc", "#build/liblogcabin.a"],
+            LIBS = libs)
+
 env.Program("SmokeTest",
             ["SmokeTest.cc", "#build/liblogcabin.a"],
             LIBS = libs)
