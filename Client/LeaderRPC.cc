@@ -16,9 +16,9 @@
 
 #include <unistd.h>
 
+#include "Client/Backoff.h"
 #include "Client/LeaderRPC.h"
 #include "Core/Debug.h"
-#include "Core/Time.h"
 #include "Protocol/Common.h"
 #include "RPC/ClientSession.h"
 #include "RPC/ClientRPC.h"
@@ -153,19 +153,16 @@ LeaderRPC::Call::wait(google::protobuf::Message& response,
 
 //// class LeaderRPC ////
 
-LeaderRPC::LeaderRPC(const RPC::Address& hosts, Event::Loop& eventLoop)
-    : windowCount(5)
-    , windowNanos(1000 * 1000 * 100)
-    , eventLoop(eventLoop)
+LeaderRPC::LeaderRPC(const RPC::Address& hosts,
+                     Event::Loop& eventLoop,
+                     Backoff& sessionCreationBackoff)
+    : eventLoop(eventLoop)
+    , sessionCreationBackoff(sessionCreationBackoff)
     , mutex()
     , hosts(hosts)
     , leaderHint()
     , leaderSession() // set by connect()
-    , lastConnectTimes()
 {
-    std::unique_lock<std::mutex> lockGuard(mutex);
-    for (uint64_t i = 0; i < windowCount; ++i)
-        lastConnectTimes.push_back(0);
 }
 
 LeaderRPC::~LeaderRPC()
@@ -208,15 +205,7 @@ LeaderRPC::getSession(TimePoint timeout)
         return leaderSession;
 
     // sleep if we've tried to connect too much recently
-    uint64_t nowNanos = Core::Time::getTimeNanos();
-    if (lastConnectTimes.front() >  nowNanos - windowNanos) {
-        usleep(unsigned(
-            std::min(lastConnectTimes.front() + windowNanos - nowNanos,
-                     windowNanos) / 1000));
-        nowNanos = Core::Time::getTimeNanos();
-    }
-    lastConnectTimes.pop_front();
-    lastConnectTimes.push_back(nowNanos);
+    sessionCreationBackoff.delayAndBegin(timeout);
 
     RPC::Address address;
     if (leaderHint.empty()) {

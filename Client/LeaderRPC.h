@@ -40,6 +40,9 @@ class ClientSession;
 
 namespace Client {
 
+// forward declaration
+class Backoff;
+
 /**
  * This class is used to send RPCs from clients to the leader of the LogCabin
  * cluster. It automatically finds and connects to the leader and transparently
@@ -211,8 +214,12 @@ class LeaderRPC : public LeaderRPCBase {
      *      current cluster leader.
      * \param eventLoop
      *      Used to invoke RPCs.
+     * \param sessionCreationBackoff
+     *      Used to rate-limit new TCP connections.
      */
-    LeaderRPC(const RPC::Address& hosts, Event::Loop& eventLoop);
+    LeaderRPC(const RPC::Address& hosts,
+              Event::Loop& eventLoop,
+              Backoff& sessionCreationBackoff);
 
     /// Destructor.
     ~LeaderRPC();
@@ -289,21 +296,15 @@ class LeaderRPC : public LeaderRPCBase {
                    const std::string& host);
 
     /**
-     * As a backoff mechanism, at most #windowCount connections are allowed in
-     * any #windowNanos period of time.
-     */
-    const uint64_t windowCount;
-
-    /**
-     * As a backoff mechanism, at most #windowCount connections are allowed in
-     * any #windowNanos period of time.
-     */
-    const uint64_t windowNanos;
-
-    /**
      * Used to drive the underlying RPC mechanism.
      */
     Event::Loop& eventLoop;
+
+    /**
+     * Used to rate-limit the creation of ClientSession objects (TCP
+     * connections).
+     */
+    Backoff& sessionCreationBackoff;
 
     /**
      * Protects all of the following member variables in this class.
@@ -330,14 +331,6 @@ class LeaderRPC : public LeaderRPCBase {
      * This is never null, but it might sometimes point to the wrong host.
      */
     std::shared_ptr<RPC::ClientSession> leaderSession;
-
-    /**
-     * The time in nanoseconds since the Unix epoch when the last #windowCount
-     * connections were initiated. If fewer than #windowCount connections have
-     * been initiated, this is padded with zeros. The first time is the
-     * oldest, and the last is the most recent.
-     */
-    std::deque<uint64_t> lastConnectTimes;
 };
 
 } // namespace LogCabin::Client

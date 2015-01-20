@@ -307,6 +307,8 @@ ClientImpl::ExactlyOnceRPCHelper::keepAliveThreadMain()
 
 ClientImpl::ClientImpl()
     : eventLoop()
+    , sessionCreationBackoff(5,                   // 5 new connections per
+                             100UL * 1000 * 1000) // 100 ms
     , hosts()
     , leaderRPC()             // set in init()
     , rpcProtocolVersion(~0U) // set in init()
@@ -337,7 +339,8 @@ ClientImpl::initDerived()
     if (!leaderRPC) { // sometimes set in unit tests
         leaderRPC.reset(new LeaderRPC(
             RPC::Address(hosts, Protocol::Common::DEFAULT_PORT),
-            eventLoop));
+            eventLoop,
+            sessionCreationBackoff));
     }
     if (rpcProtocolVersion == ~0U)
         rpcProtocolVersion = negotiateRPCVersion();

@@ -20,6 +20,7 @@
 #include <thread>
 
 #include "include/LogCabin/Client.h"
+#include "Client/Backoff.h"
 #include "Client/LeaderRPC.h"
 #include "Core/ConditionVariable.h"
 #include "Core/Mutex.h"
@@ -145,6 +146,12 @@ class ClientImpl {
      * The Event::Loop used to drive the underlying RPC mechanism.
      */
     Event::Loop eventLoop;
+
+    /**
+     * Used to rate-limit the creation of ClientSession objects (TCP
+     * connections).
+     */
+    Backoff sessionCreationBackoff;
 
     /**
      * Describes the hosts in the cluster.

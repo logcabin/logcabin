@@ -17,6 +17,7 @@
 #include <gtest/gtest.h>
 #include <thread>
 
+#include "Client/Backoff.h"
 #include "Client/LeaderRPC.h"
 #include "Core/Debug.h"
 #include "Core/ProtoBuf.h"
@@ -37,6 +38,7 @@ class ClientLeaderRPCTest : public ::testing::Test {
   public:
     ClientLeaderRPCTest()
         : eventLoop()
+        , sessionCreationBackoff(1, 1)
         , service()
         , server()
         , eventLoopThread()
@@ -53,7 +55,9 @@ class ClientLeaderRPCTest : public ::testing::Test {
         EXPECT_EQ("", server->bind(address));
         server->registerService(Protocol::Common::ServiceId::CLIENT_SERVICE,
                                 service, 1);
-        leaderRPC.reset(new LeaderRPC(address, eventLoop));
+        leaderRPC.reset(new LeaderRPC(address,
+                                      eventLoop,
+                                      sessionCreationBackoff));
 
 
         request.mutable_read()->set_path("foo");
@@ -73,6 +77,7 @@ class ClientLeaderRPCTest : public ::testing::Test {
     }
 
     Event::Loop eventLoop;
+    Backoff sessionCreationBackoff;
     std::shared_ptr<RPC::ServiceMock> service;
     std::unique_ptr<RPC::Server> server;
     std::thread eventLoopThread;

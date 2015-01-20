@@ -1,6 +1,7 @@
 Import('env', 'object_files')
 
 src = [
+    "Backoff.cc",
     "Client.cc",
     "ClientImpl.cc",
     "LeaderRPC.cc",
