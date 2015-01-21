@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -13,8 +14,10 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <string.h>
-#include <unordered_map>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <cstring>
 
 #define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
 #include <cryptopp/cryptlib.h>
@@ -28,6 +31,7 @@
 
 #include "Core/Debug.h"
 #include "Core/Checksum.h"
+#include "Core/STLUtil.h"
 #include "Core/StringUtil.h"
 #include "Core/Util.h"
 
@@ -44,18 +48,18 @@ namespace {
  * Different algorithms implement different hash functions.
  */
 class Algorithm {
-  protected:
-    Algorithm()
-        : hashFn(NULL)
-        , name()
-        , outputSize(0)
-    {
-    }
   public:
-    virtual ~Algorithm() {}
-
-    /// A short name for the hash function.
-    std::string getName() const { return name; }
+    explicit Algorithm(std::unique_ptr<CryptoPP::HashTransformation> hashFn)
+        : name(hashFn->AlgorithmName())
+        , digestSize(hashFn->DigestSize())
+        , outputSize(downCast<uint32_t>(
+            name.length() + 1 +
+            digestSize * 2 + 1))
+        , hashFnMutex()
+        , hashFn(std::move(hashFn))
+    {
+        assert(outputSize <= MAX_LENGTH);
+    }
 
     /**
      * Calculate the checksum for some data.
@@ -77,19 +81,19 @@ class Algorithm {
         *result = ':';
         ++result;
 
-        // calculate binary digest
-        uint32_t binarySize = downCast<uint32_t>(hashFn->DigestSize());
-        uint8_t binary[binarySize];
-
-        for (auto it = data.begin(); it != data.end(); ++it) {
-            hashFn->Update(static_cast<const uint8_t*>(it->first),
-                           it->second);
+        uint8_t binary[digestSize];
+        { // calculate binary digest
+            std::unique_lock<std::mutex> lockGuard(hashFnMutex);
+            for (auto it = data.begin(); it != data.end(); ++it) {
+                hashFn->Update(static_cast<const uint8_t*>(it->first),
+                               it->second);
+            }
+            hashFn->Final(binary);
         }
-        hashFn->Final(binary);
 
         // add hex digest to result
         const char* hexArray = "0123456789abcdef";
-        for (uint32_t i = 0; i < binarySize; ++i) {
+        for (uint32_t i = 0; i < digestSize; ++i) {
             *result = hexArray[binary[i] >> 4];
             ++result;
             *result = hexArray[binary[i] & 15];
@@ -101,101 +105,59 @@ class Algorithm {
         return outputSize;
     }
 
-  protected:
-    // Called by derived class's constructor to initialize this class
-    void setHashFn(CryptoPP::HashTransformation& hashFn) {
-        const std::string name = hashFn.AlgorithmName();
-        size_t outputSize = name.length() + 1 + hashFn.DigestSize() * 2 + 1;
-        assert(outputSize <= MAX_LENGTH);
-
-        this->hashFn = &hashFn;
-        this->name = name;
-        this->outputSize = downCast<uint32_t>(outputSize);
-    }
-
+    /// Name of hash function.
+    const std::string name;
+    /// Size in bytes of binary hash function output.
+    const uint32_t digestSize;
+    /// Size in bytes of name:hexdigest string.
+    const uint32_t outputSize;
   private:
-    CryptoPP::HashTransformation* hashFn;
-    std::string name;
-    uint32_t outputSize;
-    Algorithm(const Algorithm& other) = delete;
-    Algorithm& operator=(const Algorithm& other) = delete;
+    /// Protects hashFn (which is stateful) from concurrent modification.
+    std::mutex hashFnMutex;
+    /// Stateful hash function.
+    std::unique_ptr<CryptoPP::HashTransformation> hashFn;
 };
 
 /**
  * A container for a set of Algorithm implementations.
  */
-namespace Algorithms {
+class Algorithms {
+    /**
+     * Helper for constructor().
+     */
+    template<typename ConcreteHashFunction>
+    void registerAlgorithm()
+    {
+        std::unique_ptr<ConcreteHashFunction> hashFn(
+            new ConcreteHashFunction());
+        std::shared_ptr<Algorithm> algorithm(
+             std::make_shared<Algorithm>(std::move(hashFn)));
+        std::string name = algorithm->name;
+        byName.insert(
+            std::pair<std::string, std::shared_ptr<Algorithm>>(
+                name, algorithm));
+    }
 
-    namespace Internal {
 
-        /**
-         * Concrete implementations of Algorithms.
-         */
-        template<typename HashFn>
-        class ConcreteAlgorithm : public Algorithm {
-          public:
-            ConcreteAlgorithm()
-                : concreteHashFn()
-            {
-                setHashFn(concreteHashFn);
-            }
-            HashFn concreteHashFn;
-        };
-
-        // These comparison functions are used to sort the algorithms
-        // and find algorithms by name.
-
-        static bool algoAlgoCmp(const Algorithm* left,
-                                const Algorithm* right) {
-            return strcmp(left->getName().c_str(),
-                          right->getName().c_str()) < 0;
-        }
-
-        static bool nameAlgoCmp(const char* left, const Algorithm* right) {
-            return strcmp(left, right->getName().c_str()) < 0;
-        }
-        static bool algoNameCmp(const Algorithm* left, const char* right) {
-            return strcmp(left->getName().c_str(), right) < 0;
-        }
-
-        /**
-         * Each thread keeps a thread-local copy of Algorithm objects, which
-         * are reused every time a new checksum is calculated.
-         * This should be accessed via get().
-         */
-        __thread std::vector<Algorithm*>* algorithms;
-
-        /**
-         * Get the thread-local table of Algorithm objects.
-         * This will construct the table if necessary.
-         */
-        const std::vector<Algorithm*>&
-        get()
-        {
-            if (algorithms == NULL) {
-                // This is a small, harmless memory leak.
-                algorithms = new std::vector<Algorithm*> {
-                    new ConcreteAlgorithm<CryptoPP::CRC32>(),
-                    new ConcreteAlgorithm<CryptoPP::Adler32>(),
-                    new ConcreteAlgorithm<CryptoPP::Weak::MD5>(),
-                    new ConcreteAlgorithm<CryptoPP::SHA1>(),
-                    new ConcreteAlgorithm<CryptoPP::SHA224>(),
-                    new ConcreteAlgorithm<CryptoPP::SHA256>(),
-                    new ConcreteAlgorithm<CryptoPP::SHA384>(),
-                    new ConcreteAlgorithm<CryptoPP::SHA512>(),
-                    new ConcreteAlgorithm<CryptoPP::Whirlpool>(),
-                    new ConcreteAlgorithm<CryptoPP::Tiger>(),
-                    new ConcreteAlgorithm<CryptoPP::RIPEMD160>(),
-                    new ConcreteAlgorithm<CryptoPP::RIPEMD320>(),
-                    new ConcreteAlgorithm<CryptoPP::RIPEMD128>(),
-                    new ConcreteAlgorithm<CryptoPP::RIPEMD256>(),
-                };
-                std::sort(algorithms->begin(), algorithms->end(),
-                          Internal::algoAlgoCmp);
-            }
-            return *algorithms;
-        };
-    } // namespace LogCabin::Core::Checksum::<anonymous>::Algorithms::Internal
+  public:
+    Algorithms()
+        : byName()
+    {
+        registerAlgorithm<CryptoPP::CRC32>();
+        registerAlgorithm<CryptoPP::Adler32>();
+        registerAlgorithm<CryptoPP::Weak::MD5>();
+        registerAlgorithm<CryptoPP::SHA1>();
+        registerAlgorithm<CryptoPP::SHA224>();
+        registerAlgorithm<CryptoPP::SHA256>();
+        registerAlgorithm<CryptoPP::SHA384>();
+        registerAlgorithm<CryptoPP::SHA512>();
+        registerAlgorithm<CryptoPP::Whirlpool>();
+        registerAlgorithm<CryptoPP::Tiger>();
+        registerAlgorithm<CryptoPP::RIPEMD160>();
+        registerAlgorithm<CryptoPP::RIPEMD320>();
+        registerAlgorithm<CryptoPP::RIPEMD128>();
+        registerAlgorithm<CryptoPP::RIPEMD256>();
+    }
 
     /**
      * Find an algorithm by name.
@@ -207,38 +169,29 @@ namespace Algorithms {
     Algorithm*
     find(const char* name)
     {
-        auto first = std::lower_bound(Internal::get().begin(),
-                                      Internal::get().end(),
-                                      name,
-                                      Internal::algoNameCmp);
-        if (first != Internal::get().end() &&
-            !Internal::nameAlgoCmp(name, *first)) {
-            return *first;
-        }
-        return NULL;
+        // TODO(ongaro): This'll probably create a temporary std::string, which
+        // might cause a memory allocation. But it's probably nothing to worry
+        // about, and newer stdlib will hopefully implement a C++11-compliant
+        // std::string type that contains a few characters without an
+        // allocation.
+        auto it = byName.find(name);
+        if (it == byName.end())
+            return NULL;
+        else
+            return it->second.get();
     }
 
-    /// Return the names of all the algorithms in sorted order.
-    std::vector<std::string>
-    list()
-    {
-        std::vector<std::string> names;
-        for (auto it = Internal::get().begin();
-             it != Internal::get().end();
-             ++it) {
-            Algorithm* algo = *it;
-            names.push_back(algo->getName());
-        }
-        return names;
-    }
-} // namespace LogCabin::Core::Checksum::<anonymous>::Algorithms
+    // g++ 4.4 can't have non-copyable objects in maps, so use a shared_ptr for
+    // a copyable level of indirection
+    std::map<std::string, std::shared_ptr<Algorithm>> byName;
+} algorithms;
 
 } // namespace LogCabin::Core::Checksum::<anonymous>
 
 std::vector<std::string>
 listAlgorithms()
 {
-    return Algorithms::list();
+    return Core::STLUtil::getKeys(algorithms.byName);
 }
 
 uint32_t
@@ -254,7 +207,7 @@ calculate(const char* algorithm,
           std::initializer_list<std::pair<const void*, uint64_t>> data,
           char output[MAX_LENGTH])
 {
-    Algorithm* algo = Algorithms::find(algorithm);
+    Algorithm* algo = algorithms.find(algorithm);
     if (algo == NULL) {
         PANIC("The hashing algorithm %s is not available",
               algorithm);
@@ -304,7 +257,7 @@ verify(const char* checksum,
         memcpy(algorithmName, checksum, nameLength);
         algorithmName[nameLength] = '\0';
 
-         algo = Algorithms::find(algorithmName);
+         algo = algorithms.find(algorithmName);
          if (algo == NULL)
              return format("No such checksum algorithm: %s",
                                  algorithmName);
