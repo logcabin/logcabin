@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -21,7 +22,12 @@
 namespace LogCabin {
 namespace Core {
 
-/// Thread-safe pseudo-random number generator.
+/**
+ * Thread-safe pseudo-random number generator.
+ * \warning
+ *      Don't call these functions from static initializers or you might run
+ *      into the static initialization order fiasco.
+ */
 namespace Random {
 
 /// Return one random byte.
