@@ -10,6 +10,7 @@ src = [
     "ThreadId.cc",
     "Time.cc",
     "StringUtil.cc",
+    "Util.cc",
 ]
 object_files['Core'] = (env.StaticObject(src) +
                         env.Protobuf("ProtoBufTest.proto"))

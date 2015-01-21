@@ -30,7 +30,7 @@ namespace LogCabin {
 namespace Server {
 
 // forward declaration
-class Consensus;
+class RaftConsensus;
 
 /**
  * Interprets and executes operations that have been committed into the Raft
@@ -38,7 +38,7 @@ class Consensus;
  */
 class StateMachine {
   public:
-    StateMachine(std::shared_ptr<Consensus> consensus,
+    StateMachine(std::shared_ptr<RaftConsensus> consensus,
                  Core::Config& config);
     ~StateMachine();
 
@@ -124,7 +124,7 @@ class StateMachine {
     void takeSnapshot(uint64_t lastIncludedIndex,
                       std::unique_lock<std::mutex>& lockGuard);
 
-    std::shared_ptr<Consensus> consensus;
+    std::shared_ptr<RaftConsensus> consensus;
 
     /**
      * Size in bytes of smallest log to snapshot.

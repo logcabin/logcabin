@@ -770,6 +770,29 @@ ConfigurationManager::restoreInvariants()
 }
 
 
+////////// RaftConsensus::Entry //////////
+
+RaftConsensus::Entry::Entry()
+    : entryId()
+    , type(SKIP)
+    , data()
+    , snapshotReader()
+{
+}
+
+RaftConsensus::Entry::Entry(Entry&& other)
+    : entryId(other.entryId)
+    , type(other.type)
+    , data(std::move(other.data))
+    , snapshotReader(std::move(other.snapshotReader))
+{
+}
+
+RaftConsensus::Entry::~Entry()
+{
+}
+
+
 ////////// RaftConsensus //////////
 
 uint64_t RaftConsensus::ELECTION_TIMEOUT_MS = 150;
@@ -782,7 +805,9 @@ uint64_t RaftConsensus::SOFT_RPC_SIZE_LIMIT =
                 Protocol::Common::MAX_MESSAGE_LENGTH - 1024;
 
 RaftConsensus::RaftConsensus(Globals& globals)
-    : globals(globals)
+    : serverId(0)
+    , serverAddress()
+    , globals(globals)
     , storageDirectory()
     , mutex()
     , stateChanged()
@@ -967,21 +992,21 @@ RaftConsensus::getLeaderHint() const
     return configuration->lookupAddress(leaderId);
 }
 
-Consensus::Entry
+RaftConsensus::Entry
 RaftConsensus::getNextEntry(uint64_t lastEntryId) const
 {
     std::unique_lock<Mutex> lockGuard(mutex);
     uint64_t nextEntryId = lastEntryId + 1;
     while (true) {
         if (exiting)
-            throw ThreadInterruptedException();
+            throw Core::Util::ThreadInterruptedException();
         if (commitIndex >= nextEntryId) {
-            Consensus::Entry entry;
+            RaftConsensus::Entry entry;
 
             // Make the state machine load a snapshot if we don't have the next
             // entry it needs in the log.
             if (log->getLogStartIndex() > nextEntryId) {
-                entry.type = Consensus::Entry::SNAPSHOT;
+                entry.type = Entry::SNAPSHOT;
                 // For well-behaved state machines, we expect 'snapshotReader'
                 // to contain a SnapshotFile::Reader that we can return
                 // directly to the state machine. In the case that a State
@@ -1004,10 +1029,10 @@ RaftConsensus::getNextEntry(uint64_t lastEntryId) const
                 const Log::Entry& logEntry = log->getEntry(nextEntryId);
                 entry.entryId = nextEntryId;
                 if (logEntry.type() == Protocol::Raft::EntryType::DATA) {
-                    entry.type = Consensus::Entry::DATA;
+                    entry.type = Entry::DATA;
                     entry.data = logEntry.data();
                 } else {
-                    entry.type = Consensus::Entry::SKIP;
+                    entry.type = Entry::SKIP;
                 }
             }
             return entry;

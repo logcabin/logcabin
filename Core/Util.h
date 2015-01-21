@@ -1,4 +1,5 @@
 /* Copyright (c) 2011-2012 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -21,8 +22,7 @@
 
 #include <cassert>
 #include <cinttypes>
-#include <string>
-#include <vector>
+#include <stdexcept>
 
 #ifndef LOGCABIN_CORE_UTIL_H
 #define LOGCABIN_CORE_UTIL_H
@@ -49,6 +49,14 @@ downCast(const Large& large)
 
 /// Like sizeof but returns a uint32_t.
 #define sizeof32(x) LogCabin::Core::Util::downCast<uint32_t>(sizeof(x))
+
+/**
+ * The thread could not complete its task because it was asked to exit.
+ */
+class ThreadInterruptedException : public std::runtime_error {
+  public:
+    ThreadInterruptedException();
+};
 
 } // namespace LogCabin::Core::Util
 } // namespace LogCabin::Core

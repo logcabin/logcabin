@@ -27,11 +27,12 @@
 #include <unordered_map>
 
 #include "build/Protocol/Raft.pb.h"
+#include "build/Protocol/ServerStats.pb.h"
+#include "build/Server/SnapshotStats.pb.h"
 #include "Core/Mutex.h"
 #include "Core/ConditionVariable.h"
 #include "Core/Time.h"
 #include "RPC/ClientRPC.h"
-#include "Server/Consensus.h"
 #include "Storage/Log.h"
 #include "Storage/SnapshotFile.h"
 
@@ -769,15 +770,78 @@ class ConfigurationManager {
 
 /**
  * An implementation of the Raft consensus algorithm. The algorithm is
- * described at https://ramcloud.stanford.edu/raft.pdf
+ * described at https://raftconsensus.github.io
  * . In brief, Raft divides time into terms and elects a leader at the
  * beginning of each term. This election mechanism guarantees that the emerging
  * leader has at least all committed log entries. Once a candidate has received
  * votes from a quorum, it replicates its own log entries in order to the
  * followers. The leader is the only machine that serves client requests.
  */
-class RaftConsensus : public Consensus {
+class RaftConsensus {
   public:
+
+    /**
+     * This is returned by getNextEntry().
+     */
+    struct Entry {
+        /// Default constructor.
+        Entry();
+        /// Move constructor.
+        Entry(Entry&& other);
+        /// Destructor.
+        ~Entry();
+
+        /**
+         * The entry ID for this entry (or the last one a snapshot covers).
+         * Pass this as the lastEntryId argument to the next call to
+         * getNextEntry().
+         */
+        uint64_t entryId;
+
+        /**
+         * The type of the entry.
+         */
+        enum {
+            /**
+             * This is a normal entry containing a client request for the state
+             * machine. The 'data' field contains that request, and
+             * 'snapshotReader' is not set.
+             */
+            DATA,
+            /**
+             * This is a snapshot: the state machine should clear its state and
+             * load in the snapshot. The 'data' field is not set, and the
+             * 'snapshotReader' should be used to read the snapshot contents
+             * from.
+             */
+            SNAPSHOT,
+            /**
+             * Some entries should be ignored by the state machine (they are
+             * consumed internally by the consensus module). For client service
+             * threads to know when a state machine is up-to-date, it's easiest
+             * for the state machine to get empty entries back for these, and
+             * simply call back into getNextEntry() again with the next ID,
+             * Entries of type 'SKIP' will have neither 'data' nor
+             * 'snapshotReader' set.
+             */
+            SKIP,
+        } type;
+
+        /**
+         * The client request for entries of type 'DATA'.
+         */
+        std::string data;
+
+        /**
+         * A handle to the snapshot file for entries of type 'SNAPSHOT'.
+         */
+        std::unique_ptr<Storage::SnapshotFile::Reader> snapshotReader;
+
+        // copy and assign not allowed
+        Entry(const Entry&) = delete;
+        Entry& operator=(const Entry&) = delete;
+    };
+
     enum class ClientResult {
         SUCCESS,
         FAIL,
@@ -797,10 +861,10 @@ class RaftConsensus : public Consensus {
      */
     ~RaftConsensus();
 
-    // See Consensus::init().
+    /// Initialize. Must be called before any other method.
     void init();
 
-    // See Consensus::exit().
+    /// Signal the consensus module to exit (shut down threads, etc).
     void exit();
 
     /**
@@ -832,10 +896,22 @@ class RaftConsensus : public Consensus {
      */
     std::string getLeaderHint() const;
 
-    // See Consensus::getNextEntry().
-    Consensus::Entry getNextEntry(uint64_t lastEntryId) const;
+    /**
+     * This returns the entry following lastEntryId in the replicated log. Some
+     * entries may be used internally by the consensus module. These will have
+     * Entry.hasData set to false. The reason these are exposed to the state
+     * machine is that the state machine waits to be caught up to the latest
+     * committed entry ID in the replicated log; sometimes, but that entry
+     * would otherwise never reach the state machine if it was for internal
+     * use.
+     * \throw Core::Util::ThreadInterruptedException
+     *      Thread should exit.
+     */
+    Entry getNextEntry(uint64_t lastEntryId) const;
 
-    // See Consensus::getSnapshotStats().
+    /**
+     * Return statistics that may be useful in deciding when to snapshot.
+     */
     SnapshotStats::SnapshotStats getSnapshotStats() const;
 
     /**
@@ -893,15 +969,39 @@ class RaftConsensus : public Consensus {
             uint64_t id,
             const Protocol::Raft::SimpleConfiguration& newConfiguration);
 
-    // See Consensus::beginSnapshot().
+    /**
+     * Start taking a snapshot. Called by the state machine when it wants to
+     * take a snapshot.
+     * \param lastIncludedIndex
+     *      The snapshot will cover log entries in the range
+     *      [1, lastIncludedIndex].
+     *      lastIncludedIndex must be committed (must have been previously
+     *      returned by #getNextEntry()).
+     * \return
+     *      A file the state machine can dump its snapshot into.
+     */
     std::unique_ptr<Storage::SnapshotFile::Writer>
     beginSnapshot(uint64_t lastIncludedIndex);
 
-    // See Consensus::snapshotDone().
+    /**
+     * Complete taking a snapshot for the log entries in range [1,
+     * lastIncludedIndex]. Called by the state machine when it is done taking a
+     * snapshot.
+     * \param lastIncludedIndex
+     *      The snapshot will cover log entries in the range
+     *      [1, lastIncludedIndex].
+     * \param writer
+     *      A writer that has not yet been saved: the consensus module may
+     *      have to discard the snapshot in case it's gotten a better snapshot
+     *      from another server. If this snapshot is to be saved (normal case),
+     *      the consensus module will call save() on it.
+     */
     void snapshotDone(uint64_t lastIncludedIndex,
                       std::unique_ptr<Storage::SnapshotFile::Writer> writer);
 
-    // See Consensus::updateServerStats().
+    /**
+     * Add information about the consensus state to the given structure.
+     */
     void updateServerStats(Protocol::ServerStats& serverStats) const;
 
     /**
@@ -1158,6 +1258,20 @@ class RaftConsensus : public Consensus {
      * Const except for unit tests.
      */
     static uint64_t SOFT_RPC_SIZE_LIMIT;
+
+  public:
+    /**
+     * This server's unique ID. Not available until init() is called.
+     */
+    uint64_t serverId;
+
+    /**
+     * The address that this server is listening on. Not available until init()
+     * is called.
+     */
+    std::string serverAddress;
+
+  private:
 
     /**
      * The LogCabin daemon's top-level objects.

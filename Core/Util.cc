@@ -1,4 +1,5 @@
-/* Copyright (c) 2012 Stanford University
+/* Copyright (c) 2011-2012 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -13,41 +14,17 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include "Server/Consensus.h"
-#include "Storage/SnapshotFile.h"
+#include "Core/Util.h"
 
 namespace LogCabin {
-namespace Server {
+namespace Core {
+namespace Util {
 
-Consensus::Entry::Entry()
-    : entryId()
-    , type(SKIP)
-    , data()
-    , snapshotReader()
+ThreadInterruptedException::ThreadInterruptedException()
+    : std::runtime_error("Thread was interrupted")
 {
 }
 
-Consensus::Entry::Entry(Entry&& other)
-    : entryId(other.entryId)
-    , type(other.type)
-    , data(std::move(other.data))
-    , snapshotReader(std::move(other.snapshotReader))
-{
-}
-
-Consensus::Entry::~Entry()
-{
-}
-
-Consensus::Consensus()
-    : serverId(0)
-    , serverAddress()
-{
-}
-
-Consensus::~Consensus()
-{
-}
-
-} // namespace LogCabin::Server
+} // namespace LogCabin::Core::Util
+} // namespace LogCabin::Core
 } // namespace LogCabin

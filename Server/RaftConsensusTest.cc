@@ -22,6 +22,7 @@
 #include "Core/STLUtil.h"
 #include "Core/StringUtil.h"
 #include "Core/Time.h"
+#include "Core/Util.h"
 #include "Protocol/Common.h"
 #include "RPC/ServiceMock.h"
 #include "RPC/Server.h"
@@ -709,24 +710,24 @@ TEST_F(ServerRaftConsensusTest, getNextEntry)
     consensus->append({&entry4});
     consensus->stepDown(5);
     consensus->commitIndex = 4;
-    consensus->stateChanged.callback = std::bind(&Consensus::exit,
+    consensus->stateChanged.callback = std::bind(&RaftConsensus::exit,
                                                  consensus.get());
-    Consensus::Entry e1 = consensus->getNextEntry(0);
+    RaftConsensus::Entry e1 = consensus->getNextEntry(0);
     EXPECT_EQ(1U, e1.entryId);
-    EXPECT_EQ(Consensus::Entry::SKIP, e1.type);
-    Consensus::Entry e2 = consensus->getNextEntry(e1.entryId);
+    EXPECT_EQ(RaftConsensus::Entry::SKIP, e1.type);
+    RaftConsensus::Entry e2 = consensus->getNextEntry(e1.entryId);
     EXPECT_EQ(2U, e2.entryId);
-    EXPECT_EQ(Consensus::Entry::DATA, e2.type);
+    EXPECT_EQ(RaftConsensus::Entry::DATA, e2.type);
     EXPECT_EQ("hello", e2.data);
-    Consensus::Entry e3 = consensus->getNextEntry(e2.entryId);
+    RaftConsensus::Entry e3 = consensus->getNextEntry(e2.entryId);
     EXPECT_EQ(3U, e3.entryId);
-    EXPECT_EQ(Consensus::Entry::SKIP, e3.type);
-    Consensus::Entry e4 = consensus->getNextEntry(e3.entryId);
+    EXPECT_EQ(RaftConsensus::Entry::SKIP, e3.type);
+    RaftConsensus::Entry e4 = consensus->getNextEntry(e3.entryId);
     EXPECT_EQ(4U, e4.entryId);
-    EXPECT_EQ(Consensus::Entry::DATA, e4.type);
+    EXPECT_EQ(RaftConsensus::Entry::DATA, e4.type);
     EXPECT_EQ("goodbye", e4.data);
     EXPECT_THROW(consensus->getNextEntry(e4.entryId),
-                 ThreadInterruptedException);
+                 Core::Util::ThreadInterruptedException);
 }
 
 TEST_F(ServerRaftConsensusTest, getNextEntry_snapshot)
@@ -748,9 +749,9 @@ TEST_F(ServerRaftConsensusTest, getNextEntry_snapshot)
     LogCabin::Core::Debug::setLogPolicy({
         {"Server/RaftConsensus.cc", "ERROR"}
     });
-    Consensus::Entry e1 = consensus->getNextEntry(0);
+    RaftConsensus::Entry e1 = consensus->getNextEntry(0);
     EXPECT_EQ(2U, e1.entryId);
-    EXPECT_EQ(Consensus::Entry::SNAPSHOT, e1.type);
+    EXPECT_EQ(RaftConsensus::Entry::SNAPSHOT, e1.type);
     uint32_t x;
     EXPECT_TRUE(e1.snapshotReader->getStream().ReadLittleEndian32(&x));
     EXPECT_EQ(0xdeadbeef, x);

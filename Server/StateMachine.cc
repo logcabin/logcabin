@@ -22,8 +22,9 @@
 #include "Core/Mutex.h"
 #include "Core/ProtoBuf.h"
 #include "Core/ThreadId.h"
+#include "Core/Util.h"
 #include "RPC/ProtoBuf.h"
-#include "Server/Consensus.h"
+#include "Server/RaftConsensus.h"
 #include "Server/StateMachine.h"
 #include "Storage/SnapshotFile.h"
 #include "Tree/ProtoBuf.h"
@@ -39,7 +40,7 @@ static const uint64_t NO_ENTRY_ID = ~0UL;
 bool stateMachineSuppressThreads = false;
 uint32_t stateMachineChildSleepMs = 0;
 
-StateMachine::StateMachine(std::shared_ptr<Consensus> consensus,
+StateMachine::StateMachine(std::shared_ptr<RaftConsensus> consensus,
                            Core::Config& config)
     : consensus(consensus)
     , snapshotMinLogSize(config.read<uint64_t>("snapshotMinLogSize", 1024))
@@ -178,15 +179,15 @@ StateMachine::applyThreadMain()
     Core::ThreadId::setName("StateMachine");
     try {
         while (true) {
-            Consensus::Entry entry = consensus->getNextEntry(lastEntryId);
+            RaftConsensus::Entry entry = consensus->getNextEntry(lastEntryId);
             std::unique_lock<std::mutex> lockGuard(mutex);
             switch (entry.type) {
-                case Consensus::Entry::SKIP:
+                case RaftConsensus::Entry::SKIP:
                     break;
-                case Consensus::Entry::DATA:
+                case RaftConsensus::Entry::DATA:
                     apply(entry.entryId, entry.data);
                     break;
-                case Consensus::Entry::SNAPSHOT:
+                case RaftConsensus::Entry::SNAPSHOT:
                     NOTICE("Loading snapshot through entry %lu into "
                            "state machine", entry.entryId);
                     loadSessionSnapshot(entry.snapshotReader->getStream());
@@ -198,7 +199,7 @@ StateMachine::applyThreadMain()
             if (shouldTakeSnapshot(lastEntryId))
                 snapshotSuggested.notify_all();
         }
-    } catch (const ThreadInterruptedException& e) {
+    } catch (const Core::Util::ThreadInterruptedException& e) {
         NOTICE("exiting");
         std::unique_lock<std::mutex> lockGuard(mutex);
         exiting = true;

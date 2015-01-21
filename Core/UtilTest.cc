@@ -1,4 +1,5 @@
 /* Copyright (c) 2011-2012 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -34,6 +35,13 @@ TEST(CoreUtilTest, downCast) {
 
 TEST(CoreUtilTest, sizeof32) {
     EXPECT_EQ(8U, sizeof32(uint64_t));
+}
+
+TEST(CoreUtilTest, ThreadInterruptedException) {
+    EXPECT_THROW(throw ThreadInterruptedException(),
+                 ThreadInterruptedException);
+    EXPECT_STREQ("Thread was interrupted",
+                 ThreadInterruptedException().what());
 }
 
 } // namespace LogCabin::Core::Util::<anonymous>
