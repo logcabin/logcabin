@@ -38,7 +38,7 @@ TEST(ClientBackoffTest, basics_TimingSensitive) {
     Backoff backoff(2, 12 * 1000 * 1000);
     TimePoint t1 = Clock::now();
     backoff.delayAndBegin(TimePoint::max()); // immediate
-    TimePoint t2 = Clock::now();
+    //TimePoint t2 = Clock::now();
     backoff.delayAndBegin(TimePoint::max()); // immediate
     TimePoint t3 = Clock::now();
     backoff.delayAndBegin(TimePoint::max()); // delay 12ms
@@ -56,11 +56,11 @@ TEST(ClientBackoffTest, timeout_TimingSensitive) {
     Backoff backoff(2, 12 * 1000 * 1000);
     TimePoint t1 = Clock::now();
     backoff.delayAndBegin(TimePoint::max()); // immediate
-    TimePoint t2 = Clock::now();
+    //TimePoint t2 = Clock::now();
     backoff.delayAndBegin(TimePoint::max()); // immediate
-    TimePoint t3 = Clock::now();
+    //TimePoint t3 = Clock::now();
     backoff.delayAndBegin(TimePoint::min()); // immediate
-    TimePoint t4 = Clock::now();
+    //TimePoint t4 = Clock::now();
     backoff.delayAndBegin(Clock::now()); // immediate
     TimePoint t5 = Clock::now();
     backoff.delayAndBegin(Clock::now() +
