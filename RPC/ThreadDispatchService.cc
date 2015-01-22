@@ -47,8 +47,8 @@ ThreadDispatchService::~ThreadDispatchService()
     {
         std::unique_lock<std::mutex> lockGuard(mutex);
         exit = true;
+        conditionVariable.notify_all();
     }
-    conditionVariable.notify_all();
 
     // Join the threads.
     while (!threads.empty()) {

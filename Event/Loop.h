@@ -167,6 +167,25 @@ class Loop {
      */
     Core::ConditionVariable unlocked;
 
+#if 1
+    /**
+     * Lockable type that compiles out entirely.
+     */
+    struct NoOpLockable {
+        void lock() {}
+        void unlock() {}
+    } extraMutexToSatisfyRaceDetector;
+#else
+    /**
+     * Race detectors tend to know about pthreads locks and not much else. This
+     * is a pthread lock that is acquired at the bottom of Lock's constructor
+     * at the top of Lock's destructor, and also used by Loop::runForever(),
+     * for the purpose of asserting to race detectors that there is a mechanism
+     * in place for mutual exclusion.
+     */
+    std::recursive_mutex extraMutexToSatisfyRaceDetector;
+#endif
+
     /**
      * Watches breakTimer for events.
      */

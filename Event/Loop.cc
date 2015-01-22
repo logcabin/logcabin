@@ -48,6 +48,7 @@ createEpollFd()
 Loop::Lock::Lock(Event::Loop& eventLoop)
     : eventLoop(eventLoop)
 {
+    {
     std::unique_lock<std::mutex> lockGuard(eventLoop.mutex);
     ++eventLoop.numLocks;
     if (eventLoop.runningThread != Core::ThreadId::getId() &&
@@ -64,10 +65,13 @@ Loop::Lock::Lock(Event::Loop& eventLoop)
         eventLoop.lockOwner = Core::ThreadId::getId();
     }
     ++eventLoop.numActiveLocks;
+    }
+    eventLoop.extraMutexToSatisfyRaceDetector.lock();
 }
 
 Loop::Lock::~Lock()
 {
+    eventLoop.extraMutexToSatisfyRaceDetector.unlock();
     std::unique_lock<std::mutex> lockGuard(eventLoop.mutex);
     --eventLoop.numLocks;
     --eventLoop.numActiveLocks;
@@ -101,6 +105,7 @@ Loop::Loop()
     , lockOwner(Core::ThreadId::NONE)
     , safeToLock()
     , unlocked()
+    , extraMutexToSatisfyRaceDetector()
     , breakTimerMonitor(*this, breakTimer)
 {
 }
@@ -133,6 +138,8 @@ Loop::runForever()
             }
             runningThread = Core::ThreadId::getId();
         }
+        std::unique_lock<decltype(extraMutexToSatisfyRaceDetector)>
+            extraLockGuard(extraMutexToSatisfyRaceDetector);
 
         // Block in the kernel for events, then process them.
         // TODO(ongaro): It'd be more efficient to handle more than 1 event at
