@@ -9,6 +9,7 @@ opts.AddVariables(
                 "will search for include directories", []),
     ("CXX", "C++ Compiler"),
     ("CXXFLAGS", "Options that are passed to the C++ compiler", []),
+    ("LINKFLAGS", "Options that are passed to the linker", []),
     ("AS", "Assembler"),
     ("LIBPATH", "Library paths that are passed to the linker", []),
     ("LINK", "Linker"),
