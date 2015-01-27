@@ -45,78 +45,82 @@ using Core::StringUtil::format;
 namespace {
 
 /**
- * Different algorithms implement different hash functions.
+ * Helper for writeChecksum template, to keep code bloat to a minimum.
  */
-class Algorithm {
-  public:
-    explicit Algorithm(std::unique_ptr<CryptoPP::HashTransformation> hashFn)
-        : name(hashFn->AlgorithmName())
-        , digestSize(hashFn->DigestSize())
-        , outputSize(downCast<uint32_t>(
-            name.length() + 1 +
-            digestSize * 2 + 1))
-        , hashFnMutex()
-        , hashFn(std::move(hashFn))
-    {
-        assert(outputSize <= MAX_LENGTH);
-    }
+uint32_t
+writeChecksumHelper(
+        CryptoPP::HashTransformation& hashFn,
+        const char* name,
+        std::initializer_list<std::pair<const void*, uint64_t>> data,
+        char result[MAX_LENGTH])
+{
+    // Length of name in bytes, not including null character.
+    const uint32_t nameLength = downCast<uint32_t>(strlen(name));
+    // Size in bytes of binary hash function output.
+    const uint32_t digestSize = hashFn.DigestSize();
+    // Size in bytes of name:hexdigest string, including null character.
+    const uint32_t outputSize = (nameLength + 1 +
+                                 digestSize * 2 + 1);
+    assert(outputSize <= MAX_LENGTH);
 
-    /**
-     * Calculate the checksum for some data.
-     * \param data
-     *      An list of (pointer, length) pairs describing what to checksum.
-     * \param[out] result
-     *      The result of the hash function will be placed here.
-     *      This will be a null-terminated, printable C-string.
-     * \return
-     *      The number of valid characters in 'output', including the null
-     *      terminator. This is guaranteed to be greater than 1.
-     */
-    uint32_t
-    writeChecksum(std::initializer_list<std::pair<const void*, uint64_t>> data,
-                  char result[MAX_LENGTH]) {
-        // copy name and : to result
-        memcpy(result, name.c_str(), name.length());
-        result = result + name.length();
-        *result = ':';
+    // calculate binary digest
+    uint8_t binary[digestSize];
+    for (auto it = data.begin(); it != data.end(); ++it) {
+        hashFn.Update(static_cast<const uint8_t*>(it->first),
+                      it->second);
+    }
+    hashFn.Final(binary);
+
+    // copy name and : to result
+    memcpy(result, name, nameLength);
+    result += nameLength;
+    *result = ':';
+    ++result;
+
+    // add hex digest to result
+    const char* hexArray = "0123456789abcdef";
+    for (uint32_t i = 0; i < digestSize; ++i) {
+        *result = hexArray[binary[i] >> 4];
         ++result;
-
-        uint8_t binary[digestSize];
-        { // calculate binary digest
-            std::unique_lock<std::mutex> lockGuard(hashFnMutex);
-            for (auto it = data.begin(); it != data.end(); ++it) {
-                hashFn->Update(static_cast<const uint8_t*>(it->first),
-                               it->second);
-            }
-            hashFn->Final(binary);
-        }
-
-        // add hex digest to result
-        const char* hexArray = "0123456789abcdef";
-        for (uint32_t i = 0; i < digestSize; ++i) {
-            *result = hexArray[binary[i] >> 4];
-            ++result;
-            *result = hexArray[binary[i] & 15];
-            ++result;
-        }
-
-        // add null terminator to result and return total length
-        *result = '\0';
-        return outputSize;
+        *result = hexArray[binary[i] & 15];
+        ++result;
     }
 
-    /// Name of hash function.
-    const std::string name;
-    /// Size in bytes of binary hash function output.
-    const uint32_t digestSize;
-    /// Size in bytes of name:hexdigest string.
-    const uint32_t outputSize;
-  private:
-    /// Protects hashFn (which is stateful) from concurrent modification.
-    std::mutex hashFnMutex;
-    /// Stateful hash function.
-    std::unique_ptr<CryptoPP::HashTransformation> hashFn;
-};
+    // add null terminator to result and return total length
+    *result = '\0';
+    return outputSize;
+}
+
+/**
+ * Template to produce functions of type Algorithm when instantiated with a
+ * CryptoPP::HashTransformation.
+ */
+template<typename HashFn>
+uint32_t
+writeChecksum(std::initializer_list<std::pair<const void*, uint64_t>> data,
+              char result[MAX_LENGTH])
+{
+    HashFn hashFn;
+    return writeChecksumHelper(hashFn,
+                               HashFn::StaticAlgorithmName(),
+                               data,
+                               result);
+}
+
+/**
+ * Type for function that calculate the checksum for some data.
+ * \param data
+ *      An list of (pointer, length) pairs describing what to checksum.
+ * \param[out] result
+ *      The result of the hash function will be placed here.
+ *      This will be a null-terminated, printable C-string.
+ * \return
+ *      The number of valid characters in 'output', including the null
+ *      terminator. This is guaranteed to be greater than 1.
+ */
+typedef uint32_t (*Algorithm)(
+            std::initializer_list<std::pair<const void*, uint64_t>> data,
+            char result[MAX_LENGTH]);
 
 /**
  * A container for a set of Algorithm implementations.
@@ -128,14 +132,9 @@ class Algorithms {
     template<typename ConcreteHashFunction>
     void registerAlgorithm()
     {
-        std::unique_ptr<ConcreteHashFunction> hashFn(
-            new ConcreteHashFunction());
-        std::shared_ptr<Algorithm> algorithm(
-             std::make_shared<Algorithm>(std::move(hashFn)));
-        std::string name = algorithm->name;
-        byName.insert(
-            std::pair<std::string, std::shared_ptr<Algorithm>>(
-                name, algorithm));
+        byName.insert({
+                ConcreteHashFunction::StaticAlgorithmName(),
+                writeChecksum<ConcreteHashFunction>});
     }
 
 
@@ -166,8 +165,7 @@ class Algorithms {
      * \return
      *      The Algorithm if found, NULL otherwise.
      */
-    Algorithm*
-    find(const char* name)
+    Algorithm find(const char* name)
     {
         // TODO(ongaro): This'll probably create a temporary std::string, which
         // might cause a memory allocation. But it's probably nothing to worry
@@ -178,12 +176,10 @@ class Algorithms {
         if (it == byName.end())
             return NULL;
         else
-            return it->second.get();
+            return it->second;
     }
 
-    // g++ 4.4 can't have non-copyable objects in maps, so use a shared_ptr for
-    // a copyable level of indirection
-    std::map<std::string, std::shared_ptr<Algorithm>> byName;
+    std::map<std::string, Algorithm> byName;
 } algorithms;
 
 } // namespace LogCabin::Core::Checksum::<anonymous>
@@ -207,12 +203,12 @@ calculate(const char* algorithm,
           std::initializer_list<std::pair<const void*, uint64_t>> data,
           char output[MAX_LENGTH])
 {
-    Algorithm* algo = algorithms.find(algorithm);
+    Algorithm algo = algorithms.find(algorithm);
     if (algo == NULL) {
         PANIC("The hashing algorithm %s is not available",
               algorithm);
     }
-    return algo->writeChecksum(data, output);
+    return (*algo)(data, output);
 }
 
 
@@ -245,7 +241,7 @@ verify(const char* checksum,
     if (!Core::StringUtil::isPrintable(checksum))
         return "The given checksum value is corrupt and not printable.";
 
-    Algorithm* algo;
+    Algorithm algo = NULL;
     { // find algo
         char algorithmName[MAX_LENGTH];
         char* colon = strchr(const_cast<char*>(checksum), ':');
@@ -265,7 +261,7 @@ verify(const char* checksum,
 
     // compare calculated checksum with the one given
     char calculated[MAX_LENGTH];
-    algo->writeChecksum(data, calculated);
+    (*algo)(data, calculated);
     if (strcmp(calculated, checksum) != 0) {
         return format("Checksum doesn't match: expected %s "
                             "but calculated %s", checksum, calculated);
