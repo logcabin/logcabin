@@ -21,15 +21,58 @@
 namespace LogCabin {
 namespace RPC {
 
+
+////////// Server::RPCHandler //////////
+
+Server::RPCHandler::RPCHandler(Server& server)
+    : server(server)
+{
+}
+
+Server::RPCHandler::~RPCHandler()
+{
+}
+
+void
+Server::RPCHandler::handleRPC(OpaqueServerRPC opaqueRPC)
+{
+    ServerRPC rpc(std::move(opaqueRPC));
+    if (!rpc.needsReply()) {
+        // The RPC may have had an invalid header, in which case it needs no
+        // further action.
+        return;
+    }
+    std::shared_ptr<Service> service;
+    {
+        std::unique_lock<std::mutex> lockGuard(server.mutex);
+        auto it = server.services.find(rpc.getService());
+        if (it != server.services.end())
+            service = it->second;
+    }
+    if (service)
+        service->handleRPC(std::move(rpc));
+    else
+        rpc.rejectInvalidService();
+}
+
+////////// Server //////////
+
 Server::Server(Event::Loop& eventLoop, uint32_t maxMessageLength)
-    : OpaqueServer(eventLoop, maxMessageLength)
-    , mutex()
+    : mutex()
     , services()
+    , rpcHandler(*this)
+    , opaqueServer(rpcHandler, eventLoop, maxMessageLength)
 {
 }
 
 Server::~Server()
 {
+}
+
+std::string
+Server::bind(const Address& listenAddress)
+{
+    return opaqueServer.bind(listenAddress);
 }
 
 void
@@ -40,28 +83,6 @@ Server::registerService(uint16_t serviceId,
     std::unique_lock<std::mutex> lockGuard(mutex);
     services[serviceId] =
         std::make_shared<ThreadDispatchService>(service, 0, maxThreads);
-}
-
-void
-Server::handleRPC(RPC::OpaqueServerRPC opaqueRPC)
-{
-    RPC::ServerRPC rpc(std::move(opaqueRPC));
-    if (!rpc.needsReply()) {
-        // The RPC may have had an invalid header, in which case it needs no
-        // further action.
-        return;
-    }
-    std::shared_ptr<Service> service;
-    {
-        std::unique_lock<std::mutex> lockGuard(mutex);
-        auto it = services.find(rpc.getService());
-        if (it != services.end())
-            service = it->second;
-    }
-    if (service)
-        service->handleRPC(std::move(rpc));
-    else
-        rpc.rejectInvalidService();
 }
 
 } // namespace LogCabin::RPC

@@ -1,4 +1,5 @@
-/* Copyright (c) 2012 Stanford University
+/* Copyright (c) 2011-2014 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -15,129 +16,217 @@
 
 #include <errno.h>
 #include <string.h>
+#include <sys/epoll.h>
+#include <sys/socket.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #include "Core/Debug.h"
 #include "Event/Loop.h"
+#include "Protocol/Common.h"
+#include "RPC/Address.h"
 #include "RPC/OpaqueServer.h"
 #include "RPC/OpaqueServerRPC.h"
-
-/**
- * A message ID reserved for ping messages used to check the server's liveness.
- * No real RPC will ever be assigned this ID.
- */
-enum { PING_MESSAGE_ID = 0 };
 
 namespace LogCabin {
 namespace RPC {
 
-////////// OpaqueServer::ServerTCPListener //////////
 
-OpaqueServer::ServerTCPListener::ServerTCPListener(
-        OpaqueServer* server)
-    : TCPListener(server->eventLoop)
-    , server(server)
-{
-}
+////////// OpaqueServer::MessageSocketHandler //////////
 
-void
-OpaqueServer::ServerTCPListener::handleNewConnection(
-        int fd)
-{
-    if (server == NULL) {
-        if (close(fd) != 0)
-            WARNING("close(%d) failed: %s", fd, strerror(errno));
-    } else {
-        std::shared_ptr<ServerMessageSocket> messageSocket(
-                new ServerMessageSocket(server, fd, server->sockets.size()));
-        messageSocket->self = messageSocket;
-        server->sockets.push_back(messageSocket);
-    }
-}
-
-////////// OpaqueServer::ServerMessageSocket //////////
-
-OpaqueServer::ServerMessageSocket::ServerMessageSocket(
-        OpaqueServer* server,
-        int fd,
-        size_t socketsIndex)
-    : MessageSocket(server->eventLoop, fd, server->maxMessageLength)
-    , eventLoop(server->eventLoop)
-    , server(server)
-    , socketsIndex(socketsIndex)
+OpaqueServer::MessageSocketHandler::MessageSocketHandler(OpaqueServer* server)
+    : server(server)
     , self()
 {
 }
 
 void
-OpaqueServer::ServerMessageSocket::onReceiveMessage(
+OpaqueServer::MessageSocketHandler::handleReceivedMessage(
         MessageId messageId,
         Buffer message)
 {
-    // Reply to ping requests here.
-    if (messageId == PING_MESSAGE_ID) {
-        VERBOSE("Responding to ping");
-        sendMessage(PING_MESSAGE_ID, Buffer());
+    if (server == NULL)
         return;
-    }
-    if (server != NULL) {
+    if (messageId == Protocol::Common::PING_MESSAGE_ID) { // ping request
+        std::shared_ptr<SocketWithHandler> socketRef = self.lock();
+        if (socketRef) { // expect so, since we're receiving messages
+            VERBOSE("Responding to ping");
+            socketRef->monitor.sendMessage(Protocol::Common::PING_MESSAGE_ID,
+                                           Buffer());
+        }
+    } else { // normal RPC request
         VERBOSE("Handling RPC");
         OpaqueServerRPC rpc(self, messageId, std::move(message));
-        server->handleRPC(std::move(rpc));
+        server->rpcHandler.handleRPC(std::move(rpc));
     }
 }
 
 void
-OpaqueServer::ServerMessageSocket::onDisconnect()
+OpaqueServer::MessageSocketHandler::handleDisconnect()
 {
     VERBOSE("Disconnected from client");
-    close();
+    std::shared_ptr<SocketWithHandler> socketRef = self.lock();
+    if (server != NULL && socketRef) {
+        // This drops the reference count on the socket. It may cause the
+        // SocketWithHandler object (which includes this object) to be
+        // destroyed when 'socketRef' goes out of scope.
+        server->sockets.erase(socketRef);
+        server = NULL;
+    }
+}
+
+
+////////// OpaqueServer::SocketWithHandler //////////
+
+std::shared_ptr<OpaqueServer::SocketWithHandler>
+OpaqueServer::SocketWithHandler::make(OpaqueServer* server, int fd)
+{
+    std::shared_ptr<SocketWithHandler> socket(
+        new SocketWithHandler(server, fd));
+    socket->handler.self = socket;
+    return socket;
+}
+
+OpaqueServer::SocketWithHandler::SocketWithHandler(
+        OpaqueServer* server,
+        int fd)
+    : handler(server)
+    , monitor(handler, server->eventLoop, fd, server->maxMessageLength)
+{
+}
+
+OpaqueServer::SocketWithHandler::~SocketWithHandler() {
+    // 'handler' shouldn't have access to 'monitor' while/after 'monitor' is
+    // destroyed. Clear the reference here, then C++ will destroy 'monitor',
+    // then 'handler'.
+    handler.self.reset();
+}
+
+
+////////// OpaqueServer::BoundListener //////////
+
+OpaqueServer::BoundListener::BoundListener(
+        OpaqueServer& server,
+        int fd)
+    : Event::File(fd)
+    , server(server)
+{
 }
 
 void
-OpaqueServer::ServerMessageSocket::close()
+OpaqueServer::BoundListener::handleFileEvent(int events)
 {
-    Event::Loop::Lock lock(eventLoop);
-    if (server != NULL) {
-        auto& sockets = server->sockets;
-        server = NULL;
-        std::swap(sockets.at(socketsIndex), sockets.back());
-        sockets.at(socketsIndex)->socketsIndex = socketsIndex;
-        sockets.pop_back(); // may destroy this object, so do it last
+    int clientfd = accept4(fd, NULL, NULL, SOCK_NONBLOCK|SOCK_CLOEXEC);
+    if (clientfd < 0) {
+        PANIC("Could not accept connection on fd %d: %s",
+              fd, strerror(errno));
     }
+
+    server.sockets.insert(SocketWithHandler::make(&server, clientfd));
 }
+
+
+////////// OpaqueServer::BoundListenerWithMonitor //////////
+
+OpaqueServer::BoundListenerWithMonitor::BoundListenerWithMonitor(
+        OpaqueServer& server,
+        int fd)
+    : handler(server, fd)
+    , monitor(server.eventLoop, handler, EPOLLIN)
+{
+}
+
+OpaqueServer::BoundListenerWithMonitor::~BoundListenerWithMonitor()
+{
+}
+
 
 ////////// OpaqueServer //////////
 
-OpaqueServer::OpaqueServer(Event::Loop& eventLoop,
+OpaqueServer::OpaqueServer(Handler& handler,
+                           Event::Loop& eventLoop,
                            uint32_t maxMessageLength)
-    : eventLoop(eventLoop)
+    : rpcHandler(handler)
+    , eventLoop(eventLoop)
     , maxMessageLength(maxMessageLength)
     , sockets()
-    , listener(this)
+    , boundListenersMutex()
+    , boundListeners()
 {
 }
 
 OpaqueServer::~OpaqueServer()
 {
-    // Block the event loop.
-    Event::Loop::Lock lockGuard(eventLoop);
+    // Stop accepting new connections.
+    {
+        std::unique_lock<Core::Mutex> lock(boundListenersMutex);
+        boundListeners.clear();
+    }
 
-    // Stop the listener from accepting new connections
-    listener.server = NULL;
-
-    // Stop the socket objects from handling new RPCs and
-    // accessing the sockets vector.
-    for (auto it = sockets.begin(); it != sockets.end(); ++it) {
-        ServerMessageSocket& socket = **it;
-        socket.server = NULL;
+    // Stop the socket objects from handling new RPCs and accessing the
+    // 'sockets' set. They may continue to process existing RPCs, though
+    // idle sockets will be destroyed here.
+    {
+        // Block the event loop to operate on 'sockets' safely.
+        Event::Loop::Lock lockGuard(eventLoop);
+        for (auto it = sockets.begin(); it != sockets.end(); ++it) {
+            std::shared_ptr<SocketWithHandler> socket = *it;
+            socket->handler.server = NULL;
+        }
+        sockets.clear();
     }
 }
 
 std::string
 OpaqueServer::bind(const Address& listenAddress)
 {
-    return listener.bind(listenAddress);
+    using Core::StringUtil::format;
+
+    if (!listenAddress.isValid()) {
+        return format("Can't listen on invalid address: %s",
+                      listenAddress.toString().c_str());
+    }
+
+    int fd = socket(AF_INET, SOCK_STREAM|SOCK_CLOEXEC, 0);
+    if (fd < 0)
+        PANIC("Could not create new TCP socket");
+
+    int flag = 1;
+    int r = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR,
+                       &flag, sizeof(flag));
+    if (r < 0) {
+        PANIC("Could not set SO_REUSEADDR on socket: %s",
+              strerror(errno));
+    }
+
+
+    r = ::bind(fd, listenAddress.getSockAddr(),
+                   listenAddress.getSockAddrLen());
+    if (r != 0) {
+        std::string msg =
+            format("Could not bind to address %s: %s%s",
+                   listenAddress.toString().c_str(),
+                   strerror(errno),
+                   errno == EINVAL ? " (is the port in use?)" : "");
+        r = close(fd);
+        if (r != 0) {
+            WARNING("Could not close socket that failed to bind: %s",
+                    strerror(errno));
+        }
+        return msg;
+    }
+
+    // Why 128? No clue. It's what libevent was setting it to.
+    r = listen(fd, 128);
+    if (r != 0) {
+        PANIC("Could not invoke listen() on address %s: %s",
+              listenAddress.toString().c_str(),
+              strerror(errno));
+    }
+
+    std::unique_lock<Core::Mutex> lock(boundListenersMutex);
+    boundListeners.emplace_back(*this, fd);
+    return "";
 }
 
 } // namespace LogCabin::RPC

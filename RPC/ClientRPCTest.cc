@@ -35,10 +35,9 @@ namespace {
 namespace ProtocolCommon = LogCabin::Protocol::Common;
 typedef ClientRPC::TimePoint TimePoint;
 
-class MyServer : public OpaqueServer {
-    MyServer(Event::Loop& eventLoop, uint32_t maxMessageLength)
-        : OpaqueServer(eventLoop, maxMessageLength)
-        , lastRequest()
+class MyServerHandler : public OpaqueServer::Handler {
+    MyServerHandler()
+        : lastRequest()
         , nextResponse()
         , currentRPC()
         , autoReply(true)
@@ -65,7 +64,8 @@ class RPCClientRPCTest : public ::testing::Test {
     RPCClientRPCTest()
         : eventLoop()
         , eventLoopThread(&Event::Loop::runForever, &eventLoop)
-        , server(eventLoop, ProtocolCommon::MAX_MESSAGE_LENGTH)
+        , rpcHandler()
+        , server(rpcHandler, eventLoop, ProtocolCommon::MAX_MESSAGE_LENGTH)
         , session()
         , payload()
     {
@@ -94,7 +94,7 @@ class RPCClientRPCTest : public ::testing::Test {
     ServerRPC makeServerRPC()
     {
         OpaqueServerRPC opaqueServerRPC;
-        opaqueServerRPC.responseTarget = &server.nextResponse;
+        opaqueServerRPC.responseTarget = &rpcHandler.nextResponse;
         ServerRPC serverRPC;
         serverRPC.opaqueRPC = std::move(opaqueServerRPC);
         serverRPC.active = true;
@@ -103,7 +103,8 @@ class RPCClientRPCTest : public ::testing::Test {
 
     Event::Loop eventLoop;
     std::thread eventLoopThread;
-    MyServer server;
+    MyServerHandler rpcHandler;
+    OpaqueServer server;
     std::shared_ptr<ClientSession> session;
     LogCabin::ProtoBuf::TestMessage payload;
 };
@@ -115,10 +116,10 @@ TEST_F(RPCClientRPCTest, constructor) {
         usleep(100);
     }
     EXPECT_LT(sizeof(Protocol::RequestHeaderVersion1),
-              server.lastRequest.getLength());
+              rpcHandler.lastRequest.getLength());
     Protocol::RequestHeaderVersion1 header =
         *static_cast<Protocol::RequestHeaderVersion1*>(
-            server.lastRequest.getData());
+            rpcHandler.lastRequest.getData());
     header.prefix.fromBigEndian();
     EXPECT_EQ(1U, header.prefix.version);
     header.fromBigEndian();
@@ -126,7 +127,7 @@ TEST_F(RPCClientRPCTest, constructor) {
     EXPECT_EQ(3U, header.serviceSpecificErrorVersion);
     EXPECT_EQ(4U, header.opCode);
     LogCabin::ProtoBuf::TestMessage actual;
-    EXPECT_TRUE(ProtoBuf::parse(server.lastRequest, actual,
+    EXPECT_TRUE(ProtoBuf::parse(rpcHandler.lastRequest, actual,
                                 sizeof(Protocol::RequestHeaderVersion1)));
     EXPECT_EQ(payload, actual);
 }
@@ -145,14 +146,14 @@ TEST_F(RPCClientRPCTest, cancel) {
 }
 
 TEST_F(RPCClientRPCTest, waitForReply_timeout) {
-    server.autoReply = false;
+    rpcHandler.autoReply = false;
     ClientRPC rpc(session, 2, 3, 4, payload);
     EXPECT_EQ(ClientRPC::Status::TIMEOUT,
               rpc.waitForReply(NULL, NULL,
                                ClientRPC::Clock::now() +
                                std::chrono::milliseconds(1)));
     makeServerRPC().reply(payload);
-    server.reply();
+    rpcHandler.reply();
     EXPECT_EQ(ClientRPC::Status::OK,
               rpc.waitForReply(NULL, NULL,
                                ClientRPC::Clock::now() +

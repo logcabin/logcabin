@@ -24,6 +24,7 @@
 #include "Event/File.h"
 #include "Event/Loop.h"
 #include "Event/Timer.h"
+#include "Protocol/Common.h"
 #include "RPC/ClientSession.h"
 
 /**
@@ -39,12 +40,6 @@
  * TODO(ongaro): How does this interact with TCP?
  */
 enum { TIMEOUT_MS = 100 };
-
-/**
- * A message ID reserved for ping messages used to check the server's liveness.
- * No real RPC will ever be assigned this ID.
- */
-enum { PING_MESSAGE_ID = 0 };
 
 namespace LogCabin {
 namespace RPC {
@@ -88,24 +83,22 @@ struct TimerNotifier : public Event::Timer {
 
 } // anonymous namespace
 
-////////// ClientSession::ClientMessageSocket //////////
+////////// ClientSession::MessageSocketHandler //////////
 
-ClientSession::ClientMessageSocket::ClientMessageSocket(
-        ClientSession& session,
-        int fd,
-        uint32_t maxMessageLength)
-    : MessageSocket(session.eventLoop, fd, maxMessageLength)
-    , session(session)
+ClientSession::MessageSocketHandler::MessageSocketHandler(
+        ClientSession& session)
+    : session(session)
 {
 }
 
 void
-ClientSession::ClientMessageSocket::onReceiveMessage(MessageId messageId,
-                                                     Buffer message)
+ClientSession::MessageSocketHandler::handleReceivedMessage(
+        MessageId messageId,
+        Buffer message)
 {
     std::unique_lock<std::mutex> mutexGuard(session.mutex);
 
-    if (messageId == PING_MESSAGE_ID) {
+    if (messageId == Protocol::Common::PING_MESSAGE_ID) {
         if (session.numActiveRPCs > 0 && session.activePing) {
             // The server has shown that it is alive for now.
             // Let's get suspicious again in another TIMEOUT_MS.
@@ -154,7 +147,7 @@ ClientSession::ClientMessageSocket::onReceiveMessage(MessageId messageId,
 }
 
 void
-ClientSession::ClientMessageSocket::onDisconnect()
+ClientSession::MessageSocketHandler::handleDisconnect()
 {
     VERBOSE("Disconnected from server %s",
             session.address.toString().c_str());
@@ -207,7 +200,8 @@ ClientSession::Timer::handleTimerEvent()
     if (!session.activePing) {
         VERBOSE("ClientSession is suspicious. Sending ping.");
         session.activePing = true;
-        session.messageSocket->sendMessage(PING_MESSAGE_ID, Buffer());
+        session.messageSocket->sendMessage(Protocol::Common::PING_MESSAGE_ID,
+                                           Buffer());
         schedule(TIMEOUT_MS * 1000 * 1000);
     } else {
         VERBOSE("ClientSession to %s timed out.",
@@ -240,16 +234,20 @@ ClientSession::ClientSession(Event::Loop& eventLoop,
     : self() // makeSession will fill this in shortly
     , eventLoop(eventLoop)
     , address(address)
-    , messageSocket()
+    , messageSocketHandler(*this)
     , timer(*this)
-    , timerMonitor(eventLoop, timer)
     , mutex()
     , nextMessageId(1) // 0 is reserved for PING_MESSAGE_ID
     , responses()
     , errorMessage()
     , numActiveRPCs(0)
     , activePing(false)
+    , messageSocket()
+    , timerMonitor(eventLoop, timer)
 {
+    static_assert(1 > Protocol::Common::PING_MESSAGE_ID,
+                  "PING_MESSAGE_ID changed?");
+
     // Be careful not to pass a sockaddr of length 0 to conect(). Although it
     // should return -1 EINVAL, on some systems (e.g., RHEL6) it instead
     // returns OK but leaves the socket unconnected! See
@@ -333,7 +331,8 @@ ClientSession::ClientSession(Event::Loop& eventLoop,
         return;
     }
 
-    messageSocket.reset(new ClientMessageSocket(*this, fd, maxMessageLength));
+    messageSocket.reset(new MessageSocket(
+        messageSocketHandler, eventLoop, fd, maxMessageLength));
 }
 
 std::shared_ptr<ClientSession>
@@ -352,6 +351,7 @@ ClientSession::makeSession(Event::Loop& eventLoop,
 ClientSession::~ClientSession()
 {
     timerMonitor.disableForever();
+    messageSocket.reset();
     for (auto it = responses.begin(); it != responses.end(); ++it)
         delete it->second;
 }

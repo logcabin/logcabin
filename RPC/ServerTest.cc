@@ -84,25 +84,6 @@ class RPCServerTest : public ::testing::Test {
     ProtoBuf::TestMessage reply;
 };
 
-// constructor: nothing to test
-
-// destructor: nothing to test
-
-TEST_F(RPCServerTest, registerService) {
-    server.registerService(1, service1, 1);
-    server.registerService(2, service2, 1);
-    server.registerService(1, service2, 1);
-    EXPECT_EQ(2U, server.services.size());
-    service2->reply(0, request, reply);
-    service2->reply(0, request, reply);
-    ClientRPC rpc(session, 1, 1, 0, request);
-    EXPECT_EQ(ClientRPC::Status::OK,
-              rpc.waitForReply(NULL, NULL, TimePoint::max()));
-    rpc = ClientRPC(session, 2, 1, 0, request);
-    EXPECT_EQ(ClientRPC::Status::OK,
-              rpc.waitForReply(NULL, NULL, TimePoint::max()));
-}
-
 TEST_F(RPCServerTest, handleRPC_normal) {
     server.registerService(1, service1, 1);
     service1->reply(0, request, reply);
@@ -127,6 +108,27 @@ TEST_F(RPCServerTest, handleRPC_badService) {
     EXPECT_DEATH({ childDeathInit();
                    rpc.waitForReply(NULL, NULL, TimePoint::max());
                  }, "not running.*service");
+}
+
+// constructor: nothing to test
+
+// destructor: nothing to test
+
+// bind: nothing to test
+
+TEST_F(RPCServerTest, registerService) {
+    server.registerService(1, service1, 1);
+    server.registerService(2, service2, 1);
+    server.registerService(1, service2, 1);
+    EXPECT_EQ(2U, server.services.size());
+    service2->reply(0, request, reply);
+    service2->reply(0, request, reply);
+    ClientRPC rpc(session, 1, 1, 0, request);
+    EXPECT_EQ(ClientRPC::Status::OK,
+              rpc.waitForReply(NULL, NULL, TimePoint::max()));
+    rpc = ClientRPC(session, 2, 1, 0, request);
+    EXPECT_EQ(ClientRPC::Status::OK,
+              rpc.waitForReply(NULL, NULL, TimePoint::max()));
 }
 
 } // namespace LogCabin::RPC::<anonymous>

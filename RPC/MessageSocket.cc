@@ -1,4 +1,5 @@
 /* Copyright (c) 2010-2014 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -25,6 +26,7 @@
 
 #include "Core/Debug.h"
 #include "Core/Endian.h"
+#include "Event/Loop.h"
 #include "RPC/MessageSocket.h"
 
 namespace LogCabin {
@@ -163,21 +165,36 @@ MessageSocket::Outbound::operator=(Outbound&& other)
 
 ////////// MessageSocket //////////
 
-MessageSocket::MessageSocket(Event::Loop& eventLoop, int fd,
+MessageSocket::MessageSocket(Handler& handler,
+                             Event::Loop& eventLoop, int fd,
                              uint32_t maxMessageLength)
     : maxMessageLength(maxMessageLength)
+    , handler(handler)
+    , eventLoop(eventLoop)
     , inbound()
     , outboundQueueMutex()
     , outboundQueue()
     , receiveSocket(dupOrPanic(fd), *this)
-    , receiveSocketMonitor(eventLoop, receiveSocket, EPOLLIN)
     , sendSocket(fd, *this)
+    , receiveSocketMonitor(eventLoop, receiveSocket, EPOLLIN)
     , sendSocketMonitor(eventLoop, sendSocket, 0)
 {
 }
 
 MessageSocket::~MessageSocket()
 {
+}
+
+void
+MessageSocket::close()
+{
+    receiveSocketMonitor.disableForever();
+    sendSocketMonitor.disableForever();
+
+    // Take an Event::Loop::Lock in case the handler assumes it's being
+    // executed on the event loop thread.
+    Event::Loop::Lock lock(eventLoop);
+    handler.handleDisconnect();
 }
 
 void
@@ -206,9 +223,9 @@ MessageSocket::disconnect()
 {
     receiveSocketMonitor.disableForever();
     sendSocketMonitor.disableForever();
-    // TODO(ongaro): to make it safe for epoll_wait to return  multiple events,
-    // need to somehow queue the onDisconnect for later.
-    onDisconnect();
+    // TODO(ongaro): to make it safe for epoll_wait to return multiple events,
+    // need to somehow queue the handleDisconnect for later.
+    handler.handleDisconnect();
 }
 
 void
@@ -263,8 +280,8 @@ MessageSocket::readable()
                                      inbound.header.payloadLength)) {
                 return;
             }
-            onReceiveMessage(inbound.header.messageId,
-                             std::move(inbound.message));
+            handler.handleReceivedMessage(inbound.header.messageId,
+                                          std::move(inbound.message));
             // Transition to receiving header
             inbound.bytesRead = 0;
         }
@@ -345,7 +362,7 @@ MessageSocket::writable()
             } else if (errno == ECONNRESET || errno == EPIPE) {
                 // Connection closed; disconnect this end.
                 // This must be the last line to touch this object, in case
-                // onDisconnect() deletes this object.
+                // handleDisconnect() deletes this object.
                 disconnect();
                 return;
             } else {

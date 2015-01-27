@@ -21,19 +21,19 @@ namespace RPC {
 OpaqueServerRPC::OpaqueServerRPC()
     : request()
     , response()
-    , messageSocket()
+    , socket()
     , messageId(~0UL)
     , responseTarget(NULL)
 {
 }
 
 OpaqueServerRPC::OpaqueServerRPC(
-        std::weak_ptr<OpaqueServer::ServerMessageSocket> messageSocket,
+        std::weak_ptr<OpaqueServer::SocketWithHandler> socket,
         MessageSocket::MessageId messageId,
         Buffer request)
     : request(std::move(request))
     , response()
-    , messageSocket(messageSocket)
+    , socket(socket)
     , messageId(messageId)
     , responseTarget(NULL)
 {
@@ -42,7 +42,7 @@ OpaqueServerRPC::OpaqueServerRPC(
 OpaqueServerRPC::OpaqueServerRPC(OpaqueServerRPC&& other)
     : request(std::move(other.request))
     , response(std::move(other.response))
-    , messageSocket(std::move(other.messageSocket))
+    , socket(std::move(other.socket))
     , messageId(std::move(other.messageId))
     , responseTarget(std::move(other.responseTarget))
 {
@@ -57,7 +57,7 @@ OpaqueServerRPC::operator=(OpaqueServerRPC&& other)
 {
     request = std::move(other.request);
     response = std::move(other.response);
-    messageSocket = std::move(other.messageSocket);
+    socket = std::move(other.socket);
     messageId = std::move(other.messageId);
     responseTarget = std::move(other.responseTarget);
     return *this;
@@ -66,21 +66,19 @@ OpaqueServerRPC::operator=(OpaqueServerRPC&& other)
 void
 OpaqueServerRPC::closeSession()
 {
-    std::shared_ptr<OpaqueServer::ServerMessageSocket> socket =
-        messageSocket.lock();
-    if (socket)
-        socket->close();
-    messageSocket.reset();
+    std::shared_ptr<OpaqueServer::SocketWithHandler> socketRef = socket.lock();
+    if (socketRef)
+        socketRef->monitor.close();
+    socket.reset();
     responseTarget = NULL;
 }
 
 void
 OpaqueServerRPC::sendReply()
 {
-    std::shared_ptr<OpaqueServer::ServerMessageSocket> socket =
-        messageSocket.lock();
-    if (socket) {
-        socket->sendMessage(messageId, std::move(response));
+    std::shared_ptr<OpaqueServer::SocketWithHandler> socketRef = socket.lock();
+    if (socketRef) {
+        socketRef->monitor.sendMessage(messageId, std::move(response));
     } else {
         // During normal operation, this indicates that either the socket has
         // been disconnected or the reply has already been sent.
@@ -96,7 +94,7 @@ OpaqueServerRPC::sendReply()
         response.reset();
     }
     // Prevent the server from replying again.
-    messageSocket.reset();
+    socket.reset();
 }
 
 } // namespace LogCabin::RPC

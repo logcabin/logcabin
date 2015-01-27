@@ -194,7 +194,7 @@ TEST_F(RPCServerRPCTest, closeSession) {
     call();
     serverRPC.closeSession();
     EXPECT_FALSE(serverRPC.needsReply());
-    EXPECT_FALSE(serverRPC.opaqueRPC.messageSocket.lock());
+    EXPECT_FALSE(serverRPC.opaqueRPC.socket.lock());
 }
 
 // reject tested sufficiently by rejectInvalidService

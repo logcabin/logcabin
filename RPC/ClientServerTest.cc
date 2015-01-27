@@ -65,9 +65,9 @@ class ReplyTimer : public Event::Timer {
     Event::Timer::Monitor monitor;
 };
 
-class EchoServer : public RPC::OpaqueServer {
-    EchoServer(Event::Loop& eventLoop, uint32_t maxMessageLength)
-        : OpaqueServer(eventLoop, maxMessageLength)
+class EchoServer : public RPC::OpaqueServer::Handler {
+    explicit EchoServer(Event::Loop& eventLoop)
+        : eventLoop(eventLoop)
         , delayMicros(0)
     {
     }
@@ -77,6 +77,7 @@ class EchoServer : public RPC::OpaqueServer {
         VERBOSE("Delaying response for %u microseconds", delayMicros);
         new ReplyTimer(eventLoop, std::move(serverRPC), delayMicros);
     }
+    Event::Loop& eventLoop;
     uint32_t delayMicros;
 };
 
@@ -87,7 +88,8 @@ class RPCClientServerTest : public ::testing::Test {
         , clientEventLoopThread(&Event::Loop::runForever, &clientEventLoop)
         , serverEventLoopThread(&Event::Loop::runForever, &serverEventLoop)
         , address("127.0.0.1", Protocol::Common::DEFAULT_PORT)
-        , server(serverEventLoop, 1024)
+        , rpcHandler(serverEventLoop)
+        , server(rpcHandler, serverEventLoop, 1024)
         , clientSession()
     {
         address.refresh(RPC::Address::TimePoint::max());
@@ -109,7 +111,8 @@ class RPCClientServerTest : public ::testing::Test {
     std::thread clientEventLoopThread;
     std::thread serverEventLoopThread;
     RPC::Address address;
-    EchoServer server;
+    EchoServer rpcHandler;
+    RPC::OpaqueServer server;
     std::shared_ptr<RPC::ClientSession> clientSession;
 };
 
@@ -132,7 +135,7 @@ TEST_F(RPCClientServerTest, echo) {
 // Test the RPC timeout (ping) mechanism.
 // This test assumes TIMEOUT_MS is set to 100ms in ClientSession.
 TEST_F(RPCClientServerTest, timeout) {
-    server.delayMicros = 110 * 1000;
+    rpcHandler.delayMicros = 110 * 1000;
 
     // The server should not time out, since the serverEventLoopThread should
     // respond to pings.
@@ -149,7 +152,6 @@ TEST_F(RPCClientServerTest, timeout) {
               rpc2.getErrorMessage());
 
 }
-
 
 } // namespace LogCabin::<anonymous>
 } // namespace LogCabin

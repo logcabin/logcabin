@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,10 +15,12 @@
  */
 
 #include <gtest/gtest.h>
+#include <thread>
 
 #include "Core/Debug.h"
 #include "Event/Loop.h"
 #include "Protocol/Common.h"
+#include "RPC/Address.h"
 #include "RPC/OpaqueServer.h"
 #include "RPC/OpaqueServerRPC.h"
 
@@ -25,10 +28,9 @@ namespace LogCabin {
 namespace RPC {
 namespace {
 
-class MyServer : public OpaqueServer {
-    MyServer(Event::Loop& eventLoop, uint32_t maxMessageLength)
-        : OpaqueServer(eventLoop, maxMessageLength)
-        , lastRPC()
+class MyServerHandler : public OpaqueServer::Handler {
+    MyServerHandler()
+        : lastRPC()
     {
     }
     void handleRPC(OpaqueServerRPC serverRPC) {
@@ -41,7 +43,8 @@ class RPCOpaqueServerTest : public ::testing::Test {
     RPCOpaqueServerTest()
         : loop()
         , address("127.0.0.1", Protocol::Common::DEFAULT_PORT)
-        , server(loop, 1024)
+        , rpcHandler()
+        , server(rpcHandler, loop, 1024)
         , fd1(-1)
         , fd2(-1)
     {
@@ -60,73 +63,91 @@ class RPCOpaqueServerTest : public ::testing::Test {
     }
     Event::Loop loop;
     Address address;
-    MyServer server;
+    MyServerHandler rpcHandler;
+    OpaqueServer server;
     int fd1;
     int fd2;
 };
 
-TEST_F(RPCOpaqueServerTest, TCPListener_handleNewConnection) {
-    server.listener.handleNewConnection(fd1);
+TEST_F(RPCOpaqueServerTest, MessageSocketHandler_handleReceivedMessage) {
+    auto socket = OpaqueServer::SocketWithHandler::make(&server, fd1);
+    server.sockets.insert(socket);
     fd1 = -1;
-    ASSERT_EQ(1U, server.sockets.size());
-    OpaqueServer::ServerMessageSocket& socket = *server.sockets.at(0);
-    EXPECT_EQ(&server, socket.server);
-    EXPECT_EQ(0U, socket.socketsIndex);
-    EXPECT_FALSE(socket.self.expired());
+    socket->handler.handleReceivedMessage(1, Buffer(NULL, 3, NULL));
+    ASSERT_TRUE(rpcHandler.lastRPC.get());
+    EXPECT_EQ(3U, rpcHandler.lastRPC->request.getLength());
+    EXPECT_EQ(0U, rpcHandler.lastRPC->response.getLength());
+    EXPECT_EQ(socket, rpcHandler.lastRPC->socket.lock());
+    EXPECT_EQ(1U, rpcHandler.lastRPC->messageId);
+}
 
-    server.listener.server = NULL;
-    server.listener.handleNewConnection(fd2);
-    fd2 = -1;
+TEST_F(RPCOpaqueServerTest, MessageSocketHandler_handleReceivedMessage_ping) {
+    auto socket = OpaqueServer::SocketWithHandler::make(&server, fd1);
+    server.sockets.insert(socket);
+    fd1 = -1;
+    socket->handler.handleReceivedMessage(0, Buffer());
+    ASSERT_FALSE(rpcHandler.lastRPC);
+    EXPECT_EQ(1U, socket->monitor.outboundQueue.size());
+}
+
+TEST_F(RPCOpaqueServerTest, MessageSocketHandler_handleDisconnect) {
+    auto socket = OpaqueServer::SocketWithHandler::make(&server, fd1);
+    server.sockets.insert(socket);
+    fd1 = -1;
+    socket->handler.handleDisconnect();
+    EXPECT_EQ(0U, server.sockets.size());
+    EXPECT_TRUE(socket->handler.server == NULL);
+    socket->monitor.close();
+}
+
+void
+clientMain(int& fd, Address& address, OpaqueServer& server)
+{
+    fd = socket(AF_INET, SOCK_STREAM, 0);
+    int r = connect(fd,
+                    address.getSockAddr(),
+                    address.getSockAddrLen());
+    if (r < 0)
+        PANIC("connect error: %s", strerror(errno));
+
+    server.eventLoop.exit();
+};
+
+TEST_F(RPCOpaqueServerTest, BoundListener_handleFileEvent) {
+    int clientFd = -1;
+    std::thread clientThread(clientMain,
+                             std::ref(clientFd),
+                             std::ref(address),
+                             std::ref(server));
+    server.eventLoop.runForever();
+    clientThread.join();
     EXPECT_EQ(1U, server.sockets.size());
+    close(clientFd);
 }
 
-TEST_F(RPCOpaqueServerTest, MessageSocket_onReceiveMessage) {
-    server.listener.handleNewConnection(fd1);
-    fd1 = -1;
-    OpaqueServer::ServerMessageSocket& socket = *server.sockets.at(0);
-    socket.onReceiveMessage(1, Buffer(NULL, 3, NULL));
-    ASSERT_TRUE(server.lastRPC.get());
-    EXPECT_EQ(3U, server.lastRPC->request.getLength());
-    EXPECT_EQ(0U, server.lastRPC->response.getLength());
-    EXPECT_EQ(&socket, server.lastRPC->messageSocket.lock().get());
-    EXPECT_EQ(1U, server.lastRPC->messageId);
+TEST_F(RPCOpaqueServerTest, bind_good) {
+    Address address2("127.0.0.1", 61022);
+    address2.refresh(Address::TimePoint::max());
+    EXPECT_EQ("", server.bind(address2));
+    Address address3("127.0.0.1", 61024);
+    address3.refresh(Address::TimePoint::max());
+    EXPECT_EQ("", server.bind(address3));
+    EXPECT_EQ(3U, server.boundListeners.size());
 }
 
-TEST_F(RPCOpaqueServerTest, MessageSocket_onReceiveMessage_ping) {
-    server.listener.handleNewConnection(fd1);
-    fd1 = -1;
-    OpaqueServer::ServerMessageSocket& socket = *server.sockets.at(0);
-    socket.onReceiveMessage(0, Buffer());
-    ASSERT_FALSE(server.lastRPC);
-    EXPECT_EQ(1U, socket.outboundQueue.size());
+TEST_F(RPCOpaqueServerTest, bind_badAddress) {
+    Address address2("", 0);
+    std::string error = server.bind(address2);
+    EXPECT_TRUE(error.find("Can't listen on invalid address") != error.npos)
+        << error;
 }
 
-TEST_F(RPCOpaqueServerTest, MessageSocket_onDisconnect) {
-    server.listener.handleNewConnection(fd1);
-    fd1 = -1;
-    server.listener.handleNewConnection(fd2);
-    fd2 = -1;
-    EXPECT_EQ(2U, server.sockets.size());
-    std::shared_ptr<OpaqueServer::ServerMessageSocket> socket =
-        server.sockets.at(0);
-    socket->onDisconnect();
-    EXPECT_EQ(1U, server.sockets.size());
-    EXPECT_EQ(0U, server.sockets.at(0)->socketsIndex);
-    EXPECT_TRUE(socket->server == NULL);
-    socket->close();
-    EXPECT_EQ(1U, server.sockets.size());
-}
-
-TEST_F(RPCOpaqueServerTest, MessageSocket_close) {
-    // tested by onDisconnect
-}
-
-TEST_F(RPCOpaqueServerTest, constructor) {
-    // tested sufficiently in other tests
-}
-
-TEST_F(RPCOpaqueServerTest, destructor) {
-    // difficult to test
+TEST_F(RPCOpaqueServerTest, bind_portTaken) {
+    Address address2("127.0.0.1", Protocol::Common::DEFAULT_PORT);
+    address2.refresh(Address::TimePoint::max());
+    std::string error = server.bind(address2);
+    EXPECT_TRUE(error.find("in use") != error.npos)
+        << error;
 }
 
 } // namespace LogCabin::RPC::<anonymous>

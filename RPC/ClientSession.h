@@ -125,24 +125,13 @@ class ClientSession {
   private:
 
     /**
-     * This is a MessageSocket with callbacks set up for ClientSession.
+     * This handles events from #messageSocket.
      */
-    class ClientMessageSocket : public MessageSocket {
+    class MessageSocketHandler : public MessageSocket::Handler {
       public:
-        /**
-         * Constructor.
-         * \param clientSession
-         *      ClientSession owning this socket.
-         * \param fd
-         *      A connected TCP socket.
-         * \param maxMessageLength
-         *      See MessageSocket's constructor.
-         */
-        ClientMessageSocket(ClientSession& clientSession,
-                            int fd,
-                            uint32_t maxMessageLength);
-        void onReceiveMessage(MessageId messageId, Buffer message);
-        void onDisconnect();
+        explicit MessageSocketHandler(ClientSession& clientSession);
+        void handleReceivedMessage(MessageId messageId, Buffer message);
+        void handleDisconnect();
         ClientSession& session;
     };
 
@@ -255,11 +244,9 @@ class ClientSession {
     const Address address;
 
     /**
-     * The MessageSocket used to send RPC requests and receive RPC responses.
-     * This may be NULL if the socket was never created. In this case,
-     * #errorMessage will be set.
+     * Receives events from #messageSocket.
      */
-    std::unique_ptr<ClientMessageSocket> messageSocket;
+    MessageSocketHandler messageSocketHandler;
 
     /**
      * This is used to time out RPCs and sessions when the server is no longer
@@ -268,13 +255,12 @@ class ClientSession {
     Timer timer;
 
     /**
-     * Registers timer with the event loop.
-     */
-    Event::Timer::Monitor timerMonitor;
-
-    /**
-     * This mutex protects all of the members of this class defined below this
-     * point.
+     * This mutex protects several members of this class:
+     *  - #nextMessageId
+     *  - #responses
+     *  - #errorMessage
+     *  - #numActiveRPCs
+     *  - #activePing
      */
     mutable std::mutex mutex;
 
@@ -304,7 +290,8 @@ class ClientSession {
      * The number of outstanding RPC requests that have been sent but whose
      * responses have not yet been received. This does not include ping
      * requests sent by the #timer (which aren't real RPCs).
-     * TODO(ongaro): Document what this is for.
+     * This is used to determine when to schedule the timer: the timer is
+     * scheduled if numActiveRPCs is non-zero.
      */
     uint32_t numActiveRPCs;
 
@@ -314,6 +301,18 @@ class ClientSession {
      * When numActiveRPCs = 0, this field is undefined.
      */
     bool activePing;
+
+    /**
+     * The MessageSocket used to send RPC requests and receive RPC responses.
+     * This may be NULL if the socket was never created. In this case,
+     * #errorMessage will be set.
+     */
+    std::unique_ptr<MessageSocket> messageSocket;
+
+    /**
+     * Registers timer with the event loop.
+     */
+    Event::Timer::Monitor timerMonitor;
 
     /**
      * Usually set to connect() but mocked out in some unit tests.

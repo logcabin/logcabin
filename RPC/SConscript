@@ -13,7 +13,6 @@ src = [
     "Protocol.cc",
     "Server.cc",
     "ServerRPC.cc",
-    "TCPListener.cc",
     "ThreadDispatchService.cc",
 ]
 object_files['RPC'] = env.StaticObject(src)

@@ -24,6 +24,7 @@
 #include "Core/Time.h"
 #include "Core/Util.h"
 #include "Protocol/Common.h"
+#include "RPC/Address.h"
 #include "RPC/ServiceMock.h"
 #include "RPC/Server.h"
 #include "Server/RaftConsensus.h"

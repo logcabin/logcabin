@@ -36,7 +36,7 @@ namespace RPC {
 class OpaqueServerRPC {
     /**
      * Constructor for OpaqueServerRPC. This is called by OpaqueServer.
-     * \param messageSocket
+     * \param socket
      *      The socket on which to send the reply.
      * \param messageId
      *      The message ID received with the request.
@@ -44,7 +44,7 @@ class OpaqueServerRPC {
      *      The RPC request received from the client.
      */
     OpaqueServerRPC(
-            std::weak_ptr<OpaqueServer::ServerMessageSocket> messageSocket,
+            std::weak_ptr<OpaqueServer::SocketWithHandler> socket,
             MessageSocket::MessageId messageId,
             Buffer request);
 
@@ -99,7 +99,7 @@ class OpaqueServerRPC {
     /**
      * The socket on which to send the reply.
      */
-    std::weak_ptr<OpaqueServer::ServerMessageSocket> messageSocket;
+    std::weak_ptr<OpaqueServer::SocketWithHandler> socket;
 
     /**
      * The message ID received with the request. This should be sent back to

@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -34,7 +35,7 @@ namespace RPC {
  * the thread running the Event::Loop. Services will always run on a thread
  * pool.
  */
-class Server : public OpaqueServer {
+class Server {
   public:
     /**
      * Constructor. This object won't actually do anything until bind() is
@@ -58,6 +59,11 @@ class Server : public OpaqueServer {
     ~Server();
 
     /**
+     * See OpaqueServer::bind().
+     */
+    std::string bind(const Address& listenAddress);
+
+    /**
      * Register a Service to receive RPCs from clients. If a service has
      * already been registered for this service ID, this will replace it. This
      * may be called from any thread.
@@ -76,12 +82,22 @@ class Server : public OpaqueServer {
 
   private:
     /**
-     * This is called by the base class, OpaqueServer, when an RPC arrives.
+     * Services RPCs.
      */
-    void handleRPC(RPC::OpaqueServerRPC opaqueRPC);
+    class RPCHandler : public OpaqueServer::Handler {
+      public:
+        explicit RPCHandler(Server& server);
+        ~RPCHandler();
+        /**
+         * This is called by the base class, OpaqueServer::Handler, when an RPC
+         * arrives.
+         */
+        void handleRPC(OpaqueServerRPC opaqueRPC);
+        Server& server;
+    };
 
     /**
-     * Protects services from concurrent modification.
+     * Protects #services from concurrent modification.
      */
     std::mutex mutex;
 
@@ -90,6 +106,17 @@ class Server : public OpaqueServer {
      * Protected by #mutex.
      */
     std::unordered_map<uint16_t, std::shared_ptr<Service>> services;
+
+    /**
+     * Deals with RPCs created by #opaqueServer.
+     */
+    RPCHandler rpcHandler;
+
+    /**
+     * Listens for new RPCs on TCP connections and invokes #rpcHandler with
+     * them.
+     */
+    OpaqueServer opaqueServer;
 
     // Server is non-copyable.
     Server(const Server&) = delete;

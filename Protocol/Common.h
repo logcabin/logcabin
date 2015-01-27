@@ -31,6 +31,12 @@ namespace Common {
 enum { DEFAULT_PORT = 61023 };
 
 /**
+ * A MessageSocket::MessageID reserved for ping messages that are  used to
+ * check the server's liveness. No real RPC will ever be assigned this ID.
+ */
+enum { PING_MESSAGE_ID = 0 };
+
+/**
  * The maximum number of bytes per RPC request or response, including these
  * headers. This is set to slightly over 1 MB because the maximum size of log
  * entries is 1 MB.

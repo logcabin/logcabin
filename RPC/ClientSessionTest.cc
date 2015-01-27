@@ -54,8 +54,9 @@ class RPCClientSessionTest : public ::testing::Test {
         remote = socketPair[1];
         session->errorMessage.clear();
         session->messageSocket.reset(
-            new ClientSession::ClientMessageSocket(
-                *session, socketPair[0], 1024));
+            new MessageSocket(
+                session->messageSocketHandler,
+                eventLoop, socketPair[0], 1024));
     }
 
     ~RPCClientSessionTest()
@@ -88,16 +89,16 @@ buf(const char* stringLiteral)
                   NULL);
 }
 
-TEST_F(RPCClientSessionTest, onReceiveMessage) {
+TEST_F(RPCClientSessionTest, handleReceivedMessage) {
     session->numActiveRPCs = 1;
 
     // Unexpected
-    session->messageSocket->onReceiveMessage(1, buf("a"));
+    session->messageSocket->handler.handleReceivedMessage(1, buf("a"));
 
     // Normal
     session->timer.schedule(1000000000);
     session->responses[1] = new ClientSession::Response();
-    session->messageSocket->onReceiveMessage(1, buf("b"));
+    session->messageSocket->handler.handleReceivedMessage(1, buf("b"));
     EXPECT_EQ(ClientSession::Response::HAS_REPLY,
               session->responses[1]->status);
     EXPECT_EQ("b", str(session->responses[1]->reply));
@@ -106,33 +107,33 @@ TEST_F(RPCClientSessionTest, onReceiveMessage) {
 
     // Already ready
     LogCabin::Core::Debug::setLogPolicy({{"", "ERROR"}});
-    session->messageSocket->onReceiveMessage(1, buf("c"));
+    session->messageSocket->handler.handleReceivedMessage(1, buf("c"));
     EXPECT_EQ("b", str(session->responses[1]->reply));
     EXPECT_EQ(0U, session->numActiveRPCs);
 }
 
-TEST_F(RPCClientSessionTest, onReceiveMessage_ping) {
+TEST_F(RPCClientSessionTest, handleReceivedMessage_ping) {
     // spurious
-    session->messageSocket->onReceiveMessage(0, Buffer());
+    session->messageSocket->handler.handleReceivedMessage(0, Buffer());
 
     // ping requested
     session->numActiveRPCs = 1;
     session->activePing = true;
-    session->messageSocket->onReceiveMessage(0, Buffer());
+    session->messageSocket->handler.handleReceivedMessage(0, Buffer());
     session->numActiveRPCs = 0;
     EXPECT_FALSE(session->activePing);
     EXPECT_TRUE(session->timer.isScheduled());
 }
 
-TEST_F(RPCClientSessionTest, onDisconnect) {
-    session->messageSocket->onDisconnect();
+TEST_F(RPCClientSessionTest, handleDisconnect) {
+    session->messageSocket->handler.handleDisconnect();
     EXPECT_EQ("Disconnected from server 127.0.0.1 (resolved to 127.0.0.1:0)",
               session->errorMessage);
 }
 
 TEST_F(RPCClientSessionTest, handleTimerEvent) {
     // spurious
-    std::unique_ptr<ClientSession::ClientMessageSocket> oldMessageSocket;
+    std::unique_ptr<MessageSocket> oldMessageSocket;
     std::swap(oldMessageSocket, session->messageSocket);
     session->timer.handleTimerEvent();
     std::swap(oldMessageSocket, session->messageSocket);
