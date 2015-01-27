@@ -48,7 +48,8 @@ class RPCClientSessionTest : public ::testing::Test {
         Address address("127.0.0.1", 0);
         address.refresh(Address::TimePoint::max());
         session = ClientSession::makeSession(eventLoop, address, 1024,
-                                             TimePoint::max());
+                                             TimePoint::max(),
+                                             Core::Config());
         int socketPair[2];
         EXPECT_EQ(0, socketpair(AF_UNIX, SOCK_STREAM, 0, socketPair));
         remote = socketPair[1];
@@ -164,7 +165,8 @@ TEST_F(RPCClientSessionTest, constructor) {
     auto session2 = ClientSession::makeSession(eventLoop,
                                                address,
                                                1024,
-                                               TimePoint::max());
+                                               TimePoint::max(),
+                                               Core::Config());
     EXPECT_EQ("127.0.0.1 (resolved to 127.0.0.1:0)",
               session2->address.toString());
     EXPECT_EQ("Failed to connect socket to 127.0.0.1 "
@@ -178,7 +180,8 @@ TEST_F(RPCClientSessionTest, constructor) {
     auto session3 = ClientSession::makeSession(eventLoop,
                                                Address("i n v a l i d", 0),
                                                1024,
-                                               TimePoint::max());
+                                               TimePoint::max(),
+                                               Core::Config());
     EXPECT_EQ("Failed to resolve i n v a l i d (resolved to Unspecified)",
               session3->errorMessage);
     EXPECT_EQ("Closed session: Failed to resolve i n v a l i d "
@@ -226,7 +229,8 @@ TEST_F(RPCClientSessionTest, constructor_timeout_TimingSensitive) {
         eventLoop,
         address,
         1024,
-        Core::Time::SteadyClock::now() + std::chrono::milliseconds(5));
+        Core::Time::SteadyClock::now() + std::chrono::milliseconds(5),
+        Core::Config());
     uint64_t end = Core::Time::getTimeNanos();
     uint64_t elapsedMs = (end - start) / 1000000;
     EXPECT_LE(5U, elapsedMs);

@@ -23,6 +23,7 @@
 #include "Client/Backoff.h"
 #include "Client/LeaderRPC.h"
 #include "Core/ConditionVariable.h"
+#include "Core/Config.h"
 #include "Core/Mutex.h"
 #include "Core/Time.h"
 #include "Event/Loop.h"
@@ -54,7 +55,8 @@ class ClientImpl {
     typedef LeaderRPC::TimePoint TimePoint;
 
     /// Constructor.
-    ClientImpl();
+    explicit ClientImpl(const std::map<std::string, std::string>& options =
+                            std::map<std::string, std::string>());
     /// Destructor.
     virtual ~ClientImpl();
 
@@ -146,6 +148,11 @@ class ClientImpl {
      * and server are speaking the same version of the RPC protocol.
      */
     uint32_t negotiateRPCVersion();
+
+    /**
+     * Options/settings.
+     */
+    const Core::Config config;
 
     /**
      * The Event::Loop used to drive the underlying RPC mechanism.

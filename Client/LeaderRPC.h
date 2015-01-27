@@ -29,6 +29,11 @@
 namespace LogCabin {
 
 // forward declaration
+namespace Core {
+class Config;
+}
+
+// forward declaration
 namespace Event {
 class Loop;
 }
@@ -216,10 +221,13 @@ class LeaderRPC : public LeaderRPCBase {
      *      Used to invoke RPCs.
      * \param sessionCreationBackoff
      *      Used to rate-limit new TCP connections.
+     * \param config
+     *      Settings for the client library. This object keeps a reference.
      */
     LeaderRPC(const RPC::Address& hosts,
               Event::Loop& eventLoop,
-              Backoff& sessionCreationBackoff);
+              Backoff& sessionCreationBackoff,
+              const Core::Config& config);
 
     /// Destructor.
     ~LeaderRPC();
@@ -305,6 +313,11 @@ class LeaderRPC : public LeaderRPCBase {
      * connections).
      */
     Backoff& sessionCreationBackoff;
+
+    /**
+     * Settings for client library.
+     */
+    const Core::Config& config;
 
     /**
      * Protects all of the following member variables in this class.

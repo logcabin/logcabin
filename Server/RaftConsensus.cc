@@ -308,7 +308,8 @@ Peer::getSession(std::unique_lock<Mutex>& lockGuard)
             eventLoop,
             target,
             Protocol::Common::MAX_MESSAGE_LENGTH,
-            RPC::ClientSession::TimePoint::max());
+            RPC::ClientSession::TimePoint::max(),
+            consensus.globals.config);
     }
     return session;
 }

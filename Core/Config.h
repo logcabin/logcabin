@@ -27,6 +27,7 @@
  * It was subsequently modified:
  *
  * Copyright (c) 2012 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -89,6 +90,11 @@ class Config {
      */
     explicit Config(const string& delimiter = "=",
                     const string& comment = "#");
+
+    /**
+     * Construct a Config from the given map of options.
+     */
+    explicit Config(const std::map<string, string>& options);
 
     /**
      * Load a Config from a file.

@@ -74,7 +74,8 @@ class RPCClientRPCTest : public ::testing::Test {
         EXPECT_EQ("", server.bind(address));
         session = ClientSession::makeSession(eventLoop, address,
                                    ProtocolCommon::MAX_MESSAGE_LENGTH,
-                                   TimePoint::max());
+                                   TimePoint::max(),
+                                   Core::Config());
         payload.set_field_a(3);
         payload.set_field_b(4);
     }

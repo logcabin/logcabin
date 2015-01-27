@@ -27,6 +27,7 @@
  * It was subsequently modified:
  *
  * Copyright (c) 2012 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -135,6 +136,14 @@ Config::Config(const string& delimiter,
     , contents()
 {
 }
+
+Config::Config(const std::map<string, string>& options)
+    : delimiter("=")
+    , comment("#")
+    , contents(options)
+{
+}
+
 
 void
 Config::readFile(const string& filename)

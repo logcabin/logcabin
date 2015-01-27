@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -57,7 +58,7 @@ class CoreConfigTest : public ::testing::Test {
     std::string tmpdir;
 };
 
-TEST_F(CoreConfigTest, constructor) {
+TEST_F(CoreConfigTest, constructor_delim) {
     Config config;
     EXPECT_EQ("=", config.delimiter);
     EXPECT_EQ("#", config.comment);
@@ -67,6 +68,16 @@ TEST_F(CoreConfigTest, constructor) {
     EXPECT_EQ(":", config2.delimiter);
     EXPECT_EQ("//", config2.comment);
     EXPECT_TRUE(config2.contents.empty());
+}
+
+TEST_F(CoreConfigTest, constructor_withOptions) {
+    map<string, string> options = {
+                {"double", "3.14"},
+                {"int", "314"},
+                {"string", "a = b = c = d"}
+    };
+    Config config(options);
+    EXPECT_EQ(options, config.contents);
 }
 
 TEST_F(CoreConfigTest, readFile) {

@@ -20,6 +20,7 @@
 #include <unordered_map>
 
 #include "Core/ConditionVariable.h"
+#include "Core/Config.h"
 #include "Event/Timer.h"
 #include "RPC/Address.h"
 #include "RPC/Buffer.h"
@@ -58,7 +59,8 @@ class ClientSession {
     ClientSession(Event::Loop& eventLoop,
                   const Address& address,
                   uint32_t maxMessageLength,
-                  TimePoint timeout);
+                  TimePoint timeout,
+                  const Core::Config& config);
   public:
     /**
      * Return a new ClientSession object. This object is managed by a
@@ -81,12 +83,15 @@ class ClientSession {
      * \param timeout
      *      After this time has elapsed, stop trying to initiate the connection
      *      and leave the session in an error state.
+     * \param config
+     *      General settings. This object does not keep a reference.
      */
     static std::shared_ptr<ClientSession>
     makeSession(Event::Loop& eventLoop,
                 const Address& address,
                 uint32_t maxMessageLength,
-                TimePoint timeout);
+                TimePoint timeout,
+                const Core::Config& config);
 
     /**
      * Destructor.
@@ -232,6 +237,20 @@ class ClientSession {
      * This is used to keep this object alive while there are outstanding RPCs.
      */
     std::weak_ptr<ClientSession> self;
+
+    /**
+     * The number of milliseconds to wait until the client gets suspicious
+     * about the server not responding. After this amount of time elapses, the
+     * client will send a ping to the server. If no response is received within
+     * another PING_TIMEOUT_MS milliseconds, the session is closed.
+     *
+     * TODO(ongaro): How should this value be chosen?
+     * Ideally, you probably want this to be set to something like the 99-th
+     * percentile of your RPC latency.
+     *
+     * TODO(ongaro): How does this interact with TCP?
+     */
+    const uint64_t PING_TIMEOUT_MS;
 
     /**
      * The event loop that is used for non-blocking I/O.

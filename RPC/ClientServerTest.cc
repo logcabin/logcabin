@@ -92,11 +92,14 @@ class RPCClientServerTest : public ::testing::Test {
         , server(rpcHandler, serverEventLoop, 1024)
         , clientSession()
     {
+        Core::Config config;
+        config.set("tcpHeartbeatTimeoutMilliseconds", 24);
         address.refresh(RPC::Address::TimePoint::max());
         EXPECT_EQ("", server.bind(address));
         clientSession = RPC::ClientSession::makeSession(
                             clientEventLoop, address, 1024,
-                            RPC::ClientSession::TimePoint::max());
+                            RPC::ClientSession::TimePoint::max(),
+                            config);
     }
     ~RPCClientServerTest()
     {
@@ -133,9 +136,9 @@ TEST_F(RPCClientServerTest, echo) {
 }
 
 // Test the RPC timeout (ping) mechanism.
-// This test assumes TIMEOUT_MS is set to 100ms in ClientSession.
 TEST_F(RPCClientServerTest, timeout) {
-    rpcHandler.delayMicros = 110 * 1000;
+    EXPECT_EQ(12U, clientSession->PING_TIMEOUT_MS);
+    rpcHandler.delayMicros = 14 * 1000;
 
     // The server should not time out, since the serverEventLoopThread should
     // respond to pings.

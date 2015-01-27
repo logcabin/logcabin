@@ -54,7 +54,8 @@ class RPCServerTest : public ::testing::Test {
                         eventLoop,
                         address,
                         MAX_MESSAGE_LENGTH,
-                        RPC::ClientSession::TimePoint::max());
+                        RPC::ClientSession::TimePoint::max(),
+                        Core::Config());
         request.set_field_a(3);
         request.set_field_b(4);
         reply.set_field_a(5);

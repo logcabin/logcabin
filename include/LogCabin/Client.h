@@ -21,6 +21,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <map>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -473,6 +474,13 @@ class Cluster {
   public:
 
     /**
+     * Settings for the client library. These are all optional.
+     * Currently supported options:
+     * - tcpHeartbeatTimeoutMilliseconds (see sample.conf)
+     */
+    typedef std::map<std::string, std::string> Options;
+
+    /**
      * Defines a special type to use as an argument to the constructor that is
      * for testing purposes only.
      */
@@ -482,8 +490,13 @@ class Cluster {
      * Construct a Cluster object for testing purposes only. Instead of
      * connecting to a LogCabin cluster, it will keep all state locally in
      * memory.
+     * \param t
+     *      The only possible value is Cluster::FOR_TESTING.
+     * \param options
+     *      Settings for the client library.
      */
-    explicit Cluster(ForTesting t);
+    explicit Cluster(ForTesting t,
+                     const Options& options = Options());
 
     /**
      * Constructor.
@@ -492,8 +505,15 @@ class Cluster {
      *      form host:port, where host is usually a DNS name that resolves to
      *      multiple IP addresses. Alternatively, you can pass a list of hosts
      *      as host1:port1;host2:port2;host3:port3.
+     * \param options
+     *      Settings for the client library.
      */
-    explicit Cluster(const std::string& hosts);
+    explicit Cluster(const std::string& hosts,
+                     const Options& options = Options());
+
+    /**
+     * Destructor.
+     */
     ~Cluster();
 
     /**

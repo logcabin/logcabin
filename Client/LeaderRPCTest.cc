@@ -42,6 +42,7 @@ class ClientLeaderRPCTest : public ::testing::Test {
         , service()
         , server()
         , eventLoopThread()
+        , config()
         , leaderRPC()
         , request()
         , response()
@@ -57,7 +58,8 @@ class ClientLeaderRPCTest : public ::testing::Test {
                                 service, 1);
         leaderRPC.reset(new LeaderRPC(address,
                                       eventLoop,
-                                      sessionCreationBackoff));
+                                      sessionCreationBackoff,
+                                      config));
 
 
         request.mutable_read()->set_path("foo");
@@ -81,6 +83,7 @@ class ClientLeaderRPCTest : public ::testing::Test {
     std::shared_ptr<RPC::ServiceMock> service;
     std::unique_ptr<RPC::Server> server;
     std::thread eventLoopThread;
+    Core::Config config;
     std::unique_ptr<LeaderRPC> leaderRPC;
     Protocol::Client::ReadOnlyTree::Request request;
     Protocol::Client::ReadOnlyTree::Response response;

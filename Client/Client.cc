@@ -433,14 +433,16 @@ Tree::getTreeDetails() const
 
 ////////// Cluster //////////
 
-Cluster::Cluster(ForTesting t)
+Cluster::Cluster(ForTesting t,
+                 const std::map<std::string, std::string>& options)
     : clientImpl(std::make_shared<MockClientImpl>())
 {
     clientImpl->init("-MOCK-");
 }
 
-Cluster::Cluster(const std::string& hosts)
-    : clientImpl(std::make_shared<ClientImpl>())
+Cluster::Cluster(const std::string& hosts,
+                 const std::map<std::string, std::string>& options)
+    : clientImpl(std::make_shared<ClientImpl>(options))
 {
 #if DEBUG // for testing purposes only
     if (hosts == "-MOCK-SKIP-INIT-")

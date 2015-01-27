@@ -155,9 +155,11 @@ LeaderRPC::Call::wait(google::protobuf::Message& response,
 
 LeaderRPC::LeaderRPC(const RPC::Address& hosts,
                      Event::Loop& eventLoop,
-                     Backoff& sessionCreationBackoff)
+                     Backoff& sessionCreationBackoff,
+                     const Core::Config& config)
     : eventLoop(eventLoop)
     , sessionCreationBackoff(sessionCreationBackoff)
+    , config(config)
     , mutex()
     , hosts(hosts)
     , leaderHint()
@@ -222,7 +224,8 @@ LeaderRPC::getSession(TimePoint timeout)
                         eventLoop,
                         address,
                         Protocol::Common::MAX_MESSAGE_LENGTH,
-                        timeout);
+                        timeout,
+                        config);
 
     return leaderSession;
 }

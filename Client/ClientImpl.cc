@@ -307,8 +307,9 @@ ClientImpl::ExactlyOnceRPCHelper::keepAliveThreadMain()
 
 ////////// class ClientImpl //////////
 
-ClientImpl::ClientImpl()
-    : eventLoop()
+ClientImpl::ClientImpl(const std::map<std::string, std::string>& options)
+    : config(options)
+    , eventLoop()
     , sessionCreationBackoff(5,                   // 5 new connections per
                              100UL * 1000 * 1000) // 100 ms
     , hosts()
@@ -342,7 +343,8 @@ ClientImpl::initDerived()
         leaderRPC.reset(new LeaderRPC(
             RPC::Address(hosts, Protocol::Common::DEFAULT_PORT),
             eventLoop,
-            sessionCreationBackoff));
+            sessionCreationBackoff,
+            config));
     }
     if (rpcProtocolVersion == ~0U)
         rpcProtocolVersion = negotiateRPCVersion();
@@ -423,7 +425,8 @@ ClientImpl::getServerStats(const std::string& host,
                             eventLoop,
                             address,
                             Protocol::Common::MAX_MESSAGE_LENGTH,
-                            timeout);
+                            timeout,
+                            config);
 
         Protocol::Client::GetServerStats::Request request;
         RPC::ClientRPC rpc(session,

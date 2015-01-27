@@ -55,7 +55,8 @@ class ServerClientServiceTest : public ::testing::Test {
                 globals->eventLoop,
                 address,
                 1024 * 1024,
-                TimePoint::max());
+                TimePoint::max(),
+                Core::Config());
             thread = std::thread(&Globals::run, globals.get());
         }
     }

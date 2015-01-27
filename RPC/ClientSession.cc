@@ -27,20 +27,6 @@
 #include "Protocol/Common.h"
 #include "RPC/ClientSession.h"
 
-/**
- * The number of milliseconds to wait until the client gets suspicious about
- * the server not responding. After this amount of time elapses, the client
- * will send a ping to the server. If no response is received within another
- * TIMEOUT_MS milliseconds, the session is closed.
- *
- * TODO(ongaro): How should this value be chosen?
- * Ideally, you probably want this to be set to something like the 99-th
- * percentile of your RPC latency.
- *
- * TODO(ongaro): How does this interact with TCP?
- */
-enum { TIMEOUT_MS = 100 };
-
 namespace LogCabin {
 namespace RPC {
 
@@ -101,9 +87,9 @@ ClientSession::MessageSocketHandler::handleReceivedMessage(
     if (messageId == Protocol::Common::PING_MESSAGE_ID) {
         if (session.numActiveRPCs > 0 && session.activePing) {
             // The server has shown that it is alive for now.
-            // Let's get suspicious again in another TIMEOUT_MS.
+            // Let's get suspicious again in another PING_TIMEOUT_MS.
             session.activePing = false;
-            session.timer.schedule(TIMEOUT_MS * 1000 * 1000);
+            session.timer.schedule(session.PING_TIMEOUT_MS * 1000 * 1000);
         } else {
             VERBOSE("Received an unexpected ping response. This can happen "
                     "for a number of reasons and is no cause for alarm. For "
@@ -138,7 +124,7 @@ ClientSession::MessageSocketHandler::handleReceivedMessage(
     if (session.numActiveRPCs == 0)
         session.timer.deschedule();
     else
-        session.timer.schedule(TIMEOUT_MS * 1000 * 1000);
+        session.timer.schedule(session.PING_TIMEOUT_MS * 1000 * 1000);
 
     // Fill in the response
     response.status = Response::HAS_REPLY;
@@ -202,7 +188,7 @@ ClientSession::Timer::handleTimerEvent()
         session.activePing = true;
         session.messageSocket->sendMessage(Protocol::Common::PING_MESSAGE_ID,
                                            Buffer());
-        schedule(TIMEOUT_MS * 1000 * 1000);
+        schedule(session.PING_TIMEOUT_MS * 1000 * 1000);
     } else {
         VERBOSE("ClientSession to %s timed out.",
                 session.address.toString().c_str());
@@ -230,8 +216,11 @@ std::function<
 ClientSession::ClientSession(Event::Loop& eventLoop,
                              const Address& address,
                              uint32_t maxMessageLength,
-                             TimePoint timeout)
+                             TimePoint timeout,
+                             const Core::Config& config)
     : self() // makeSession will fill this in shortly
+    , PING_TIMEOUT_MS(config.read<uint64_t>(
+        "tcpHeartbeatTimeoutMilliseconds", 200) / 2)
     , eventLoop(eventLoop)
     , address(address)
     , messageSocketHandler(*this)
@@ -339,10 +328,15 @@ std::shared_ptr<ClientSession>
 ClientSession::makeSession(Event::Loop& eventLoop,
                            const Address& address,
                            uint32_t maxMessageLength,
-                           TimePoint timeout)
+                           TimePoint timeout,
+                           const Core::Config& config)
 {
     std::shared_ptr<ClientSession> session(
-        new ClientSession(eventLoop, address, maxMessageLength, timeout));
+        new ClientSession(eventLoop,
+                          address,
+                          maxMessageLength,
+                          timeout,
+                          config));
     session->self = session;
     return session;
 }
@@ -370,7 +364,7 @@ ClientSession::sendRequest(Buffer request)
         if (numActiveRPCs == 1) {
             // activePing's value was undefined while numActiveRPCs = 0
             activePing = false;
-            timer.schedule(TIMEOUT_MS * 1000 * 1000);
+            timer.schedule(PING_TIMEOUT_MS * 1000 * 1000);
         }
     }
     // Release the mutex before sending so that receives can be processed
