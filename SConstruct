@@ -19,7 +19,7 @@ opts.AddVariables(
 )
 
 env = Environment(options = opts,
-                  tools = ['default', 'protoc'],
+                  tools = ['default', 'protoc', 'packaging'],
                   ENV = os.environ)
 Help(opts.GenerateHelpText(env))
 
@@ -132,3 +132,58 @@ env.Program("build/LogCabin",
              object_files['Event'] +
              object_files['Core']),
             LIBS = [ "pthread", "protobuf", "rt", "cryptopp" ])
+
+# this will add the files section to the spec file
+env.InstallAs(target='/usr/sbin/logcabin', source='build/LogCabin')
+env.InstallAs('/etc/init.d/logcabin', 'scripts/logcabin')
+env.InstallAs('/usr/bin/Benchmark', 'build/Examples/Benchmark')
+env.InstallAs('/usr/bin/DumpTree', 'build/Examples/DumpTree')
+env.InstallAs('/usr/bin/SmokeTest', 'build/Examples/SmokeTest')
+env.InstallAs('/usr/bin/ServerStats', 'build/Examples/ServerStats')
+env.InstallAs('/usr/bin/Reconfigure', 'build/Examples/Reconfigure')
+env.InstallAs('/usr/bin/HelloWorld', 'build/Examples/HelloWorld')
+
+# http://scons.tigris.org/ds/viewMessage.do?dsForumId=1272&dsMessageId=923496
+#
+# having trouble getting this rpm packager to function. it doesn't
+# seem to be understanding the dependencies correctly, so going to
+# over cheat just to get something working
+#
+#for root, dirs, files in os.walk("."):
+#    path = root.split('/')
+#    for file in files:
+#        if '.h' in file:
+#            env.File(root + file)
+# env.File('site_scons/site_tools/protoc.py')
+# env.File('Core/Debug.h')
+# env.File('Core/ProtoBuf.h')
+# env.File('Core/ThreadId.h')
+env["X_RPM_INSTALL"] = \
+    'mkdir -p $RPM_BUILD_ROOT/usr/sbin\n' \
+    'mkdir -p $RPM_BUILD_ROOT/usr/bin\n' \
+    'mkdir -p $RPM_BUILD_ROOT/etc/init.d\n' \
+    'cp ../../../build/LogCabin $RPM_BUILD_ROOT/usr/sbin/logcabin\n' \
+    'cp ../../../build/Examples/Benchmark $RPM_BUILD_ROOT/usr/bin/\n' \
+    'cp ../../../build/Examples/DumpTree $RPM_BUILD_ROOT/usr/bin/\n' \
+    'cp ../../../build/Examples/SmokeTest $RPM_BUILD_ROOT/usr/bin/\n' \
+    'cp ../../../build/Examples/ServerStats $RPM_BUILD_ROOT/usr/bin/\n' \
+    'cp ../../../build/Examples/Reconfigure $RPM_BUILD_ROOT/usr/bin/\n' \
+    'cp ../../../build/Examples/HelloWorld $RPM_BUILD_ROOT/usr/bin/\n' \
+    'cp ../../../scripts/logcabin $RPM_BUILD_ROOT/etc/init.d/logcabin\n'
+
+env.Package(
+    NAME           = 'logcabin',
+    VERSION        = '0.0.0.1',
+    PACKAGEVERSION = 0,
+    PACKAGETYPE    = 'rpm',
+    LICENSE        = 'stanford',
+    SUMMARY        = 'LogCabin is clustered consensus deamon',
+    X_RPM_GROUP    = 'Application/logcabin',
+    DESCRIPTION    =
+    'LogCabin is a distributed system that provides a small amount of\n'
+    'highly replicated, consistent storage. It is a reliable place for\n'
+    'other distributed systems to store their core metadata and\n'
+    'is helpful in solving cluster management issues. Although its key\n'
+    'functionality is in place, LogCabin is not yet recommended\n'
+    'for actual use.'
+)
