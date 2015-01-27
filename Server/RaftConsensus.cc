@@ -795,17 +795,17 @@ RaftConsensus::Entry::~Entry()
 
 ////////// RaftConsensus //////////
 
-uint64_t RaftConsensus::ELECTION_TIMEOUT_MS = 150;
-
-uint64_t RaftConsensus::HEARTBEAT_PERIOD_MS = ELECTION_TIMEOUT_MS / 2;
-
-uint64_t RaftConsensus::RPC_FAILURE_BACKOFF_MS = ELECTION_TIMEOUT_MS / 2;
-
-uint64_t RaftConsensus::SOFT_RPC_SIZE_LIMIT =
-                Protocol::Common::MAX_MESSAGE_LENGTH - 1024;
-
 RaftConsensus::RaftConsensus(Globals& globals)
-    : serverId(0)
+    : ELECTION_TIMEOUT_MS(globals.config.read<uint64_t>(
+        "electionTimeoutMilliseconds", 150))
+    , HEARTBEAT_PERIOD_MS(globals.config.read<uint64_t>(
+        "heartbeatPeriodMilliseconds",
+        ELECTION_TIMEOUT_MS / 2))
+    , RPC_FAILURE_BACKOFF_MS(globals.config.read<uint64_t>(
+        "rpcFailureBackoffMilliseconds",
+        ELECTION_TIMEOUT_MS / 2))
+    , SOFT_RPC_SIZE_LIMIT(Protocol::Common::MAX_MESSAGE_LENGTH - 1024)
+    , serverId(0)
     , serverAddress()
     , globals(globals)
     , storageDirectory()

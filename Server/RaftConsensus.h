@@ -1236,28 +1236,27 @@ class RaftConsensus {
 
     /**
      * A follower waits for about this much inactivity before becoming a
-     * candidate and starting a new election. Const except for unit tests.
+     * candidate and starting a new election.
      */
-    static uint64_t ELECTION_TIMEOUT_MS;
+    const uint64_t ELECTION_TIMEOUT_MS;
 
     /**
      * A leader sends RPCs at least this often, even if there is no data to
-     * send. Const except for unit tests.
+     * send.
      */
-    static uint64_t HEARTBEAT_PERIOD_MS;
+    const uint64_t HEARTBEAT_PERIOD_MS;
 
     /**
      * A candidate or leader waits this long after an RPC fails before sending
-     * another one, so as to not overwhelm the network with retries. Const
-     * except for unit tests.
+     * another one, so as to not overwhelm the network with retries.
      */
-    static uint64_t RPC_FAILURE_BACKOFF_MS;
+    const uint64_t RPC_FAILURE_BACKOFF_MS;
 
     /**
      * Prefer to keep RPC requests under this size.
      * Const except for unit tests.
      */
-    static uint64_t SOFT_RPC_SIZE_LIMIT;
+    uint64_t SOFT_RPC_SIZE_LIMIT;
 
   public:
     /**
