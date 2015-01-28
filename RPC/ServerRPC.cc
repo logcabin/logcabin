@@ -77,6 +77,11 @@ ServerRPC::ServerRPC(ServerRPC&& other)
 
 ServerRPC::~ServerRPC()
 {
+    if (active) {
+        WARNING("ServerRPC destroyed without a reply (service %u, opcode %u). "
+                "This may cause the client of the RPC to hang",
+                service, opCode);
+    }
 }
 
 ServerRPC&

@@ -112,6 +112,7 @@ TEST_F(RPCServerRPCTest, constructor_normal) {
     EXPECT_EQ(3U, serverRPC.getServiceSpecificErrorVersion());
     EXPECT_EQ(4U, serverRPC.getOpCode());
     EXPECT_TRUE(serverRPC.needsReply());
+    serverRPC.closeSession();
 }
 
 // default constructor: nothing to test
@@ -126,6 +127,7 @@ TEST_F(RPCServerRPCTest, getRequest_normal) {
     EXPECT_TRUE(serverRPC.getRequest(actual));
     EXPECT_EQ(payload, actual);
     EXPECT_TRUE(serverRPC.needsReply());
+    serverRPC.closeSession();
 }
 
 TEST_F(RPCServerRPCTest, getRequest_inactive) {
