@@ -67,6 +67,9 @@ ClientService::handleRPC(RPC::ServerRPC rpc)
             readWriteTreeRPC(std::move(rpc));
             break;
         default:
+            WARNING("Received RPC request with unknown opcode %u: "
+                    "rejecting it as invalid request",
+                    rpc.getOpCode());
             rpc.rejectInvalidRequest();
     }
 }
