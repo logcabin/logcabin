@@ -2346,6 +2346,7 @@ RaftConsensus::upToDateLeader(std::unique_lock<Mutex>& lockGuard) const
     uint64_t epoch = currentEpoch;
     // schedule a heartbeat now so that this returns quickly
     configuration->forEach(&Server::scheduleHeartbeat);
+    stateChanged.notify_all();
     while (true) {
         if (exiting || state != State::LEADER)
             return false;

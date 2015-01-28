@@ -1302,6 +1302,7 @@ class RaftConsensus {
      *  - startElectionAt changes (see note under startElectionAt).
      *  - an acknowledgement from a peer is received.
      *  - a server goes from not caught up to caught up.
+     *  - a heartbeat is scheduled.
      * TODO(ongaro): Should there be multiple condition variables? This one is
      * used by a lot of threads for a lot of different conditions.
      */
