@@ -8,3 +8,15 @@ debug
 logcabin.conf
 smoketest.conf
 smoketeststorage
+
+# Used in building RPM files
+# (I don't know how to get scons to do this underneath /build/)
+# Should match names like:
+#  /logcabin-0.0.0.1
+#  /logcabin-0.0.0.1-0.src.rpm
+#  /logcabin-0.0.0.1-0.src.tar.gz
+#  /logcabin-0.0.0.1-0.x86_64.rpm
+#  /logcabin-0.0.0.1.spec
+# but hopefully not a subdirectory called 'logcabin' or 'logcabin.conf' or that
+# sort of thing.
+/logcabin-?.*

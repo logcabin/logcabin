@@ -114,15 +114,16 @@ PhonyTargets(doc = "doxygen docs/Doxyfile")
 PhonyTargets(docs = "doxygen docs/Doxyfile")
 PhonyTargets(tags = "ctags -R --exclude=build --exclude=docs .")
 
-env.StaticLibrary("build/logcabin",
+clientlib = env.StaticLibrary("build/logcabin",
                   (object_files['Client'] +
                    object_files['Tree'] +
                    object_files['Protocol'] +
                    object_files['RPC'] +
                    object_files['Event'] +
                    object_files['Core']))
+env.Default(clientlib)
 
-env.Program("build/LogCabin",
+daemon = env.Program("build/LogCabin",
             (["build/Server/Main.cc"] +
              object_files['Server'] +
              object_files['Storage'] +
@@ -132,9 +133,12 @@ env.Program("build/LogCabin",
              object_files['Event'] +
              object_files['Core']),
             LIBS = [ "pthread", "protobuf", "rt", "cryptopp" ])
+env.Default(daemon)
 
-# this will add the files section to the spec file
-env.InstallAs(target='/usr/sbin/logcabin', source='build/LogCabin')
+
+### scons install target
+
+env.InstallAs(target='/usr/bin/logcabin', source='build/LogCabin')
 env.InstallAs('/etc/init.d/logcabin', 'scripts/logcabin')
 env.InstallAs('/usr/bin/Benchmark', 'build/Examples/Benchmark')
 env.InstallAs('/usr/bin/DumpTree', 'build/Examples/DumpTree')
@@ -142,41 +146,44 @@ env.InstallAs('/usr/bin/SmokeTest', 'build/Examples/SmokeTest')
 env.InstallAs('/usr/bin/ServerStats', 'build/Examples/ServerStats')
 env.InstallAs('/usr/bin/Reconfigure', 'build/Examples/Reconfigure')
 env.InstallAs('/usr/bin/HelloWorld', 'build/Examples/HelloWorld')
+env.Alias('install', ['/etc', '/usr'])
 
-# http://scons.tigris.org/ds/viewMessage.do?dsForumId=1272&dsMessageId=923496
-#
-# having trouble getting this rpm packager to function. it doesn't
-# seem to be understanding the dependencies correctly, so going to
-# over cheat just to get something working
-#
-#for root, dirs, files in os.walk("."):
-#    path = root.split('/')
-#    for file in files:
-#        if '.h' in file:
-#            env.File(root + file)
-# env.File('site_scons/site_tools/protoc.py')
-# env.File('Core/Debug.h')
-# env.File('Core/ProtoBuf.h')
-# env.File('Core/ThreadId.h')
-env["X_RPM_INSTALL"] = \
-    'mkdir -p $RPM_BUILD_ROOT/usr/sbin\n' \
-    'mkdir -p $RPM_BUILD_ROOT/usr/bin\n' \
-    'mkdir -p $RPM_BUILD_ROOT/etc/init.d\n' \
-    'cp ../../../build/LogCabin $RPM_BUILD_ROOT/usr/sbin/logcabin\n' \
-    'cp ../../../build/Examples/Benchmark $RPM_BUILD_ROOT/usr/bin/\n' \
-    'cp ../../../build/Examples/DumpTree $RPM_BUILD_ROOT/usr/bin/\n' \
-    'cp ../../../build/Examples/SmokeTest $RPM_BUILD_ROOT/usr/bin/\n' \
-    'cp ../../../build/Examples/ServerStats $RPM_BUILD_ROOT/usr/bin/\n' \
-    'cp ../../../build/Examples/Reconfigure $RPM_BUILD_ROOT/usr/bin/\n' \
-    'cp ../../../build/Examples/HelloWorld $RPM_BUILD_ROOT/usr/bin/\n' \
-    'cp ../../../scripts/logcabin $RPM_BUILD_ROOT/etc/init.d/logcabin\n'
 
-env.Package(
+#### 'scons rpm' target
+
+# monkey-patch for SCons.Tool.packaging.rpm.collectintargz, which tries to put
+# way too many files into the source tarball (the source tarball should only
+# contain the installed files, since we're not building it)
+def decent_collectintargz(target, source, env):
+    tarball = env['SOURCE_URL'].split('/')[-1]
+    from SCons.Tool.packaging import src_targz
+    tarball = src_targz.package(env, source=source, target=tarball,
+                                PACKAGEROOT=env['PACKAGEROOT'])
+    return target, tarball
+import SCons.Tool.packaging.rpm as RPMPackager
+RPMPackager.collectintargz = decent_collectintargz
+
+# set the install target in the .spec file to just copy over the files that
+# 'scons install' would install. Default scons behavior is to invoke scons in
+# the source tarball, which doesn't make a ton of sense unless you're doing the
+# build in there.
+install_commands = []
+for target in env.FindInstalledFiles():
+    parent = target.get_dir()
+    source = target.sources[0]
+    install_commands.append('mkdir -p $RPM_BUILD_ROOT%s' % parent)
+    install_commands.append('cp %s $RPM_BUILD_ROOT%s' % (source, target))
+
+VERSION = '0.0.0.1'
+rpms=RPMPackager.package(env,
+    target         = ['logcabin-%s' % VERSION],
+    source         = env.FindInstalledFiles(),
+    X_RPM_INSTALL  = '\n'.join(install_commands),
+    PACKAGEROOT    = 'logcabin-%s' % VERSION,
     NAME           = 'logcabin',
-    VERSION        = '0.0.0.1',
+    VERSION        = VERSION,
     PACKAGEVERSION = 0,
-    PACKAGETYPE    = 'rpm',
-    LICENSE        = 'stanford',
+    LICENSE        = 'ISC',
     SUMMARY        = 'LogCabin is clustered consensus deamon',
     X_RPM_GROUP    = 'Application/logcabin',
     DESCRIPTION    =
@@ -185,5 +192,6 @@ env.Package(
     'other distributed systems to store their core metadata and\n'
     'is helpful in solving cluster management issues. Although its key\n'
     'functionality is in place, LogCabin is not yet recommended\n'
-    'for actual use.'
+    'for actual use.',
 )
+env.Alias('rpm', rpms)

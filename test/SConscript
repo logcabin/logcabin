@@ -25,7 +25,7 @@ def GetTestFiles(src_dirs, variant_dir):
                                  variant_dir=variant_dir)
                     for src_dir in src_dirs])
 
-env.Program("test",
+testrunner = env.Program("test",
             (["TestRunner.cc", "gtest-all.o"] +
              object_files['Server'] +
              object_files['Storage'] +
@@ -49,3 +49,5 @@ env.Program("test",
             CPPPATH = env["CPPPATH"] + ["#gtest/include"],
             # -fno-access-control allows tests to access private members
             CXXFLAGS = env["CXXFLAGS"] + ["-fno-access-control"])
+
+env.Default(testrunner)
