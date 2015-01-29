@@ -174,15 +174,18 @@ for target in env.FindInstalledFiles():
     install_commands.append('mkdir -p $RPM_BUILD_ROOT%s' % parent)
     install_commands.append('cp %s $RPM_BUILD_ROOT%s' % (source, target))
 
-VERSION = '0.0.0.1'
+VERSION = '0.0.1-alpha.0'
+# https://fedoraproject.org/wiki/Packaging:NamingGuidelines#NonNumericRelease
+RPM_VERSION = '0.0.1'
+RPM_RELEASE = '0.1.alpha.0'
 rpms=RPMPackager.package(env,
-    target         = ['logcabin-%s' % VERSION],
+    target         = ['logcabin-%s' % RPM_VERSION],
     source         = env.FindInstalledFiles(),
     X_RPM_INSTALL  = '\n'.join(install_commands),
-    PACKAGEROOT    = 'logcabin-%s' % VERSION,
+    PACKAGEROOT    = 'logcabin-%s' % RPM_VERSION,
     NAME           = 'logcabin',
-    VERSION        = VERSION,
-    PACKAGEVERSION = 0,
+    VERSION        = RPM_VERSION,
+    PACKAGEVERSION = RPM_RELEASE,
     LICENSE        = 'ISC',
     SUMMARY        = 'LogCabin is clustered consensus deamon',
     X_RPM_GROUP    = 'Application/logcabin',
