@@ -59,16 +59,6 @@ reload() {
 }
 
 configtest() {
-    if [ "$#" -ne 0 ] ; then
-        case "$1" in
-            -q)
-                FLAG=$1
-                ;;
-            *)
-                ;;
-        esac
-        shift
-    fi
     ${logcabin} -t -c ${conffile} $FLAG
     RETVAL=$?
     return $RETVAL
@@ -92,7 +82,7 @@ case "$1" in
         RETVAL=$?
         ;;
     restart)
-        configtest -q || exit $RETVAL
+        configtest || exit $RETVAL
         stop
         start
         ;;
