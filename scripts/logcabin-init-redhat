@@ -3,7 +3,7 @@
 # logcabin        Startup script for logcabin
 #
 # chkconfig: - 85 15
-# processname: logcabin
+# processname: logcabind
 # config: /etc/logcabin/logcabin.conf
 # config: /etc/sysconfig/logcabin
 # pidfile: /var/run/logcabin.pid
@@ -27,7 +27,7 @@ if [ -f /etc/sysconfig/logcabin ]; then
 fi
 
 prog=logcabin
-logcabin=${LOGCABIN-/usr/sbin/logcabin}
+logcabin=${LOGCABIN-/usr/bin/logcabind}
 conffile=${CONFFILE-/etc/logcabin.conf}
 lockfile=${LOCKFILE-/var/lock/subsys/logcabin}
 pidfile=${PIDFILE-/var/run/logcabin.pid}

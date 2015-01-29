@@ -138,14 +138,14 @@ env.Default(daemon)
 
 ### scons install target
 
-env.InstallAs(target='/usr/bin/logcabin', source='build/LogCabin')
-env.InstallAs('/etc/init.d/logcabin', 'scripts/logcabin')
-env.InstallAs('/usr/bin/Benchmark', 'build/Examples/Benchmark')
-env.InstallAs('/usr/bin/DumpTree', 'build/Examples/DumpTree')
-env.InstallAs('/usr/bin/SmokeTest', 'build/Examples/SmokeTest')
-env.InstallAs('/usr/bin/ServerStats', 'build/Examples/ServerStats')
-env.InstallAs('/usr/bin/Reconfigure', 'build/Examples/Reconfigure')
-env.InstallAs('/usr/bin/HelloWorld', 'build/Examples/HelloWorld')
+env.InstallAs('/etc/init.d/logcabin',           'scripts/logcabin-init-redhat')
+env.InstallAs('/usr/bin/logcabind',             'build/LogCabin')
+env.InstallAs('/usr/bin/logcabin-benchmark',    'build/Examples/Benchmark')
+env.InstallAs('/usr/bin/logcabin-dumptree',     'build/Examples/DumpTree')
+env.InstallAs('/usr/bin/logcabin-helloworld',   'build/Examples/HelloWorld')
+env.InstallAs('/usr/bin/logcabin-reconfigure',  'build/Examples/Reconfigure')
+env.InstallAs('/usr/bin/logcabin-serverstats',  'build/Examples/ServerStats')
+env.InstallAs('/usr/bin/logcabin-smoketest',    'build/Examples/SmokeTest')
 env.Alias('install', ['/etc', '/usr'])
 
 
