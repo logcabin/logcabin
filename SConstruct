@@ -178,11 +178,13 @@ VERSION = '0.0.1-alpha.0'
 # https://fedoraproject.org/wiki/Packaging:NamingGuidelines#NonNumericRelease
 RPM_VERSION = '0.0.1'
 RPM_RELEASE = '0.1.alpha.0'
+PACKAGEROOT = 'logcabin-%s' % RPM_VERSION
+
 rpms=RPMPackager.package(env,
     target         = ['logcabin-%s' % RPM_VERSION],
     source         = env.FindInstalledFiles(),
     X_RPM_INSTALL  = '\n'.join(install_commands),
-    PACKAGEROOT    = 'logcabin-%s' % RPM_VERSION,
+    PACKAGEROOT    = PACKAGEROOT,
     NAME           = 'logcabin',
     VERSION        = RPM_VERSION,
     PACKAGEVERSION = RPM_RELEASE,
@@ -197,4 +199,37 @@ rpms=RPMPackager.package(env,
     'functionality is in place, LogCabin is not yet recommended\n'
     'for actual use.',
 )
+
+# Rename .rpm files into build/
+def rename(env, target, source):
+    for (t, s) in zip(target, source):
+        os.rename(str(s), str(t))
+
+# Rename files used to build .rpm files
+def remove_sources(env, target, source):
+    garbage = set()
+    for s in source:
+        garbage.update(s.sources)
+        for s2 in s.sources:
+            garbage.update(s2.sources)
+    for g in list(garbage):
+        if str(g).endswith('.spec'):
+            garbage.update(g.sources)
+    for g in garbage:
+        if env['VERBOSE'] == '1':
+            print 'rm %s' % g
+        os.remove(str(g))
+
+# Rename PACKAGEROOT directory and subdirectories (should be empty)
+def remove_packageroot(env, target, source):
+    if env['VERBOSE'] == '1':
+        print 'rm -r %s' % PACKAGEROOT
+    import shutil
+    shutil.rmtree(str(PACKAGEROOT))
+
+# Wrap cleanup around (moved) RPM targets
+rpms = env.Command(['build/%s' % str(rpm) for rpm in rpms],
+                   rpms,
+                   [rename, remove_sources, remove_packageroot])
+
 env.Alias('rpm', rpms)
