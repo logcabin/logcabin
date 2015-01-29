@@ -69,8 +69,7 @@ configtest() {
         esac
         shift
     fi
-    #TODO
-    #${logcabin} -t -c ${conffile} $FLAG
+    ${logcabin} -t -c ${conffile} $FLAG
     RETVAL=$?
     return $RETVAL
 }
