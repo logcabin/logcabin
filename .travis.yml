@@ -15,6 +15,7 @@ before_install:
 - sudo apt-get install -y protobuf-compiler libprotobuf-dev
 - sudo apt-get install -y libcrypto++-dev
 - sudo apt-get --no-install-recommends install -y doxygen
+- sudo apt-get install -y rpm
 - echo "HTML_TIMESTAMP = no" >> docs/Doxyfile
 script:
 - scons NUMCPUS=2
@@ -28,3 +29,4 @@ script:
   else
       echo "Not pushing doxygen, sons docs=$DOCS_STATUS, TRAVIS_BRANCH=$TRAVIS_BRANCH, TRAVIS_PULL_REQUEST=$TRAVIS_PULL_REQUEST";
   fi
+- scons rpm
