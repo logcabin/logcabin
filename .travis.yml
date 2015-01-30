@@ -12,6 +12,7 @@ before_install:
   chmod 0600 travisci_rsa &&
   mv travisci_rsa ~/.ssh/id_rsa ||
   echo "Failed to set up SSH key for doxygen output"
+- sudo apt-get update -qq
 - sudo apt-get install -y protobuf-compiler libprotobuf-dev
 - sudo apt-get install -y libcrypto++-dev
 - sudo apt-get --no-install-recommends install -y doxygen
