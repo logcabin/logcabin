@@ -41,6 +41,7 @@ class OptionParser {
         , debugLogFilename() // empty for default
         , pidFilename() // empty for none
         , serverId(1)
+        , testConfig(false)
     {
         while (true) {
             static struct option longOptions[] = {
@@ -51,9 +52,10 @@ class OptionParser {
                {"id",  required_argument, NULL, 'i'},
                {"log",  required_argument, NULL, 'l'},
                {"pidfile",  required_argument, NULL, 'p'},
+               {"test",  no_argument, NULL, 't'},
                {0, 0, 0, 0}
             };
-            int c = getopt_long(argc, argv, "bc:dhi:l:p:", longOptions, NULL);
+            int c = getopt_long(argc, argv, "bc:dhi:l:p:t", longOptions, NULL);
 
             // Detect the end of the options.
             if (c == -1)
@@ -80,6 +82,9 @@ class OptionParser {
                     break;
                 case 'p':
                     pidFilename = optarg;
+                    break;
+                case 't':
+                    testConfig = true;
                     break;
                 case '?':
                 default:
@@ -122,6 +127,9 @@ class OptionParser {
         std::cout << "  -p, --pidfile <file>  "
                   << "Write process ID to <file>"
                   << std::endl;
+        std::cout << "  -t, --test            "
+                  << "Check the configuration file for (basic) errors and exit"
+                  << std::endl;
     }
 
     int& argc;
@@ -132,6 +140,7 @@ class OptionParser {
     std::string debugLogFilename;
     std::string pidFilename;
     uint64_t serverId;
+    bool testConfig;
 };
 
 /**
@@ -231,6 +240,12 @@ main(int argc, char** argv)
 
     // Parse command line args.
     OptionParser options(argc, argv);
+
+    if (options.testConfig) {
+        Server::Globals globals;
+        globals.config.readFile(options.configFilename.c_str());
+        return 0;
+    }
 
     // Set debug log file
     if (!options.debugLogFilename.empty()) {

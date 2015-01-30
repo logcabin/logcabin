@@ -19,7 +19,7 @@ opts.AddVariables(
 )
 
 env = Environment(options = opts,
-                  tools = ['default', 'protoc'],
+                  tools = ['default', 'protoc', 'packaging'],
                   ENV = os.environ)
 Help(opts.GenerateHelpText(env))
 
@@ -114,15 +114,16 @@ PhonyTargets(doc = "doxygen docs/Doxyfile")
 PhonyTargets(docs = "doxygen docs/Doxyfile")
 PhonyTargets(tags = "ctags -R --exclude=build --exclude=docs .")
 
-env.StaticLibrary("build/logcabin",
+clientlib = env.StaticLibrary("build/logcabin",
                   (object_files['Client'] +
                    object_files['Tree'] +
                    object_files['Protocol'] +
                    object_files['RPC'] +
                    object_files['Event'] +
                    object_files['Core']))
+env.Default(clientlib)
 
-env.Program("build/LogCabin",
+daemon = env.Program("build/LogCabin",
             (["build/Server/Main.cc"] +
              object_files['Server'] +
              object_files['Storage'] +
@@ -132,3 +133,103 @@ env.Program("build/LogCabin",
              object_files['Event'] +
              object_files['Core']),
             LIBS = [ "pthread", "protobuf", "rt", "cryptopp" ])
+env.Default(daemon)
+
+
+### scons install target
+
+env.InstallAs('/etc/init.d/logcabin',           'scripts/logcabin-init-redhat')
+env.InstallAs('/usr/bin/logcabind',             'build/LogCabin')
+env.InstallAs('/usr/bin/logcabin-benchmark',    'build/Examples/Benchmark')
+env.InstallAs('/usr/bin/logcabin-dumptree',     'build/Examples/DumpTree')
+env.InstallAs('/usr/bin/logcabin-helloworld',   'build/Examples/HelloWorld')
+env.InstallAs('/usr/bin/logcabin-reconfigure',  'build/Examples/Reconfigure')
+env.InstallAs('/usr/bin/logcabin-serverstats',  'build/Examples/ServerStats')
+env.InstallAs('/usr/bin/logcabin-smoketest',    'build/Examples/SmokeTest')
+env.Alias('install', ['/etc', '/usr'])
+
+
+#### 'scons rpm' target
+
+# monkey-patch for SCons.Tool.packaging.rpm.collectintargz, which tries to put
+# way too many files into the source tarball (the source tarball should only
+# contain the installed files, since we're not building it)
+def decent_collectintargz(target, source, env):
+    tarball = env['SOURCE_URL'].split('/')[-1]
+    from SCons.Tool.packaging import src_targz
+    tarball = src_targz.package(env, source=source, target=tarball,
+                                PACKAGEROOT=env['PACKAGEROOT'])
+    return target, tarball
+import SCons.Tool.packaging.rpm as RPMPackager
+RPMPackager.collectintargz = decent_collectintargz
+
+# set the install target in the .spec file to just copy over the files that
+# 'scons install' would install. Default scons behavior is to invoke scons in
+# the source tarball, which doesn't make a ton of sense unless you're doing the
+# build in there.
+install_commands = []
+for target in env.FindInstalledFiles():
+    parent = target.get_dir()
+    source = target.sources[0]
+    install_commands.append('mkdir -p $RPM_BUILD_ROOT%s' % parent)
+    install_commands.append('cp %s $RPM_BUILD_ROOT%s' % (source, target))
+
+VERSION = '0.0.1-alpha.0'
+# https://fedoraproject.org/wiki/Packaging:NamingGuidelines#NonNumericRelease
+RPM_VERSION = '0.0.1'
+RPM_RELEASE = '0.1.alpha.0'
+PACKAGEROOT = 'logcabin-%s' % RPM_VERSION
+
+rpms=RPMPackager.package(env,
+    target         = ['logcabin-%s' % RPM_VERSION],
+    source         = env.FindInstalledFiles(),
+    X_RPM_INSTALL  = '\n'.join(install_commands),
+    PACKAGEROOT    = PACKAGEROOT,
+    NAME           = 'logcabin',
+    VERSION        = RPM_VERSION,
+    PACKAGEVERSION = RPM_RELEASE,
+    LICENSE        = 'ISC',
+    SUMMARY        = 'LogCabin is clustered consensus deamon',
+    X_RPM_GROUP    = 'Application/logcabin',
+    DESCRIPTION    =
+    'LogCabin is a distributed system that provides a small amount of\n'
+    'highly replicated, consistent storage. It is a reliable place for\n'
+    'other distributed systems to store their core metadata and\n'
+    'is helpful in solving cluster management issues. Although its key\n'
+    'functionality is in place, LogCabin is not yet recommended\n'
+    'for actual use.',
+)
+
+# Rename .rpm files into build/
+def rename(env, target, source):
+    for (t, s) in zip(target, source):
+        os.rename(str(s), str(t))
+
+# Rename files used to build .rpm files
+def remove_sources(env, target, source):
+    garbage = set()
+    for s in source:
+        garbage.update(s.sources)
+        for s2 in s.sources:
+            garbage.update(s2.sources)
+    for g in list(garbage):
+        if str(g).endswith('.spec'):
+            garbage.update(g.sources)
+    for g in garbage:
+        if env['VERBOSE'] == '1':
+            print 'rm %s' % g
+        os.remove(str(g))
+
+# Rename PACKAGEROOT directory and subdirectories (should be empty)
+def remove_packageroot(env, target, source):
+    if env['VERBOSE'] == '1':
+        print 'rm -r %s' % PACKAGEROOT
+    import shutil
+    shutil.rmtree(str(PACKAGEROOT))
+
+# Wrap cleanup around (moved) RPM targets
+rpms = env.Command(['build/%s' % str(rpm) for rpm in rpms],
+                   rpms,
+                   [rename, remove_sources, remove_packageroot])
+
+env.Alias('rpm', rpms)
