@@ -1,4 +1,5 @@
 /* Copyright (c) 2014 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -20,9 +21,13 @@
 #include "Core/Debug.h"
 #include "Core/StringUtil.h"
 #include "Storage/LogFactory.h"
+#include "Storage/MemoryLog.h"
+#include "Storage/SegmentedLog.h"
+#include "Storage/SimpleFileLog.h"
 
 namespace LogCabin {
 namespace Storage {
+
 namespace {
 
 class StorageLogFactoryTest : public ::testing::Test {
@@ -42,14 +47,14 @@ class StorageLogFactoryTest : public ::testing::Test {
     Core::Config config;
 };
 
-TEST_F(StorageLogFactoryTest, makeLog_memory)
+TEST_F(StorageLogFactoryTest, makeLog_Memory)
 {
-    config.set("storageModule", "memory");
+    config.set("storageModule", "Memory");
     std::unique_ptr<Log> log = LogFactory::makeLog(config, tmpdir);
-    EXPECT_TRUE(bool(log));
+    EXPECT_STREQ(typeid(MemoryLog).name(), typeid(*log).name());
 }
 
-TEST_F(StorageLogFactoryTest, makeLog_filesystem)
+TEST_F(StorageLogFactoryTest, makeLog_SimpleFile)
 {
     // expect warning
     Core::Debug::setLogPolicy({
@@ -58,12 +63,24 @@ TEST_F(StorageLogFactoryTest, makeLog_filesystem)
 
     // default
     std::unique_ptr<Log> log = LogFactory::makeLog(config, tmpdir);
-    EXPECT_TRUE(bool(log));
+    EXPECT_STREQ(typeid(SimpleFileLog).name(), typeid(*log).name());
     log.reset();
 
-    config.set("storageModule", "filesystem");
+    config.set("storageModule", "SimpleFile");
     log = LogFactory::makeLog(config, tmpdir);
-    EXPECT_TRUE(bool(log));
+    EXPECT_STREQ(typeid(SimpleFileLog).name(), typeid(*log).name());
+}
+
+TEST_F(StorageLogFactoryTest, makeLog_Segmented)
+{
+    // expect warning
+    Core::Debug::setLogPolicy({
+        {"Storage/SegmentedLog.cc", "ERROR"}
+    });
+
+    config.set("storageModule", "Segmented");
+    std::unique_ptr<Log> log = LogFactory::makeLog(config, tmpdir);
+    EXPECT_STREQ(typeid(SegmentedLog).name(), typeid(*log).name());
 }
 
 TEST_F(StorageLogFactoryTest, makeLog_notfound)

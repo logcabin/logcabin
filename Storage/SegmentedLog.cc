@@ -187,6 +187,9 @@ SegmentedLog::Sync::Sync(uint64_t lastIndex)
     , fds()
     , writes()
 {
+    // TODO(ongaro): this shouldn't be here. It's to quiet an assertion in
+    // Storage/Log.h.
+    completed = true;
 }
 
 void
