@@ -71,7 +71,7 @@ TEST_F(StorageLogFactoryTest, makeLog_SimpleFile)
     EXPECT_STREQ(typeid(SimpleFileLog).name(), typeid(*log).name());
 }
 
-TEST_F(StorageLogFactoryTest, makeLog_Segmented)
+TEST_F(StorageLogFactoryTest, makeLog_Segmented_Binary)
 {
     // expect warning
     Core::Debug::setLogPolicy({
@@ -79,6 +79,23 @@ TEST_F(StorageLogFactoryTest, makeLog_Segmented)
     });
 
     config.set("storageModule", "Segmented");
+    std::unique_ptr<Log> log = LogFactory::makeLog(config, tmpdir);
+    EXPECT_STREQ(typeid(SegmentedLog).name(), typeid(*log).name());
+    log.reset();
+
+    config.set("storageModule", "Segmented-Binary");
+    log = LogFactory::makeLog(config, tmpdir);
+    EXPECT_STREQ(typeid(SegmentedLog).name(), typeid(*log).name());
+}
+
+TEST_F(StorageLogFactoryTest, makeLog_Segmented_Text)
+{
+    // expect warning
+    Core::Debug::setLogPolicy({
+        {"Storage/SegmentedLog.cc", "ERROR"}
+    });
+
+    config.set("storageModule", "Segmented-Text");
     std::unique_ptr<Log> log = LogFactory::makeLog(config, tmpdir);
     EXPECT_STREQ(typeid(SegmentedLog).name(), typeid(*log).name());
 }

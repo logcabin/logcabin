@@ -1,4 +1,5 @@
 /* Copyright (c) 2012-2014 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -18,9 +19,9 @@
 #include <vector>
 
 #include "build/Storage/SegmentedLog.pb.h"
+#include "Core/Buffer.h"
 #include "Core/ConditionVariable.h"
 #include "Core/Mutex.h"
-#include "RPC/Buffer.h"
 #include "Storage/FilesystemUtil.h"
 #include "Storage/Log.h"
 
@@ -74,7 +75,26 @@ class SegmentedLog : public Log {
 
   public:
 
-    explicit SegmentedLog(const Storage::FilesystemUtil::File& parentDir);
+    /**
+     * Specifies how individual records are serialized.
+     */
+    enum class Encoding {
+      /// ProtoBuf human-readable text format.
+      TEXT,
+      /// ProtoBuf binary format.
+      BINARY,
+    };
+
+    /**
+     * Constructor.
+     * \param parentDir
+     *      A filesystem directory in which all the files for this storage
+     *      module are kept.
+     * \param encoding
+     *      Specifies how individual records are stored.
+     */
+    SegmentedLog(const Storage::FilesystemUtil::File& parentDir,
+                 Encoding encoding);
     ~SegmentedLog();
 
     // Methods implemented from Log interface
@@ -103,7 +123,7 @@ class SegmentedLog : public Log {
          * List of file descriptors that should be synced or closed on wait().
          */
         std::vector<std::pair<int, Op>> fds;
-        std::deque<std::pair<int, RPC::Buffer>> writes;
+        std::deque<std::pair<int, Core::Buffer>> writes;
     };
 
     /**
@@ -268,6 +288,10 @@ class SegmentedLog : public Log {
      */
     void segmentPreparerMain();
 
+    /**
+     * Specifies how individual records are stored.
+     */
+    const Encoding encoding;
 
     /**
      * The metadata this class mintains. This should be combined with the

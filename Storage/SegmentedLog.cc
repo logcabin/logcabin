@@ -1,4 +1,5 @@
 /* Copyright (c) 2012-2014 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -26,8 +27,6 @@
 #include "Core/ThreadId.h"
 #include "Core/Time.h"
 #include "Core/Util.h"
-#include "RPC/Buffer.h"
-#include "RPC/ProtoBuf.h"
 #include "Storage/FilesystemUtil.h"
 #include "Storage/SegmentedLog.h"
 #include "Server/Globals.h"
@@ -42,17 +41,12 @@ namespace {
 
 uint64_t MAX_SEGMENT_SIZE = 8ul * 1024 * 1024;
 
-enum class Encoding {
-  ASCII,
-  BINARY,
-};
-
 std::string
 readProtoFromFile(const FS::File& file,
                   FS::FileContents& reader,
                   uint64_t* offset,
                   google::protobuf::Message* out,
-                  Encoding encoding)
+                  SegmentedLog::Encoding encoding)
 {
     uint64_t loffset = *offset;
     char checksum[Core::Checksum::MAX_LENGTH];
@@ -86,16 +80,17 @@ readProtoFromFile(const FS::File& file,
     loffset += dataLen;
 
     switch (encoding) {
-        case Encoding::BINARY: {
-            RPC::Buffer contents(const_cast<void*>(data),
-                                 Core::Util::downCast<uint32_t>(dataLen), NULL);
-            if (!RPC::ProtoBuf::parse(contents, *out)) {
+        case SegmentedLog::Encoding::BINARY: {
+            Core::Buffer contents(const_cast<void*>(data),
+                                  Core::Util::downCast<uint32_t>(dataLen),
+                                  NULL);
+            if (!Core::ProtoBuf::parse(contents, *out)) {
                 return format("Failed to parse protobuf in %s",
                               file.path.c_str());
             }
             break;
         }
-        case Encoding::ASCII: {
+        case SegmentedLog::Encoding::TEXT: {
             std::string contents(static_cast<const char*>(data), dataLen);
             Core::ProtoBuf::Internal::fromString(contents, *out);
             break;
@@ -112,20 +107,20 @@ readProtoFromFile(const FS::File& file,
 uint64_t
 appendProtoToFile(const google::protobuf::Message& in,
                   const FS::File& file,
-                  Encoding encoding)
+                  SegmentedLog::Encoding encoding)
 {
     const void* data = NULL;
     uint64_t len = 0;
-    RPC::Buffer binaryContents;
+    Core::Buffer binaryContents;
     std::string asciiContents;
     switch (encoding) {
-        case Encoding::BINARY: {
-            RPC::ProtoBuf::serialize(in, binaryContents);
+        case SegmentedLog::Encoding::BINARY: {
+            Core::ProtoBuf::serialize(in, binaryContents);
             data = binaryContents.getData();
             len = binaryContents.getLength();
             break;
         }
-        case Encoding::ASCII: {
+        case SegmentedLog::Encoding::TEXT: {
             asciiContents = Core::ProtoBuf::dumpString(in);
             data = asciiContents.data();
             len = asciiContents.length();
@@ -155,11 +150,11 @@ appendProtoToFile(const google::protobuf::Message& in,
     return written;
 }
 
-RPC::Buffer
+Core::Buffer
 serializeProto(const google::protobuf::Message& in)
 {
-    RPC::Buffer binaryContents;
-    RPC::ProtoBuf::serialize(in, binaryContents);
+    Core::Buffer binaryContents;
+    Core::ProtoBuf::serialize(in, binaryContents);
     const void* data = binaryContents.getData();
     uint64_t len = binaryContents.getLength();
     char checksum[Core::Checksum::MAX_LENGTH];
@@ -171,7 +166,9 @@ serializeProto(const google::protobuf::Message& in)
 
     uint64_t totalLen = checksumLen + sizeof(len) + len;
     char* buf = new char[totalLen];
-    RPC::Buffer b(buf, uint32_t(totalLen), RPC::Buffer::deleteArrayFn<char[]>);
+    Core::Buffer b(buf,
+                   uint32_t(totalLen),
+                   Core::Buffer::deleteArrayFn<char[]>);
     memcpy(buf, checksum, checksumLen);
     memcpy(buf + checksumLen, &len, sizeof(len));
     memcpy(buf + checksumLen + sizeof(len), data, len);
@@ -237,8 +234,9 @@ SegmentedLog::Sync::wait()
 ////////// SegmentedLog public functions //////////
 
 
-SegmentedLog::SegmentedLog(const FS::File& parentDir)
-    : metadata()
+SegmentedLog::SegmentedLog(const FS::File& parentDir, Encoding encoding)
+    : encoding(encoding)
+    , metadata()
     , dir(FS::openDir(parentDir, "log"))
     , openSegmentFile()
     , logStartIndex(1)
@@ -396,7 +394,7 @@ SegmentedLog::append(const std::vector<const Entry*>& entries)
                                               openSegmentFile,
                                               Encoding::BINARY);
 #else
-        RPC::Buffer buf = serializeProto(openSegment->entries.back().entry);
+        Core::Buffer buf = serializeProto(openSegment->entries.back().entry);
         uint64_t actBytes = buf.getLength();
         currentSync->writes.push_back({openSegmentFile.fd, std::move(buf)});
 #endif
@@ -586,7 +584,7 @@ SegmentedLog::updateMetadata()
     }
 
     FS::File file = FS::openFile(dir, filename, O_CREAT|O_WRONLY|O_TRUNC);
-    appendProtoToFile(metadata, file, Encoding::BINARY);
+    appendProtoToFile(metadata, file, encoding);
     FS::fsync(file);
 }
 
@@ -664,7 +662,7 @@ SegmentedLog::readMetadata(const std::string& filename,
     FS::FileContents reader(file);
     uint64_t offset = 0;
     return readProtoFromFile(file, reader, &offset, &metadata,
-                             Encoding::BINARY);
+                             encoding);
 }
 
 bool
@@ -678,7 +676,7 @@ SegmentedLog::loadSegment(Segment& segment)
             segment.entries.emplace_back(offset);
             std::string error = readProtoFromFile(file, reader, &offset,
                                                   &segment.entries.back().entry,
-                                                  Encoding::BINARY);
+                                                  encoding);
             if (!error.empty()) {
                 segment.entries.pop_back();
                 WARNING("Could not read entry in log segment %s "
@@ -724,7 +722,7 @@ SegmentedLog::loadSegment(Segment& segment)
             } else {
                 error = readProtoFromFile(file, reader, &offset,
                                           &segment.entries.back().entry,
-                                          Encoding::BINARY);
+                                          encoding);
             }
             if (!error.empty()) {
                 PANIC("Could not read entry %lu in log segment %s "
