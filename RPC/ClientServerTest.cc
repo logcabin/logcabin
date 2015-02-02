@@ -126,10 +126,10 @@ TEST_F(RPCClientServerTest, echo) {
         for (uint32_t i = 0; i < bufLen; ++i)
             buf[i] = char(i);
         RPC::OpaqueClientRPC rpc = clientSession->sendRequest(
-                                        RPC::Buffer(buf, bufLen, NULL));
+                                        Core::Buffer(buf, bufLen, NULL));
         rpc.waitForReply(TimePoint::max());
         EXPECT_EQ(RPC::OpaqueClientRPC::Status::OK, rpc.getStatus());
-        RPC::Buffer& reply = *rpc.peekReply();
+        Core::Buffer& reply = *rpc.peekReply();
         EXPECT_EQ(bufLen, reply.getLength());
         EXPECT_EQ(0, memcmp(reply.getData(), buf, bufLen));
     }
@@ -142,14 +142,14 @@ TEST_F(RPCClientServerTest, timeout) {
 
     // The server should not time out, since the serverEventLoopThread should
     // respond to pings.
-    RPC::OpaqueClientRPC rpc = clientSession->sendRequest(RPC::Buffer());
+    RPC::OpaqueClientRPC rpc = clientSession->sendRequest(Core::Buffer());
     rpc.waitForReply(TimePoint::max());
     EXPECT_EQ("", rpc.getErrorMessage());
 
     // This time, if we don't let the server event loop run, the RPC should
     // time out.
     Event::Loop::Lock blockPings(serverEventLoop);
-    RPC::OpaqueClientRPC rpc2 = clientSession->sendRequest(RPC::Buffer());
+    RPC::OpaqueClientRPC rpc2 = clientSession->sendRequest(Core::Buffer());
     rpc2.waitForReply(TimePoint::max());
     EXPECT_EQ("Server 127.0.0.1 (resolved to 127.0.0.1:61023) timed out",
               rpc2.getErrorMessage());

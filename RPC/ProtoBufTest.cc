@@ -26,7 +26,7 @@ namespace {
 using LogCabin::ProtoBuf::TestMessage;
 
 TEST(RPCProtoBufTest, parse) {
-    RPC::Buffer rpc;
+    Core::Buffer rpc;
     TestMessage m;
     LogCabin::Core::Debug::setLogPolicy({{"", "ERROR"}});
     EXPECT_FALSE(ProtoBuf::parse(rpc, m));
@@ -41,7 +41,7 @@ TEST(RPCProtoBufTest, parse) {
 }
 
 TEST(RPCProtoBufTest, serialize) {
-    RPC::Buffer rpc;
+    Core::Buffer rpc;
     TestMessage m;
     EXPECT_DEATH(ProtoBuf::serialize(m, rpc, 3),
                  "Missing fields in protocol buffer.*: field_a, field_b");

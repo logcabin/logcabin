@@ -73,7 +73,7 @@ TEST_F(RPCOpaqueServerTest, MessageSocketHandler_handleReceivedMessage) {
     auto socket = OpaqueServer::SocketWithHandler::make(&server, fd1);
     server.sockets.insert(socket);
     fd1 = -1;
-    socket->handler.handleReceivedMessage(1, Buffer(NULL, 3, NULL));
+    socket->handler.handleReceivedMessage(1, Core::Buffer(NULL, 3, NULL));
     ASSERT_TRUE(rpcHandler.lastRPC.get());
     EXPECT_EQ(3U, rpcHandler.lastRPC->request.getLength());
     EXPECT_EQ(0U, rpcHandler.lastRPC->response.getLength());
@@ -85,7 +85,7 @@ TEST_F(RPCOpaqueServerTest, MessageSocketHandler_handleReceivedMessage_ping) {
     auto socket = OpaqueServer::SocketWithHandler::make(&server, fd1);
     server.sockets.insert(socket);
     fd1 = -1;
-    socket->handler.handleReceivedMessage(0, Buffer());
+    socket->handler.handleReceivedMessage(0, Core::Buffer());
     ASSERT_FALSE(rpcHandler.lastRPC);
     EXPECT_EQ(1U, socket->monitor.outboundQueue.size());
 }

@@ -17,9 +17,9 @@
 #include <deque>
 #include <vector>
 
+#include "Core/Buffer.h"
 #include "Core/Mutex.h"
 #include "Event/File.h"
-#include "RPC/Buffer.h"
 
 #ifndef LOGCABIN_RPC_MESSAGESOCKET_H
 #define LOGCABIN_RPC_MESSAGESOCKET_H
@@ -82,7 +82,7 @@ class MessageSocket {
          *      The data received.
          */
         virtual void handleReceivedMessage(MessageId messageId,
-                                           Buffer contents) = 0;
+                                           Core::Buffer contents) = 0;
 
         /**
          * This method is overridden by a subclass and invoked when the socket
@@ -139,7 +139,7 @@ class MessageSocket {
      *      The data to send. This must be shorter than the maxMessageLength
      *      argument given to the constructor.
      */
-    void sendMessage(MessageId messageId, Buffer contents);
+    void sendMessage(MessageId messageId, Core::Buffer contents);
 
   private:
 
@@ -222,7 +222,7 @@ class MessageSocket {
         /**
          * The contents of the message (after the header) are staged here.
          */
-        Buffer message;
+        Core::Buffer message;
     };
 
     /**
@@ -234,7 +234,7 @@ class MessageSocket {
         /// Move constructor.
         Outbound(Outbound&& other);
         /// Constructor.
-        Outbound(MessageId messageId, Buffer message);
+        Outbound(MessageId messageId, Core::Buffer message);
         /// Move assignment.
         Outbound& operator=(Outbound&& other);
         /**
@@ -249,7 +249,7 @@ class MessageSocket {
         /**
          * The contents of the message (after the header).
          */
-        Buffer message;
+        Core::Buffer message;
     };
 
     /**

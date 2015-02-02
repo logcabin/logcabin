@@ -31,6 +31,8 @@ namespace {
 const char* payload = "abcdefghijklmnopqrstuvwxyz0123456789"
                       "ABCDEFGHIJKLMNOPQRSTUVWXYZ+-";
 
+using Core::Buffer;
+
 class MyMessageSocketHandler : public MessageSocket::Handler {
     MyMessageSocketHandler()
         : lastReceivedId(-1)

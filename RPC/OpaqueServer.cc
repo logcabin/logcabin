@@ -43,7 +43,7 @@ OpaqueServer::MessageSocketHandler::MessageSocketHandler(OpaqueServer* server)
 void
 OpaqueServer::MessageSocketHandler::handleReceivedMessage(
         MessageId messageId,
-        Buffer message)
+        Core::Buffer message)
 {
     if (server == NULL)
         return;
@@ -52,7 +52,7 @@ OpaqueServer::MessageSocketHandler::handleReceivedMessage(
         if (socketRef) { // expect so, since we're receiving messages
             VERBOSE("Responding to ping");
             socketRef->monitor.sendMessage(Protocol::Common::PING_MESSAGE_ID,
-                                           Buffer());
+                                           Core::Buffer());
         }
     } else { // normal RPC request
         VERBOSE("Handling RPC");

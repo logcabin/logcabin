@@ -40,7 +40,7 @@ truncateEnd(std::string str)
 } // anonymous namespace
 
 bool
-parse(const RPC::Buffer& from,
+parse(const Core::Buffer& from,
       google::protobuf::Message& to,
       uint32_t skipBytes)
 {
@@ -61,7 +61,7 @@ parse(const RPC::Buffer& from,
 
 void
 serialize(const google::protobuf::Message& from,
-          RPC::Buffer& to,
+          Core::Buffer& to,
           uint32_t skipBytes)
 {
     // SerializeToArray seems to always return true, so we explicitly check
@@ -74,7 +74,7 @@ serialize(const google::protobuf::Message& from,
     uint32_t length = from.ByteSize();
     char* data = new char[skipBytes + length];
     from.SerializeToArray(data + skipBytes, length);
-    to.setData(data, skipBytes + length, RPC::Buffer::deleteArrayFn<char>);
+    to.setData(data, skipBytes + length, Core::Buffer::deleteArrayFn<char>);
 }
 
 } // namespace LogCabin::RPC::ProtoBuf

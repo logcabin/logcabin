@@ -37,7 +37,7 @@ ClientRPC::ClientRPC(std::shared_ptr<RPC::ClientSession> session,
     : opaqueRPC() // placeholder, set again below
 {
     // Serialize the request into a Buffer
-    Buffer requestBuffer;
+    Core::Buffer requestBuffer;
     ProtoBuf::serialize(request, requestBuffer,
                         sizeof(RequestHeaderVersion1));
     auto& requestHeader =
@@ -110,7 +110,7 @@ ClientRPC::waitForReply(google::protobuf::Message* response,
         case OpaqueClientRPC::Status::CANCELED:
             return Status::RPC_CANCELED;
     }
-    const Buffer& responseBuffer = *opaqueRPC.peekReply();
+    const Core::Buffer& responseBuffer = *opaqueRPC.peekReply();
 
     // Extract the response's status field.
     if (responseBuffer.getLength() < sizeof(ResponseHeaderPrefix)) {

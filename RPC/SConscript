@@ -2,7 +2,6 @@ Import('env', 'object_files')
 
 src = [
     "Address.cc",
-    "Buffer.cc",
     "ClientRPC.cc",
     "ClientSession.cc",
     "MessageSocket.cc",

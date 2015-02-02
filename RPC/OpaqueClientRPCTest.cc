@@ -74,7 +74,7 @@ TEST(RPCOpaqueClientRPCTest, getStatus) {
 TEST(RPCOpaqueClientRPCTest, peekReply) {
     OpaqueClientRPC rpc;
     rpc.status = OpaqueClientRPC::Status::OK;
-    rpc.reply = Buffer(NULL, 3, NULL);
+    rpc.reply = Core::Buffer(NULL, 3, NULL);
     EXPECT_EQ(3U, rpc.peekReply()->getLength());
     rpc.status = OpaqueClientRPC::Status::ERROR;
     rpc.errorMessage = "foo";

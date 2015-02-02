@@ -15,10 +15,10 @@
 
 #include <gtest/gtest.h>
 
-#include "Buffer.h"
+#include "Core/Buffer.h"
 
 namespace LogCabin {
-namespace RPC {
+namespace Core {
 namespace {
 
 uint32_t deleterCount;
@@ -29,9 +29,9 @@ deleterCounter(void* data)
     ++deleterCount;
 }
 
-class RPCBufferTest : public ::testing::Test {
+class CoreBufferTest : public ::testing::Test {
   public:
-    RPCBufferTest()
+    CoreBufferTest()
     {
         deleterCount = 0;
         strncpy(buf, "foo", sizeof(buf));
@@ -40,13 +40,13 @@ class RPCBufferTest : public ::testing::Test {
 };
 
 
-TEST_F(RPCBufferTest, constructor_default) {
+TEST_F(CoreBufferTest, constructor_default) {
     Buffer buffer;
     EXPECT_TRUE(NULL == buffer.getData());
     EXPECT_EQ(0U, buffer.getLength());
 }
 
-TEST_F(RPCBufferTest, constructor_withData) {
+TEST_F(CoreBufferTest, constructor_withData) {
     {
         Buffer buffer(buf, sizeof(buf), deleterCounter);
         EXPECT_EQ(buf, buffer.getData());
@@ -55,7 +55,7 @@ TEST_F(RPCBufferTest, constructor_withData) {
     EXPECT_EQ(1U, deleterCount);
 }
 
-TEST_F(RPCBufferTest, constructor_move) {
+TEST_F(CoreBufferTest, constructor_move) {
     {
         Buffer buffer1(buf, sizeof(buf), deleterCounter);
         Buffer buffer2(std::move(buffer1));
@@ -67,7 +67,7 @@ TEST_F(RPCBufferTest, constructor_move) {
     EXPECT_EQ(1U, deleterCount);
 }
 
-TEST_F(RPCBufferTest, destructor) {
+TEST_F(CoreBufferTest, destructor) {
     {
         Buffer buffer1(buf, sizeof(buf), deleterCounter);
         Buffer buffer2(buf, sizeof(buf), NULL);
@@ -75,7 +75,7 @@ TEST_F(RPCBufferTest, destructor) {
     EXPECT_EQ(1U, deleterCount);
 }
 
-TEST_F(RPCBufferTest, assignment_move) {
+TEST_F(CoreBufferTest, assignment_move) {
     {
         Buffer buffer1(buf, sizeof(buf), deleterCounter);
         Buffer buffer2(buf + 1, uint32_t(sizeof(buf) - 1), deleterCounter);
@@ -88,19 +88,19 @@ TEST_F(RPCBufferTest, assignment_move) {
     EXPECT_EQ(2U, deleterCount);
 }
 
-TEST_F(RPCBufferTest, getters_nonconst) {
+TEST_F(CoreBufferTest, getters_nonconst) {
     Buffer buffer(buf, sizeof(buf), deleterCounter);
     EXPECT_EQ(buf, buffer.getData());
     EXPECT_EQ(sizeof(buf), buffer.getLength());
 }
 
-TEST_F(RPCBufferTest, getters_const) {
+TEST_F(CoreBufferTest, getters_const) {
     const Buffer buffer(buf, sizeof(buf), deleterCounter);
     EXPECT_EQ(buf, buffer.getData());
     EXPECT_EQ(sizeof(buf), buffer.getLength());
 }
 
-TEST_F(RPCBufferTest, setData) {
+TEST_F(CoreBufferTest, setData) {
     {
         Buffer buffer;
         buffer.setData(buf, sizeof(buf), deleterCounter);
@@ -113,7 +113,7 @@ TEST_F(RPCBufferTest, setData) {
     EXPECT_EQ(2U, deleterCount);
 }
 
-TEST_F(RPCBufferTest, reset) {
+TEST_F(CoreBufferTest, reset) {
     {
         Buffer buffer;
         buffer.reset();
@@ -126,6 +126,6 @@ TEST_F(RPCBufferTest, reset) {
     EXPECT_EQ(1U, deleterCount);
 }
 
-} // namespace LogCabin::RPC::<anonymous>
-} // namespace LogCabin::RPC
+} // namespace LogCabin::Core::<anonymous>
+} // namespace LogCabin::Core
 } // namespace LogCabin

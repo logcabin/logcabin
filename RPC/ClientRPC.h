@@ -20,7 +20,6 @@
 #include <memory>
 #include <string>
 
-#include "RPC/Buffer.h"
 #include "RPC/OpaqueClientRPC.h"
 
 #ifndef LOGCABIN_RPC_CLIENTRPC_H

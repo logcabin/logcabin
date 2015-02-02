@@ -53,8 +53,8 @@ class MyServerHandler : public OpaqueServer::Handler {
         currentRPC.response = std::move(nextResponse);
         currentRPC.sendReply();
     }
-    Buffer lastRequest;
-    Buffer nextResponse;
+    Core::Buffer lastRequest;
+    Core::Buffer nextResponse;
     OpaqueServerRPC currentRPC;
     bool autoReply;
 };

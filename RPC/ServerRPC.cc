@@ -32,7 +32,7 @@ ServerRPC::ServerRPC(OpaqueServerRPC opaqueRPC)
     , serviceSpecificErrorVersion(0)
     , opCode(0)
 {
-    const Buffer& request = this->opaqueRPC.request;
+    const Core::Buffer& request = this->opaqueRPC.request;
 
     // Carefully read the headers.
     if (request.getLength() < sizeof(RequestHeaderPrefix)) {
@@ -113,7 +113,7 @@ void
 ServerRPC::reply(const google::protobuf::Message& payload)
 {
     active = false;
-    RPC::Buffer buffer;
+    Core::Buffer buffer;
     RPC::ProtoBuf::serialize(payload, buffer,
                              sizeof(ResponseHeaderVersion1));
     auto& responseHeader =
@@ -129,7 +129,7 @@ void
 ServerRPC::returnError(const google::protobuf::Message& serviceSpecificError)
 {
     active = false;
-    RPC::Buffer buffer;
+    Core::Buffer buffer;
     RPC::ProtoBuf::serialize(serviceSpecificError, buffer,
                              sizeof(ResponseHeaderVersion1));
     auto& responseHeader =
@@ -171,7 +171,7 @@ ServerRPC::reject(RPC::Protocol::Status status)
     opaqueRPC.response.setData(
         &responseHeader,
         sizeof(responseHeader),
-        RPC::Buffer::deleteObjectFn<ResponseHeaderVersion1*>);
+        Core::Buffer::deleteObjectFn<ResponseHeaderVersion1*>);
     opaqueRPC.sendReply();
 }
 

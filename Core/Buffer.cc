@@ -13,10 +13,10 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include "Buffer.h"
+#include "Core/Buffer.h"
 
 namespace LogCabin {
-namespace RPC {
+namespace Core {
 
 Buffer::Buffer()
     : data(NULL)
@@ -82,5 +82,5 @@ Buffer::reset()
     deleter = NULL;
 }
 
-} // namespace LogCabin::RPC
+} // namespace LogCabin::Core
 } // namespace LogCabin

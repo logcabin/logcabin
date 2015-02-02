@@ -19,13 +19,13 @@
 #include <unistd.h>
 
 #include "build/Protocol/Raft.pb.h"
+#include "Core/Buffer.h"
 #include "Core/Checksum.h"
 #include "Core/Debug.h"
 #include "Core/ProtoBuf.h"
 #include "Core/StringUtil.h"
 #include "Core/Time.h"
 #include "Core/Util.h"
-#include "RPC/Buffer.h"
 #include "RPC/ProtoBuf.h"
 #include "Storage/FilesystemUtil.h"
 #include "Storage/SimpleFileLog.h"

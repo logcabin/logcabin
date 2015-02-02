@@ -16,7 +16,7 @@
 #include <cinttypes>
 #include <google/protobuf/message.h>
 
-#include "RPC/Buffer.h"
+#include "Core/Buffer.h"
 
 #ifndef LOGCABIN_RPC_PROTOBUF_H
 #define LOGCABIN_RPC_PROTOBUF_H
@@ -26,12 +26,12 @@ namespace RPC {
 namespace ProtoBuf {
 
 /**
- * Parse a protocol buffer message out of an RPC::Buffer.
+ * Parse a protocol buffer message out of a Core::Buffer.
  * \param from
- *      The RPC::Buffer from which to extract a protocol buffer.
+ *      The Core::Buffer from which to extract a protocol buffer.
  * \param[out] to
  *      The empty protocol buffer to fill in with the contents of the
- *      RPC::Buffer.
+ *      Core::Buffer.
  * \param skipBytes
  *      The number of bytes to skip at the beginning of 'from' (defaults to 0).
  * \return
@@ -39,24 +39,24 @@ namespace ProtoBuf {
  *      (for example, if a required field is missing).
  */
 bool
-parse(const RPC::Buffer& from,
+parse(const Core::Buffer& from,
       google::protobuf::Message& to,
       uint32_t skipBytes = 0);
 
 /**
- * Serialize a protocol buffer message into an RPC::Buffer.
+ * Serialize a protocol buffer message into a Core::Buffer.
  * \param from
  *      The protocol buffer containing the contents to serialize into the
- *      RPC::Buffer. All required fields must be set or this will PANIC.
+ *      Core::Buffer. All required fields must be set or this will PANIC.
  * \param[out] to
- *      The RPC::Buffer to fill in with the contents of the protocol buffer.
+ *      The Core::Buffer to fill in with the contents of the protocol buffer.
  * \param skipBytes
  *      The number of bytes to allocate at the beginning of 'to' but leave
  *      uninitialized for someone else to fill in (defaults to 0).
  */
 void
 serialize(const google::protobuf::Message& from,
-          RPC::Buffer& to,
+          Core::Buffer& to,
           uint32_t skipBytes = 0);
 
 } // namespace LogCabin::RPC::ProtoBuf

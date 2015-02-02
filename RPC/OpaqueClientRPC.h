@@ -20,8 +20,8 @@
 #include <stdexcept>
 #include <string>
 
+#include "Core/Buffer.h"
 #include "Core/Time.h"
-#include "RPC/Buffer.h"
 
 #ifndef LOGCABIN_RPC_OPAQUECLIENTRPC_H
 #define LOGCABIN_RPC_OPAQUECLIENTRPC_H
@@ -119,7 +119,7 @@ class OpaqueClientRPC {
      *      a pointer to the reply buffer inside this OpaqueClientRPC object.
      *      Otherwise, returns NULL.
      */
-    Buffer* peekReply();
+    Core::Buffer* peekReply();
 
     /**
      * Block until the reply is ready, an error has occurred, or the given
@@ -171,7 +171,7 @@ class OpaqueClientRPC {
      * The payload of a successful reply, once available.
      * This becomes valid when #status is OK.
      */
-    Buffer reply;
+    Core::Buffer reply;
 
     /**
      * If an error occurred in the RPC then this holds the error message;

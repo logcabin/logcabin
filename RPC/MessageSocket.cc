@@ -144,7 +144,7 @@ MessageSocket::Outbound::Outbound(Outbound&& other)
 }
 
 MessageSocket::Outbound::Outbound(MessageId messageId,
-                                  Buffer message)
+                                  Core::Buffer message)
     : bytesSent(0)
     , header()
     , message(std::move(message))
@@ -198,7 +198,7 @@ MessageSocket::close()
 }
 
 void
-MessageSocket::sendMessage(MessageId messageId, Buffer contents)
+MessageSocket::sendMessage(MessageId messageId, Core::Buffer contents)
 {
     // Check the message length.
     if (contents.getLength() > maxMessageLength) {
@@ -256,7 +256,7 @@ MessageSocket::readable()
             }
             inbound.message.setData(new char[inbound.header.payloadLength],
                                     inbound.header.payloadLength,
-                                    Buffer::deleteArrayFn<char>);
+                                    Core::Buffer::deleteArrayFn<char>);
         }
         // Don't use 'else' here; we want to check this branch for two reasons:
         // First, if there is a header with a length of 0, the socket won't be
