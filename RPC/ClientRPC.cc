@@ -15,10 +15,10 @@
  */
 
 #include "Core/Debug.h"
+#include "Core/ProtoBuf.h"
 #include "RPC/Protocol.h"
 #include "RPC/ClientRPC.h"
 #include "RPC/ClientSession.h"
-#include "RPC/ProtoBuf.h"
 
 namespace LogCabin {
 namespace RPC {
@@ -38,8 +38,8 @@ ClientRPC::ClientRPC(std::shared_ptr<RPC::ClientSession> session,
 {
     // Serialize the request into a Buffer
     Core::Buffer requestBuffer;
-    ProtoBuf::serialize(request, requestBuffer,
-                        sizeof(RequestHeaderVersion1));
+    Core::ProtoBuf::serialize(request, requestBuffer,
+                              sizeof(RequestHeaderVersion1));
     auto& requestHeader =
         *static_cast<RequestHeaderVersion1*>(requestBuffer.getData());
     requestHeader.prefix.version = 1;
@@ -143,8 +143,8 @@ ClientRPC::waitForReply(google::protobuf::Message* response,
         // The RPC succeeded. Parse the response into a protocol buffer.
         case ProtocolStatus::OK:
             if (response != NULL &&
-                !RPC::ProtoBuf::parse(responseBuffer, *response,
-                                      sizeof(responseHeader))) {
+                !Core::ProtoBuf::parse(responseBuffer, *response,
+                                       sizeof(responseHeader))) {
                 PANIC("Could not parse the protocol buffer out of the server "
                       "response");
             }
@@ -154,8 +154,8 @@ ClientRPC::waitForReply(google::protobuf::Message* response,
         // protocol buffer.
         case ProtocolStatus::SERVICE_SPECIFIC_ERROR:
             if (serviceSpecificError != NULL &&
-                !RPC::ProtoBuf::parse(responseBuffer, *serviceSpecificError,
-                                      sizeof(responseHeader))) {
+                !Core::ProtoBuf::parse(responseBuffer, *serviceSpecificError,
+                                       sizeof(responseHeader))) {
                 PANIC("Could not parse the protocol buffer out of the "
                       "service-specific error details");
             }

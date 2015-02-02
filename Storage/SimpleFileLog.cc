@@ -26,7 +26,6 @@
 #include "Core/StringUtil.h"
 #include "Core/Time.h"
 #include "Core/Util.h"
-#include "RPC/ProtoBuf.h"
 #include "Storage/FilesystemUtil.h"
 #include "Storage/SimpleFileLog.h"
 

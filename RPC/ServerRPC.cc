@@ -13,7 +13,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include "RPC/ProtoBuf.h"
+#include "Core/ProtoBuf.h"
 #include "RPC/ServerRPC.h"
 
 namespace LogCabin {
@@ -101,8 +101,8 @@ ServerRPC::getRequest(google::protobuf::Message& request)
 {
     if (!active)
         return false;
-    if (!RPC::ProtoBuf::parse(opaqueRPC.request, request,
-                              sizeof(RequestHeaderVersion1))) {
+    if (!Core::ProtoBuf::parse(opaqueRPC.request, request,
+                               sizeof(RequestHeaderVersion1))) {
         rejectInvalidRequest();
         return false;
     }
@@ -114,8 +114,8 @@ ServerRPC::reply(const google::protobuf::Message& payload)
 {
     active = false;
     Core::Buffer buffer;
-    RPC::ProtoBuf::serialize(payload, buffer,
-                             sizeof(ResponseHeaderVersion1));
+    Core::ProtoBuf::serialize(payload, buffer,
+                              sizeof(ResponseHeaderVersion1));
     auto& responseHeader =
         *static_cast<ResponseHeaderVersion1*>(buffer.getData());
     responseHeader.prefix.status = Status::OK;
@@ -130,8 +130,8 @@ ServerRPC::returnError(const google::protobuf::Message& serviceSpecificError)
 {
     active = false;
     Core::Buffer buffer;
-    RPC::ProtoBuf::serialize(serviceSpecificError, buffer,
-                             sizeof(ResponseHeaderVersion1));
+    Core::ProtoBuf::serialize(serviceSpecificError, buffer,
+                              sizeof(ResponseHeaderVersion1));
     auto& responseHeader =
         *static_cast<ResponseHeaderVersion1*>(buffer.getData());
     responseHeader.prefix.status = Status::SERVICE_SPECIFIC_ERROR;

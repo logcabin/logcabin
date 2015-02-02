@@ -16,7 +16,6 @@
 #include "build/Protocol/Raft.pb.h"
 #include "Core/Debug.h"
 #include "Core/ProtoBuf.h"
-#include "RPC/ProtoBuf.h"
 #include "RPC/ServerRPC.h"
 #include "Server/RaftConsensus.h"
 #include "Server/RaftService.h"

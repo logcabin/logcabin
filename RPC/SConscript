@@ -8,7 +8,6 @@ src = [
     "OpaqueClientRPC.cc",
     "OpaqueServer.cc",
     "OpaqueServerRPC.cc",
-    "ProtoBuf.cc",
     "Protocol.cc",
     "Server.cc",
     "ServerRPC.cc",

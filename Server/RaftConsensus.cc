@@ -33,7 +33,6 @@
 #include "Protocol/Common.h"
 #include "RPC/ClientRPC.h"
 #include "RPC/ClientSession.h"
-#include "RPC/ProtoBuf.h"
 #include "RPC/ServerRPC.h"
 #include "Server/RaftConsensus.h"
 #include "Server/Globals.h"
