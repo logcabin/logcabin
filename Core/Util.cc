@@ -14,11 +14,24 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <cstring>
 #include "Core/Util.h"
 
 namespace LogCabin {
 namespace Core {
 namespace Util {
+
+void*
+memcpy(void* dest,
+       std::initializer_list<std::pair<const void*, size_t>> src)
+{
+    uint8_t* target = static_cast<uint8_t*>(dest);
+    for (auto it = src.begin(); it != src.end(); ++it) {
+        ::memcpy(target, it->first, it->second);
+        target += it->second;
+    }
+    return dest;
+}
 
 ThreadInterruptedException::ThreadInterruptedException()
     : std::runtime_error("Thread was interrupted")

@@ -51,6 +51,19 @@ downCast(const Large& large)
 #define sizeof32(x) LogCabin::Core::Util::downCast<uint32_t>(sizeof(x))
 
 /**
+ * Copy some noncontiguous chunks of data into a contiguous chunk.
+ * \param dest
+ *      Where the new copy should be written.
+ * \param src
+ *      A list of (pointer, length) pairs describing where to copy from.
+ * \return
+ *      dest (as in memcpy).
+ */
+void*
+memcpy(void* dest,
+       std::initializer_list<std::pair<const void*, size_t>> src);
+
+/**
  * The thread could not complete its task because it was asked to exit.
  */
 class ThreadInterruptedException : public std::runtime_error {

@@ -37,6 +37,13 @@ TEST(CoreUtilTest, sizeof32) {
     EXPECT_EQ(8U, sizeof32(uint64_t));
 }
 
+TEST(CoreUtilTest, memcpy) {
+    char buf[16];
+    memset(buf, 0, sizeof(buf));
+    EXPECT_EQ(buf, memcpy(buf, {{"hello ", 6}, {"world!", 7}}));
+    EXPECT_STREQ("hello world!", buf);
+}
+
 TEST(CoreUtilTest, ThreadInterruptedException) {
     EXPECT_THROW(throw ThreadInterruptedException(),
                  ThreadInterruptedException);
