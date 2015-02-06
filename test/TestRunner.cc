@@ -18,6 +18,7 @@
 #include <memory>
 
 #include "Core/Debug.h"
+#include "Storage/FilesystemUtil.h"
 #include <google/protobuf/stubs/common.h>
 
 namespace {
@@ -105,6 +106,7 @@ class GTestSetupListener : public ::testing::EmptyTestEventListener {
         LogCabin::Core::Debug::setLogPolicy({
             {"", "WARNING"}
         });
+        LogCabin::Storage::FilesystemUtil::skipFsync = true;
     }
 };
 
