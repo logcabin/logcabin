@@ -23,7 +23,6 @@
 #include "Core/ProtoBuf.h"
 #include "Core/ThreadId.h"
 #include "Core/Util.h"
-#include "RPC/ProtoBuf.h"
 #include "Server/RaftConsensus.h"
 #include "Server/StateMachine.h"
 #include "Storage/SnapshotFile.h"

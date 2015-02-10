@@ -28,6 +28,11 @@
 namespace LogCabin {
 
 // forward declaration
+namespace Core {
+class Buffer;
+};
+
+// forward declaration
 namespace Event {
 class Loop;
 };
@@ -36,7 +41,6 @@ namespace RPC {
 
 // forward declarations
 class Address;
-class Buffer;
 class OpaqueServerRPC;
 
 /**
@@ -117,7 +121,7 @@ class OpaqueServer {
     class MessageSocketHandler : public MessageSocket::Handler {
       public:
         explicit MessageSocketHandler(OpaqueServer* server);
-        void handleReceivedMessage(MessageId messageId, Buffer message);
+        void handleReceivedMessage(MessageId messageId, Core::Buffer message);
         void handleDisconnect();
 
         /**

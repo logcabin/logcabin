@@ -17,9 +17,9 @@
 #include <thread>
 
 #include "build/Protocol/Client.pb.h"
+#include "Core/Buffer.h"
 #include "Core/ProtoBuf.h"
 #include "Protocol/Common.h"
-#include "RPC/Buffer.h"
 #include "RPC/ClientRPC.h"
 #include "RPC/ClientSession.h"
 #include "Server/Globals.h"

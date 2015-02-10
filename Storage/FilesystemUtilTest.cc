@@ -128,12 +128,14 @@ TEST_F(StorageFilesystemUtilTest, dup) {
 }
 
 TEST_F(StorageFilesystemUtilTest, fsync) {
+    FilesystemUtil::skipFsync = false;
     FS::fsync(tmpdir);
     EXPECT_DEATH(FS::fsync(File()),
                  "Could not fsync");
 }
 
 TEST_F(StorageFilesystemUtilTest, fdatasync) {
+    FilesystemUtil::skipFsync = false;
     FS::fdatasync(tmpdir);
     EXPECT_DEATH(FS::fdatasync(File()),
                  "Could not fdatasync");
@@ -282,6 +284,7 @@ TEST_F(StorageFilesystemUtilTest, rename) {
 }
 
 TEST_F(StorageFilesystemUtilTest, syncDir) {
+    FilesystemUtil::skipFsync = false;
     // I don't know of a way to observe that this does anything,
     // but at least we can run through it and make sure nothing panics.
     // -Diego

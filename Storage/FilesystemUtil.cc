@@ -32,6 +32,8 @@ namespace LogCabin {
 namespace Storage {
 namespace FilesystemUtil {
 
+bool skipFsync = false;
+
 File::File()
     : fd(-1)
     , path()
@@ -111,6 +113,8 @@ dup(const File& file)
 void
 fsync(const File& file)
 {
+    if (skipFsync)
+        return;
     if (::fsync(file.fd) != 0) {
         PANIC("Could not fsync %s: %s",
               file.path.c_str(), strerror(errno));
@@ -120,6 +124,8 @@ fsync(const File& file)
 void
 fdatasync(const File& file)
 {
+    if (skipFsync)
+        return;
     if (::fdatasync(file.fd) != 0) {
         PANIC("Could not fdatasync %s: %s",
               file.path.c_str(), strerror(errno));
@@ -309,6 +315,8 @@ rename(const File& oldDir, const std::string& oldChild,
 void
 syncDir(const std::string& path)
 {
+    if (skipFsync)
+        return;
     int fd = open(path.c_str(), O_RDONLY);
     if (fd == -1) {
         PANIC("Could not open %s: %s",

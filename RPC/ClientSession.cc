@@ -80,7 +80,7 @@ ClientSession::MessageSocketHandler::MessageSocketHandler(
 void
 ClientSession::MessageSocketHandler::handleReceivedMessage(
         MessageId messageId,
-        Buffer message)
+        Core::Buffer message)
 {
     std::unique_lock<std::mutex> mutexGuard(session.mutex);
 
@@ -187,7 +187,7 @@ ClientSession::Timer::handleTimerEvent()
         VERBOSE("ClientSession is suspicious. Sending ping.");
         session.activePing = true;
         session.messageSocket->sendMessage(Protocol::Common::PING_MESSAGE_ID,
-                                           Buffer());
+                                           Core::Buffer());
         schedule(session.PING_TIMEOUT_MS * 1000 * 1000);
     } else {
         VERBOSE("ClientSession to %s timed out.",
@@ -351,7 +351,7 @@ ClientSession::~ClientSession()
 }
 
 OpaqueClientRPC
-ClientSession::sendRequest(Buffer request)
+ClientSession::sendRequest(Core::Buffer request)
 {
     MessageSocket::MessageId messageId;
     {

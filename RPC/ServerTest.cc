@@ -17,10 +17,10 @@
 #include <thread>
 
 #include "build/Core/ProtoBufTest.pb.h"
+#include "Core/Buffer.h"
 #include "Core/Debug.h"
 #include "Event/Loop.h"
 #include "Protocol/Common.h"
-#include "RPC/Buffer.h"
 #include "RPC/ClientRPC.h"
 #include "RPC/ClientSession.h"
 #include "RPC/Server.h"
@@ -97,7 +97,7 @@ TEST_F(RPCServerTest, handleRPC_badHeader) {
     server.registerService(1, service1, 1);
     deinit();
     ClientRPC rpc;
-    rpc.opaqueRPC = session->sendRequest(Buffer());
+    rpc.opaqueRPC = session->sendRequest(Core::Buffer());
     EXPECT_DEATH({ childDeathInit();
                    rpc.waitForReply(NULL, NULL, TimePoint::max());
                  }, "request.*invalid");

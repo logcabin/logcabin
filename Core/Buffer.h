@@ -16,11 +16,11 @@
 #include <cinttypes>
 #include <cstdlib>
 
-#ifndef LOGCABIN_RPC_BUFFER_H
-#define LOGCABIN_RPC_BUFFER_H
+#ifndef LOGCABIN_CORE_BUFFER_H
+#define LOGCABIN_CORE_BUFFER_H
 
 namespace LogCabin {
-namespace RPC {
+namespace Core {
 
 /**
  * A container for opaque data. This makes it easy for code to operate on data
@@ -166,7 +166,7 @@ class Buffer {
 
 }; // class Buffer
 
-} // namespace LogCabin::RPC
+} // namespace LogCabin::Core
 } // namespace LogCabin
 
-#endif /* LOGCABIN_RPC_BUFFER_H */
+#endif /* LOGCABIN_CORE_BUFFER_H */

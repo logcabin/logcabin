@@ -16,6 +16,7 @@
 #include <memory>
 #include <sstream>
 
+#include "Core/Debug.h"
 #include "Core/ProtoBuf.h"
 #include "Core/StringUtil.h"
 
@@ -71,6 +72,19 @@ namespace Core {
 namespace ProtoBuf {
 
 using Core::StringUtil::replaceAll;
+
+namespace {
+
+/// Remove the last character from the end of a string.
+std::string
+truncateEnd(std::string str)
+{
+    if (!str.empty())
+        str.resize(str.length() - 1, 0);
+    return str;
+}
+
+} // anonymous namespace
 
 namespace Internal {
 
@@ -132,6 +146,45 @@ copy(const google::protobuf::Message& protoBuf)
     ret->CopyFrom(protoBuf);
     return ret;
 }
+
+bool
+parse(const Core::Buffer& from,
+      google::protobuf::Message& to,
+      uint32_t skipBytes)
+{
+    google::protobuf::LogSilencer logSilencer;
+    if (!to.ParseFromArray(
+                        static_cast<const char*>(from.getData()) + skipBytes,
+                        from.getLength() - skipBytes)) {
+        WARNING("Missing fields in protocol buffer of type %s: %s",
+                to.GetTypeName().c_str(),
+                to.InitializationErrorString().c_str());
+        return false;
+    }
+    VERBOSE("%s:\n%s",
+            to.GetTypeName().c_str(),
+            truncateEnd(Core::ProtoBuf::dumpString(to, true)).c_str());
+    return true;
+}
+
+void
+serialize(const google::protobuf::Message& from,
+          Core::Buffer& to,
+          uint32_t skipBytes)
+{
+    // SerializeToArray seems to always return true, so we explicitly check
+    // IsInitialized to make sure all required fields are set.
+    if (!from.IsInitialized()) {
+        PANIC("Missing fields in protocol buffer of type %s: %s",
+              from.GetTypeName().c_str(),
+              from.InitializationErrorString().c_str());
+    }
+    uint32_t length = from.ByteSize();
+    char* data = new char[skipBytes + length];
+    from.SerializeToArray(data + skipBytes, length);
+    to.setData(data, skipBytes + length, Core::Buffer::deleteArrayFn<char>);
+}
+
 
 } // namespace LogCabin::Core::ProtoBuf
 } // namespace LogCabin::Core

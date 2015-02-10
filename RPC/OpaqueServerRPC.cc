@@ -30,7 +30,7 @@ OpaqueServerRPC::OpaqueServerRPC()
 OpaqueServerRPC::OpaqueServerRPC(
         std::weak_ptr<OpaqueServer::SocketWithHandler> socket,
         MessageSocket::MessageId messageId,
-        Buffer request)
+        Core::Buffer request)
     : request(std::move(request))
     , response()
     , socket(socket)

@@ -30,6 +30,12 @@ namespace Storage {
 namespace FilesystemUtil {
 
 /**
+ * Set to true in some unit tests to skip fsync() and fdatasync(), which can
+ * speeds up some tests significantly.
+ */
+extern bool skipFsync;
+
+/**
  * A File object is just a wrapper around a file descriptor; it represents
  * either an open file, an open directory, or an empty placeholder. It takes
  * charge of closing the file descriptor when it is done and tracks the path
@@ -101,6 +107,7 @@ File dup(const File& file);
 
 /**
  * Flush changes to a File to its underlying storage device.
+ * See #skipFsync.
  * \param file
  *      An open file descriptor.
  */
@@ -111,6 +118,7 @@ void fsync(const File& file);
  * atime/mtime. See fdatasync man page.
  * \param file
  *      An open file descriptor.
+ * See #skipFsync.
  */
 void fdatasync(const File& file);
 
@@ -199,6 +207,7 @@ void rename(const File& oldDir, const std::string& oldChild,
 /**
  * Open a directory, fsync it, and close it. This is useful to fsync a
  * directory after creating a file or directory within it.
+ * See #skipFsync.
  */
 void syncDir(const std::string& path);
 

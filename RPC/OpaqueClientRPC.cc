@@ -88,7 +88,7 @@ OpaqueClientRPC::getStatus() const
     return status;
 }
 
-Buffer*
+Core::Buffer*
 OpaqueClientRPC::peekReply()
 {
     std::unique_lock<std::mutex> mutexGuard(mutex);

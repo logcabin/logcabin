@@ -15,6 +15,7 @@
 
 #include <gtest/gtest.h>
 
+#include "Core/Debug.h"
 #include "Core/ProtoBuf.h"
 #include "build/Core/ProtoBufTest.pb.h"
 
@@ -81,6 +82,36 @@ TEST(CoreProtoBufTest, copy) {
     m = fromString<TestMessage>("field_a: 3, field_b: 5");
     EXPECT_EQ(*copy(m), m);
 }
+
+TEST(CoreProtoBufTest, parse) {
+    Core::Buffer rpc;
+    TestMessage m;
+    Core::Debug::setLogPolicy({{"", "ERROR"}});
+    EXPECT_FALSE(ProtoBuf::parse(rpc, m));
+    Core::Debug::setLogPolicy({});
+    m.set_field_a(3);
+    m.set_field_b(5);
+    ProtoBuf::serialize(m, rpc, 8);
+    *static_cast<uint64_t*>(rpc.getData()) = 0xdeadbeefdeadbeef;
+    m.Clear();
+    EXPECT_TRUE(ProtoBuf::parse(rpc, m, 8));
+    EXPECT_EQ("field_a: 3 field_b: 5", m.ShortDebugString());
+}
+
+TEST(CoreProtoBufTest, serialize) {
+    Core::Buffer rpc;
+    TestMessage m;
+    EXPECT_DEATH(ProtoBuf::serialize(m, rpc, 3),
+                 "Missing fields in protocol buffer.*: field_a, field_b");
+    m.set_field_a(3);
+    m.set_field_b(5);
+    ProtoBuf::serialize(m, rpc, 8);
+    *static_cast<uint64_t*>(rpc.getData()) = 0xdeadbeefdeadbeef;
+    m.Clear();
+    EXPECT_TRUE(ProtoBuf::parse(rpc, m, 8));
+    EXPECT_EQ("field_a: 3 field_b: 5", m.ShortDebugString());
+}
+
 
 } // namespace LogCabin::Core::ProtoBuf
 } // namespace LogCabin::Core

@@ -13,7 +13,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include "RPC/ProtoBuf.h"
+#include "Core/ProtoBuf.h"
 #include "RPC/ServerRPC.h"
 
 namespace LogCabin {
@@ -32,7 +32,7 @@ ServerRPC::ServerRPC(OpaqueServerRPC opaqueRPC)
     , serviceSpecificErrorVersion(0)
     , opCode(0)
 {
-    const Buffer& request = this->opaqueRPC.request;
+    const Core::Buffer& request = this->opaqueRPC.request;
 
     // Carefully read the headers.
     if (request.getLength() < sizeof(RequestHeaderPrefix)) {
@@ -101,8 +101,8 @@ ServerRPC::getRequest(google::protobuf::Message& request)
 {
     if (!active)
         return false;
-    if (!RPC::ProtoBuf::parse(opaqueRPC.request, request,
-                              sizeof(RequestHeaderVersion1))) {
+    if (!Core::ProtoBuf::parse(opaqueRPC.request, request,
+                               sizeof(RequestHeaderVersion1))) {
         rejectInvalidRequest();
         return false;
     }
@@ -113,9 +113,9 @@ void
 ServerRPC::reply(const google::protobuf::Message& payload)
 {
     active = false;
-    RPC::Buffer buffer;
-    RPC::ProtoBuf::serialize(payload, buffer,
-                             sizeof(ResponseHeaderVersion1));
+    Core::Buffer buffer;
+    Core::ProtoBuf::serialize(payload, buffer,
+                              sizeof(ResponseHeaderVersion1));
     auto& responseHeader =
         *static_cast<ResponseHeaderVersion1*>(buffer.getData());
     responseHeader.prefix.status = Status::OK;
@@ -129,9 +129,9 @@ void
 ServerRPC::returnError(const google::protobuf::Message& serviceSpecificError)
 {
     active = false;
-    RPC::Buffer buffer;
-    RPC::ProtoBuf::serialize(serviceSpecificError, buffer,
-                             sizeof(ResponseHeaderVersion1));
+    Core::Buffer buffer;
+    Core::ProtoBuf::serialize(serviceSpecificError, buffer,
+                              sizeof(ResponseHeaderVersion1));
     auto& responseHeader =
         *static_cast<ResponseHeaderVersion1*>(buffer.getData());
     responseHeader.prefix.status = Status::SERVICE_SPECIFIC_ERROR;
@@ -171,7 +171,7 @@ ServerRPC::reject(RPC::Protocol::Status status)
     opaqueRPC.response.setData(
         &responseHeader,
         sizeof(responseHeader),
-        RPC::Buffer::deleteObjectFn<ResponseHeaderVersion1*>);
+        Core::Buffer::deleteObjectFn<ResponseHeaderVersion1*>);
     opaqueRPC.sendReply();
 }
 

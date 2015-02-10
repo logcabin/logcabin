@@ -19,11 +19,11 @@
 #include <string>
 #include <unordered_map>
 
+#include "Core/Buffer.h"
 #include "Core/ConditionVariable.h"
 #include "Core/Config.h"
 #include "Event/Timer.h"
 #include "RPC/Address.h"
-#include "RPC/Buffer.h"
 #include "RPC/OpaqueClientRPC.h"
 #include "RPC/MessageSocket.h"
 
@@ -106,7 +106,7 @@ class ClientSession {
      * \return
      *      This is be used to wait for and retrieve the reply to the RPC.
      */
-    OpaqueClientRPC sendRequest(Buffer request);
+    OpaqueClientRPC sendRequest(Core::Buffer request);
 
     /**
      * If the socket has been disconnected, return a descriptive message.
@@ -135,7 +135,7 @@ class ClientSession {
     class MessageSocketHandler : public MessageSocket::Handler {
       public:
         explicit MessageSocketHandler(ClientSession& clientSession);
-        void handleReceivedMessage(MessageId messageId, Buffer message);
+        void handleReceivedMessage(MessageId messageId, Core::Buffer message);
         void handleDisconnect();
         ClientSession& session;
     };
@@ -172,7 +172,7 @@ class ClientSession {
          * The contents of the response. This is valid when
          * #status is HAS_REPLY.
          */
-        Buffer reply;
+        Core::Buffer reply;
         /**
          * If true, a thread is blocked waiting on #ready,
          * and this object may not be deleted.

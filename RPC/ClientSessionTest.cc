@@ -76,18 +76,18 @@ class RPCClientSessionTest : public ::testing::Test {
 };
 
 std::string
-str(const Buffer& buffer)
+str(const Core::Buffer& buffer)
 {
     return std::string(static_cast<const char*>(buffer.getData()),
                        buffer.getLength());
 }
 
-Buffer
+Core::Buffer
 buf(const char* stringLiteral)
 {
-    return Buffer(const_cast<char*>(stringLiteral),
-                  static_cast<uint32_t>(strlen(stringLiteral)),
-                  NULL);
+    return Core::Buffer(const_cast<char*>(stringLiteral),
+                        static_cast<uint32_t>(strlen(stringLiteral)),
+                        NULL);
 }
 
 TEST_F(RPCClientSessionTest, handleReceivedMessage) {
@@ -115,12 +115,12 @@ TEST_F(RPCClientSessionTest, handleReceivedMessage) {
 
 TEST_F(RPCClientSessionTest, handleReceivedMessage_ping) {
     // spurious
-    session->messageSocket->handler.handleReceivedMessage(0, Buffer());
+    session->messageSocket->handler.handleReceivedMessage(0, Core::Buffer());
 
     // ping requested
     session->numActiveRPCs = 1;
     session->activePing = true;
-    session->messageSocket->handler.handleReceivedMessage(0, Buffer());
+    session->messageSocket->handler.handleReceivedMessage(0, Core::Buffer());
     session->numActiveRPCs = 0;
     EXPECT_FALSE(session->activePing);
     EXPECT_TRUE(session->timer.isScheduled());

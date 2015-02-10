@@ -24,7 +24,6 @@
 #include "RPC/ClientSession.h"
 #include "RPC/OpaqueServer.h"
 #include "RPC/OpaqueServerRPC.h"
-#include "RPC/ProtoBuf.h"
 #include "RPC/Protocol.h"
 #include "RPC/ServerRPC.h"
 
@@ -53,8 +52,8 @@ class MyServerHandler : public OpaqueServer::Handler {
         currentRPC.response = std::move(nextResponse);
         currentRPC.sendReply();
     }
-    Buffer lastRequest;
-    Buffer nextResponse;
+    Core::Buffer lastRequest;
+    Core::Buffer nextResponse;
     OpaqueServerRPC currentRPC;
     bool autoReply;
 };
@@ -128,8 +127,9 @@ TEST_F(RPCClientRPCTest, constructor) {
     EXPECT_EQ(3U, header.serviceSpecificErrorVersion);
     EXPECT_EQ(4U, header.opCode);
     LogCabin::ProtoBuf::TestMessage actual;
-    EXPECT_TRUE(ProtoBuf::parse(rpcHandler.lastRequest, actual,
-                                sizeof(Protocol::RequestHeaderVersion1)));
+    EXPECT_TRUE(Core::ProtoBuf::parse(
+        rpcHandler.lastRequest, actual,
+        sizeof(Protocol::RequestHeaderVersion1)));
     EXPECT_EQ(payload, actual);
 }
 

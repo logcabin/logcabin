@@ -18,6 +18,8 @@
 #include <memory>
 #include <string>
 
+#include "Core/Buffer.h"
+
 /**
  * \file
  * Utilities for dealing with protocol buffers.
@@ -110,6 +112,41 @@ dumpString(const google::protobuf::Message& protoBuf,
  */
 std::unique_ptr<google::protobuf::Message>
 copy(const google::protobuf::Message& protoBuf);
+
+/**
+ * Parse a protocol buffer message out of a Core::Buffer.
+ * \param from
+ *      The Core::Buffer from which to extract a protocol buffer.
+ * \param[out] to
+ *      The empty protocol buffer to fill in with the contents of the
+ *      Core::Buffer.
+ * \param skipBytes
+ *      The number of bytes to skip at the beginning of 'from' (defaults to 0).
+ * \return
+ *      True if the protocol buffer was parsed successfully; false otherwise
+ *      (for example, if a required field is missing).
+ */
+bool
+parse(const Core::Buffer& from,
+      google::protobuf::Message& to,
+      uint32_t skipBytes = 0);
+
+/**
+ * Serialize a protocol buffer message into a Core::Buffer.
+ * \param from
+ *      The protocol buffer containing the contents to serialize into the
+ *      Core::Buffer. All required fields must be set or this will PANIC.
+ * \param[out] to
+ *      The Core::Buffer to fill in with the contents of the protocol buffer.
+ * \param skipBytes
+ *      The number of bytes to allocate at the beginning of 'to' but leave
+ *      uninitialized for someone else to fill in (defaults to 0).
+ */
+void
+serialize(const google::protobuf::Message& from,
+          Core::Buffer& to,
+          uint32_t skipBytes = 0);
+
 
 } // namespace LogCabin::Core::ProtoBuf
 } // namespace LogCabin::Core
