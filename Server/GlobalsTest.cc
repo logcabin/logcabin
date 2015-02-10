@@ -26,7 +26,7 @@ namespace {
 
 TEST(ServerGlobalsTest, basics) {
     Globals globals;
-    globals.config.set("storageModule", "memory");
+    globals.config.set("storageModule", "Memory");
     globals.config.set("uuid", "my-fake-uuid-123");
     globals.config.set("servers", "127.0.0.1");
     globals.init();
@@ -36,7 +36,7 @@ TEST(ServerGlobalsTest, basics) {
 
 TEST(ServerGlobalsTest, initNoServers) {
     Globals globals;
-    globals.config.set("storageModule", "memory");
+    globals.config.set("storageModule", "Memory");
     globals.config.set("uuid", "my-fake-uuid-123");
     EXPECT_DEATH(globals.init(),
                  "No server addresses specified");
@@ -44,7 +44,7 @@ TEST(ServerGlobalsTest, initNoServers) {
 
 TEST(ServerGlobalsTest, initEmptyServers) {
     Globals globals;
-    globals.config.set("storageModule", "memory");
+    globals.config.set("storageModule", "Memory");
     globals.config.set("uuid", "my-fake-uuid-123");
     globals.config.set("servers", ";");
     EXPECT_DEATH(globals.init(),
@@ -60,7 +60,7 @@ TEST(ServerGlobalsTest, initAddressTaken) {
     EXPECT_EQ("", server.bind(address));
 
     Globals globals;
-    globals.config.set("storageModule", "memory");
+    globals.config.set("storageModule", "Memory");
     globals.config.set("uuid", "my-fake-uuid-123");
     globals.config.set("servers", "127.0.0.1");
     EXPECT_DEATH(globals.init(),
@@ -74,7 +74,7 @@ TEST(ServerGlobalsTest, initBindToOneOnly) {
     address.refresh(RPC::Address::TimePoint::max());
     EXPECT_EQ("", server.bind(address));
     Globals globals;
-    globals.config.set("storageModule", "memory");
+    globals.config.set("storageModule", "Memory");
     globals.config.set("uuid", "my-fake-uuid-123");
     globals.config.set("servers", "127.0.0.1:61023;127.0.0.1:61024");
     globals.init();

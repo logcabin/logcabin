@@ -1,4 +1,5 @@
 /* Copyright (c) 2014 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -16,6 +17,7 @@
 #include "Core/Debug.h"
 #include "Storage/LogFactory.h"
 #include "Storage/MemoryLog.h"
+#include "Storage/SegmentedLog.h"
 #include "Storage/SimpleFileLog.h"
 
 namespace LogCabin {
@@ -27,12 +29,21 @@ makeLog(const Core::Config& config,
         const FilesystemUtil::File& parentDir)
 {
     std::string module =
-        config.read<std::string>("storageModule", "filesystem");
+        config.read<std::string>("storageModule", "SimpleFile");
     std::unique_ptr<Log> log;
-    if (module == "memory") {
+    if (module == "Memory") {
         log.reset(new MemoryLog());
-    } else if (module == "filesystem") {
+    } else if (module == "SimpleFile") {
         log.reset(new SimpleFileLog(parentDir));
+    } else if (module == "Segmented" ||
+               module == "Segmented-Binary") {
+        log.reset(new SegmentedLog(parentDir,
+                                   SegmentedLog::Encoding::BINARY,
+                                   config));
+    } else if (module == "Segmented-Text") {
+        log.reset(new SegmentedLog(parentDir,
+                                   SegmentedLog::Encoding::TEXT,
+                                   config));
     } else {
         PANIC("Unknown storage module from config file: %s", module.c_str());
     }
