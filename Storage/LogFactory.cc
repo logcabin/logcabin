@@ -37,9 +37,13 @@ makeLog(const Core::Config& config,
         log.reset(new SimpleFileLog(parentDir));
     } else if (module == "Segmented" ||
                module == "Segmented-Binary") {
-        log.reset(new SegmentedLog(parentDir, SegmentedLog::Encoding::BINARY));
+        log.reset(new SegmentedLog(parentDir,
+                                   SegmentedLog::Encoding::BINARY,
+                                   config));
     } else if (module == "Segmented-Text") {
-        log.reset(new SegmentedLog(parentDir, SegmentedLog::Encoding::TEXT));
+        log.reset(new SegmentedLog(parentDir,
+                                   SegmentedLog::Encoding::TEXT,
+                                   config));
     } else {
         PANIC("Unknown storage module from config file: %s", module.c_str());
     }

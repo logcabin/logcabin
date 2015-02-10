@@ -55,7 +55,10 @@ class File {
      *      The path used to open fd; used for error messages.
      */
     File(int fd, std::string path);
-    /// Destructor.
+
+    /**
+     * Destructor. Closes file unless it's already been closed.
+     */
     ~File();
 
     /// Move assignment.

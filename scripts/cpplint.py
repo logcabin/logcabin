@@ -2459,10 +2459,6 @@ def CheckLanguage(filename, clean_lines, linenum, file_extension, include_state,
     error(filename, linenum, 'runtime/printf', 4,
           'Almost always, snprintf is better than %s' % match.group(1))
 
-  if Search(r'\bsscanf\b', line):
-    error(filename, linenum, 'runtime/printf', 1,
-          'sscanf can be ok, but is slow and can overflow buffers.')
-
   if (Search(r'\b(random|rand|rand_r|\wrand48)\(', line) and
       not Search(r'\bNOLINT\b', line)):
       error(filename, linenum, 'ramcloud/random', 5,

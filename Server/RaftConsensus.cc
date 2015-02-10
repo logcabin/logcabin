@@ -1549,6 +1549,7 @@ RaftConsensus::updateServerStats(Protocol::ServerStats& serverStats) const
     raftStats.set_log_start_index(log->getLogStartIndex());
     raftStats.set_log_bytes(log->getSizeBytes());
     configuration->updateServerStats(serverStats, time);
+    log->updateServerStats(serverStats);
 }
 
 std::ostream&
@@ -2059,6 +2060,13 @@ RaftConsensus::discardUnneededEntries()
         log->truncatePrefix(lastSnapshotIndex + 1);
         configurationManager->truncatePrefix(lastSnapshotIndex + 1);
         stateChanged.notify_all();
+        if (state == State::LEADER) { // defer log sync
+            logSyncQueued = true;
+        } else { // sync log now
+            std::unique_ptr<Log::Sync> sync = log->takeSync();
+            sync->wait();
+            log->syncComplete(std::move(sync));
+        }
     }
 }
 
@@ -2148,6 +2156,14 @@ RaftConsensus::readSnapshot()
             log->truncateSuffix(lastSnapshotIndex);
             configurationManager->truncatePrefix(lastSnapshotIndex + 1);
             configurationManager->truncateSuffix(lastSnapshotIndex);
+            // Clean up resources.
+            if (state == State::LEADER) { // defer log sync
+                logSyncQueued = true;
+            } else { // sync log now
+                std::unique_ptr<Log::Sync> sync = log->takeSync();
+                sync->wait();
+                log->syncComplete(std::move(sync));
+            }
         }
 
         discardUnneededEntries();

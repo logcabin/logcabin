@@ -14,6 +14,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#define _BSD_SOURCE
+#include <endian.h>
+
 #include <algorithm>
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -39,237 +42,273 @@ using Core::StringUtil::format;
 
 namespace {
 
-uint64_t MAX_SEGMENT_SIZE = 8ul * 1024 * 1024;
-
-std::string
-readProtoFromFile(const FS::File& file,
-                  FS::FileContents& reader,
-                  uint64_t* offset,
-                  google::protobuf::Message* out,
-                  SegmentedLog::Encoding encoding)
-{
-    uint64_t loffset = *offset;
-    char checksum[Core::Checksum::MAX_LENGTH];
-    uint64_t bytesRead = reader.copyPartial(loffset, checksum,
-                                            sizeof(checksum));
-    uint32_t checksumBytes = Core::Checksum::length(checksum,
-                                                    uint32_t(bytesRead));
-    if (checksumBytes == 0)
-        return format("File %s missing checksum", file.path.c_str());
-    loffset += checksumBytes;
-
-    uint64_t dataLen;
-    if (reader.copyPartial(loffset, &dataLen, sizeof(dataLen)) <
-        sizeof(dataLen)) {
-        return format("Record length truncated in file %s", file.path.c_str());
-    }
-    if (reader.getFileLength() < loffset + sizeof(dataLen) + dataLen) {
-        return format("ProtoBuf truncated in file %s", file.path.c_str());
-    }
-
-    const void* checksumCoverage = reader.get(loffset,
-                                              sizeof(dataLen) + dataLen);
-    std::string error = Core::Checksum::verify(checksum, checksumCoverage,
-                                               sizeof(dataLen) + dataLen);
-    if (!error.empty()) {
-        return format("Checksum verification failure on %s: %s",
-                      file.path.c_str(), error.c_str());
-    }
-    loffset += sizeof(dataLen);
-    const void* data = reader.get(loffset, dataLen);
-    loffset += dataLen;
-
-    switch (encoding) {
-        case SegmentedLog::Encoding::BINARY: {
-            Core::Buffer contents(const_cast<void*>(data),
-                                  Core::Util::downCast<uint32_t>(dataLen),
-                                  NULL);
-            if (!Core::ProtoBuf::parse(contents, *out)) {
-                return format("Failed to parse protobuf in %s",
-                              file.path.c_str());
-            }
-            break;
-        }
-        case SegmentedLog::Encoding::TEXT: {
-            std::string contents(static_cast<const char*>(data), dataLen);
-            Core::ProtoBuf::Internal::fromString(contents, *out);
-            break;
-        }
-    }
-    *offset = loffset;
-    return "";
-}
+/**
+ * Format string for open segment filenames.
+ * First param: incrementing counter.
+ */
+#define OPEN_SEGMENT_FORMAT "open-%lu"
 
 /**
- * \return
- *      The total number of bytes written.
+ * Format string for closed segment filenames.
+ * First param: start index, inclusive.
+ * Second param: end index, inclusive.
  */
+#define CLOSED_SEGMENT_FORMAT "%020lu-%020lu"
+
+/**
+ * Return true if all the bytes in range [start, start + length) are zero.
+ */
+bool
+isAllZeros(const void* _start, size_t length)
+{
+    const uint8_t* start = static_cast<const uint8_t*>(_start);
+    for (size_t offset = 0; offset < length; ++offset) {
+        if (start[offset] != 0)
+            return false;
+    }
+    return true;
+}
+
+} // anonymous namespace
+
+
+////////// SegmentedLog::PreparedSegments //////////
+
+
+SegmentedLog::PreparedSegments::PreparedSegments(uint64_t queueSize)
+    : quietForUnitTests(false)
+    , mutex()
+    , consumed()
+    , produced()
+    , exiting(false)
+    , demanded(queueSize)
+    , filenameCounter(0)
+    , openSegments()
+{
+}
+
+SegmentedLog::PreparedSegments::~PreparedSegments()
+{
+}
+
+void
+SegmentedLog::PreparedSegments::exit()
+{
+    std::unique_lock<Core::Mutex> lockGuard(mutex);
+    exiting = true;
+    consumed.notify_all();
+    produced.notify_all();
+}
+
+void
+SegmentedLog::PreparedSegments::foundFile(uint64_t fileId)
+{
+    std::unique_lock<Core::Mutex> lockGuard(mutex);
+    if (filenameCounter < fileId)
+        filenameCounter = fileId;
+}
+
+std::deque<SegmentedLog::PreparedSegments::OpenSegment>
+SegmentedLog::PreparedSegments::releaseAll()
+{
+    std::unique_lock<Core::Mutex> lockGuard(mutex);
+    std::deque<OpenSegment> ret;
+    std::swap(openSegments, ret);
+    return ret;
+}
+
+void
+SegmentedLog::PreparedSegments::submitOpenSegment(OpenSegment segment)
+{
+    std::unique_lock<Core::Mutex> lockGuard(mutex);
+    openSegments.push_back(std::move(segment));
+    produced.notify_one();
+}
+
 uint64_t
-appendProtoToFile(const google::protobuf::Message& in,
-                  const FS::File& file,
-                  SegmentedLog::Encoding encoding)
+SegmentedLog::PreparedSegments::waitForDemand()
 {
-    const void* data = NULL;
-    uint64_t len = 0;
-    Core::Buffer binaryContents;
-    std::string asciiContents;
-    switch (encoding) {
-        case SegmentedLog::Encoding::BINARY: {
-            Core::ProtoBuf::serialize(in, binaryContents);
-            data = binaryContents.getData();
-            len = binaryContents.getLength();
+    std::unique_lock<Core::Mutex> lockGuard(mutex);
+    while (!exiting) {
+        if (demanded > 0) {
+            --demanded;
+            ++filenameCounter;
+            return filenameCounter;
+        }
+        consumed.wait(lockGuard);
+    }
+    throw Core::Util::ThreadInterruptedException();
+}
+
+SegmentedLog::PreparedSegments::OpenSegment
+SegmentedLog::PreparedSegments::waitForOpenSegment()
+{
+    std::unique_lock<Core::Mutex> lockGuard(mutex);
+    uint64_t numWaits = 0;
+    while (true) {
+        if (exiting) {
+            NOTICE("Exiting");
+            throw Core::Util::ThreadInterruptedException();
+        }
+        if (!openSegments.empty()) {
             break;
         }
-        case SegmentedLog::Encoding::TEXT: {
-            asciiContents = Core::ProtoBuf::dumpString(in);
-            data = asciiContents.data();
-            len = asciiContents.length();
-            break;
+        if (numWaits == 0 && !quietForUnitTests) {
+            WARNING("Prepared segment not ready, having to wait on it. "
+                    "This is perfectly safe but bad for performance. "
+                    "Consider increasing storageOpenSegments in the config.");
         }
+        ++numWaits;
+        produced.wait(lockGuard);
     }
-    char checksum[Core::Checksum::MAX_LENGTH];
-    uint32_t checksumLen = Core::Checksum::calculate(
-            "Adler32",
-            {{&len, sizeof(len)}, // TODO(ongaro): htonl
-             {data, len}},
-             checksum);
-
-    uint64_t start = Core::Time::rdtsc();
-    ssize_t written = FS::write(file.fd, {
-        {checksum, checksumLen},
-        // TODO(ongaro): htonl
-        {&len, sizeof(len)},
-        {data, len},
-    });
-    if (written == -1) {
-        PANIC("Failed to write to %s: %s",
-              file.path.c_str(), strerror(errno));
+    if (numWaits > 0 && !quietForUnitTests) {
+        WARNING("Done waiting: prepared segment now ready");
     }
-    uint64_t end = Core::Time::rdtsc();
-    VERBOSE("writing us: %lu", (end - start) / 2400);
-    return written;
+    OpenSegment r = std::move(openSegments.front());
+    openSegments.pop_front();
+    consumed.notify_one();
+    ++demanded;
+    return r;
 }
 
-Core::Buffer
-serializeProto(const google::protobuf::Message& in)
-{
-    Core::Buffer binaryContents;
-    Core::ProtoBuf::serialize(in, binaryContents);
-    const void* data = binaryContents.getData();
-    uint64_t len = binaryContents.getLength();
-    char checksum[Core::Checksum::MAX_LENGTH];
-    uint32_t checksumLen = Core::Checksum::calculate(
-            "Adler32",
-            {{&len, sizeof(len)}, // TODO(ongaro): htonl
-             {data, len}},
-             checksum);
-
-    uint64_t totalLen = checksumLen + sizeof(len) + len;
-    char* buf = new char[totalLen];
-    Core::Buffer b(buf,
-                   uint32_t(totalLen),
-                   Core::Buffer::deleteArrayFn<char[]>);
-    memcpy(buf, checksum, checksumLen);
-    memcpy(buf + checksumLen, &len, sizeof(len));
-    memcpy(buf + checksumLen + sizeof(len), data, len);
-    return b;
-}
-
-
-}
 
 ////////// SegmentedLog::Sync //////////
+
+
 SegmentedLog::Sync::Sync(uint64_t lastIndex)
     : Log::Sync(lastIndex)
-    , fds()
-    , writes()
+    , ops()
 {
-    // TODO(ongaro): this shouldn't be here. It's to quiet an assertion in
-    // Storage/Log.h.
-    completed = true;
+}
+
+SegmentedLog::Sync::~Sync()
+{
 }
 
 void
 SegmentedLog::Sync::wait()
 {
-
-    uint64_t wrote = 0;
-    for (auto it = writes.begin(); it != writes.end(); ++it) {
-        ssize_t written = FS::write(it->first,
-                it->second.getData(),
-                it->second.getLength());
-        wrote += it->second.getLength();
-        //ERROR("writing %u bytes", it->second.getLength());
-        if (written != it->second.getLength()) {
-            PANIC("Failed to write to %d: %s",
-                  it->first,
-                  strerror(errno));
-        }
-    }
-    int lastDataSynced = -1;
-    for (auto it = fds.begin(); it != fds.end(); ++it) {
-        FS::File f(it->first, "-unknown-");
-        switch (it->second) {
-            case Op::FDATASYNC:
-                if (lastDataSynced != it->first) {
-                    NOTICE("fdatasync after %lu bytes ", wrote);
-                    FS::fdatasync(f);
-                    lastDataSynced = it->first;
+    // This used to skip back-to-back fdatasync calls, presumably for
+    // performance reasons. I removed it, since I have no reason to believe
+    // that it's useful or sufficient.
+    while (!ops.empty()) {
+        Op& op = ops.front();
+        FS::File f(op.fd, "-unknown-");
+        switch (op.opCode) {
+            case Op::WRITE: {
+                ssize_t written = FS::write(op.fd,
+                        op.writeData.getData(),
+                        op.writeData.getLength());
+                if (written < 0) {
+                    PANIC("Failed to write to fd %d: %s",
+                          op.fd,
+                          strerror(errno));
                 }
-                f.release();
                 break;
-            case Op::FSYNC:
-                //ERROR("fsync");
+            }
+            case Op::TRUNCATE: {
+                FS::truncate(f, op.size);
+                break;
+            }
+            case Op::RENAME: {
+                FS::rename(f, op.filename1,
+                           f, op.filename2);
+                break;
+            }
+            case Op::FDATASYNC: {
+                FS::fdatasync(f);
+                break;
+            }
+            case Op::FSYNC: {
                 FS::fsync(f);
-                f.release();
                 break;
-            case Op::CLOSE:
+            }
+            case Op::CLOSE: {
                 f.close();
                 break;
+            }
+            case Op::UNLINKAT: {
+                FS::removeFile(f, op.filename1);
+                break;
+            }
         }
+        f.release();
+        ops.pop_front();
     }
 }
 
 
+////////// SegmentedLog::Segment::Record //////////
+
+
+SegmentedLog::Segment::Record::Record(uint64_t offset)
+    : offset(offset)
+    , entry()
+{
+}
+
+
+////////// SegmentedLog::Segment //////////
+
+SegmentedLog::Segment::Segment()
+    : isOpen(false)
+    , startIndex(~0UL)
+    , endIndex(~0UL - 1)
+    , bytes(0)
+    , filename("--invalid--")
+    , entries()
+{
+}
+
+std::string
+SegmentedLog::Segment::makeClosedFilename() const
+{
+    return format(CLOSED_SEGMENT_FORMAT,
+                  startIndex, endIndex);
+}
+
 ////////// SegmentedLog public functions //////////
 
 
-SegmentedLog::SegmentedLog(const FS::File& parentDir, Encoding encoding)
+SegmentedLog::SegmentedLog(const FS::File& parentDir,
+                           Encoding encoding,
+                           const Core::Config& config)
     : encoding(encoding)
+    , checksumAlgorithm(config.read<std::string>("storageChecksum", "CRC32"))
+    , MAX_SEGMENT_SIZE(config.read<uint64_t>("storageSegmentBytes",
+                                             8 * 1024 * 1024))
+    , shouldCheckInvariants(config.read<bool>("storageDebug", false))
     , metadata()
     , dir(FS::openDir(parentDir, "log"))
     , openSegmentFile()
     , logStartIndex(1)
     , segmentsByStartIndex()
     , totalClosedSegmentBytes(0)
-    , preparedSegmentsMutex()
-    , preparedSegmentConsumed()
-    , preparedSegmentProduced()
-    , segmentPreparerExiting(false)
-    , preparedSegments()
-    , segmentFilenameCounter(1)
+    , preparedSegments(
+        std::max(config.read<uint64_t>("storageOpenSegments", 3),
+                 1UL))
     , currentSync(new SegmentedLog::Sync(0))
     , segmentPreparer()
 {
     std::vector<Segment> segments = readSegmentFilenames();
 
+    bool quiet = config.read<bool>("unittest-quiet", false);
+    preparedSegments.quietForUnitTests = quiet;
     SegmentedLogMetadata::Metadata metadata1;
     SegmentedLogMetadata::Metadata metadata2;
-    std::string error1 = readMetadata("metadata1", metadata1);
-    std::string error2 = readMetadata("metadata2", metadata2);
-    if (error1.empty() && error2.empty()) {
+    bool ok1 = readMetadata("metadata1", metadata1, quiet);
+    bool ok2 = readMetadata("metadata2", metadata2, quiet);
+    if (ok1 && ok2) {
         if (metadata1.version() > metadata2.version())
             metadata = metadata1;
         else
             metadata = metadata2;
-    } else if (error1.empty()) {
+    } else if (ok1) {
         metadata = metadata1;
-    } else if (error2.empty()) {
+    } else if (ok2) {
         metadata = metadata2;
     } else {
-        // Brand new servers won't have metadata.
-        WARNING("Error reading metadata1: %s", error1.c_str());
-        WARNING("Error reading metadata2: %s", error2.c_str());
+        // Brand new servers won't have metadata, and that's ok.
         if (!segments.empty()) {
             PANIC("No readable metadata file but found segments in %s",
                   dir.path.c_str());
@@ -285,18 +324,29 @@ SegmentedLog::SegmentedLog(const FS::File& parentDir, Encoding encoding)
     FS::fsync(dir); // in case metadata files didn't exist
 
 
-    // TODO(ongaro): ignore errors below start index
+    // Read data from segments, closing any open segments.
     for (auto it = segments.begin(); it != segments.end(); ++it) {
         Segment& segment = *it;
-        bool keep = loadSegment(segment);
+        bool keep = segment.isOpen ? loadOpenSegment(segment, logStartIndex)
+                                   : loadClosedSegment(segment, logStartIndex);
         if (keep) {
-            assert(!it->isOpen);
-            segmentsByStartIndex.insert({segment.startIndex,
-                                         std::move(segment)});
+            assert(!segment.isOpen);
+            uint64_t startIndex = segment.startIndex;
+            std::string filename = segment.filename;
+            auto result = segmentsByStartIndex.insert({startIndex,
+                                                       std::move(segment)});
+            if (!result.second) {
+                Segment& other = result.first->second;
+                PANIC("Two segments contain entry %lu: %s and %s",
+                      startIndex,
+                      other.filename.c_str(),
+                      filename.c_str());
+            }
         }
     }
 
-    // Check to make sure no entry is present in more than one segment.
+    // Check to make sure no entry is present in more than one segment,
+    // and that there's no gap in the numbering for entries we have.
     if (!segmentsByStartIndex.empty()) {
         uint64_t nextIndex = segmentsByStartIndex.begin()->first;
         for (auto it = segmentsByStartIndex.begin();
@@ -305,62 +355,56 @@ SegmentedLog::SegmentedLog(const FS::File& parentDir, Encoding encoding)
             Segment& segment = it->second;
             if (nextIndex < segment.startIndex) {
                 PANIC("Did not find segment containing entries "
-                      "%16lx to %16lx (inclusive)",
+                      "%lu to %lu (inclusive)",
                       nextIndex, segment.startIndex - 1);
             } else if (segment.startIndex < nextIndex) {
                 PANIC("Segment %s contains duplicate entries "
-                      "%16lx to %16lx (inclusive)",
+                      "%lu to %lu (inclusive)",
                       segment.filename.c_str(),
-                      segment.startIndex, nextIndex - 1);
+                      segment.startIndex,
+                      std::min(segment.endIndex,
+                               nextIndex - 1));
             }
             nextIndex = segment.endIndex + 1;
         }
     }
 
-    { // Open a segment to write new entries into.
-        Segment newSegment;
-        newSegment.isOpen = true;
-        newSegment.startIndex = getLastLogIndex() + 1;
-        newSegment.endIndex = newSegment.startIndex - 1;
-        newSegment.bytes = 0;
-        std::pair<std::string, FS::File> prepared =
-            prepareNewSegment();
-        newSegment.filename = prepared.first;
-        openSegmentFile = std::move(prepared.second);
-        segmentsByStartIndex.insert({newSegment.startIndex, newSegment});
-    }
+    // Open a segment to write new entries into.
+    uint64_t fileId = preparedSegments.waitForDemand();
+    preparedSegments.submitOpenSegment(
+        prepareNewSegment(fileId));
+    openNewSegment();
 
     // Launch the segment preparer thread so that we'll have a source for
     // additional new segments.
     segmentPreparer = std::thread(&SegmentedLog::segmentPreparerMain, this);
-
-    // Remove any unneeded segments and entries.
-    truncatePrefix(logStartIndex);
 
     checkInvariants();
 }
 
 SegmentedLog::~SegmentedLog()
 {
-    {
-        Sync sync(0);
-        closeSegment(sync);
-        sync.wait();
-    }
+    NOTICE("Closing open segment");
+    closeSegment();
 
     // Stop preparing segments and delete the extras.
-    {
-        std::unique_lock<Core::Mutex> lockGuard(preparedSegmentsMutex);
-        segmentPreparerExiting = true;
-        preparedSegmentConsumed.notify_all();
-    }
+    preparedSegments.exit();
     if (segmentPreparer.joinable())
         segmentPreparer.join();
-    while (!preparedSegments.empty()) {
-        FS::removeFile(dir, preparedSegments.front().first);
-        preparedSegments.pop_front();
+    auto prepared = preparedSegments.releaseAll();
+    while (!prepared.empty()) {
+        std::string filename = prepared.front().first;
+        NOTICE("Removing unused open segment: %s",
+               filename.c_str());
+        FS::removeFile(dir, filename);
+        prepared.pop_front();
     }
     FS::fsync(dir);
+
+    // Keep assertion in Log.h happy. No need to "take" and "complete" this
+    // sync since no operations were performed.
+    if (currentSync->ops.empty())
+        currentSync->completed = true;
 }
 
 std::pair<uint64_t, uint64_t>
@@ -370,41 +414,74 @@ SegmentedLog::append(const std::vector<const Entry*>& entries)
     uint64_t startIndex = openSegment->endIndex + 1;
     uint64_t index = startIndex;
     for (auto it = entries.begin(); it != entries.end(); ++it) {
-        // TODO(ongaro): Awful break of abstraction here, this knows way too
-        // much about appendProtoToFile
-        // TODO(ongaro): this also uses it->ByteSize() before it has an index
-        uint64_t testBytes = (openSegment->bytes +
-             Core::Checksum::MAX_LENGTH +
-             8 +
-             16 +
-             (*it)->ByteSize());
-        if (testBytes >
-            MAX_SEGMENT_SIZE) {
-            NOTICE("roll segments");
-            closeSegment(*currentSync);
+        Segment::Record record(openSegment->bytes);
+        // Note that record.offset may change later, if this entry doesn't fit.
+        record.entry = **it;
+        record.entry.set_index(index);
+        Core::Buffer buf = serializeProto(record.entry);
+
+        // See if we need to roll over to a new head segment. If someone is
+        // writing an entry that is bigger than MAX_SEGMENT_SIZE, just put it
+        // in its own segment. This duplicates some code from closeSegment(),
+        // but queues up the operations into 'currentSync'.
+        if (openSegment->bytes > 0 &&
+            openSegment->bytes + buf.getLength() > MAX_SEGMENT_SIZE) {
+            NOTICE("Rolling over to new head segment: trying to append new "
+                   "entry that is %u bytes long, but open segment is already "
+                   "%lu of %lu bytes large",
+                   buf.getLength(),
+                   openSegment->bytes,
+                   MAX_SEGMENT_SIZE);
+
+            // Truncate away any extra 0 bytes at the end from when
+            // MAX_SEGMENT_SIZE was allocated.
+            currentSync->ops.emplace_back(openSegmentFile.fd,
+                                          Sync::Op::TRUNCATE);
+            currentSync->ops.back().size = openSegment->bytes;
+            currentSync->ops.emplace_back(openSegmentFile.fd,
+                                          Sync::Op::FSYNC);
+            currentSync->ops.emplace_back(openSegmentFile.release(),
+                                          Sync::Op::CLOSE);
+
+            // Rename the file.
+            std::string newFilename = openSegment->makeClosedFilename();
+            NOTICE("Closing full segment (was %s, renaming to %s)",
+                   openSegment->filename.c_str(),
+                   newFilename.c_str());
+            currentSync->ops.emplace_back(dir.fd, Sync::Op::RENAME);
+            currentSync->ops.back().filename1 = openSegment->filename;
+            currentSync->ops.back().filename2 = newFilename;
+            currentSync->ops.emplace_back(dir.fd, Sync::Op::FSYNC);
+            openSegment->filename = newFilename;
+
+            // Bookkeeping.
+            openSegment->isOpen = false;
+            totalClosedSegmentBytes += openSegment->bytes;
+
+            // Open new segment.
             openNewSegment();
             openSegment = &getOpenSegment();
+            record.offset = 0;
         }
-        uint64_t offset = openSegment->bytes;
-        openSegment->entries.emplace_back(offset);
-        openSegment->entries.back().entry = **it;
-        openSegment->entries.back().entry.set_index(index);
-#if 0
-        uint64_t actBytes = appendProtoToFile(openSegment->entries.back().entry,
-                                              openSegmentFile,
-                                              Encoding::BINARY);
-#else
-        Core::Buffer buf = serializeProto(openSegment->entries.back().entry);
-        uint64_t actBytes = buf.getLength();
-        currentSync->writes.push_back({openSegmentFile.fd, std::move(buf)});
-#endif
-        if (actBytes > testBytes)
-            PANIC("actBytes: %lu, testBytes: %lu", actBytes, testBytes);
-        openSegment->bytes += actBytes;
+
+        if (buf.getLength() > MAX_SEGMENT_SIZE) {
+            WARNING("Trying to append an entry of %u bytes when the maximum "
+                    "segment size is %lu bytes. Placing this entry in its own "
+                    "segment. Consider adjusting 'storageSegmentBytes' in the "
+                    "config.",
+                    buf.getLength(),
+                    MAX_SEGMENT_SIZE);
+        }
+
+        openSegment->entries.emplace_back(std::move(record));
+        openSegment->bytes += buf.getLength();
+        currentSync->ops.emplace_back(openSegmentFile.fd, Sync::Op::WRITE);
+        currentSync->ops.back().writeData = std::move(buf);
         ++openSegment->endIndex;
         ++index;
     }
-    currentSync->fds.push_back({openSegmentFile.fd, Sync::Op::FDATASYNC});
+
+    currentSync->ops.emplace_back(openSegmentFile.fd, Sync::Op::FDATASYNC);
     currentSync->lastIndex = getLastLogIndex();
     checkInvariants();
     return {startIndex, getLastLogIndex()};
@@ -466,6 +543,8 @@ SegmentedLog::truncatePrefix(uint64_t newStartIndex)
     if (newStartIndex <= logStartIndex)
         return;
 
+    NOTICE("Truncating log to start at index %lu (was %lu)",
+           newStartIndex, logStartIndex);
     logStartIndex = newStartIndex;
     // update metadata before removing files in case of interruption
     updateMetadata();
@@ -474,18 +553,24 @@ SegmentedLog::truncatePrefix(uint64_t newStartIndex)
         Segment& segment = segmentsByStartIndex.begin()->second;
         if (logStartIndex <= segment.endIndex)
             break;
-        NOTICE("Deleting unneeded segment %s",
-               segment.filename.c_str());
-        FS::removeFile(dir, segment.filename);
-        if (segment.isOpen)
-            openSegmentFile.close();
-        else
+        NOTICE("Deleting unneeded segment %s (its end index is %lu)",
+               segment.filename.c_str(),
+               segment.endIndex);
+        currentSync->ops.emplace_back(dir.fd, Sync::Op::UNLINKAT);
+        currentSync->ops.back().filename1 = segment.filename;
+        if (segment.isOpen) {
+            currentSync->ops.emplace_back(openSegmentFile.release(),
+                                          Sync::Op::CLOSE);
+        } else {
             totalClosedSegmentBytes -= segment.bytes;
+        }
         segmentsByStartIndex.erase(segmentsByStartIndex.begin());
     }
 
     if (segmentsByStartIndex.empty())
         openNewSegment();
+    if (currentSync->lastIndex < logStartIndex - 1)
+        currentSync->lastIndex = logStartIndex - 1;
     checkInvariants();
 }
 
@@ -495,7 +580,10 @@ SegmentedLog::truncateSuffix(uint64_t newEndIndex)
     if (newEndIndex >= getLastLogIndex())
         return;
 
-    {
+    NOTICE("Truncating log to end at index %lu (was %lu)",
+           newEndIndex, getLastLogIndex());
+    { // Check if the open segment has some entries we need. If so,
+      // just truncate that segment, open a new one, and return.
         Segment& openSegment = getOpenSegment();
         if (newEndIndex >= openSegment.startIndex) {
             // Update in-memory segment
@@ -506,9 +594,7 @@ SegmentedLog::truncateSuffix(uint64_t newEndIndex)
                 openSegment.entries.end());
             openSegment.endIndex = newEndIndex;
             // Truncate and close the open segment, and open a new one.
-            Sync sync(0);
-            closeSegment(sync);
-            sync.wait();
+            closeSegment();
             openNewSegment();
             checkInvariants();
             return;
@@ -519,9 +605,7 @@ SegmentedLog::truncateSuffix(uint64_t newEndIndex)
         Segment& openSegment = getOpenSegment();
         openSegment.endIndex = openSegment.startIndex - 1;
         openSegment.bytes = 0;
-        Sync sync(0);
-        closeSegment(sync);
-        sync.wait();
+        closeSegment();
     }
 
     // Remove and/or truncate closed segments.
@@ -531,6 +615,7 @@ SegmentedLog::truncateSuffix(uint64_t newEndIndex)
         if (segment.endIndex == newEndIndex)
             break;
         if (segment.startIndex > newEndIndex) { // remove segment
+            NOTICE("Removing closed segment %s", segment.filename.c_str());
             FS::removeFile(dir, segment.filename);
             FS::fsync(dir);
             totalClosedSegmentBytes -= segment.bytes;
@@ -547,9 +632,10 @@ SegmentedLog::truncateSuffix(uint64_t newEndIndex)
             segment.endIndex = newEndIndex;
 
             // Rename the file
-            std::string newFilename = format("%016lx-%016lx",
-                                             segment.startIndex,
-                                             segment.endIndex);
+            std::string newFilename = segment.makeClosedFilename();
+            NOTICE("Truncating closed segment (was %s, renaming to %s)",
+                   segment.filename.c_str(),
+                   newFilename.c_str());
             FS::rename(dir, segment.filename,
                        dir, newFilename);
             FS::fsync(dir);
@@ -574,6 +660,7 @@ SegmentedLog::updateMetadata()
         metadata.clear_raft_metadata();
     else
         *metadata.mutable_raft_metadata() = Log::metadata;
+    metadata.set_format_version(1);
     metadata.set_entries_start(logStartIndex);
     metadata.set_version(metadata.version() + 1);
     std::string filename;
@@ -583,9 +670,28 @@ SegmentedLog::updateMetadata()
         filename = "metadata2";
     }
 
+    NOTICE("Writing new storage metadata (version %lu) to %s",
+           metadata.version(),
+           filename.c_str());
     FS::File file = FS::openFile(dir, filename, O_CREAT|O_WRONLY|O_TRUNC);
-    appendProtoToFile(metadata, file, encoding);
+    Core::Buffer record = serializeProto(metadata);
+    ssize_t written = FS::write(file.fd,
+                                record.getData(),
+                                record.getLength());
+    if (written == -1) {
+        PANIC("Failed to write to %s: %s",
+              file.path.c_str(), strerror(errno));
+    }
     FS::fsync(file);
+}
+
+void
+SegmentedLog::updateServerStats(Protocol::ServerStats& serverStats) const
+{
+    Protocol::ServerStats::Storage& stats = *serverStats.mutable_storage();
+    stats.set_num_segments(segmentsByStartIndex.size());
+    stats.set_open_segment_bytes(getOpenSegment().bytes);
+    stats.set_metadata_version(metadata.version());
 }
 
 
@@ -597,11 +703,12 @@ SegmentedLog::readSegmentFilenames()
 {
     std::vector<Segment> segments;
     std::vector<std::string> filenames = FS::ls(dir);
+    // sorting isn't strictly necessary, but it helps with unit tests
+    std::sort(filenames.begin(), filenames.end());
     for (auto it = filenames.begin(); it != filenames.end(); ++it) {
         const std::string& filename = *it;
         if (filename == "metadata1" ||
-            filename == "metadata2" ||
-            filename == "unknown") {
+            filename == "metadata2") {
             continue;
         }
         Segment segment;
@@ -611,7 +718,8 @@ SegmentedLog::readSegmentFilenames()
             uint64_t startIndex = 1;
             uint64_t endIndex = 0;
             unsigned bytesConsumed;
-            int matched = sscanf(filename.c_str(), "%016lx-%016lx%n", // NOLINT
+            int matched = sscanf(filename.c_str(),
+                                 CLOSED_SEGMENT_FORMAT "%n",
                                  &startIndex, &endIndex,
                                  &bytesConsumed);
             if (matched == 2 && bytesConsumed == filename.length()) {
@@ -626,7 +734,8 @@ SegmentedLog::readSegmentFilenames()
         { // Open segment: open-xxx
             uint64_t counter;
             unsigned bytesConsumed;
-            int matched = sscanf(filename.c_str(), "open-%lu%n", // NOLINT
+            int matched = sscanf(filename.c_str(),
+                                 OPEN_SEGMENT_FORMAT "%n",
                                  &counter,
                                  &bytesConsumed);
             if (matched == 1 && bytesConsumed == filename.length()) {
@@ -634,9 +743,7 @@ SegmentedLog::readSegmentFilenames()
                 segment.startIndex = ~0UL;
                 segment.endIndex = ~0UL - 1;
                 segments.push_back(segment);
-                if (segmentFilenameCounter <= counter) {
-                    segmentFilenameCounter = counter + 1;
-                }
+                preparedSegments.foundFile(counter);
                 continue;
             }
         }
@@ -649,99 +756,170 @@ SegmentedLog::readSegmentFilenames()
     return segments;
 }
 
-
-std::string
+bool
 SegmentedLog::readMetadata(const std::string& filename,
-                            SegmentedLogMetadata::Metadata& metadata) const
+                           SegmentedLogMetadata::Metadata& metadata,
+                           bool quiet) const
 {
+    std::string error;
     FS::File file = FS::tryOpenFile(dir, filename, O_RDONLY);
     if (file.fd == -1) {
-        return format("Could not open %s/%s: %s",
-                      dir.path.c_str(), filename.c_str(), strerror(errno));
+        error = format("Could not open %s/%s: %s",
+                       dir.path.c_str(), filename.c_str(), strerror(errno));
+    } else {
+        FS::FileContents reader(file);
+        uint64_t offset = 0;
+        error = readProtoFromFile(file, reader, &offset, &metadata);
     }
-    FS::FileContents reader(file);
-    uint64_t offset = 0;
-    return readProtoFromFile(file, reader, &offset, &metadata,
-                             encoding);
+    if (error.empty()) {
+        if (metadata.format_version() > 1) {
+            PANIC("The format version found in %s is %lu but this code "
+                  "only understands version 1",
+                  filename.c_str(),
+                  metadata.format_version());
+        }
+        NOTICE("Read metadata version %lu from %s",
+               metadata.version(), filename.c_str());
+        return true;
+    } else {
+        if (!quiet) {
+            WARNING("Error reading metadata from %s: %s",
+                    filename.c_str(), error.c_str());
+        }
+        return false;
+    }
 }
 
 bool
-SegmentedLog::loadSegment(Segment& segment)
+SegmentedLog::loadClosedSegment(Segment& segment, uint64_t logStartIndex)
 {
+    assert(!segment.isOpen);
     FS::File file = FS::openFile(dir, segment.filename, O_RDWR);
     FS::FileContents reader(file);
     uint64_t offset = 0;
-    if (segment.isOpen) {
-        while (offset < reader.getFileLength()) {
+    if (segment.endIndex < logStartIndex) {
+        NOTICE("Removing closed segment whose entries are no longer "
+               "needed (last index is %lu but log start index is %lu): %s",
+               segment.endIndex,
+               logStartIndex,
+               segment.filename.c_str());
+        FS::removeFile(dir, segment.filename);
+        FS::fsync(dir);
+        return false;
+    }
+    for (uint64_t index = segment.startIndex;
+         index <= segment.endIndex;
+         ++index) {
+        std::string error;
+        if (offset >= reader.getFileLength()) {
+            error = "File too short";
+        } else {
             segment.entries.emplace_back(offset);
-            std::string error = readProtoFromFile(file, reader, &offset,
-                                                  &segment.entries.back().entry,
-                                                  encoding);
-            if (!error.empty()) {
-                segment.entries.pop_back();
+            error = readProtoFromFile(file, reader, &offset,
+                                      &segment.entries.back().entry);
+        }
+        if (!error.empty()) {
+            PANIC("Could not read entry %lu in log segment %s "
+                  "(offset %lu bytes). This indicates the file was "
+                  "somehow corrupted. Error was: %s",
+                  index,
+                  segment.filename.c_str(),
+                  offset,
+                  error.c_str());
+        }
+    }
+    if (offset < reader.getFileLength()) {
+        WARNING("Found an extra %lu bytes at the end of closed segment "
+                "%s. This can happen if the server crashed while "
+                "truncating the segment. Truncating these now.",
+                reader.getFileLength() - offset,
+                segment.filename.c_str());
+        // TODO(ongaro): do we want to save these bytes somewhere?
+        FS::truncate(file, offset);
+        FS::fsync(file);
+    }
+    segment.bytes = offset;
+    totalClosedSegmentBytes += segment.bytes;
+    return true;
+}
+
+bool
+SegmentedLog::loadOpenSegment(Segment& segment, uint64_t logStartIndex)
+{
+    assert(segment.isOpen);
+    FS::File file = FS::openFile(dir, segment.filename, O_RDWR);
+    FS::FileContents reader(file);
+    uint64_t offset = 0;
+    uint64_t lastIndex = 0;
+    while (offset < reader.getFileLength()) {
+        segment.entries.emplace_back(offset);
+        std::string error = readProtoFromFile(
+                file,
+                reader,
+                &offset,
+                &segment.entries.back().entry);
+        if (!error.empty()) {
+            segment.entries.pop_back();
+            uint64_t remainingBytes = reader.getFileLength() - offset;
+            if (isAllZeros(reader.get(offset, remainingBytes),
+                           remainingBytes)) {
+                WARNING("Truncating %lu zero bytes at the end of log "
+                        "segment %s (%lu bytes into the segment, "
+                        "following  entry %lu). This is most likely "
+                        "because the server shutdown uncleanly.",
+                        remainingBytes,
+                        segment.filename.c_str(),
+                        offset,
+                        lastIndex);
+            } else {
+                // TODO(ongaro): do we want to save these bytes somewhere?
                 WARNING("Could not read entry in log segment %s "
-                        "(offset %lu), probably because it was being "
+                        "(%lu bytes into the segment, following "
+                        "entry %lu), probably because it was being "
                         "written when the server crashed. Discarding the "
                         "remainder of the file (%lu bytes). Error was: %s",
                         segment.filename.c_str(),
                         offset,
-                        reader.getFileLength() - offset,
+                        lastIndex,
+                        remainingBytes,
                         error.c_str());
-                FS::truncate(file, offset);
-                FS::fsync(file);
-                break;
             }
+            FS::truncate(file, offset);
+            FS::fsync(file);
+            break;
         }
-        if (segment.entries.empty()) {
-            FS::removeFile(dir, segment.filename);
-            FS::fsync(dir);
-            return false;
-        } else {
-            segment.bytes = offset;
-            totalClosedSegmentBytes += segment.bytes;
-            segment.isOpen = false;
-            segment.startIndex = segment.entries.front().entry.index();
-            segment.endIndex = segment.entries.back().entry.index();
-            std::string newFilename = format("%016lx-%016lx",
-                                             segment.startIndex,
-                                             segment.endIndex);
-            FS::rename(dir, segment.filename,
-                       dir, newFilename);
-            FS::fsync(dir);
-            segment.filename = newFilename;
-            return true;
-        }
-    } else { /* !segment.isOpen */
-        for (uint64_t index = segment.startIndex;
-             index <= segment.endIndex;
-             ++index) {
-            segment.entries.emplace_back(offset);
-            std::string error;
-            if (offset > reader.getFileLength()) {
-                error = "File too short";
-            } else {
-                error = readProtoFromFile(file, reader, &offset,
-                                          &segment.entries.back().entry,
-                                          encoding);
-            }
-            if (!error.empty()) {
-                PANIC("Could not read entry %lu in log segment %s "
-                      "(offset %lu). This indicates the file was somehow "
-                      "corrupted. Error was: %s",
-                      index,
-                      segment.filename.c_str(),
-                      offset,
-                      error.c_str());
-            }
-        }
-        if (offset < reader.getFileLength()) {
-            WARNING("Ignoring %lu bytes at the end of closed segment %s. "
-                    "This can happen if the server crashed while truncating "
-                    "the segment.",
-                    reader.getFileLength() - offset, segment.filename.c_str());
-        }
+        lastIndex = segment.entries.back().entry.index();
+    }
+    bool remove = false;
+    if (segment.entries.empty()) {
+        NOTICE("Removing empty segment: %s", segment.filename.c_str());
+        remove = true;
+    } else if (segment.entries.back().entry.index() < logStartIndex) {
+        NOTICE("Removing open segment whose entries are no longer "
+               "needed (last index is %lu but log start index is %lu): %s",
+               segment.entries.back().entry.index(),
+               logStartIndex,
+               segment.filename.c_str());
+        remove = true;
+    }
+    if (remove) {
+        FS::removeFile(dir, segment.filename);
+        FS::fsync(dir);
+        return false;
+    } else {
         segment.bytes = offset;
         totalClosedSegmentBytes += segment.bytes;
+        segment.isOpen = false;
+        segment.startIndex = segment.entries.front().entry.index();
+        segment.endIndex = segment.entries.back().entry.index();
+        std::string newFilename = segment.makeClosedFilename();
+        NOTICE("Closing open segment %s, renaming to %s",
+                segment.filename.c_str(),
+                newFilename.c_str());
+        FS::rename(dir, segment.filename,
+                   dir, newFilename);
+        FS::fsync(dir);
+        segment.filename = newFilename;
         return true;
     }
 }
@@ -753,11 +931,14 @@ SegmentedLog::loadSegment(Segment& segment)
 void
 SegmentedLog::checkInvariants()
 {
+    if (!shouldCheckInvariants)
+        return;
 #if DEBUG
     assert(openSegmentFile.fd >= 0);
     assert(!segmentsByStartIndex.empty());
     assert(logStartIndex >= segmentsByStartIndex.begin()->second.startIndex);
     assert(logStartIndex <= segmentsByStartIndex.begin()->second.endIndex + 1);
+    assert(currentSync.get() != NULL);
     uint64_t closedBytes = 0;
     for (auto it = segmentsByStartIndex.begin();
          it != segmentsByStartIndex.end();
@@ -767,12 +948,17 @@ SegmentedLog::checkInvariants()
         Segment& segment = it->second;
         assert(it->first == segment.startIndex);
         assert(segment.startIndex > 0);
-        assert(segment.bytes <= MAX_SEGMENT_SIZE);
         assert(segment.entries.size() ==
                segment.endIndex + 1 - segment.startIndex);
+        uint64_t lastOffset = 0;
         for (uint64_t i = 0; i < segment.entries.size(); ++i) {
             assert(segment.entries.at(i).entry.index() ==
                    segment.startIndex + i);
+            if (i == 0)
+                assert(segment.entries.at(0).offset == 0);
+            else
+                assert(segment.entries.at(i).offset > lastOffset);
+            lastOffset = segment.entries.at(i).offset;
         }
         if (next == segmentsByStartIndex.end()) {
             assert(segment.isOpen);
@@ -784,44 +970,47 @@ SegmentedLog::checkInvariants()
             assert(next->second.startIndex == segment.endIndex + 1);
             assert(segment.bytes > 0);
             closedBytes += segment.bytes;
-            assert(segment.filename == format("%016lx-%016lx",
-                                              segment.startIndex,
-                                              segment.endIndex));
+            assert(segment.filename == segment.makeClosedFilename());
         }
     }
     assert(closedBytes == totalClosedSegmentBytes);
-#endif
+#endif /* DEBUG */
 }
 
 void
-SegmentedLog::closeSegment(Sync& sync)
+SegmentedLog::closeSegment()
 {
     if (openSegmentFile.fd < 0)
         return;
     Segment& openSegment = getOpenSegment();
     if (openSegment.startIndex > openSegment.endIndex) {
         // Segment is empty; just remove it.
-        WARNING("Removing empty segment");
+        NOTICE("Removing empty open segment (start index %lu): %s",
+               openSegment.startIndex,
+               openSegment.filename.c_str());
         openSegmentFile.close();
         FS::removeFile(dir, openSegment.filename);
-        sync.fds.push_back({dir.fd, Sync::Op::FSYNC});
+        FS::fsync(dir);
         segmentsByStartIndex.erase(openSegment.startIndex);
         return;
     }
+
+    // Truncate away any extra 0 bytes at the end from when
+    // MAX_SEGMENT_SIZE was allocated, or in the case of truncateSuffix,
+    // truncate away actual entries that are no longer desired.
+    FS::truncate(openSegmentFile, openSegment.bytes);
+    FS::fsync(openSegmentFile);
+    openSegmentFile.close();
+
     // Rename the file.
-    std::string newFilename = format("%016lx-%016lx",
-                                     openSegment.startIndex,
-                                     openSegment.endIndex);
+    std::string newFilename = openSegment.makeClosedFilename();
+    NOTICE("Closing segment (was %s, renaming to %s)",
+           openSegment.filename.c_str(),
+           newFilename.c_str());
     FS::rename(dir, openSegment.filename,
                dir, newFilename);
-    sync.fds.push_back({dir.fd, Sync::Op::FSYNC});
+    FS::fsync(dir);
     openSegment.filename = newFilename;
-
-    // truncate away any extra 0 bytes at the end from when
-    // MAX_SEGMENT_SIZE was allocated
-    FS::truncate(openSegmentFile, openSegment.bytes);
-    sync.fds.push_back({openSegmentFile.fd, Sync::Op::FSYNC});
-    sync.fds.push_back({openSegmentFile.release(), Sync::Op::CLOSE});
 
     openSegment.isOpen = false;
     totalClosedSegmentBytes += openSegment.bytes;
@@ -853,57 +1042,148 @@ SegmentedLog::openNewSegment()
     newSegment.startIndex = getLastLogIndex() + 1;
     newSegment.endIndex = newSegment.startIndex - 1;
     newSegment.bytes = 0;
-    {
-        std::unique_lock<Core::Mutex> lockGuard(preparedSegmentsMutex);
-        while (preparedSegments.empty()) {
-            WARNING("Prepared segment not ready, having to wait on it. "
-                    "This is perfectly safe but bad for performance.");
-            preparedSegmentProduced.wait(lockGuard);
-            if (!preparedSegments.empty())
-                WARNING("Done waiting, prepared segment now ready");
-        }
-        newSegment.filename = std::move(preparedSegments.front().first);
-        openSegmentFile = std::move(preparedSegments.front().second);
-        preparedSegments.pop_front();
-        preparedSegmentConsumed.notify_all();
-    }
+    // This can throw ThreadInterruptedException, but it shouldn't ever, since
+    // this class shouldn't have been destroyed yet.
+    auto s = preparedSegments.waitForOpenSegment();
+    newSegment.filename = s.first;
+    openSegmentFile = std::move(s.second);
     segmentsByStartIndex.insert({newSegment.startIndex, newSegment});
+}
+
+std::string
+SegmentedLog::readProtoFromFile(const FS::File& file,
+                                FS::FileContents& reader,
+                                uint64_t* offset,
+                                google::protobuf::Message* out) const
+{
+    uint64_t loffset = *offset;
+    char checksum[Core::Checksum::MAX_LENGTH];
+    uint64_t bytesRead = reader.copyPartial(loffset, checksum,
+                                            sizeof(checksum));
+    uint32_t checksumBytes = Core::Checksum::length(checksum,
+                                                    uint32_t(bytesRead));
+    if (checksumBytes == 0)
+        return format("Missing checksum in file %s", file.path.c_str());
+    loffset += checksumBytes;
+
+    uint64_t dataLen;
+    if (reader.copyPartial(loffset, &dataLen, sizeof(dataLen)) <
+        sizeof(dataLen)) {
+        return format("Record length truncated in file %s", file.path.c_str());
+    }
+    dataLen = be64toh(dataLen);
+    if (reader.getFileLength() < loffset + sizeof(dataLen) + dataLen) {
+        return format("ProtoBuf truncated in file %s", file.path.c_str());
+    }
+
+    const void* checksumCoverage = reader.get(loffset,
+                                              sizeof(dataLen) + dataLen);
+    std::string error = Core::Checksum::verify(checksum, checksumCoverage,
+                                               sizeof(dataLen) + dataLen);
+    if (!error.empty()) {
+        return format("Checksum verification failure on %s: %s",
+                      file.path.c_str(), error.c_str());
+    }
+    loffset += sizeof(dataLen);
+    const void* data = reader.get(loffset, dataLen);
+    loffset += dataLen;
+
+    switch (encoding) {
+        case SegmentedLog::Encoding::BINARY: {
+            Core::Buffer contents(const_cast<void*>(data),
+                                  Core::Util::downCast<uint32_t>(dataLen),
+                                  NULL);
+            if (!Core::ProtoBuf::parse(contents, *out)) {
+                return format("Failed to parse protobuf in %s",
+                              file.path.c_str());
+            }
+            break;
+        }
+        case SegmentedLog::Encoding::TEXT: {
+            std::string contents(static_cast<const char*>(data), dataLen);
+            Core::ProtoBuf::Internal::fromString(contents, *out);
+            break;
+        }
+    }
+    *offset = loffset;
+    return "";
+}
+
+Core::Buffer
+SegmentedLog::serializeProto(const google::protobuf::Message& in) const
+{
+    // TODO(ongaro): can the intermediate buffer be avoided?
+    const void* data = NULL;
+    uint64_t len = 0;
+    Core::Buffer binaryContents;
+    std::string asciiContents;
+    switch (encoding) {
+        case SegmentedLog::Encoding::BINARY: {
+            Core::ProtoBuf::serialize(in, binaryContents);
+            data = binaryContents.getData();
+            len = binaryContents.getLength();
+            break;
+        }
+        case SegmentedLog::Encoding::TEXT: {
+            asciiContents = Core::ProtoBuf::dumpString(in);
+            data = asciiContents.data();
+            len = asciiContents.length();
+            break;
+        }
+    }
+    uint64_t netLen = htobe64(len);
+    char checksum[Core::Checksum::MAX_LENGTH];
+    uint32_t checksumLen = Core::Checksum::calculate(
+        checksumAlgorithm.c_str(), {
+            {&netLen, sizeof(netLen)},
+            {data, len},
+        },
+        checksum);
+
+    uint64_t totalLen = checksumLen + sizeof(netLen) + len;
+    char* buf = new char[totalLen];
+    Core::Buffer record(
+        buf,
+        uint32_t(totalLen),
+        Core::Buffer::deleteArrayFn<char[]>);
+    Core::Util::memcpy(buf, {
+        {checksum, checksumLen},
+        {&netLen, sizeof(netLen)},
+        {data, len},
+    });
+    return record;
 }
 
 
 ////////// SegmentedLog segment preparer thread functions //////////
 
-
 std::pair<std::string, FS::File>
-SegmentedLog::prepareNewSegment()
+SegmentedLog::prepareNewSegment(uint64_t id)
 {
-    std::string filename = format("open-%lu", ++segmentFilenameCounter);
-    FS::File segment = FS::openFile(dir, filename,
-                                    O_CREAT|O_WRONLY|O_EXCL);
-    FS::allocate(segment, 0, MAX_SEGMENT_SIZE);
-    FS::fsync(segment);
+    std::string filename = format(OPEN_SEGMENT_FORMAT, id);
+    FS::File file = FS::openFile(dir, filename,
+                                 O_CREAT|O_EXCL|O_RDWR);
+    FS::allocate(file, 0, MAX_SEGMENT_SIZE);
+    FS::fsync(file);
     FS::fsync(dir);
-    return {std::move(filename), std::move(segment)};
+    return {std::move(filename), std::move(file)};
 }
+
 
 void
 SegmentedLog::segmentPreparerMain()
 {
-    std::unique_lock<Core::Mutex> lockGuard(preparedSegmentsMutex);
     Core::ThreadId::setName("SegmentPreparer");
-    while (!segmentPreparerExiting) {
-        if (preparedSegments.size() < 3) {
-            std::pair<std::string, FS::File> segment;
-            {
-                // release lock for concurrency
-                Core::MutexUnlock<Core::Mutex> unlockGuard(lockGuard);
-                segment = prepareNewSegment();
-            }
-            preparedSegments.push_back(std::move(segment));
-            preparedSegmentProduced.notify_all();
-            continue;
+    while (true) {
+        uint64_t fileId = 0;
+        try {
+            fileId = preparedSegments.waitForDemand();
+        } catch (const Core::Util::ThreadInterruptedException& e) {
+            VERBOSE("Exiting");
+            break;
         }
-        preparedSegmentConsumed.wait(lockGuard);
+        preparedSegments.submitOpenSegment(
+            prepareNewSegment(fileId));
     }
 }
 

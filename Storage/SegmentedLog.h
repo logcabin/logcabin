@@ -29,37 +29,42 @@
 #define LOGCABIN_STORAGE_SEGMENTEDLOG_H
 
 namespace LogCabin {
-namespace Storage {
 
+// forward declaration
+namespace Core {
+class Config;
+}
+
+namespace Storage {
 
 /**
  * This class persists a log on the filesystem efficiently.
  *
  * The log entries on disk are stored in a series of files called segments, and
  * each segment is about 8MB in size. Thus, most small appends do not need to
- * TODO: where's the rest of this sentence
- *
+ * update filesystem metadata and can proceed with a single consecutive disk
+ * write.
  *
  * The disk files consist of metadata files, closed segments, and open
- * segments. Metadata files are used to track Raft metadata such as the
- * server's current term but also the log's start index. Segments contain
+ * segments. Metadata files are used to track Raft metadata, such as the
+ * server's current term, and also the log's start index. Segments contain
  * contiguous entries that are part of the log. Closed segments are never
- * written to again (but may be truncated if a suffix of the log is truncated).
- * Open segments are where newly appended entries go. Once an open segment
- * reaches MAX_SEGMENT_SIZE, it is closed and a new one is used.
+ * written to again (but may be renamed and truncated if a suffix of the log is
+ * truncated). Open segments are where newly appended entries go. Once an open
+ * segment reaches MAX_SEGMENT_SIZE, it is closed and a new one is used.
  *
  * Metadata files are named "metadata1" and "metadata2". The code alternates
  * between these so that there is always at least one readable metadata file.
  * On boot, the readable metadata file with the higher version number is used.
  *
- * Closed segments are named by the format string "%016lx-%016lx" with their
+ * Closed segments are named by the format string "%020lu-%020lu" with their
  * start and end indexes, both inclusive. Closed segments always contain at
  * least one entry; the end index is always at least as large as the start
  * index. Closed segment files may occasionally include data past their
  * filename's end index (these are ignored but a WARNING is issued). This can
  * happen if the suffix of the segment is truncated and a crash occurs at an
- * inopportune time (the segment file is first renamed, then truncated, and
- * this situation occurs when a crash occurs in between).
+ * inopportune time (the segment file is first renamed, then truncated, and a
+ * crash occurs in between).
  *
  * Open segments are named by the format string "open-%lu" with a unique
  * number. These should not exist when the server shuts down cleanly, but they
@@ -70,6 +75,11 @@ namespace Storage {
  * between a corrupt file and a partially written entry. The code assumes it's
  * a partially written entry, issues a WARNING, and ignores it.
  *
+ * Truncating a suffix of the log will remove all entries that are no longer
+ * part of the log. Truncating a prefix of the log will only remove complete
+ * segments that are before the new log start index. For example, if a
+ * segment has entries 10 through 20 and the prefix of the log is truncated to
+ * start at entry 15, that entire segment will be retained.
  */
 class SegmentedLog : public Log {
 
@@ -92,9 +102,12 @@ class SegmentedLog : public Log {
      *      module are kept.
      * \param encoding
      *      Specifies how individual records are stored.
+     * \param config
+     *      Settings.
      */
-    SegmentedLog(const Storage::FilesystemUtil::File& parentDir,
-                 Encoding encoding);
+    SegmentedLog(const FilesystemUtil::File& parentDir,
+                 Encoding encoding,
+                 const Core::Config& config);
     ~SegmentedLog();
 
     // Methods implemented from Log interface
@@ -108,22 +121,164 @@ class SegmentedLog : public Log {
     void truncatePrefix(uint64_t firstIndex);
     void truncateSuffix(uint64_t lastIndex);
     void updateMetadata();
+    void updateServerStats(Protocol::ServerStats& serverStats) const;
 
   private:
+
+    /**
+     * A producer/consumer monitor for a queue of files to use for open
+     * segments. These are created asynchronously, hopefully ahead of the log
+     * appends.
+     *
+     * This class is written in a monitor style; each public method acquires
+     * #mutex.
+     */
+    class PreparedSegments {
+      public:
+        /**
+         * The type of element that is queued in #openSegments.
+         * The first element of each pair is its filename relative to #dir. The
+         * second element is its open file descriptor.
+         */
+        typedef std::pair<std::string, FilesystemUtil::File> OpenSegment;
+
+        /**
+         * Constructor.
+         * \param queueSize
+         *      The maximum number of prepared segments to hold in the queue
+         *      at a time.
+         */
+        explicit PreparedSegments(uint64_t queueSize);
+
+        /**
+         * Destructor.
+         */
+        ~PreparedSegments();
+
+        /**
+         * Do not block any more waiting threads, and return immediately.
+         */
+        void exit();
+
+        /**
+         * Ensure that future filenames will be larger than this one.
+         * This should generally be invoked before any producers are started,
+         * since once they're started, there's no stopping them.
+         * \param fileId
+         *      A lower bound on future IDs.
+         */
+        void foundFile(uint64_t fileId);
+
+        /**
+         * Immediately return all currently prepared segments.
+         */
+        std::deque<OpenSegment> releaseAll();
+
+        /**
+         * Producers call this when they're done creating a new file. This must
+         * be called once after each call waitForDemand(); otherwise, the
+         * internal bookkeeping won't work.
+         * \param segment
+         *      File to queue up for a consumer.
+         */
+        void submitOpenSegment(OpenSegment segment);
+
+        /**
+         * Producers call this first to block until work becomes needed.
+         * \return
+         *      ID for new filename.
+         * \throw Core::Util::ThreadInterruptedException
+         *      If exit() has been called.
+         */
+        uint64_t waitForDemand();
+
+        /**
+         * Consumers call this when they need a prepared segment file.
+         * \throw Core::Util::ThreadInterruptedException
+         *      If exit() has been called.
+         */
+        OpenSegment waitForOpenSegment();
+
+        /**
+         * Reduce log message verbosity for unit tests.
+         */
+        bool quietForUnitTests;
+
+      private:
+        /**
+         * Mutual exclusion for all of the members of this class.
+         */
+        Core::Mutex mutex;
+        /**
+         * Notified when #openSegments shrinks in size or when #exiting becomes
+         * true.
+         */
+        Core::ConditionVariable consumed;
+        /**
+         * Notified when #openSegments grows in size or when #exiting becomes
+         * true.
+         */
+        Core::ConditionVariable produced;
+        /**
+         * Set to true when waiters should exit.
+         */
+        bool exiting;
+        /**
+         * The number of producers that may be started to fulfill demand.
+         */
+        uint64_t demanded;
+        /**
+         * Used to assign filenames to open segments (which is done before the
+         * indexes they contain is known). This number is the largest of all
+         * previously known numbers so that it can be incremented then assigned
+         * to a new file. It's possible that numbers are reused across reboots.
+         */
+        uint64_t filenameCounter;
+        /**
+         * The queue where open segments sit before they're consumed. These are
+         * available for the log to use as future open segments.
+         */
+        std::deque<OpenSegment> openSegments;
+    };
+
+    /**
+     * Queues various operations on files, such as writes and fsyncs, to be
+     * executed later.
+     */
     class Sync : public Log::Sync {
       public:
-        enum class Op {
-            FDATASYNC,
-            FSYNC,
-            CLOSE,
+        struct Op {
+            enum OpCode {
+                WRITE,
+                TRUNCATE,
+                RENAME,
+                FDATASYNC,
+                FSYNC,
+                CLOSE,
+                UNLINKAT,
+            };
+            Op(int fd, OpCode opCode)
+                : fd(fd)
+                , opCode(opCode)
+                , writeData()
+                , filename1()
+                , filename2()
+                , size(0)
+            {
+            }
+            int fd;
+            OpCode opCode;
+            Core::Buffer writeData;
+            std::string filename1;
+            std::string filename2;
+            uint64_t size;
         };
+
         explicit Sync(uint64_t lastIndex);
+        ~Sync();
         void wait();
-        /**
-         * List of file descriptors that should be synced or closed on wait().
-         */
-        std::vector<std::pair<int, Op>> fds;
-        std::deque<std::pair<int, Core::Buffer>> writes;
+        /// List of operations to perform during wait().
+        std::deque<Op> ops;
     };
 
     /**
@@ -137,13 +292,11 @@ class SegmentedLog : public Log {
             /**
              * Constructor.
              */
-            explicit Record(uint64_t offset)
-                : offset(offset)
-                , entry() {
-            }
+            explicit Record(uint64_t offset);
 
             /**
              * Byte offset in the file where the entry begins.
+             * This is used when truncating a segment.
              */
             uint64_t offset;
 
@@ -156,14 +309,13 @@ class SegmentedLog : public Log {
         /**
          * Default constructor. Sets the segment to invalid.
          */
-        Segment()
-            : isOpen(false)
-            , startIndex(~0UL)
-            , endIndex(~0UL - 1)
-            , bytes(0)
-            , filename("--invalid--")
-            , entries() {
-        }
+        Segment();
+
+        /**
+         * Return a filename of the right form for a closed segment.
+         * See also #filename.
+         */
+        std::string makeClosedFilename() const;
 
         /**
          * True for the open segment, false for closed segments.
@@ -200,8 +352,9 @@ class SegmentedLog : public Log {
     /**
      * List the files in #dir and create Segment objects for any of them that
      * look like segments. This is only used during initialization. These
-     * segments are passed through #loadSegment() next.
-     * Also updates #segmentFilenameCounter.
+     * segments are passed through #loadClosedSegment() and #loadOpenSegment()
+     * next.
+     * Also updates SegmentPreparer::filenameCounter.
      * \return
      *      Partially initialized Segment objects, one per discovered filename.
      */
@@ -213,38 +366,66 @@ class SegmentedLog : public Log {
      *      Filename within #dir to attempt to open and read.
      * \param[out] metadata
      *      Where the contents of the file end up.
+     * \param quiet
+     *      Set to true to avoid warnings when the file can't be read; used in
+     *      unit tests.
      * \return
-     *      Empty string if the file was read successfully, or a string
-     *      describing the error that occurred.
+     *      True if the file was read successfully, false otherwise.
      */
-    std::string readMetadata(const std::string& filename,
-                             SegmentedLogMetadata::Metadata& metadata) const;
+    bool readMetadata(const std::string& filename,
+                             SegmentedLogMetadata::Metadata& metadata,
+                             bool quiet) const;
 
     /**
-     * Read the given segment from disk, issuing PANICs and WARNINGs
-     * appropriately, and closing any open segments. This is only used during
-     * initialization.
+     * Read the given closed segment from disk, issuing PANICs and WARNINGs
+     * appropriately. This is only used during initialization.
      *
-     * For open segments, reads up through the end of the file or the last
-     * entry with a valid checksum. If any valid entries are read, the segment
-     * is truncated and closed. Otherwise, it is removed.
+     * Deletes segment if its last index is below logStartIndex.
      *
-     * For closed segments, reads every entry described in the filename, and
-     * PANICs if any of those can't be read.
+     * Reads every entry described in the filename, and PANICs if any of those
+     * can't be read.
      *
      * \param[in,out] segment
-     *      Segment to read from disk.
+     *      Closed segment to read from disk.
+     * \param logStartIndex
+     *      The index of the first entry in the log, according to the log
+     *      metadata.
      * \return
      *      True if the segment is valid; false if it has been removed entirely
      *      from disk.
      */
-    bool loadSegment(Segment& segment);
+    bool loadClosedSegment(Segment& segment, uint64_t logStartIndex);
+
+    /**
+     * Read the given open segment from disk, issuing PANICs and WARNINGs
+     * appropriately, and closing the segment. This is only used during
+     * initialization.
+     *
+     * Reads up through the end of the file or the last
+     * entry with a valid checksum. If any valid entries are read, the segment
+     * is truncated and closed. Otherwise, it is removed.
+     *
+     * Deletes segment if its last index is below logStartIndex.
+     *
+     * \param[in,out] segment
+     *      Open segment to read from disk.
+     * \param logStartIndex
+     *      The index of the first entry in the log, according to the log
+     *      metadata.
+     * \return
+     *      True if the segment is valid; false if it has been removed entirely
+     *      from disk.
+     */
+    bool loadOpenSegment(Segment& segment, uint64_t logStartIndex);
 
 
     ////////// normal operation helper functions //////////
 
     /**
      * Run through a bunch of assertions of class invariants (for debugging).
+     * For example, there should always be one open segment. See
+     * #shouldCheckInvariants, controlled by the config option 'storageDebug',
+     * and the BUILDTYPE.
      */
     void checkInvariants();
 
@@ -254,7 +435,7 @@ class SegmentedLog : public Log {
      * there is always an open segment, the caller should open a new segment
      * after calling this (unless it's shutting down).
      */
-    void closeSegment(Sync& sync);
+    void closeSegment();
 
     /**
      * Return a reference to the current open segment (the one that new writes
@@ -265,33 +446,97 @@ class SegmentedLog : public Log {
     const Segment& getOpenSegment() const;
 
     /**
-     * Close the current open segment, if any, and open a new one. This is
-     * called when #append() needs more space but also when the end of the log
-     * is truncated with #truncatePrefix() or #truncateSuffix().
+     * Set up a new open segment for the log head.
+     * This is called when #append() needs more space but also when the end of
+     * the log is truncated with #truncatePrefix() or #truncateSuffix().
+     * \pre
+     *      There is no currently open segment.
      */
     void openNewSegment();
 
+    /**
+     * Read the next ProtoBuf record out of 'file'.
+     * \param file
+     *      The open file, useful for error messages.
+     * \param reader
+     *      A reader for 'file'.
+     * \param[in,out] offset
+     *      The byte offset in the file at which to start reading as input.
+     *      The byte just after the last byte of data as output if successful,
+     *      otherwise unmodified.
+     * \param[out] out
+     *      An empty ProtoBuf to fill in.
+     * \return
+     *      Empty string if successful, otherwise error message.
+     *
+     * Format:
+     *
+     * |checksum|dataLen|data|
+     *
+     * The checksum is up to Core::Checksum::MAX_LENGTH bytes and is terminated
+     * by a null character. It covers both dataLen and data.
+     *
+     * dataLen is an unsigned integer (8 bytes, big-endian byte order) that
+     * specifies the length in bytes of data.
+     *
+     * data is a protobuf encoded as binary or text, depending on encoding.
+     */
+    std::string readProtoFromFile(const FilesystemUtil::File& file,
+                                  FilesystemUtil::FileContents& reader,
+                                  uint64_t* offset,
+                                  google::protobuf::Message* out) const;
+
+    /**
+     * Prepare a ProtoBuf record to be written to disk.
+     * \param in
+     *      ProtoBuf to be serialized.
+     * \return
+     *      Buffer containing serialized record.
+     */
+    Core::Buffer serializeProto(const google::protobuf::Message& in) const;
 
     ////////// segment preparer thread functions //////////
 
     /**
-     * Opens a file for a new segment and allocates its space on disk. This may
-     * only be called from the #segmentPreparer thread, as it accesses
-     * #segmentFilenameCounter.
+     * Opens a file for a new segment and allocates its space on disk.
+     * \param fileId
+     *      ID to use to generate filename; see
+     *      SegmentPreparer::filenameCounter.
      * \return
      *      Filename and writable OS-level file.
      */
-    std::pair<std::string, Storage::FilesystemUtil::File> prepareNewSegment();
+    std::pair<std::string, FilesystemUtil::File>
+    prepareNewSegment(uint64_t fileId);
 
     /**
      * The main function for the #segmentPreparer thread.
      */
     void segmentPreparerMain();
 
+    ////////// member variables //////////
+
     /**
      * Specifies how individual records are stored.
      */
     const Encoding encoding;
+
+    /**
+     * The algorithm to use when writing new records. When reading records, any
+     * available checksum is used.
+     */
+    const std::string checksumAlgorithm;
+
+    /**
+     * The maximum size in bytes for newly written segments. Controlled by the
+     * 'storageSegmentBytes' config option.
+     */
+    const uint64_t MAX_SEGMENT_SIZE;
+
+    /**
+     * Set to true if checkInvariants() should do its job, or set to false for
+     * performance.
+     */
+    const bool shouldCheckInvariants;
 
     /**
      * The metadata this class mintains. This should be combined with the
@@ -302,13 +547,13 @@ class SegmentedLog : public Log {
     /**
      * The directory containing every file this log creates.
      */
-    Storage::FilesystemUtil::File dir;
+    FilesystemUtil::File dir;
 
     /**
      * A writable OS-level file that contains the entries for the current open
      * segment. It is a class invariant that this is always a valid file.
      */
-    Storage::FilesystemUtil::File openSegmentFile;
+    FilesystemUtil::File openSegmentFile;
 
     /**
      * The index of the first entry in the log, see getLogStartIndex().
@@ -329,40 +574,16 @@ class SegmentedLog : public Log {
     uint64_t totalClosedSegmentBytes;
 
     /**
-     * Mutual exclusion for #segmentPreparerExiting and #preparedSegments.
+     * See PreparedSegments.
      */
-    Core::Mutex preparedSegmentsMutex;
+    PreparedSegments preparedSegments;
+
     /**
-     * Notified when the log uses a prepared segment as a new open segment, or
-     * when #segmentPreparerExiting becomes true.
+     * Accumulates deferred filesystem operations for append() and
+     * truncatePrefix().
      */
-    Core::ConditionVariable preparedSegmentConsumed;
-    /**
-     * Notified when #segmentPreparer adds a new prepared segment to
-     * #preparedSegments.
-     */
-    Core::ConditionVariable preparedSegmentProduced;
-    /**
-     * Initially false; set to true by ~SegmentedLog() when #segmentPreparer
-     * should exit for a clean shutdown. #preparedSegmentConsumed is also
-     * notified when this is set to true.
-     */
-    bool segmentPreparerExiting;
-    /**
-     * A queue of segments that is available for the log to use as future open
-     * segments. segmentPreparerMain() bounds the size of this queue.
-     */
-    std::deque<std::pair<std::string, Storage::FilesystemUtil::File>>
-        preparedSegments;
-    /**
-     * Used to assign filenames to open segments (which is done before the
-     * indexes they contain is known). This number is larger than all
-     * previously known numbers so that it can be assigned to new files.
-     * It's possible that numbers are reused across reboots.
-     * This may only be accessed from the #segmentPreparer thread.
-     */
-    uint64_t segmentFilenameCounter;
     std::unique_ptr<SegmentedLog::Sync> currentSync;
+
     /**
      * Opens files, allocates the to full size, and places them on
      * #preparedSegments for the log to use.

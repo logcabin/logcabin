@@ -15,7 +15,7 @@
 
 #include <cinttypes>
 #include <memory>
-#include <string>
+#include <vector>
 
 #include "build/Protocol/Raft.pb.h"
 #include "build/Protocol/RaftLogMetadata.pb.h"
@@ -24,10 +24,13 @@
 #define LOGCABIN_STORAGE_LOG_H
 
 namespace LogCabin {
-namespace Storage {
 
 // forward declaration
-class Globals;
+namespace Protocol {
+class ServerStats;
+}
+
+namespace Storage {
 
 /**
  * This interface is used by RaftConsensus to store log entries and metadata.
@@ -77,7 +80,8 @@ class Log {
     virtual ~Log();
 
     /**
-     * Append new entries to the log.
+     * Start to append new entries to the log. The entries may not be on disk
+     * yet when this returns; see Sync.
      * \param entries
      *      Entries to place at the end of the log.
      * \return
@@ -147,6 +151,8 @@ class Log {
     /**
      * Delete the log entries before the given index.
      * Once you truncate a prefix from the log, there's no way to undo this.
+     * The entries may still be on disk when this returns and file descriptors
+     * and other resources may remain open; see Sync.
      * \param firstIndex
      *      After this call, the log will contain no entries indexed less
      *      than firstIndex. This can be any log index, including 0 and those
@@ -172,6 +178,12 @@ class Log {
      * Call this after changing #metadata.
      */
     virtual void updateMetadata() = 0;
+
+    /**
+     * Add information about the log's state to the given structure.
+     * Used for diagnostics.
+     */
+    virtual void updateServerStats(Protocol::ServerStats& serverStats) const {}
 
     /**
      * Opaque metadata that the log keeps track of.
