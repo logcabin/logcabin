@@ -626,6 +626,7 @@ Configuration::updateServerStats(Protocol::ServerStats& serverStats,
             *serverStats.mutable_raft()->add_peer();
         peerStats.set_server_id(it->first);
         const ServerRef& peer = it->second;
+        peerStats.set_address(peer->address);
         peerStats.set_old_member(oldServers.contains(peer));
         peerStats.set_new_member(state == State::TRANSITIONAL &&
                                  newServers.contains(peer));
