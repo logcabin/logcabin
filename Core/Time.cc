@@ -27,9 +27,16 @@ namespace Time {
 CSystemClock::time_point
 CSystemClock::now()
 {
-    return time_point(std::chrono::nanoseconds(getTimeNanos()));
+    struct timespec now;
+    int r = clock_gettime(CLOCK_REALTIME, &now);
+    if (r != 0) {
+        PANIC("clock_gettime(CLOCK_REALTIME) failed: %s",
+              strerror(errno));
+    }
+    return time_point(std::chrono::nanoseconds(
+                int64_t(now.tv_sec) * 1000 * 1000 * 1000 +
+                now.tv_nsec));
 }
-
 
 CSteadyClock::time_point
 CSteadyClock::now()
@@ -43,18 +50,6 @@ CSteadyClock::now()
     return time_point(std::chrono::nanoseconds(
                 int64_t(now.tv_sec) * 1000 * 1000 * 1000 +
                 now.tv_nsec));
-}
-
-int64_t
-getTimeNanos()
-{
-    struct timespec now;
-    int r = clock_gettime(CLOCK_REALTIME, &now);
-    if (r != 0) {
-        PANIC("clock_gettime(CLOCK_REALTIME) failed: %s",
-              strerror(errno));
-    }
-    return int64_t(now.tv_sec) * 1000 * 1000 * 1000 + now.tv_nsec;
 }
 
 void

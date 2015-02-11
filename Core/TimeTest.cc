@@ -160,14 +160,6 @@ TEST(CoreTime, rdtsc_progressTimingSensitive) {
     EXPECT_LT(b, a + 10 * 1000 * 1000);
 }
 
-TEST(CoreTime, getTimeNanos) {
-    EXPECT_LT(1417720382578042639L, Time::getTimeNanos()); // 2014-12-04
-    EXPECT_GT(1893456000000000000L, Time::getTimeNanos()); // 2030-01-01
-    int64_t first = Time::getTimeNanos();
-    int64_t later = Time::getTimeNanos();
-    EXPECT_LT(first, later);
-}
-
 TEST(CoreTime, sleep_immediate_TimingSensitive) {
     Time::SteadyClock::time_point start = Time::SteadyClock::now();
     Time::sleep(Time::SteadyClock::time_point::min());

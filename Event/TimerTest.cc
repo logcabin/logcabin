@@ -69,14 +69,24 @@ TEST_F(EventTimerTest, schedule_immediate) {
     EXPECT_FALSE(timer1.isScheduled());
 }
 
+typedef Core::Time::SystemClock Clock;
+typedef Clock::time_point TimePoint;
+
+uint64_t
+diffMillis(TimePoint startTime, TimePoint endTime)
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+                endTime - startTime).count();
+}
+
 TEST_F(EventTimerTest, schedule_timeElapsed_TimingSensitive) {
-    uint64_t startNanos = Core::Time::getTimeNanos();
+    TimePoint start = Clock::now();
     timer1.schedule(5 * 1000 * 1000); // 5ms
     EXPECT_TRUE(timer1.isScheduled());
     loop.runForever();
     EXPECT_EQ(1U, timer1.triggerCount);
-    uint64_t endNanos = Core::Time::getTimeNanos();
-    uint64_t elapsedMillis = (endNanos - startNanos) / 1000000;
+    TimePoint end = Clock::now();
+    uint64_t elapsedMillis = diffMillis(start, end);
     EXPECT_LE(5U, elapsedMillis);
     EXPECT_LE(elapsedMillis, 15U) <<
         "A 5ms timer took " << elapsedMillis << " ms to fire. "
@@ -85,14 +95,14 @@ TEST_F(EventTimerTest, schedule_timeElapsed_TimingSensitive) {
 }
 
 TEST_F(EventTimerTest, scheduleAbsolute_timeElapsed_TimingSensitive) {
-    uint64_t startNanos = Core::Time::getTimeNanos();
+    TimePoint start = Clock::now();
     timer1.scheduleAbsolute(Core::Time::SteadyClock::now() +
                             std::chrono::milliseconds(5));
     EXPECT_TRUE(timer1.isScheduled());
     loop.runForever();
     EXPECT_EQ(1U, timer1.triggerCount);
-    uint64_t endNanos = Core::Time::getTimeNanos();
-    uint64_t elapsedMillis = (endNanos - startNanos) / 1000000;
+    TimePoint end = Clock::now();
+    uint64_t elapsedMillis = diffMillis(start, end);
     EXPECT_LE(5U, elapsedMillis);
     EXPECT_LE(elapsedMillis, 15U) <<
         "A 5ms timer took " << elapsedMillis << " ms to fire. "
@@ -103,10 +113,10 @@ TEST_F(EventTimerTest, scheduleAbsolute_timeElapsed_TimingSensitive) {
 TEST_F(EventTimerTest, scheduleAbsolute_min_TimingSensitive) {
     timer1.scheduleAbsolute(Core::Time::SteadyClock::time_point::min());
     // broken: EXPECT_TRUE(timer1.isScheduled());
-    uint64_t startNanos = Core::Time::getTimeNanos();
+    TimePoint start = Clock::now();
     loop.runForever();
-    uint64_t endNanos = Core::Time::getTimeNanos();
-    uint64_t elapsedMillis = (endNanos - startNanos) / 1000000;
+    TimePoint end = Clock::now();
+    uint64_t elapsedMillis = diffMillis(start, end);
     EXPECT_LE(elapsedMillis, 1U);
     EXPECT_EQ(1U, timer1.triggerCount);
     EXPECT_FALSE(timer1.isScheduled());
@@ -116,10 +126,10 @@ TEST_F(EventTimerTest, scheduleAbsolute_past_TimingSensitive) {
     timer1.scheduleAbsolute(Core::Time::SteadyClock::now() -
                             std::chrono::nanoseconds(3));
     // broken: EXPECT_TRUE(timer1.isScheduled());
-    uint64_t startNanos = Core::Time::getTimeNanos();
+    TimePoint start = Clock::now();
     loop.runForever();
-    uint64_t endNanos = Core::Time::getTimeNanos();
-    uint64_t elapsedMillis = (endNanos - startNanos) / 1000000;
+    TimePoint end = Clock::now();
+    uint64_t elapsedMillis = diffMillis(start, end);
     EXPECT_LE(elapsedMillis, 1U);
     EXPECT_EQ(1U, timer1.triggerCount);
     EXPECT_FALSE(timer1.isScheduled());
@@ -128,10 +138,10 @@ TEST_F(EventTimerTest, scheduleAbsolute_past_TimingSensitive) {
 TEST_F(EventTimerTest, scheduleAbsolute_zero_TimingSensitive) {
     timer1.scheduleAbsolute(Core::Time::SteadyClock::time_point());
     // broken: EXPECT_TRUE(timer1.isScheduled());
-    uint64_t startNanos = Core::Time::getTimeNanos();
+    TimePoint start = Clock::now();
     loop.runForever();
-    uint64_t endNanos = Core::Time::getTimeNanos();
-    uint64_t elapsedMillis = (endNanos - startNanos) / 1000000;
+    TimePoint end = Clock::now();
+    uint64_t elapsedMillis = diffMillis(start, end);
     EXPECT_LE(elapsedMillis, 1U);
     EXPECT_EQ(1U, timer1.triggerCount);
     EXPECT_FALSE(timer1.isScheduled());

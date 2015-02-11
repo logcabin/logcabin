@@ -185,11 +185,6 @@ rdtsc()
 }
 
 /**
- * Return the system time since the Unix epoch in nanoseconds.
- */
-int64_t getTimeNanos();
-
-/**
  * Block the calling thread until the given time.
  */
 void sleep(SteadyClock::time_point wake);

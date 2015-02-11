@@ -224,15 +224,16 @@ TEST_F(RPCClientSessionTest, constructor_timeout_TimingSensitive) {
     ClientSession::connectFn = std::ref(c);
     Address address("127.0.0.1", 0);
     address.refresh(Address::TimePoint::max());
-    uint64_t start = Core::Time::getTimeNanos();
+    auto start = Core::Time::SystemClock::now();
     auto session2 = ClientSession::makeSession(
         eventLoop,
         address,
         1024,
         Core::Time::SteadyClock::now() + std::chrono::milliseconds(5),
         Core::Config());
-    uint64_t end = Core::Time::getTimeNanos();
-    uint64_t elapsedMs = (end - start) / 1000000;
+    auto end = Core::Time::SystemClock::now();
+    uint64_t elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                            end - start).count();
     EXPECT_LE(5U, elapsedMs);
     EXPECT_GE(100U, elapsedMs);
     ClientSession::connectFn = ::connect;
