@@ -216,16 +216,39 @@ log(LogLevel level,
     const char* format, ...)
 {
     va_list ap;
+
+    // Don't use Core::Time here since it could potentially call PANIC.
     struct timespec now;
     clock_gettime(CLOCK_REALTIME, &now);
+
+    // Failures are a little annoying here, since we can't exactly log
+    // errors that come up.
+    char formattedSeconds[64]; // a human-readable string now.tv_sec
+    bool ok = false;
+    { // First, try gmtime and strftime.
+        struct tm calendarTime;
+        if (gmtime_r(&now.tv_sec, &calendarTime) != NULL) {
+            ok = (strftime(formattedSeconds,
+                           sizeof(formattedSeconds),
+                           "%F %T",
+                           &calendarTime) > 0);
+        }
+    }
+    if (!ok) { // If that failed, use the raw number.
+        snprintf(formattedSeconds,
+                 sizeof(formattedSeconds),
+                 "%010lu",
+                 now.tv_sec);
+        formattedSeconds[sizeof(formattedSeconds) - 1] = '\0';
+    }
 
     // This ensures that output on stderr won't be interspersed with other
     // output. This normally happens automatically for a single call to
     // fprintf, but must be explicit since we're using two calls here.
     flockfile(stream);
 
-    fprintf(stream, "%010lu.%06lu %s:%d in %s() %s[%s:%s]: ",
-            now.tv_sec, now.tv_nsec / 1000,
+    fprintf(stream, "%s.%06lu %s:%d in %s() %s[%s:%s]: ",
+            formattedSeconds, now.tv_nsec / 1000,
             relativeFileName(fileName), lineNum, functionName,
             logLevelToString[uint32_t(level)],
             processName.c_str(), ThreadId::getName().c_str());
