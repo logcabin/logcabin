@@ -47,6 +47,13 @@ class StateMachine {
      * the Tree.
      * \warning
      *      Be sure to wait() first!
+     * \param rpcInfo
+     *      Identifies client session, etc.
+     * \param[out] response
+     *      If the return value is true, the response will be filled in here.
+     *      Otherwise, this will be unmodified.
+     * \return
+     *      True if successful; false if the session expired.
      */
     bool getResponse(const Protocol::Client::ExactlyOnceRPCInfo& rpcInfo,
                      Protocol::Client::CommandResponse& response) const;
