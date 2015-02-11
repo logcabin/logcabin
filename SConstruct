@@ -174,6 +174,22 @@ for target in env.FindInstalledFiles():
     install_commands.append('mkdir -p $RPM_BUILD_ROOT%s' % parent)
     install_commands.append('cp %s $RPM_BUILD_ROOT%s' % (source, target))
 
+# We probably don't want rpm to strip binaries.
+#
+# The normal __os_install_post consists of:
+#    %{_rpmconfigdir}/brp-compress
+#    %{_rpmconfigdir}/brp-strip %{__strip}
+#    %{_rpmconfigdir}/brp-strip-static-archive %{__strip}
+#    %{_rpmconfigdir}/brp-strip-comment-note %{__strip} %{__objdump}
+# as shown by: rpm --showrc | grep ' __os_install_post' -A10
+#
+# brp-compress just gzips manpages, which is fine. The others are probably
+# undesirable. This can go anywhere in the spec file (it's tacked onto
+# X_RPM_INSTALL below).
+skip_stripping_binaries_commands = [
+    '%define __os_install_post /usr/lib/rpm/brp-compress',
+]
+
 VERSION = '0.0.1-alpha.0'
 # https://fedoraproject.org/wiki/Packaging:NamingGuidelines#NonNumericRelease
 RPM_VERSION = '0.0.1'
@@ -183,7 +199,9 @@ PACKAGEROOT = 'logcabin-%s' % RPM_VERSION
 rpms=RPMPackager.package(env,
     target         = ['logcabin-%s' % RPM_VERSION],
     source         = env.FindInstalledFiles(),
-    X_RPM_INSTALL  = '\n'.join(install_commands),
+    X_RPM_INSTALL  = '\n'.join(install_commands +
+                               [''] +
+                               skip_stripping_binaries_commands),
     PACKAGEROOT    = PACKAGEROOT,
     NAME           = 'logcabin',
     VERSION        = RPM_VERSION,
