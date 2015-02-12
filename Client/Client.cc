@@ -431,11 +431,39 @@ Tree::getTreeDetails() const
     return ret;
 }
 
+////////// TestingCallbacks //////////
+
+TestingCallbacks::TestingCallbacks()
+{
+}
+
+TestingCallbacks::~TestingCallbacks()
+{
+}
+
+bool
+TestingCallbacks::readOnlyTreeRPC(
+    Protocol::Client::ReadOnlyTree_Request& request,
+    Protocol::Client::ReadOnlyTree_Response& response)
+{
+    return false;
+}
+
+bool
+TestingCallbacks::readWriteTreeRPC(
+    Protocol::Client::ReadWriteTree_Request& request,
+    Protocol::Client::ReadWriteTree_Response& response)
+{
+    return false;
+}
+
 ////////// Cluster //////////
 
-Cluster::Cluster(ForTesting t,
+Cluster::Cluster(std::shared_ptr<TestingCallbacks> testingCallbacks,
                  const std::map<std::string, std::string>& options)
-    : clientImpl(std::make_shared<MockClientImpl>())
+    : clientImpl(std::make_shared<MockClientImpl>(
+        testingCallbacks ? testingCallbacks
+                         : std::make_shared<TestingCallbacks>()))
 {
     clientImpl->init("-MOCK-");
 }

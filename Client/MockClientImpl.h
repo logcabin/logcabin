@@ -13,7 +13,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <mutex>
 #include <map>
 #include <unordered_map>
 #include <vector>
@@ -33,7 +32,7 @@ namespace Client {
 class MockClientImpl : public ClientImpl {
   public:
     /// Constructor.
-    MockClientImpl();
+    explicit MockClientImpl(std::shared_ptr<TestingCallbacks> callbacks);
     /// Destructor.
     ~MockClientImpl();
 
@@ -45,6 +44,9 @@ class MockClientImpl : public ClientImpl {
                 const Configuration& newConfiguration);
 
     using ClientImpl::read;
+
+    std::shared_ptr<TestingCallbacks> callbacks;
+
 
   private:
 

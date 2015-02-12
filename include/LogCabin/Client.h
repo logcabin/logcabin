@@ -31,8 +31,15 @@
 
 namespace LogCabin {
 
+// forward declarations
 namespace Protocol {
-class ServerStats; // forward declaration
+class ServerStats;
+namespace Client {
+class ReadOnlyTree_Request;
+class ReadOnlyTree_Response;
+class ReadWriteTree_Request;
+class ReadWriteTree_Response;
+} // namespace LogCabin::Protocol::Client
 } // namespace LogCabin::Protocol
 
 namespace Client {
@@ -460,6 +467,60 @@ class Tree {
 };
 
 /**
+ * When running in testing mode, these callbacks serve as a way for the
+ * application to interpose on requests and responses to inject failures and
+ * model dynamic scenarios. See Cluster's constructor for more information.
+ */
+class TestingCallbacks {
+  public:
+
+    /**
+     * Constructor. Does nothing.
+     */
+    TestingCallbacks();
+
+    /**
+     * Destructor. Does nothing.
+     */
+    virtual ~TestingCallbacks();
+
+    /**
+     * Handle a read-only Tree RPC, such as Tree::read or Tree::listDirectory.
+     * The default implementation just returns false.
+     * \param[in,out] request
+     *      Protocol buffer containing request details. You can modify this and
+     *      return false to have a slightly different request executed against
+     *      the in-memory data structure.
+     * \param[out] response
+     *      Protocol buffer where response details should be filled in if true
+     *      is returned.
+     * \return
+     *      True if handled, false to query the in-memory data structure.
+     */
+    virtual bool readOnlyTreeRPC(
+        Protocol::Client::ReadOnlyTree_Request& request,
+        Protocol::Client::ReadOnlyTree_Response& response);
+
+    /**
+     * Handle a read-write Tree RPC, such as Tree::read or Tree::listDirectory.
+     * The default implementation just returns false.
+     * \param[in,out] request
+     *      Protocol buffer containing request details. You can modify this and
+     *      return false to have a slightly different request executed against
+     *      the in-memory data structure.
+     * \param[out] response
+     *      Protocol buffer where response details should be filled in if true
+     *      is returned.
+     * \return
+     *      True if handled, false to query the in-memory data structure.
+     */
+    virtual bool readWriteTreeRPC(
+        Protocol::Client::ReadWriteTree_Request& request,
+        Protocol::Client::ReadWriteTree_Response& response);
+};
+
+
+/**
  * A handle to the LogCabin cluster.
  *
  * If the client requests changes to the cluster's replicated state machine
@@ -481,21 +542,18 @@ class Cluster {
     typedef std::map<std::string, std::string> Options;
 
     /**
-     * Defines a special type to use as an argument to the constructor that is
-     * for testing purposes only.
-     */
-    enum ForTesting { FOR_TESTING };
-
-    /**
      * Construct a Cluster object for testing purposes only. Instead of
      * connecting to a LogCabin cluster, it will keep all state locally in
      * memory.
-     * \param t
-     *      The only possible value is Cluster::FOR_TESTING.
+     * \param testingCallbacks
+     *      These allow the application to interpose on requests. A
+     *      default-constructed TestingCallbacks will execute requests against
+     *      an in-memory structure. Applications can pass in classes derived
+     *      from TestingCallbacks to model failures and more dynamic scenarios.
      * \param options
      *      Settings for the client library.
      */
-    explicit Cluster(ForTesting t,
+    explicit Cluster(std::shared_ptr<TestingCallbacks> testingCallbacks,
                      const Options& options = Options());
 
     /**

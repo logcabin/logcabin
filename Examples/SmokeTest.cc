@@ -100,8 +100,9 @@ int
 main(int argc, char** argv)
 {
     OptionParser options(argc, argv);
-    Cluster cluster = options.mock ? Cluster(Cluster::FOR_TESTING)
-                                   : Cluster(options.cluster);
+    Cluster cluster = (options.mock
+        ? Cluster(std::make_shared<LogCabin::Client::TestingCallbacks>())
+        : Cluster(options.cluster));
 
     Tree tree = cluster.getTree();
     tree.makeDirectoryEx("/etc");

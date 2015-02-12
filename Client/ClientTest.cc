@@ -94,7 +94,7 @@ TEST_F(ClientClusterTest, constructor) {
 class ClientTreeTest : public ::testing::Test {
   public:
     ClientTreeTest()
-        : cluster(Client::Cluster::FOR_TESTING)
+        : cluster(std::make_shared<Client::TestingCallbacks>())
         , tree(cluster.getTree())
     {
     }
@@ -115,7 +115,8 @@ using Client::Status;
 TEST_F(ClientTreeTest, assignment)
 {
     Client::Tree tree2 =
-        Client::Cluster(Client::Cluster::FOR_TESTING).getTree();
+        Client::Cluster(std::make_shared<Client::TestingCallbacks>())
+        .getTree();
     tree2.setWorkingDirectory("/foo/bar");
     tree2 = tree;
     EXPECT_EQ("/", tree2.getWorkingDirectory());

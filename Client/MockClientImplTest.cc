@@ -31,7 +31,8 @@ namespace {
 class ClientMockClientImplTest : public ::testing::Test {
   public:
     ClientMockClientImplTest()
-        : cluster(new Client::Cluster(Client::Cluster::FOR_TESTING))
+        : cluster(new Client::Cluster(
+            std::make_shared<Client::TestingCallbacks>()))
     {
     }
     std::unique_ptr<Client::Cluster> cluster;
@@ -47,6 +48,65 @@ TEST_F(ClientMockClientImplTest, tree) {
               tree.listDirectory("/", children).status);
     EXPECT_EQ((std::vector<std::string> {"foo/"}),
               children);
+}
+
+class MyCallbacks : public Client::TestingCallbacks {
+  public:
+    MyCallbacks()
+        : tree()
+    {
+    }
+
+    bool readOnlyTreeRPC(
+        Protocol::Client::ReadOnlyTree_Request& request,
+        Protocol::Client::ReadOnlyTree_Response& response) {
+        if (request.has_read()) {
+            if (request.read().path() == "/foo") {
+                response.set_status(Protocol::Client::TIMEOUT);
+                response.set_error("timed out");
+                return true;
+            } else if (request.read().path() == "/bar") {
+                response.set_status(Protocol::Client::OK);
+                response.mutable_read()->set_contents(tree->readEx("/foo"));
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool readWriteTreeRPC(
+        Protocol::Client::ReadWriteTree_Request& request,
+        Protocol::Client::ReadWriteTree_Response& response) {
+        if (request.has_write()) {
+            if (request.write().path() == "/foo" &&
+                request.write().contents() == "hello") {
+                request.mutable_write()->set_contents("world");
+                return false;
+            } else if (request.write().path() == "/except") {
+                throw Client::TypeException("exception from callback");
+            }
+        }
+        return false;
+    }
+
+    // heap-allocated for deferred construction
+    std::unique_ptr<Client::Tree> tree;
+};
+
+TEST_F(ClientMockClientImplTest, callbacks) {
+    auto callbacks = std::make_shared<MyCallbacks>();
+    cluster.reset(new Client::Cluster(callbacks));
+    Client::Tree tree = cluster->getTree();
+    callbacks->tree.reset(new Client::Tree(tree));
+    tree.writeEx("/foo", "hello");
+    EXPECT_THROW(tree.readEx("/foo"),
+                 Client::TimeoutException);
+    EXPECT_EQ("world", tree.readEx("/bar"));
+    EXPECT_THROW(tree.writeEx("/except", "here"),
+                 Client::TypeException);
+    // check that the object is still usable after an exception
+    EXPECT_EQ("world", tree.readEx("/bar"));
+    callbacks->tree.reset(); // break circular refcount
 }
 
 } // namespace LogCabin::<anonymous>

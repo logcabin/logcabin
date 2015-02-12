@@ -62,8 +62,8 @@ class StateMachine {
      * Called by ClientService to execute read-only operations on the Tree.
      */
     void readOnlyTreeRPC(
-                const Protocol::Client::ReadOnlyTree::Request& request,
-                Protocol::Client::ReadOnlyTree::Response& response) const;
+                const Protocol::Client::ReadOnlyTree_Request& request,
+                Protocol::Client::ReadOnlyTree_Response& response) const;
 
     /**
      * Return once the state machine has applied at least the given entry.
