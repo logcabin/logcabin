@@ -952,6 +952,10 @@ class RaftConsensus {
      * \param operation
      *      If the cluster accepts this operation, then it will be added to the
      *      log and the state machine will eventually apply it.
+     * \return
+     *      First component is status code. If SUCCESS, second component is the
+     *      log index at which the entry has been committed to the replicated
+     *      log.
      */
     std::pair<ClientResult, uint64_t> replicate(const std::string& operation);
 
