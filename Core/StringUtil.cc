@@ -3,6 +3,8 @@
  * Copyright (c) 2011 Facebook
  *    startsWith() and endsWith() functions
  *
+ * Copyright (c) 2015 Diego Ongaro
+ *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
  * copyright notice and this permission notice appear in all copies.
@@ -41,6 +43,24 @@ display(char c)
 }
 
 } // anonymous namespace
+
+std::string
+flags(int value,
+      std::initializer_list<std::pair<int, const char*>> flags)
+{
+    if (value == 0)
+        return "0";
+    std::vector<std::string> strings;
+    for (auto it = flags.begin(); it != flags.end(); ++it) {
+        if (value & it->first) {
+            strings.push_back(it->second);
+            value &= ~it->first;
+        }
+    }
+    if (value)
+        strings.push_back(format("0x%x", value));
+    return join(strings, "|");
+}
 
 // This comes from the RAMCloud project.
 std::string
@@ -85,6 +105,18 @@ isPrintable(const void* data, size_t length)
     return (length >= 1 &&
             *end == '\0' &&
             std::all_of(begin, end, display));
+}
+
+std::string
+join(const std::vector<std::string>& components, const std::string& glue)
+{
+    std::string r;
+    for (uint64_t i = 0; i < components.size(); ++i) {
+        r += components.at(i);
+        if (i < components.size() - 1)
+            r += glue;
+    }
+    return r;
 }
 
 void

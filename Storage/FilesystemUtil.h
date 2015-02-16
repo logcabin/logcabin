@@ -126,6 +126,28 @@ void fsync(const File& file);
 void fdatasync(const File& file);
 
 /**
+ * Apply or remove an advisory lock on a file or directory.
+ * See man 2 flock.
+ * PANICs if any errors are encountered, even EWOULDBLOCK (see tryFlock).
+ */
+void flock(const File& file, int operation);
+
+/**
+ * Apply or remove an advisory lock on a file or directory.
+ * See man 2 flock.
+ * \param file
+ *      File or directory to lock.
+ * \param operation
+ *      LOCK_SH, LOCK_EX, or LOCK_UN, usually ORed with LOCK_NB.
+ * \return
+ *      If successful, returns the empty string.
+ *      If the operation would have blocked, returns a non-empty string with
+ *      detailed information.
+ */
+std::string
+tryFlock(const File& file, int operation);
+
+/**
  * Returns the size of the file in bytes.
  */
 uint64_t getSize(const File& file);

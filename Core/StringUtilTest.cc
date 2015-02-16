@@ -25,6 +25,29 @@ namespace Core {
 namespace StringUtil {
 namespace {
 
+TEST(CoreStringUtilTest, flags) {
+    enum {
+        A = 1,
+        B = 2,
+        C = 4,
+        D = 8,
+    };
+    std::initializer_list<std::pair<int, const char*>> abc = {
+        {A, "A"},
+        {B, "B"},
+        {C, "C"},
+    };
+
+    EXPECT_EQ("0",
+              flags(0, abc));
+    EXPECT_EQ("A",
+              flags(A, abc));
+    EXPECT_EQ("A|B",
+              flags(B|A, abc));
+    EXPECT_EQ("A|B|0x8",
+              flags(B|A|D, abc));
+}
+
 // Tests for format come from the RAMCloud project.
 TEST(CoreStringUtilTest, formatBasic) {
     EXPECT_EQ("rofl3", format("rofl3"));
@@ -50,6 +73,17 @@ TEST(CoreStringUtilTest, isPrintableData) {
     EXPECT_TRUE(isPrintable("foo", 4));
     EXPECT_FALSE(isPrintable("foo", 3));
     EXPECT_FALSE(isPrintable("\n", 2));
+}
+
+TEST(CoreStringUtilTest, join) {
+    EXPECT_EQ("",
+              join(std::vector<std::string>{}, ","));
+    EXPECT_EQ("a",
+              join(std::vector<std::string>{"a"}, ","));
+    EXPECT_EQ("abc;def;ghi",
+              join(std::vector<std::string>{"abc", "def", "ghi"}, ";"));
+    EXPECT_EQ(";abc\n;def;;",
+              join(std::vector<std::string>{"", "abc\n", "def", "", ""}, ";"));
 }
 
 TEST(CoreStringUtilTest, split) {

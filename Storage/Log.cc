@@ -52,13 +52,16 @@ std::ostream&
 operator<<(std::ostream& os, const Log& log)
 {
     os << "Log:" << std::endl;
-    os << "metadata: " << Core::ProtoBuf::dumpString(log.metadata);
+    os << "metadata start: " << std::endl;
+    os << Core::ProtoBuf::dumpString(log.metadata);
+    os << "end of metadata" << std::endl;
     os << "startIndex: " << log.getLogStartIndex() << std::endl;
     for (uint64_t i = log.getLogStartIndex();
          i <= log.getLastLogIndex();
          ++i) {
-        os << "Entry " << i << ": "
-           << Core::ProtoBuf::dumpString(log.getEntry(i));
+        os << "Entry " << i << " start:" << std::endl;
+        os << Core::ProtoBuf::dumpString(log.getEntry(i));
+        os << "end of entry " << i << std::endl;
     }
     os << std::endl;
     return os;

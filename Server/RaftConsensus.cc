@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <fcntl.h>
 #include <string.h>
+#include <sys/file.h>
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
@@ -876,6 +877,8 @@ RaftConsensus::init()
                 globals.config.read<std::string>("storagePath", "storage"));
         storageDirectory = Storage::FilesystemUtil::openDir(parentDir,
                               Core::StringUtil::format("server%lu", serverId));
+        // lock storage directory so that Storage/Tool doesn't open it
+        Storage::FilesystemUtil::flock(storageDirectory, LOCK_EX|LOCK_NB);
     }
 
     configuration.reset(new Configuration(serverId, *this));

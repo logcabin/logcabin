@@ -37,6 +37,21 @@ TEST(CoreUtilTest, sizeof32) {
     EXPECT_EQ(8U, sizeof32(uint64_t));
 }
 
+void setToWorld(std::string& s)
+{
+    s = "world";
+}
+
+TEST(CoreUtilTest, Finally) {
+    std::string s = "hello";
+    {
+        Finally _(std::bind(setToWorld, std::ref(s)));
+        EXPECT_EQ("hello", s);
+    }
+    EXPECT_EQ("world", s);
+}
+
+
 TEST(CoreUtilTest, memcpy) {
     char buf[16];
     memset(buf, 0, sizeof(buf));

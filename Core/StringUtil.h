@@ -31,6 +31,20 @@ std::string format(const char* format, ...)
     __attribute__((format(printf, 1, 2)));
 
 /**
+ * Format an ORed group of flags as a string.
+ * \param value
+ *      The ORed options.
+ * \param flags
+ *      Maps option identifiers to their string names, such as
+ *      {{FOO, "FOO"}, {BAR, "BAR"}}.
+ * \return
+ *      String such as "FOO|BAR".
+ */
+std::string
+flags(int value,
+      std::initializer_list<std::pair<int, const char*>> flags);
+
+/**
  * Determine whether a null-terminated string is printable.
  * \param str
  *      A null-terminated string.
@@ -53,6 +67,9 @@ isPrintable(const char* str);
  */
 bool
 isPrintable(const void* data, size_t length);
+
+std::string
+join(const std::vector<std::string>& components, const std::string& glue);
 
 /**
  * For strings, replace all occurrences of 'needle' in 'haystack' with

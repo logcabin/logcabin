@@ -18,6 +18,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
+#include <sys/file.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/uio.h>
@@ -130,6 +131,36 @@ fdatasync(const File& file)
         PANIC("Could not fdatasync %s: %s",
               file.path.c_str(), strerror(errno));
     }
+}
+
+
+void
+flock(const File& file, int operation)
+{
+    std::string e = tryFlock(file, operation);
+    if (!e.empty())
+        PANIC("%s", e.c_str());
+}
+
+std::string
+tryFlock(const File& file, int operation)
+{
+    if (::flock(file.fd, operation) == 0)
+        return std::string();
+    int error = errno;
+    std::string msg = Core::StringUtil::format(
+        "Could not flock('%s', %s): %s",
+        file.path.c_str(),
+        Core::StringUtil::flags(operation,
+                                {{LOCK_SH, "LOCK_SH"},
+                                 {LOCK_EX, "LOCK_EX"},
+                                 {LOCK_UN, "LOCK_UN"},
+                                 {LOCK_NB, "LOCK_NB"}}).c_str(),
+        strerror(error));
+    if (error == EWOULDBLOCK)
+        return msg;
+    else
+        PANIC("%s", msg.c_str());
 }
 
 uint64_t

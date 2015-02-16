@@ -22,6 +22,7 @@
 
 #include <cassert>
 #include <cinttypes>
+#include <functional>
 #include <stdexcept>
 
 #ifndef LOGCABIN_CORE_UTIL_H
@@ -49,6 +50,24 @@ downCast(const Large& large)
 
 /// Like sizeof but returns a uint32_t.
 #define sizeof32(x) LogCabin::Core::Util::downCast<uint32_t>(sizeof(x))
+
+/**
+ * Calls a function when this object goes out of scope.
+ * This is useful for deferring execution of something until the end of the
+ * scope without creating a full-blown RAII class to wrap it. It's named after
+ * the try { .. } finally { ... } control structure found in many languages.
+ * See also http://www.stroustrup.com/bs_faq2.html#finally
+ */
+class Finally {
+  public:
+    explicit Finally(std::function<void()> onDestroy)
+        : onDestroy(onDestroy) {
+    }
+    ~Finally() {
+        onDestroy();
+    }
+    std::function<void()> onDestroy;
+};
 
 /**
  * Copy some noncontiguous chunks of data into a contiguous chunk.

@@ -15,6 +15,7 @@
 
 #include <fcntl.h>
 #include <gtest/gtest.h>
+#include <sys/file.h>
 #include <sys/stat.h>
 #include <sys/uio.h>
 
@@ -139,6 +140,24 @@ TEST_F(StorageFilesystemUtilTest, fdatasync) {
     FS::fdatasync(tmpdir);
     EXPECT_DEATH(FS::fdatasync(File()),
                  "Could not fdatasync");
+}
+
+TEST_F(StorageFilesystemUtilTest, flock) {
+    FS::File tmpdir2(FS::openDir(tmpdir.path));
+    FS::flock(tmpdir, LOCK_EX|LOCK_NB);
+    EXPECT_DEATH(FS::flock(tmpdir2, LOCK_EX|LOCK_NB),
+                 "Could not flock.*temporarily");
+    EXPECT_DEATH(FS::flock(FilesystemUtil::File(), LOCK_EX),
+                 "Could not flock.*Bad file");
+}
+
+TEST_F(StorageFilesystemUtilTest, tryFlock) {
+    FS::File tmpdir2(FS::openDir(tmpdir.path));
+    EXPECT_EQ("", FS::tryFlock(tmpdir, LOCK_EX|LOCK_NB));
+    std::string e = FS::tryFlock(tmpdir2, LOCK_EX|LOCK_NB);
+    EXPECT_NE(e.npos, e.find("temporarily")) << e;
+    EXPECT_DEATH(FS::tryFlock(FilesystemUtil::File(), LOCK_EX),
+                 "Could not flock.*Bad file");
 }
 
 TEST_F(StorageFilesystemUtilTest, getSize) {

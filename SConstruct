@@ -135,6 +135,19 @@ daemon = env.Program("build/LogCabin",
             LIBS = [ "pthread", "protobuf", "rt", "cryptopp" ])
 env.Default(daemon)
 
+storageTool = env.Program("build/Storage/Tool",
+            (["build/Storage/Tool.cc"] +
+             [ # these proto files should maybe move into Protocol
+                "build/Server/SnapshotMetadata.pb.o",
+                "build/Server/Sessions.pb.o",
+             ] +
+             object_files['Storage'] +
+             object_files['Tree'] +
+             object_files['Protocol'] +
+             object_files['Core']),
+            LIBS = [ "pthread", "protobuf", "rt", "cryptopp" ])
+env.Default(storageTool)
+
 
 ### scons install target
 
@@ -146,6 +159,7 @@ env.InstallAs('/usr/bin/logcabin-helloworld',   'build/Examples/HelloWorld')
 env.InstallAs('/usr/bin/logcabin-reconfigure',  'build/Examples/Reconfigure')
 env.InstallAs('/usr/bin/logcabin-serverstats',  'build/Examples/ServerStats')
 env.InstallAs('/usr/bin/logcabin-smoketest',    'build/Examples/SmokeTest')
+env.InstallAs('/usr/bin/logcabin-storage',      'build/Storage/Tool')
 env.Alias('install', ['/etc', '/usr'])
 
 
