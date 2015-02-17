@@ -433,12 +433,14 @@ void drainDiskQueue(RaftConsensus& consensus)
 class ServerRaftConsensusTest : public ::testing::Test {
     ServerRaftConsensusTest()
         : globals()
+        , clockMocker()
         , consensus()
         , entry1()
         , entry2()
         , entry3()
         , entry4()
         , entry5()
+        , storageDirectory()
     {
         globals.config.set("electionTimeoutMilliseconds", 5000);
         globals.config.set("heartbeatPeriodMilliseconds", 2500);
@@ -448,8 +450,6 @@ class ServerRaftConsensusTest : public ::testing::Test {
         consensus->SOFT_RPC_SIZE_LIMIT = 1024;
         consensus->serverId = 1;
         consensus->serverAddress = "127.0.0.1:61023";
-        Clock::useMockValue = true;
-        Clock::mockValue = Clock::now();
 
         entry1.set_term(1);
         entry1.set_type(Protocol::Raft::EntryType::CONFIGURATION);
@@ -472,10 +472,12 @@ class ServerRaftConsensusTest : public ::testing::Test {
         *entry5.mutable_configuration() = desc(d3);
 
         std::string path = Storage::FilesystemUtil::mkdtemp();
-        consensus->storageDirectory =
+        storageDirectory =
             Storage::FilesystemUtil::File(open(path.c_str(),
                                                O_RDONLY|O_DIRECTORY),
                                           path);
+        consensus->storageDirectory =
+            Storage::FilesystemUtil::dup(storageDirectory);
     }
     void init() {
         consensus->log.reset(new Storage::MemoryLog());
@@ -486,8 +488,8 @@ class ServerRaftConsensusTest : public ::testing::Test {
         consensus->invariants.checkAll();
         EXPECT_EQ(0U, consensus->invariants.errors);
         startThreads = true;
-        Clock::useMockValue = false;
-        Storage::FilesystemUtil::remove(consensus->storageDirectory.path);
+        consensus.reset();
+        Storage::FilesystemUtil::remove(storageDirectory.path);
     }
 
     Peer* getPeer(uint64_t serverId) {
@@ -503,12 +505,14 @@ class ServerRaftConsensusTest : public ::testing::Test {
     }
 
     Globals globals;
+    Clock::Mocker clockMocker;
     std::unique_ptr<RaftConsensus> consensus;
     Log::Entry entry1;
     Log::Entry entry2;
     Log::Entry entry3;
     Log::Entry entry4;
     Log::Entry entry5;
+    Storage::FilesystemUtil::File storageDirectory;
 };
 
 
@@ -1563,7 +1567,6 @@ TEST_F(ServerRaftConsensusTest, timerThreadMain)
 {
     init();
     Clock::mockValue = consensus->startElectionAt - milliseconds(1);
-    Clock::useMockValue = true;
     consensus->stepDown(5);
     consensus->append({&entry1});
     consensus->append({&entry5});
@@ -2690,7 +2693,7 @@ TEST_F(ServerRaftConsensusTest, upToDateLeader)
     consensus->stateChanged.callback = std::ref(helper);
     peer->nextHeartbeatTime = TimePoint::max();
     EXPECT_TRUE(consensus->upToDateLeader(lockGuard));
-    EXPECT_EQ(round(Clock::now()),
+    EXPECT_EQ(Clock::now(),
               peer->nextHeartbeatTime);
     EXPECT_EQ(3U, helper.iter);
 }

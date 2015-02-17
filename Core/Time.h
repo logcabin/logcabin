@@ -14,6 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <cassert>
 #include <chrono>
 #include <iostream>
 #include <time.h>
@@ -137,6 +138,18 @@ struct MockableClock
 
     static bool useMockValue;
     static time_point mockValue;
+
+    /// RAII class to mock out the clock and then restore it.
+    struct Mocker {
+        explicit Mocker(time_point value = now()) {
+            assert(!useMockValue);
+            useMockValue = true;
+            mockValue = value;
+        }
+        ~Mocker() {
+            useMockValue = false;
+        }
+    };
 };
 
 template<typename BaseClock>
