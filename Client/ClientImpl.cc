@@ -401,7 +401,7 @@ ClientImpl::setConfiguration(uint64_t oldId,
         }
         return result;
     }
-    PANIC("Did not understand server response to append RPC:\n%s",
+    PANIC("Did not understand server response to setConfiguration RPC:\n%s",
           Core::ProtoBuf::dumpString(response).c_str());
 }
 
