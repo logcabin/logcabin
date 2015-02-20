@@ -61,9 +61,13 @@ message ServerStats {
 
         optional int64 start_election_at = 21;
         optional int64 withhold_votes_until = 22;
+        optional uint64 cluster_time = 23;
+        optional uint64 cluster_time_epoch = 24;
 
         optional uint64 last_snapshot_index = 31;
         optional uint64 last_snapshot_bytes = 32;
+        optional uint64 last_snapshot_term = 35;
+        optional uint64 last_snapshot_cluster_time = 36;
         optional uint64 log_start_index = 33;
         optional uint64 log_bytes = 34;
 

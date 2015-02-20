@@ -769,6 +769,69 @@ class ConfigurationManager {
 };
 
 /**
+ * This is the rough equivalent of a SteadyClock that can be shared across the
+ * network with other Raft servers. The cluster time approximately tracks how
+ * long the cluster has been available with a working leader.
+ *
+ * Cluster time is measured in nanoseconds and progresses at about the same
+ * rate as a normal clock when the cluster is operational. While there's a
+ * stable leader, the nanoseconds increase according to that leader's
+ * SteadyClock. When a new leader takes over, it starts ticking from cluster
+ * time value it finds in its last entry/snapshot, so some cluster time may be
+ * unaccounted for between the last leader replicating its final entry and then
+ * losing leadership.
+ *
+ * The StateMachine uses cluster time to expire client sessions. Cluster times
+ * in committed log entries monotonically increase, so the state machine will
+ * see cluster times monotonically increase.
+ *
+ * Before cluster time, client sessions were expired based on the SystemClock.
+ * That meant that if the SystemClock jumped forwards drastically, all clients
+ * would expire. That's undesirable, so cluster time was introduced in #90
+ * ("make client session timeout use monotonic clock") to address this.
+ */
+class ClusterClock {
+  public:
+    /// Default constructor.
+    ClusterClock();
+
+    /**
+     * Reset to the given cluster time, assuming it's the current time right
+     * now. This is used, for example, when a follower gets a new log entry
+     * (which includes a cluster time) from the leader.
+     */
+    void newEpoch(uint64_t clusterTime);
+
+    /**
+     * Called by leaders to generate a new cluster time for a new log entry.
+     * This is equivalent to the following but slightly more efficient:
+     *   uint64_t now = c.interpolate();
+     *   c.newEpoch(now);
+     *   return now;
+     */
+    uint64_t leaderStamp();
+
+    /**
+     * Return the best approximation of the current cluster time, assuming
+     * there's been a leader all along.
+     */
+    uint64_t interpolate() const;
+
+    /**
+     * Invariant: this is equal to the cluster time in:
+     * - the last log entry, if any, or
+     * - the last snapshot, if any, or
+     * - 0.
+     */
+    uint64_t clusterTimeAtEpoch;
+
+    /**
+     * The local SteadyClock time when clusterTimeAtEpoch was set.
+     */
+    Core::Time::SteadyClock::time_point localTimeAtEpoch;
+};
+
+/**
  * An implementation of the Raft consensus algorithm. The algorithm is
  * described at https://raftconsensus.github.io
  * . In brief, Raft divides time into terms and elects a leader at the
@@ -836,6 +899,12 @@ class RaftConsensus {
          * A handle to the snapshot file for entries of type 'SNAPSHOT'.
          */
         std::unique_ptr<Storage::SnapshotFile::Reader> snapshotReader;
+
+        /**
+         * Cluster time when leader created entry/snapshot. This is valid for
+         * entries of all types.
+         */
+        uint64_t clusterTime;
 
         // copy and assign not allowed
         Entry(const Entry&) = delete;
@@ -1395,6 +1464,12 @@ class RaftConsensus {
     uint64_t lastSnapshotTerm;
 
     /**
+     * The cluster time of the last entry covered by the latest good snapshot,
+     * or 0 if we have no snapshot.
+     */
+    uint64_t lastSnapshotClusterTime;
+
+    /**
      * The size of the latest good snapshot in bytes, or 0 if we have no
      * snapshot.
      */
@@ -1446,6 +1521,11 @@ class RaftConsensus {
      */
     // TODO(ongaro): rename, explain more
     mutable uint64_t currentEpoch;
+
+    /**
+     * Tracks the passage of "cluster time". See ClusterClock.
+     */
+    ClusterClock clusterClock;
 
     /**
      * The earliest time at which #timerThread should begin a new election

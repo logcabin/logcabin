@@ -48,8 +48,8 @@ StateMachine::StateMachine(std::shared_ptr<RaftConsensus> consensus,
       // every server, so it's dangerous to put it in the config file. Need to
       // use the Raft log to agree on this value. Also need to inform clients
       // of the value and its changes, so that they can send keep-alives at
-      // appropriate intervals. For now, servers time out after an hour, and
-      // clients send keep-alives every minute.
+      // appropriate intervals. For now, servers time out after about an hour,
+      // and clients send keep-alives every minute.
     , sessionTimeoutNanos(1000UL * 1000 * 1000 * 60 * 60)
     , mutex()
     , entriesApplied()
@@ -125,11 +125,11 @@ StateMachine::wait(uint64_t entryId) const
 ////////// StateMachine private methods //////////
 
 void
-StateMachine::apply(uint64_t entryId, const std::string& data)
+StateMachine::apply(const RaftConsensus::Entry& entry)
 {
     // TODO(ongaro): Switch from string to binary format. This is probably
     // really slow to parse.
-    PC::Command command = Core::ProtoBuf::fromString<PC::Command>(data);
+    PC::Command command = Core::ProtoBuf::fromString<PC::Command>(entry.data);
     Session* session = NULL;
     if (command.has_tree()) {
         PC::ExactlyOnceRPCInfo rpcInfo = command.tree().exactly_once();
@@ -157,18 +157,16 @@ StateMachine::apply(uint64_t entryId, const std::string& data)
             }
         }
     } else if (command.has_open_session()) {
-        uint64_t clientId = entryId;
+        uint64_t clientId = entry.entryId;
         session = &sessions.insert({clientId, {}}).first->second;
     } else {
-        PANIC("unknown command at %lu: %s", entryId, data.c_str());
+        PANIC("unknown command at %lu: %s", entry.entryId, entry.data.c_str());
     }
 
-    if (command.has_nanoseconds_since_epoch()) {
-        if (session != NULL) {
-            session->lastModified = command.nanoseconds_since_epoch();
-            session = NULL; // pointer invalidated by expireSessions()
-        }
-        expireSessions(command.nanoseconds_since_epoch());
+    // update based on entry.clusterTime
+    if (session != NULL) {
+        session->lastModified = entry.clusterTime;
+        session = NULL; // pointer invalidated by expireSessions()
     }
 }
 
@@ -184,7 +182,7 @@ StateMachine::applyThreadMain()
                 case RaftConsensus::Entry::SKIP:
                     break;
                 case RaftConsensus::Entry::DATA:
-                    apply(entry.entryId, entry.data);
+                    apply(entry);
                     break;
                 case RaftConsensus::Entry::SNAPSHOT:
                     NOTICE("Loading snapshot through entry %lu into "
@@ -193,6 +191,7 @@ StateMachine::applyThreadMain()
                     tree.loadSnapshot(entry.snapshotReader->getStream());
                     break;
             }
+            expireSessions(entry.clusterTime);
             lastEntryId = entry.entryId;
             entriesApplied.notify_all();
             if (shouldTakeSnapshot(lastEntryId))
@@ -256,16 +255,16 @@ StateMachine::expireResponses(Session& session, uint64_t firstOutstandingRPC)
 }
 
 void
-StateMachine::expireSessions(uint64_t nanosecondsSinceEpoch)
+StateMachine::expireSessions(uint64_t clusterTime)
 {
     auto it = sessions.begin();
     while (it != sessions.end()) {
         Session& session = it->second;
         uint64_t expireTime = session.lastModified + sessionTimeoutNanos;
-        if (expireTime < nanosecondsSinceEpoch) {
-            uint64_t diffNanos = nanosecondsSinceEpoch - session.lastModified;
+        if (expireTime < clusterTime) {
+            uint64_t diffNanos = clusterTime - session.lastModified;
             NOTICE("Expiring client %lu's session after %lu.%09lu seconds "
-                   "due to inactivity",
+                   "of cluster time due to inactivity",
                    it->first,
                    diffNanos / (1000 * 1000 * 1000UL),
                    diffNanos % (1000 * 1000 * 1000UL));

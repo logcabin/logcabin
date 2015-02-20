@@ -108,9 +108,12 @@ TEST_F(ServerStateMachineTest, getResponse)
 TEST_F(ServerStateMachineTest, apply_tree)
 {
     stateMachine->sessionTimeoutNanos = 1;
+    RaftConsensus::Entry entry;
+    entry.entryId = 6;
+    entry.type = RaftConsensus::Entry::DATA;
+    entry.clusterTime = 2;
     Protocol::Client::Command command =
         Core::ProtoBuf::fromString<Protocol::Client::Command>(
-            "nanoseconds_since_epoch: 2, "
             "tree: { "
             " exactly_once: { "
             "  client_id: 39 "
@@ -121,11 +124,13 @@ TEST_F(ServerStateMachineTest, apply_tree)
             "  path: '/a' "
             " } "
             "}");
+    entry.data = Core::ProtoBuf::dumpString(command);
     std::vector<std::string> children;
 
     // session does not exist
     stateMachine->sessions.insert({1, {}});
-    stateMachine->apply(6, Core::ProtoBuf::dumpString(command));
+    stateMachine->apply(entry);
+    stateMachine->expireSessions(entry.clusterTime);
     stateMachine->tree.listDirectory("/", children);
     EXPECT_EQ((std::vector<std::string> {}), children);
     ASSERT_EQ(0U, stateMachine->sessions.size());
@@ -133,7 +138,8 @@ TEST_F(ServerStateMachineTest, apply_tree)
     // session exists and need to apply
     stateMachine->sessions.insert({1, {}});
     stateMachine->sessions.insert({39, {}});
-    stateMachine->apply(6, Core::ProtoBuf::dumpString(command));
+    stateMachine->apply(entry);
+    stateMachine->expireSessions(entry.clusterTime);
     stateMachine->tree.listDirectory("/", children);
     EXPECT_EQ((std::vector<std::string> {"a/"}), children);
     ASSERT_EQ(1U, stateMachine->sessions.size());
@@ -142,7 +148,8 @@ TEST_F(ServerStateMachineTest, apply_tree)
     // session exists and response exists
     stateMachine->sessions.insert({1, {}});
     stateMachine->tree.removeDirectory("/a");
-    stateMachine->apply(6, Core::ProtoBuf::dumpString(command));
+    stateMachine->apply(entry);
+    stateMachine->expireSessions(entry.clusterTime);
     stateMachine->tree.listDirectory("/", children);
     EXPECT_EQ((std::vector<std::string> {}), children);
     ASSERT_EQ(1U, stateMachine->sessions.size());
@@ -151,7 +158,8 @@ TEST_F(ServerStateMachineTest, apply_tree)
     // session exists but response discarded
     stateMachine->sessions.insert({1, {}});
     stateMachine->expireResponses(stateMachine->sessions.at(39), 4);
-    stateMachine->apply(6, Core::ProtoBuf::dumpString(command));
+    stateMachine->apply(entry);
+    stateMachine->expireSessions(entry.clusterTime);
     stateMachine->tree.listDirectory("/", children);
     EXPECT_EQ((std::vector<std::string> {}), children);
     ASSERT_EQ(1U, stateMachine->sessions.size());
@@ -164,9 +172,15 @@ TEST_F(ServerStateMachineTest, apply_openSession)
     stateMachine->sessions.insert({1, {}});
     Protocol::Client::Command command =
         Core::ProtoBuf::fromString<Protocol::Client::Command>(
-            "nanoseconds_since_epoch: 2, "
             "open_session: {}");
-    stateMachine->apply(6, Core::ProtoBuf::dumpString(command));
+    RaftConsensus::Entry entry;
+    entry.entryId = 6;
+    entry.type = RaftConsensus::Entry::DATA;
+    entry.data = Core::ProtoBuf::dumpString(command);
+    entry.clusterTime = 2;
+
+    stateMachine->apply(entry);
+    stateMachine->expireSessions(entry.clusterTime);
     ASSERT_EQ((std::vector<uint64_t>{6U}),
               Core::STLUtil::sorted(
                   Core::STLUtil::getKeys(stateMachine->sessions)));

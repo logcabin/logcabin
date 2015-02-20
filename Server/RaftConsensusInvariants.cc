@@ -93,17 +93,29 @@ Invariants::checkAll()
 void
 Invariants::checkBasic()
 {
-    // Log terms monotonically increase
+    // Log terms and cluster times monotonically increase
     uint64_t lastTerm = 0;
+    uint64_t lastClusterTime = 0;
     for (uint64_t entryId = consensus.log->getLogStartIndex();
          entryId <= consensus.log->getLastLogIndex();
          ++entryId) {
         const Storage::Log::Entry& entry = consensus.log->getEntry(entryId);
         expect(entry.term() >= lastTerm);
+        expect(entry.cluster_time() >= lastClusterTime);
         lastTerm = entry.term();
+        lastClusterTime = entry.cluster_time();
     }
     // The terms in the log do not exceed currentTerm
     expect(lastTerm <= consensus.currentTerm);
+
+    if (consensus.log->getLogStartIndex() <=
+        consensus.log->getLastLogIndex()) {
+        expect(lastClusterTime ==
+               consensus.clusterClock.clusterTimeAtEpoch);
+    } else {
+        expect(consensus.lastSnapshotClusterTime ==
+               consensus.clusterClock.clusterTimeAtEpoch);
+    }
 
     // The current configuration should be the last one found in the log
     bool found = false;

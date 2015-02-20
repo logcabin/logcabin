@@ -31,6 +31,11 @@ message Header {
     required uint64 last_included_term = 4;
 
     /**
+     * The cluster time of the lastIncludedIndex entry.
+     */
+    optional uint64 last_cluster_time = 5;
+
+    /**
      * This contains the latest configuration in the prefix of the log ending
      * with lastIncludedIndex. It'll be present in practice (logs start with
      * configurations in practice) but is marked optional so as to not to bake

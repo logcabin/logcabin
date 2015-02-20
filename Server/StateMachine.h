@@ -77,7 +77,7 @@ class StateMachine {
     /**
      * Invoked once per committed entry from the Raft log.
      */
-    void apply(uint64_t entryId, const std::string& data);
+    void apply(const RaftConsensus::Entry& entry);
 
     /**
      * Main function for thread that waits for new commands from Raft.
@@ -101,11 +101,11 @@ class StateMachine {
 
     /**
      * Remove old sessions.
-     * \param nanosecondsSinceEpoch
-     *      Sessions that have not been used since this (leader) time are
-     *      removed.
+     * \param clusterTime
+     *      Sessions are kept if they have been modified during the last
+     *      timeout period going backwards from the given time.
      */
-    void expireSessions(uint64_t nanosecondsSinceEpoch);
+    void expireSessions(uint64_t clusterTime);
 
     /**
      * Read the #sessions table from a snapshot file.
@@ -146,7 +146,7 @@ class StateMachine {
 
     /**
      * The time interval after which to remove an inactive client session, in
-     * nanoseconds of leader time.
+     * nanoseconds of cluster time.
      */
     uint64_t sessionTimeoutNanos;
 
@@ -202,8 +202,9 @@ class StateMachine {
         {
         }
         /**
-         * When the session was last active, measured in leader time
-         * nanoseconds since the Unix epoch.
+         * When the session was last active, measured in cluster time
+         * (roughly the number of nanoseconds that the cluster has maintained a
+         * leader).
          */
         uint64_t lastModified;
         /**

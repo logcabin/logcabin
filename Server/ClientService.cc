@@ -176,9 +176,6 @@ ClientService::openSession(RPC::ServerRPC rpc)
 {
     PRELUDE(OpenSession);
     Command command;
-    command.set_nanoseconds_since_epoch(
-        std::chrono::nanoseconds(Core::Time::SystemClock::now()
-                                 .time_since_epoch()).count());
     *command.mutable_open_session() = request;
     std::pair<Result, uint64_t> result = submit(rpc, command);
     if (result.first != Result::SUCCESS)
@@ -261,9 +258,6 @@ ClientService::readWriteTreeRPC(RPC::ServerRPC rpc)
 {
     PRELUDE(ReadWriteTree);
     Command command;
-    command.set_nanoseconds_since_epoch(
-        std::chrono::nanoseconds(Core::Time::SystemClock::now()
-                                 .time_since_epoch()).count());
     *command.mutable_tree() = request;
     std::pair<Result, uint64_t> result = submit(rpc, command);
     if (result.first != Result::SUCCESS)

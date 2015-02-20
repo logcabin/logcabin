@@ -109,6 +109,14 @@ message Entry {
      * because some storage backends might want to use it.
      */
     optional uint64 index = 5;
+
+    /**
+     * Roughly the number of nanoseconds the cluster has had a leader. This
+     * gets passed onto state machines, where it's used for cleaning up client
+     * sessions. See ClusterClock for more details.
+    */
+    required uint64 cluster_time = 6;
+
     /**
      * See EntryType.
      */

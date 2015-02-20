@@ -771,6 +771,42 @@ ConfigurationManager::restoreInvariants()
     }
 }
 
+////////// ClusterClock //////////
+
+ClusterClock::ClusterClock()
+    : clusterTimeAtEpoch(0)
+    , localTimeAtEpoch(Core::Time::SteadyClock::now())
+{
+}
+
+void
+ClusterClock::newEpoch(uint64_t clusterTime)
+{
+    clusterTimeAtEpoch = clusterTime;
+    localTimeAtEpoch = Core::Time::SteadyClock::now();
+}
+
+uint64_t
+ClusterClock::leaderStamp()
+{
+    auto localTime = Core::Time::SteadyClock::now();
+    int64_t nanosSinceEpoch = std::chrono::nanoseconds(
+        localTime - localTimeAtEpoch).count();
+    assert(nanosSinceEpoch >= 0);
+    clusterTimeAtEpoch += nanosSinceEpoch;
+    localTimeAtEpoch = localTime;
+    return clusterTimeAtEpoch;
+}
+
+uint64_t
+ClusterClock::interpolate() const
+{
+    int64_t nanosSinceEpoch = std::chrono::nanoseconds(
+        Core::Time::SteadyClock::now() - localTimeAtEpoch).count();
+    assert(nanosSinceEpoch >= 0);
+    return clusterTimeAtEpoch + nanosSinceEpoch;
+}
+
 
 ////////// RaftConsensus::Entry //////////
 
@@ -779,6 +815,7 @@ RaftConsensus::Entry::Entry()
     , type(SKIP)
     , data()
     , snapshotReader()
+    , clusterTime(0)
 {
 }
 
@@ -787,6 +824,7 @@ RaftConsensus::Entry::Entry(Entry&& other)
     , type(other.type)
     , data(std::move(other.data))
     , snapshotReader(std::move(other.snapshotReader))
+    , clusterTime(other.clusterTime)
 {
 }
 
@@ -824,6 +862,7 @@ RaftConsensus::RaftConsensus(Globals& globals)
     , state(State::FOLLOWER)
     , lastSnapshotIndex(0)
     , lastSnapshotTerm(0)
+    , lastSnapshotClusterTime(0)
     , lastSnapshotBytes(0)
     , snapshotReader()
     , snapshotWriter()
@@ -831,6 +870,7 @@ RaftConsensus::RaftConsensus(Globals& globals)
     , leaderId(0)
     , votedFor(0)
     , currentEpoch(0)
+    , clusterClock()
     , startElectionAt(TimePoint::max())
     , withholdVotesUntil(TimePoint::min())
     , leaderDiskThread()
@@ -896,6 +936,12 @@ RaftConsensus::init()
         }
     }
 
+    // Restore cluster time epoch from last log entry, if any
+    if (log->getLastLogIndex() >= log->getLogStartIndex()) {
+        clusterClock.newEpoch(
+            log->getEntry(log->getLastLogIndex()).cluster_time());
+    }
+
     NOTICE("The log contains indexes %lu through %lu (inclusive)",
            log->getLogStartIndex(), log->getLastLogIndex());
 
@@ -953,6 +999,7 @@ RaftConsensus::bootstrapConfiguration()
     Log::Entry entry;
     entry.set_term(1);
     entry.set_type(Protocol::Raft::EntryType::CONFIGURATION);
+    entry.set_cluster_time(0);
     Protocol::Raft::Configuration& configuration =
         *entry.mutable_configuration();
     Protocol::Raft::Server& server =
@@ -1028,6 +1075,7 @@ RaftConsensus::getNextEntry(uint64_t lastEntryId) const
                     entry.snapshotReader = std::move(snapshotReader);
                 }
                 entry.entryId = lastSnapshotIndex;
+                entry.clusterTime = lastSnapshotClusterTime;
             } else {
                 // not a snapshot
                 const Log::Entry& logEntry = log->getEntry(nextEntryId);
@@ -1038,6 +1086,7 @@ RaftConsensus::getNextEntry(uint64_t lastEntryId) const
                 } else {
                     entry.type = Entry::SKIP;
                 }
+                entry.clusterTime = logEntry.cluster_time();
             }
             return entry;
         }
@@ -1164,11 +1213,12 @@ RaftConsensus::handleAppendEntries(
 
         // Append this and all following entries.
         std::vector<const Protocol::Raft::Entry*> entries;
-        while (it != request.entries().end()) {
+        do {
             entries.push_back(&*it);
             ++it;
-        }
+        } while (it != request.entries().end());
         append(entries);
+        clusterClock.newEpoch(entries.back()->cluster_time());
         break;
     }
 
@@ -1430,17 +1480,21 @@ RaftConsensus::beginSnapshot(uint64_t lastIncludedIndex)
     // set header fields
     SnapshotMetadata::Header header;
     header.set_last_included_index(lastIncludedIndex);
-    // Set last_included_term:
+    // Set last_included_term and last_cluster_time:
     if (lastIncludedIndex >= log->getLogStartIndex() &&
         lastIncludedIndex <= log->getLastLogIndex()) {
-        header.set_last_included_term(log->getEntry(lastIncludedIndex).term());
+        const Log::Entry& entry = log->getEntry(lastIncludedIndex);
+        header.set_last_included_term(entry.term());
+        header.set_last_cluster_time(entry.cluster_time());
     } else if (lastIncludedIndex == 0) {
         WARNING("Taking a snapshot covering no log entries");
         header.set_last_included_term(0);
+        header.set_last_cluster_time(0);
     } else if (lastIncludedIndex == lastSnapshotIndex) {
         WARNING("Taking a snapshot where we already have one, covering "
                 "entries 1 through %lu (inclusive)", lastIncludedIndex);
         header.set_last_included_term(lastSnapshotTerm);
+        header.set_last_cluster_time(lastSnapshotClusterTime);
     } else {
         WARNING("We've already discarded the entries that the state machine "
                 "wants to snapshot. This can happen in rare cases if the "
@@ -1451,7 +1505,9 @@ RaftConsensus::beginSnapshot(uint64_t lastIncludedIndex)
         // If this turns out to be common, we should return NULL instead and
         // change the state machines to deal with that.
         header.set_last_included_term(0);
+        header.set_last_cluster_time(0);
     }
+
     // Copy the configuration as of lastIncludedIndex to the header.
     std::pair<uint64_t, Protocol::Raft::Configuration> c =
         configurationManager->getLatestConfigurationAsOf(lastIncludedIndex);
@@ -1497,7 +1553,9 @@ RaftConsensus::snapshotDone(
 
     lastSnapshotBytes = writer->save();
     lastSnapshotIndex = lastIncludedIndex;
-    lastSnapshotTerm = log->getEntry(lastIncludedIndex).term();
+    const Log::Entry& lastEntry = log->getEntry(lastIncludedIndex);
+    lastSnapshotTerm = lastEntry.term();
+    lastSnapshotClusterTime = lastEntry.cluster_time();
 
     // It's easier to grab this configuration out of the manager again than to
     // carry it around after writing the header.
@@ -1547,8 +1605,12 @@ RaftConsensus::updateServerStats(Protocol::ServerStats& serverStats) const
     raftStats.set_voted_for(votedFor);
     raftStats.set_start_election_at(time.unixNanos(startElectionAt));
     raftStats.set_withhold_votes_until(time.unixNanos(withholdVotesUntil));
+    raftStats.set_cluster_time_epoch(clusterClock.clusterTimeAtEpoch);
+    raftStats.set_cluster_time(clusterClock.interpolate());
 
     raftStats.set_last_snapshot_index(lastSnapshotIndex);
+    raftStats.set_last_snapshot_term(lastSnapshotTerm);
+    raftStats.set_last_snapshot_cluster_time(lastSnapshotClusterTime);
     raftStats.set_last_snapshot_bytes(lastSnapshotBytes);
     raftStats.set_log_start_index(log->getLogStartIndex());
     raftStats.set_log_bytes(log->getSizeBytes());
@@ -1567,6 +1629,8 @@ operator<<(std::ostream& os, const RaftConsensus& raft)
     os << "leader: " << raft.leaderId << std::endl;
     os << "lastSnapshotIndex: " << raft.lastSnapshotIndex << std::endl;
     os << "lastSnapshotTerm: " << raft.lastSnapshotTerm << std::endl;
+    os << "lastSnapshotClusterTime: " << raft.lastSnapshotClusterTime
+       << std::endl;
     os << "commitIndex: " << raft.commitIndex << std::endl;
     switch (raft.state) {
         case State::FOLLOWER:
@@ -1781,6 +1845,7 @@ RaftConsensus::advanceCommittedId()
             Log::Entry entry;
             entry.set_term(currentTerm);
             entry.set_type(Protocol::Raft::EntryType::CONFIGURATION);
+            entry.set_cluster_time(clusterClock.leaderStamp());
             *entry.mutable_configuration()->mutable_prev_configuration() =
                 configuration->description.next_configuration();
             append({&entry});
@@ -2037,6 +2102,12 @@ RaftConsensus::becomeLeader()
     startElectionAt = TimePoint::max();
     withholdVotesUntil = TimePoint::max();
 
+    // Our local cluster time clock has been ticking ever since we got the last
+    // log entry/snapshot. Set the clock back to when that happened, since we
+    // don't really want to count that time (the cluster probably had no leader
+    // for most of it).
+    clusterClock.newEpoch(clusterClock.clusterTimeAtEpoch);
+
     // The ordering is pretty important here: First set nextIndex and
     // lastAgreeIndex for ourselves and each follower, then append the no op.
     // Otherwise we'll set our localServer's last agree index too high.
@@ -2049,6 +2120,7 @@ RaftConsensus::becomeLeader()
     Log::Entry entry;
     entry.set_term(currentTerm);
     entry.set_type(Protocol::Raft::EntryType::NOOP);
+    entry.set_cluster_time(clusterClock.leaderStamp());
     append({&entry});
 
     // Outstanding RequestVote RPCs are no longer needed.
@@ -2134,6 +2206,7 @@ RaftConsensus::readSnapshot()
         }
         lastSnapshotIndex = header.last_included_index();
         lastSnapshotTerm = header.last_included_term();
+        lastSnapshotClusterTime = header.last_cluster_time();
         lastSnapshotBytes = reader->getSizeBytes();
         commitIndex = std::max(lastSnapshotIndex, commitIndex);
 
@@ -2168,6 +2241,7 @@ RaftConsensus::readSnapshot()
                 sync->wait();
                 log->syncComplete(std::move(sync));
             }
+            clusterClock.newEpoch(lastSnapshotClusterTime);
         }
 
         discardUnneededEntries();
@@ -2202,6 +2276,7 @@ RaftConsensus::replicateEntry(Log::Entry& entry,
 {
     if (state == State::LEADER) {
         entry.set_term(currentTerm);
+        entry.set_cluster_time(clusterClock.leaderStamp());
         append({&entry});
         uint64_t index = log->getLastLogIndex();
         while (!exiting && currentTerm == entry.term()) {

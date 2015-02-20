@@ -483,22 +483,22 @@ TEST_F(StorageSegmentedLogTest, append_rollover)
         entries.push_back(&sampleEntry);
     EXPECT_EQ((std::pair<uint64_t, uint64_t>{3, 17}),
               log->append(entries));
-    EXPECT_EQ((std::vector<uint64_t> { 3, 13 }),
+    EXPECT_EQ((std::vector<uint64_t> { 3, 11 }),
               Core::STLUtil::getKeys(log->segmentsByStartIndex));
-    EXPECT_EQ(0U, log->segmentsByStartIndex.at(13).entries.at(0).offset);
+    EXPECT_EQ(0U, log->segmentsByStartIndex.at(11).entries.at(0).offset);
     EXPECT_EQ(17U, log->currentSync->lastIndex);
     sync();
     log.reset();
     EXPECT_EQ((std::vector<std::string> {
-                    "00000000000000000003-00000000000000000012",
-                    "00000000000000000013-00000000000000000017",
+                    "00000000000000000003-00000000000000000010",
+                    "00000000000000000011-00000000000000000017",
                     "metadata1",
                     "metadata2",
                }),
               sorted(FS::ls(logDir)));
     EXPECT_GE(1024U, getSize(FS::openFile(
                                 logDir,
-                                "00000000000000000003-00000000000000000012",
+                                "00000000000000000003-00000000000000000010",
                                 O_RDONLY)));
     construct(); // extra sanity checks
 }
