@@ -34,7 +34,9 @@ ClientRPC::ClientRPC(std::shared_ptr<RPC::ClientSession> session,
                      uint8_t serviceSpecificErrorVersion,
                      uint16_t opCode,
                      const google::protobuf::Message& request)
-    : opaqueRPC() // placeholder, set again below
+    : service(service)
+    , opCode(opCode)
+    , opaqueRPC() // placeholder, set again below
 {
     // Serialize the request into a Buffer
     Core::Buffer requestBuffer;
@@ -55,12 +57,16 @@ ClientRPC::ClientRPC(std::shared_ptr<RPC::ClientSession> session,
 }
 
 ClientRPC::ClientRPC()
-    : opaqueRPC()
+    : service(0)
+    , opCode(0)
+    , opaqueRPC()
 {
 }
 
 ClientRPC::ClientRPC(ClientRPC&& other)
-    : opaqueRPC(std::move(other.opaqueRPC))
+    : service(other.service)
+    , opCode(other.opCode)
+    , opaqueRPC(std::move(other.opaqueRPC))
 {
 }
 
@@ -71,6 +77,8 @@ ClientRPC::~ClientRPC()
 ClientRPC&
 ClientRPC::operator=(ClientRPC&& other)
 {
+    service = other.service;
+    opCode = other.opCode;
     opaqueRPC = std::move(other.opaqueRPC);
     return *this;
 }
@@ -114,9 +122,10 @@ ClientRPC::waitForReply(google::protobuf::Message* response,
 
     // Extract the response's status field.
     if (responseBuffer.getLength() < sizeof(ResponseHeaderPrefix)) {
-        PANIC("The response from the server was too short to be valid "
-              "(%lu bytes). This probably indicates network or memory "
-              "corruption.", responseBuffer.getLength());
+        PANIC("The response from the server for RPC to service %u, opcode "
+              "%u was too short to be valid (%lu bytes). This probably "
+              "indicates network or memory corruption.",
+              service, opCode, responseBuffer.getLength());
     }
     ResponseHeaderPrefix responseHeaderPrefix =
         *static_cast<const ResponseHeaderPrefix*>(responseBuffer.getData());
@@ -131,8 +140,10 @@ ClientRPC::waitForReply(google::protobuf::Message* response,
     }
 
     if (responseBuffer.getLength() < sizeof(ResponseHeaderVersion1)) {
-        PANIC("The response from the server was too short to be valid. "
-              "This probably indicates network or memory corruption.");
+        PANIC("The response from the server for RPC to service %u, opcode "
+              "%u was too short to be valid. This probably indicates "
+              "network or memory corruption.",
+              service, opCode);
     }
     ResponseHeaderVersion1 responseHeader =
         *static_cast<const ResponseHeaderVersion1*>(responseBuffer.getData());
@@ -146,7 +157,8 @@ ClientRPC::waitForReply(google::protobuf::Message* response,
                 !Core::ProtoBuf::parse(responseBuffer, *response,
                                        sizeof(responseHeader))) {
                 PANIC("Could not parse the protocol buffer out of the server "
-                      "response");
+                      "response for RPC to service %u, opcode %u",
+                      service, opCode);
             }
             return Status::OK;
 
@@ -157,30 +169,37 @@ ClientRPC::waitForReply(google::protobuf::Message* response,
                 !Core::ProtoBuf::parse(responseBuffer, *serviceSpecificError,
                                        sizeof(responseHeader))) {
                 PANIC("Could not parse the protocol buffer out of the "
-                      "service-specific error details");
+                      "service-specific error details for RPC to service "
+                      "%u, opcode %u",
+                      service, opCode);
             }
             return Status::SERVICE_SPECIFIC_ERROR;
 
         // The server does not have the requested service.
         case ProtocolStatus::INVALID_SERVICE:
-            PANIC("The server is not running the requested service.");
+            PANIC("The server is not running the requested service (tried "
+                  "service %u, opcode %u)",
+                  service, opCode);
 
         // The server disliked our request. This shouldn't happen because
         // the higher layers of software were supposed to negotiate an RPC
         // protocol version.
         case ProtocolStatus::INVALID_REQUEST:
-            PANIC("The server found the request to be invalid. This "
-                  "indicates a bug in the client or server in negotiating "
-                  "which RPCs the client may legally send to the server.");
+            PANIC("The server found the request to service %u, opcode %u to "
+                  "be invalid. This indicates a bug in the client or server "
+                  "in negotiating which RPCs the client may legally send to "
+                  "the server.",
+                  service, opCode);
 
         default:
             // The server shouldn't reply back with status codes we don't
             // understand. That's why we gave it a version number in the
             // request header.
             PANIC("Unknown status %u returned from server after sending it "
-                  "protocol version 1 in the request header. This probably "
-                  "indicates a bug in the server.",
-                  uint32_t(responseHeader.prefix.status));
+                  "protocol version 1 in the request header for RPC to "
+                  "service %u, opcode %u. This probably indicates a bug in "
+                  "the server.",
+                  uint32_t(responseHeader.prefix.status), service, opCode);
     }
 
 }

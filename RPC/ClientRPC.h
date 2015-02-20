@@ -172,6 +172,16 @@ class ClientRPC {
     std::string getErrorMessage() const;
 
   private:
+    /**
+     * Identifies the service running on the server.
+     * See Protocol::Common::ServiceId.
+     */
+    uint16_t service;
+
+    /**
+     * Identifies the remote procedure within the Service to execute.
+     */
+    uint16_t opCode;
 
     OpaqueClientRPC opaqueRPC;
 
