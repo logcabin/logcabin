@@ -25,7 +25,7 @@ Buffer::Buffer()
 {
 }
 
-Buffer::Buffer(void* data, uint32_t length, Deleter deleter)
+Buffer::Buffer(void* data, uint64_t length, Deleter deleter)
     : data(data)
     , length(length)
     , deleter(deleter)
@@ -63,7 +63,7 @@ Buffer::operator=(Buffer&& other)
 }
 
 void
-Buffer::setData(void* data, uint32_t length, Deleter deleter)
+Buffer::setData(void* data, uint64_t length, Deleter deleter)
 {
     if (this->deleter != NULL)
         (*this->deleter)(this->data);

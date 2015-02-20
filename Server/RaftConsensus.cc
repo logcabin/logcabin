@@ -1037,7 +1037,7 @@ RaftConsensus::getNextEntry(uint64_t lastEntryId) const
                     const std::string& s = logEntry.data();
                     entry.command = Core::Buffer(
                         memcpy(new char[s.length()], s.data(), s.length()),
-                        Core::Util::downCast<uint32_t>(s.length()),
+                        s.length(),
                         Core::Buffer::deleteArrayFn<char>);
                 } else {
                     entry.type = Entry::SKIP;

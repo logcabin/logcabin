@@ -150,7 +150,7 @@ MessageSocket::Outbound::Outbound(MessageId messageId,
     , message(std::move(message))
 {
     header.messageId = messageId;
-    header.payloadLength = this->message.getLength();
+    header.payloadLength = uint32_t(this->message.getLength());
     header.toBigEndian();
 }
 
@@ -202,7 +202,7 @@ MessageSocket::sendMessage(MessageId messageId, Core::Buffer contents)
 {
     // Check the message length.
     if (contents.getLength() > maxMessageLength) {
-        PANIC("Message of length %u bytes is too long to send "
+        PANIC("Message of length %lu bytes is too long to send "
               "(limit is %u bytes)",
               contents.getLength(), maxMessageLength);
     }

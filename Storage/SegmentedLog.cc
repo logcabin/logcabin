@@ -427,7 +427,7 @@ SegmentedLog::append(const std::vector<const Entry*>& entries)
         if (openSegment->bytes > 0 &&
             openSegment->bytes + buf.getLength() > MAX_SEGMENT_SIZE) {
             NOTICE("Rolling over to new head segment: trying to append new "
-                   "entry that is %u bytes long, but open segment is already "
+                   "entry that is %lu bytes long, but open segment is already "
                    "%lu of %lu bytes large",
                    buf.getLength(),
                    openSegment->bytes,
@@ -465,7 +465,7 @@ SegmentedLog::append(const std::vector<const Entry*>& entries)
         }
 
         if (buf.getLength() > MAX_SEGMENT_SIZE) {
-            WARNING("Trying to append an entry of %u bytes when the maximum "
+            WARNING("Trying to append an entry of %lu bytes when the maximum "
                     "segment size is %lu bytes. Placing this entry in its own "
                     "segment. Consider adjusting 'storageSegmentBytes' in the "
                     "config.",
@@ -1091,7 +1091,7 @@ SegmentedLog::readProtoFromFile(const FS::File& file,
     switch (encoding) {
         case SegmentedLog::Encoding::BINARY: {
             Core::Buffer contents(const_cast<void*>(data),
-                                  Core::Util::downCast<uint32_t>(dataLen),
+                                  dataLen,
                                   NULL);
             if (!Core::ProtoBuf::parse(contents, *out)) {
                 return format("Failed to parse protobuf in %s",
@@ -1144,7 +1144,7 @@ SegmentedLog::serializeProto(const google::protobuf::Message& in) const
     char* buf = new char[totalLen];
     Core::Buffer record(
         buf,
-        uint32_t(totalLen),
+        totalLen,
         Core::Buffer::deleteArrayFn<char>);
     Core::Util::memcpy(buf, {
         {checksum, checksumLen},
