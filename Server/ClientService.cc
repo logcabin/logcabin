@@ -122,10 +122,9 @@ std::pair<Result, uint64_t>
 ClientService::submit(RPC::ServerRPC& rpc,
                       const google::protobuf::Message& command)
 {
-    // TODO(ongaro): Switch from string to binary format. This is probably
-    // really slow to serialize.
-    std::string cmdStr = Core::ProtoBuf::dumpString(command);
-    std::pair<Result, uint64_t> result = globals.raft->replicate(cmdStr);
+    Core::Buffer cmdBuffer;
+    Core::ProtoBuf::serialize(command, cmdBuffer);
+    std::pair<Result, uint64_t> result = globals.raft->replicate(cmdBuffer);
     if (result.first == Result::RETRY || result.first == Result::NOT_LEADER) {
         Protocol::Client::Error error;
         error.set_error_code(Protocol::Client::Error::NOT_LEADER);

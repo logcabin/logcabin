@@ -76,6 +76,15 @@ class ServerStateMachineTest : public ::testing::Test {
         stateMachineChildSleepMs = 0;
         Storage::FilesystemUtil::remove(consensus->storageDirectory.path);
     }
+
+
+    Core::Buffer
+    serialize(const Protocol::Client::Command& command) {
+        Core::Buffer out;
+        Core::ProtoBuf::serialize(command, out);
+        return out;
+    }
+
     Globals globals;
     std::shared_ptr<RaftConsensus> consensus;
     std::unique_ptr<StateMachine> stateMachine;
@@ -125,7 +134,7 @@ TEST_F(ServerStateMachineTest, apply_tree)
 
     // session does not exist
     stateMachine->sessions.insert({1, {}});
-    stateMachine->apply(6, Core::ProtoBuf::dumpString(command));
+    stateMachine->apply(6, serialize(command));
     stateMachine->tree.listDirectory("/", children);
     EXPECT_EQ((std::vector<std::string> {}), children);
     ASSERT_EQ(0U, stateMachine->sessions.size());
@@ -133,7 +142,7 @@ TEST_F(ServerStateMachineTest, apply_tree)
     // session exists and need to apply
     stateMachine->sessions.insert({1, {}});
     stateMachine->sessions.insert({39, {}});
-    stateMachine->apply(6, Core::ProtoBuf::dumpString(command));
+    stateMachine->apply(6, serialize(command));
     stateMachine->tree.listDirectory("/", children);
     EXPECT_EQ((std::vector<std::string> {"a/"}), children);
     ASSERT_EQ(1U, stateMachine->sessions.size());
@@ -142,7 +151,7 @@ TEST_F(ServerStateMachineTest, apply_tree)
     // session exists and response exists
     stateMachine->sessions.insert({1, {}});
     stateMachine->tree.removeDirectory("/a");
-    stateMachine->apply(6, Core::ProtoBuf::dumpString(command));
+    stateMachine->apply(6, serialize(command));
     stateMachine->tree.listDirectory("/", children);
     EXPECT_EQ((std::vector<std::string> {}), children);
     ASSERT_EQ(1U, stateMachine->sessions.size());
@@ -151,7 +160,7 @@ TEST_F(ServerStateMachineTest, apply_tree)
     // session exists but response discarded
     stateMachine->sessions.insert({1, {}});
     stateMachine->expireResponses(stateMachine->sessions.at(39), 4);
-    stateMachine->apply(6, Core::ProtoBuf::dumpString(command));
+    stateMachine->apply(6, serialize(command));
     stateMachine->tree.listDirectory("/", children);
     EXPECT_EQ((std::vector<std::string> {}), children);
     ASSERT_EQ(1U, stateMachine->sessions.size());
@@ -166,7 +175,7 @@ TEST_F(ServerStateMachineTest, apply_openSession)
         Core::ProtoBuf::fromString<Protocol::Client::Command>(
             "nanoseconds_since_epoch: 2, "
             "open_session: {}");
-    stateMachine->apply(6, Core::ProtoBuf::dumpString(command));
+    stateMachine->apply(6, serialize(command));
     ASSERT_EQ((std::vector<uint64_t>{6U}),
               Core::STLUtil::sorted(
                   Core::STLUtil::getKeys(stateMachine->sessions)));

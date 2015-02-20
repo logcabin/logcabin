@@ -777,7 +777,7 @@ ConfigurationManager::restoreInvariants()
 RaftConsensus::Entry::Entry()
     : entryId()
     , type(SKIP)
-    , data()
+    , command()
     , snapshotReader()
 {
 }
@@ -785,7 +785,7 @@ RaftConsensus::Entry::Entry()
 RaftConsensus::Entry::Entry(Entry&& other)
     : entryId(other.entryId)
     , type(other.type)
-    , data(std::move(other.data))
+    , command(std::move(other.command))
     , snapshotReader(std::move(other.snapshotReader))
 {
 }
@@ -1034,7 +1034,11 @@ RaftConsensus::getNextEntry(uint64_t lastEntryId) const
                 entry.entryId = nextEntryId;
                 if (logEntry.type() == Protocol::Raft::EntryType::DATA) {
                     entry.type = Entry::DATA;
-                    entry.data = logEntry.data();
+                    const std::string& s = logEntry.data();
+                    entry.command = Core::Buffer(
+                        memcpy(new char[s.length()], s.data(), s.length()),
+                        Core::Util::downCast<uint32_t>(s.length()),
+                        Core::Buffer::deleteArrayFn<char>);
                 } else {
                     entry.type = Entry::SKIP;
                 }
@@ -1322,13 +1326,12 @@ RaftConsensus::handleRequestVote(
 }
 
 std::pair<RaftConsensus::ClientResult, uint64_t>
-RaftConsensus::replicate(const std::string& operation)
+RaftConsensus::replicate(const Core::Buffer& operation)
 {
     std::unique_lock<Mutex> lockGuard(mutex);
-    VERBOSE("replicate(%s)", operation.c_str());
     Log::Entry entry;
     entry.set_type(Protocol::Raft::EntryType::DATA);
-    entry.set_data(operation);
+    entry.set_data(operation.getData(), operation.getLength());
     return replicateEntry(entry, lockGuard);
 }
 

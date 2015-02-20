@@ -723,14 +723,14 @@ TEST_F(ServerRaftConsensusTest, getNextEntry)
     RaftConsensus::Entry e2 = consensus->getNextEntry(e1.entryId);
     EXPECT_EQ(2U, e2.entryId);
     EXPECT_EQ(RaftConsensus::Entry::DATA, e2.type);
-    EXPECT_EQ("hello", e2.data);
+    EXPECT_STREQ("hello", static_cast<const char*>(e2.command.getData()));
     RaftConsensus::Entry e3 = consensus->getNextEntry(e2.entryId);
     EXPECT_EQ(3U, e3.entryId);
     EXPECT_EQ(RaftConsensus::Entry::SKIP, e3.type);
     RaftConsensus::Entry e4 = consensus->getNextEntry(e3.entryId);
     EXPECT_EQ(4U, e4.entryId);
     EXPECT_EQ(RaftConsensus::Entry::DATA, e4.type);
-    EXPECT_EQ("goodbye", e4.data);
+    EXPECT_STREQ("goodbye", static_cast<const char*>(e4.command.getData()));
     EXPECT_THROW(consensus->getNextEntry(e4.entryId),
                  Core::Util::ThreadInterruptedException);
 }

@@ -830,7 +830,7 @@ class RaftConsensus {
         /**
          * The client request for entries of type 'DATA'.
          */
-        std::string data;
+        Core::Buffer command;
 
         /**
          * A handle to the snapshot file for entries of type 'SNAPSHOT'.
@@ -957,7 +957,7 @@ class RaftConsensus {
      *      log index at which the entry has been committed to the replicated
      *      log.
      */
-    std::pair<ClientResult, uint64_t> replicate(const std::string& operation);
+    std::pair<ClientResult, uint64_t> replicate(const Core::Buffer& operation);
 
     /**
      * Change the cluster's configuration.

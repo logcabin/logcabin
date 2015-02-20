@@ -1145,7 +1145,7 @@ SegmentedLog::serializeProto(const google::protobuf::Message& in) const
     Core::Buffer record(
         buf,
         uint32_t(totalLen),
-        Core::Buffer::deleteArrayFn<char[]>);
+        Core::Buffer::deleteArrayFn<char>);
     Core::Util::memcpy(buf, {
         {checksum, checksumLen},
         {&netLen, sizeof(netLen)},

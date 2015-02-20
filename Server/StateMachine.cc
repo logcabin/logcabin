@@ -125,11 +125,13 @@ StateMachine::wait(uint64_t entryId) const
 ////////// StateMachine private methods //////////
 
 void
-StateMachine::apply(uint64_t entryId, const std::string& data)
+StateMachine::apply(uint64_t entryId, const Core::Buffer& serializedCommand)
 {
-    // TODO(ongaro): Switch from string to binary format. This is probably
-    // really slow to parse.
-    PC::Command command = Core::ProtoBuf::fromString<PC::Command>(data);
+    PC::Command command;
+    if (!Core::ProtoBuf::parse(serializedCommand, command)) {
+        PANIC("Failed to parse protobuf for entry %lu",
+              entryId);
+    }
     Session* session = NULL;
     if (command.has_tree()) {
         PC::ExactlyOnceRPCInfo rpcInfo = command.tree().exactly_once();
@@ -160,7 +162,9 @@ StateMachine::apply(uint64_t entryId, const std::string& data)
         uint64_t clientId = entryId;
         session = &sessions.insert({clientId, {}}).first->second;
     } else {
-        PANIC("unknown command at %lu: %s", entryId, data.c_str());
+        PANIC("unknown command at %lu: %s",
+              entryId,
+              Core::ProtoBuf::dumpString(command).c_str());
     }
 
     if (command.has_nanoseconds_since_epoch()) {
@@ -184,7 +188,7 @@ StateMachine::applyThreadMain()
                 case RaftConsensus::Entry::SKIP:
                     break;
                 case RaftConsensus::Entry::DATA:
-                    apply(entry.entryId, entry.data);
+                    apply(entry.entryId, entry.command);
                     break;
                 case RaftConsensus::Entry::SNAPSHOT:
                     NOTICE("Loading snapshot through entry %lu into "

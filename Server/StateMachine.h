@@ -77,7 +77,7 @@ class StateMachine {
     /**
      * Invoked once per committed entry from the Raft log.
      */
-    void apply(uint64_t entryId, const std::string& data);
+    void apply(uint64_t entryId, const Core::Buffer& serializedCommand);
 
     /**
      * Main function for thread that waits for new commands from Raft.
