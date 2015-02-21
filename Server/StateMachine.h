@@ -68,7 +68,7 @@ class StateMachine {
     /**
      * Return once the state machine has applied at least the given entry.
      */
-    void wait(uint64_t entryId) const;
+    void wait(uint64_t index) const;
 
   private:
     // forward declaration
@@ -77,7 +77,7 @@ class StateMachine {
     /**
      * Invoked once per committed entry from the Raft log.
      */
-    void apply(uint64_t entryId, const Core::Buffer& serializedCommand);
+    void apply(uint64_t index, const Core::Buffer& serializedCommand);
 
     /**
      * Main function for thread that waits for new commands from Raft.
@@ -157,14 +157,14 @@ class StateMachine {
     mutable std::mutex mutex;
 
     /**
-     * Notified when lastEntryId changes after some entry got applied.
+     * Notified when lastIndex changes after some entry got applied.
      * Also notified upon exiting.
      * This is used for client threads to wait; see wait().
      */
     mutable Core::ConditionVariable entriesApplied;
 
     /**
-     * Notified when shouldTakeSnapshot(lastEntryId) becomes true.
+     * Notified when shouldTakeSnapshot(lastIndex) becomes true.
      * Also notified upon exiting.
      * This is used for snapshotThread to wake up only when necessary.
      */
@@ -188,7 +188,7 @@ class StateMachine {
      * This variable is only written to by applyThread, so applyThread is free
      * to access this variable without holding 'mutex'.
      */
-    uint64_t lastEntryId;
+    uint64_t lastIndex;
 
     /**
      * Tracks state for a particular client.

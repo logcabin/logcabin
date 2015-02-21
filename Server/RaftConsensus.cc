@@ -775,7 +775,7 @@ ConfigurationManager::restoreInvariants()
 ////////// RaftConsensus::Entry //////////
 
 RaftConsensus::Entry::Entry()
-    : entryId()
+    : index(0)
     , type(SKIP)
     , command()
     , snapshotReader()
@@ -783,7 +783,7 @@ RaftConsensus::Entry::Entry()
 }
 
 RaftConsensus::Entry::Entry(Entry&& other)
-    : entryId(other.entryId)
+    : index(other.index)
     , type(other.type)
     , command(std::move(other.command))
     , snapshotReader(std::move(other.snapshotReader))
@@ -887,12 +887,12 @@ RaftConsensus::init()
     if (!log) { // some unit tests pre-set the log; don't overwrite it
         log = Storage::LogFactory::makeLog(globals.config, storageDirectory);
     }
-    for (uint64_t entryId = log->getLogStartIndex();
-         entryId <= log->getLastLogIndex();
-         ++entryId) {
-        const Log::Entry& entry = log->getEntry(entryId);
+    for (uint64_t index = log->getLogStartIndex();
+         index <= log->getLastLogIndex();
+         ++index) {
+        const Log::Entry& entry = log->getEntry(index);
         if (entry.type() == Protocol::Raft::EntryType::CONFIGURATION) {
-            configurationManager->add(entryId, entry.configuration());
+            configurationManager->add(index, entry.configuration());
         }
     }
 
@@ -997,19 +997,19 @@ RaftConsensus::getLeaderHint() const
 }
 
 RaftConsensus::Entry
-RaftConsensus::getNextEntry(uint64_t lastEntryId) const
+RaftConsensus::getNextEntry(uint64_t lastIndex) const
 {
     std::unique_lock<Mutex> lockGuard(mutex);
-    uint64_t nextEntryId = lastEntryId + 1;
+    uint64_t nextIndex = lastIndex + 1;
     while (true) {
         if (exiting)
             throw Core::Util::ThreadInterruptedException();
-        if (commitIndex >= nextEntryId) {
+        if (commitIndex >= nextIndex) {
             RaftConsensus::Entry entry;
 
             // Make the state machine load a snapshot if we don't have the next
             // entry it needs in the log.
-            if (log->getLogStartIndex() > nextEntryId) {
+            if (log->getLogStartIndex() > nextIndex) {
                 entry.type = Entry::SNAPSHOT;
                 // For well-behaved state machines, we expect 'snapshotReader'
                 // to contain a SnapshotFile::Reader that we can return
@@ -1027,11 +1027,11 @@ RaftConsensus::getNextEntry(uint64_t lastEntryId) const
                     const_cast<RaftConsensus*>(this)->readSnapshot();
                     entry.snapshotReader = std::move(snapshotReader);
                 }
-                entry.entryId = lastSnapshotIndex;
+                entry.index = lastSnapshotIndex;
             } else {
                 // not a snapshot
-                const Log::Entry& logEntry = log->getEntry(nextEntryId);
-                entry.entryId = nextEntryId;
+                const Log::Entry& logEntry = log->getEntry(nextIndex);
+                entry.index = nextIndex;
                 if (logEntry.type() == Protocol::Raft::EntryType::DATA) {
                     entry.type = Entry::DATA;
                     const std::string& s = logEntry.data();
@@ -1143,27 +1143,27 @@ RaftConsensus::handleAppendEntries(
     // acknowledged data is safe. However, there is a window of vulnerability
     // on the follower's disk between the truncate and append operations (which
     // are not done atomically) when the follower processes the later request.
-    uint64_t entryId = request.prev_log_index();
+    uint64_t index = request.prev_log_index();
     for (auto it = request.entries().begin();
          it != request.entries().end();
          ++it) {
-        ++entryId;
+        ++index;
         const Protocol::Raft::Entry& entry = *it;
-        if (entryId < log->getLogStartIndex()) {
+        if (index < log->getLogStartIndex()) {
             // We already snapshotted and discarded this index, so presumably
             // we've received a committed entry we once already had.
             continue;
         }
-        if (log->getLastLogIndex() >= entryId) {
-            if (log->getEntry(entryId).term() == entry.term())
+        if (log->getLastLogIndex() >= index) {
+            if (log->getEntry(index).term() == entry.term())
                 continue;
             // should never truncate committed entries:
-            assert(commitIndex < entryId);
+            assert(commitIndex < index);
             NOTICE("Truncating %lu entries after %lu from the log",
-                   log->getLastLogIndex() - entryId + 1,
-                   entryId - 1);
-            log->truncateSuffix(entryId - 1);
-            configurationManager->truncateSuffix(entryId - 1);
+                   log->getLastLogIndex() - index + 1,
+                   index - 1);
+            log->truncateSuffix(index - 1);
+            configurationManager->truncateSuffix(index - 1);
         }
 
         // Append this and all following entries.
@@ -1856,17 +1856,17 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
     // the last one out.
     uint64_t numEntries = 0;
     if (!peer.forceHeartbeat) {
-        for (uint64_t entryId = peer.nextIndex;
-             entryId <= lastLogIndex;
-             ++entryId) {
-            const Log::Entry& entry = log->getEntry(entryId);
+        for (uint64_t index = peer.nextIndex;
+             index <= lastLogIndex;
+             ++index) {
+            const Log::Entry& entry = log->getEntry(index);
             *request.add_entries() = entry;
             uint64_t requestSize =
                 Core::Util::downCast<uint64_t>(request.ByteSize());
             if (requestSize < SOFT_RPC_SIZE_LIMIT || numEntries == 0) {
                 // this entry fits, send it
-                VERBOSE("sending entry <id=%lu,term=%lu>",
-                        entryId, entry.term());
+                VERBOSE("sending entry <index=%lu,term=%lu>",
+                        index, entry.term());
                 ++numEntries;
             } else {
                 // this entry doesn't fit, discard it

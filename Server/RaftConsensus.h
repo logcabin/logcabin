@@ -792,11 +792,11 @@ class RaftConsensus {
         ~Entry();
 
         /**
-         * The entry ID for this entry (or the last one a snapshot covers).
-         * Pass this as the lastEntryId argument to the next call to
+         * The Raft log index for this entry (or the last one a snapshot
+         * covers). Pass this as the lastIndex argument to the next call to
          * getNextEntry().
          */
-        uint64_t entryId;
+        uint64_t index;
 
         /**
          * The type of the entry.
@@ -897,17 +897,17 @@ class RaftConsensus {
     std::string getLeaderHint() const;
 
     /**
-     * This returns the entry following lastEntryId in the replicated log. Some
+     * This returns the entry following lastIndex in the replicated log. Some
      * entries may be used internally by the consensus module. These will have
      * Entry.hasData set to false. The reason these are exposed to the state
      * machine is that the state machine waits to be caught up to the latest
-     * committed entry ID in the replicated log; sometimes, but that entry
-     * would otherwise never reach the state machine if it was for internal
-     * use.
+     * committed entry in the replicated log sometimes, but if that entry
+     * was for internal use, it would would otherwise never reach the state
+     * machine.
      * \throw Core::Util::ThreadInterruptedException
      *      Thread should exit.
      */
-    Entry getNextEntry(uint64_t lastEntryId) const;
+    Entry getNextEntry(uint64_t lastIndex) const;
 
     /**
      * Return statistics that may be useful in deciding when to snapshot.

@@ -95,10 +95,10 @@ Invariants::checkBasic()
 {
     // Log terms monotonically increase
     uint64_t lastTerm = 0;
-    for (uint64_t entryId = consensus.log->getLogStartIndex();
-         entryId <= consensus.log->getLastLogIndex();
-         ++entryId) {
-        const Storage::Log::Entry& entry = consensus.log->getEntry(entryId);
+    for (uint64_t index = consensus.log->getLogStartIndex();
+         index <= consensus.log->getLastLogIndex();
+         ++index) {
+        const Storage::Log::Entry& entry = consensus.log->getEntry(index);
         expect(entry.term() >= lastTerm);
         lastTerm = entry.term();
     }
@@ -107,12 +107,12 @@ Invariants::checkBasic()
 
     // The current configuration should be the last one found in the log
     bool found = false;
-    for (uint64_t entryId = consensus.log->getLastLogIndex();
-         entryId >= consensus.log->getLogStartIndex();
-         --entryId) {
-        const Storage::Log::Entry& entry = consensus.log->getEntry(entryId);
+    for (uint64_t index = consensus.log->getLastLogIndex();
+         index >= consensus.log->getLogStartIndex();
+         --index) {
+        const Storage::Log::Entry& entry = consensus.log->getEntry(index);
         if (entry.type() == Protocol::Raft::EntryType::CONFIGURATION) {
-            expect(consensus.configuration->id == entryId);
+            expect(consensus.configuration->id == index);
             expect(consensus.configuration->state !=
                    Configuration::State::BLANK);
             found = true;
@@ -131,13 +131,13 @@ Invariants::checkBasic()
 
     // Every configuration present in the log should also be present in the
     // configurationDescriptions map.
-    for (uint64_t entryId = consensus.log->getLogStartIndex();
-         entryId <= consensus.log->getLastLogIndex();
-         ++entryId) {
-        const Storage::Log::Entry& entry = consensus.log->getEntry(entryId);
+    for (uint64_t index = consensus.log->getLogStartIndex();
+         index <= consensus.log->getLastLogIndex();
+         ++index) {
+        const Storage::Log::Entry& entry = consensus.log->getEntry(index);
         if (entry.type() == Protocol::Raft::EntryType::CONFIGURATION) {
             auto it = consensus.configurationManager->
-                                        descriptions.find(entryId);
+                                        descriptions.find(index);
             expect(it != consensus.configurationManager->descriptions.end());
             if (it != consensus.configurationManager->descriptions.end())
                 expect(it->second == entry.configuration());

@@ -155,11 +155,11 @@ ClientService::catchUpStateMachine(RPC::ServerRPC& rpc)
 
 bool
 ClientService::getResponse(RPC::ServerRPC& rpc,
-                           uint64_t entryId,
+                           uint64_t index,
                            const Protocol::Client::ExactlyOnceRPCInfo& rpcInfo,
                            Protocol::Client::CommandResponse& response)
 {
-    globals.stateMachine->wait(entryId);
+    globals.stateMachine->wait(index);
     bool ok = globals.stateMachine->getResponse(rpcInfo, response);
     if (!ok) {
         Protocol::Client::Error error;

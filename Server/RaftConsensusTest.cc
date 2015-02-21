@@ -718,20 +718,20 @@ TEST_F(ServerRaftConsensusTest, getNextEntry)
     consensus->stateChanged.callback = std::bind(&RaftConsensus::exit,
                                                  consensus.get());
     RaftConsensus::Entry e1 = consensus->getNextEntry(0);
-    EXPECT_EQ(1U, e1.entryId);
+    EXPECT_EQ(1U, e1.index);
     EXPECT_EQ(RaftConsensus::Entry::SKIP, e1.type);
-    RaftConsensus::Entry e2 = consensus->getNextEntry(e1.entryId);
-    EXPECT_EQ(2U, e2.entryId);
+    RaftConsensus::Entry e2 = consensus->getNextEntry(e1.index);
+    EXPECT_EQ(2U, e2.index);
     EXPECT_EQ(RaftConsensus::Entry::DATA, e2.type);
     EXPECT_STREQ("hello", static_cast<const char*>(e2.command.getData()));
-    RaftConsensus::Entry e3 = consensus->getNextEntry(e2.entryId);
-    EXPECT_EQ(3U, e3.entryId);
+    RaftConsensus::Entry e3 = consensus->getNextEntry(e2.index);
+    EXPECT_EQ(3U, e3.index);
     EXPECT_EQ(RaftConsensus::Entry::SKIP, e3.type);
-    RaftConsensus::Entry e4 = consensus->getNextEntry(e3.entryId);
-    EXPECT_EQ(4U, e4.entryId);
+    RaftConsensus::Entry e4 = consensus->getNextEntry(e3.index);
+    EXPECT_EQ(4U, e4.index);
     EXPECT_EQ(RaftConsensus::Entry::DATA, e4.type);
     EXPECT_STREQ("goodbye", static_cast<const char*>(e4.command.getData()));
-    EXPECT_THROW(consensus->getNextEntry(e4.entryId),
+    EXPECT_THROW(consensus->getNextEntry(e4.index),
                  Core::Util::ThreadInterruptedException);
 }
 
@@ -755,13 +755,13 @@ TEST_F(ServerRaftConsensusTest, getNextEntry_snapshot)
         {"Server/RaftConsensus.cc", "ERROR"}
     });
     RaftConsensus::Entry e1 = consensus->getNextEntry(0);
-    EXPECT_EQ(2U, e1.entryId);
+    EXPECT_EQ(2U, e1.index);
     EXPECT_EQ(RaftConsensus::Entry::SNAPSHOT, e1.type);
     uint32_t x;
     EXPECT_TRUE(e1.snapshotReader->getStream().ReadLittleEndian32(&x));
     EXPECT_EQ(0xdeadbeef, x);
 
-    EXPECT_EQ(3U, consensus->getNextEntry(2).entryId);
+    EXPECT_EQ(3U, consensus->getNextEntry(2).index);
 }
 
 TEST_F(ServerRaftConsensusTest, getSnapshotStats)

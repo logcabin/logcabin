@@ -69,7 +69,7 @@ class ClientService : public RPC::Service {
 
     bool
     getResponse(RPC::ServerRPC& rpc,
-                uint64_t entryId,
+                uint64_t index,
                 const Protocol::Client::ExactlyOnceRPCInfo& rpcInfo,
                 Protocol::Client::CommandResponse& response);
 

@@ -56,7 +56,7 @@ StateMachine::StateMachine(std::shared_ptr<RaftConsensus> consensus,
     , snapshotSuggested()
     , exiting(false)
     , childPid(0)
-    , lastEntryId(0)
+    , lastIndex(0)
     , sessions()
     , tree()
     , applyThread()
@@ -114,10 +114,10 @@ StateMachine::readOnlyTreeRPC(const PC::ReadOnlyTree::Request& request,
 }
 
 void
-StateMachine::wait(uint64_t entryId) const
+StateMachine::wait(uint64_t index) const
 {
     std::unique_lock<std::mutex> lockGuard(mutex);
-    while (lastEntryId < entryId)
+    while (lastIndex < index)
         entriesApplied.wait(lockGuard);
 }
 
@@ -125,12 +125,12 @@ StateMachine::wait(uint64_t entryId) const
 ////////// StateMachine private methods //////////
 
 void
-StateMachine::apply(uint64_t entryId, const Core::Buffer& serializedCommand)
+StateMachine::apply(uint64_t index, const Core::Buffer& serializedCommand)
 {
     PC::Command command;
     if (!Core::ProtoBuf::parse(serializedCommand, command)) {
         PANIC("Failed to parse protobuf for entry %lu",
-              entryId);
+              index);
     }
     Session* session = NULL;
     if (command.has_tree()) {
@@ -159,11 +159,11 @@ StateMachine::apply(uint64_t entryId, const Core::Buffer& serializedCommand)
             }
         }
     } else if (command.has_open_session()) {
-        uint64_t clientId = entryId;
+        uint64_t clientId = index;
         session = &sessions.insert({clientId, {}}).first->second;
     } else {
         PANIC("unknown command at %lu: %s",
-              entryId,
+              index,
               Core::ProtoBuf::dumpString(command).c_str());
     }
 
@@ -182,24 +182,24 @@ StateMachine::applyThreadMain()
     Core::ThreadId::setName("StateMachine");
     try {
         while (true) {
-            RaftConsensus::Entry entry = consensus->getNextEntry(lastEntryId);
+            RaftConsensus::Entry entry = consensus->getNextEntry(lastIndex);
             std::unique_lock<std::mutex> lockGuard(mutex);
             switch (entry.type) {
                 case RaftConsensus::Entry::SKIP:
                     break;
                 case RaftConsensus::Entry::DATA:
-                    apply(entry.entryId, entry.command);
+                    apply(entry.index, entry.command);
                     break;
                 case RaftConsensus::Entry::SNAPSHOT:
                     NOTICE("Loading snapshot through entry %lu into "
-                           "state machine", entry.entryId);
+                           "state machine", entry.index);
                     loadSessionSnapshot(entry.snapshotReader->getStream());
                     tree.loadSnapshot(entry.snapshotReader->getStream());
                     break;
             }
-            lastEntryId = entry.entryId;
+            lastIndex = entry.index;
             entriesApplied.notify_all();
-            if (shouldTakeSnapshot(lastEntryId))
+            if (shouldTakeSnapshot(lastIndex))
                 snapshotSuggested.notify_all();
         }
     } catch (const Core::Util::ThreadInterruptedException& e) {
@@ -338,8 +338,8 @@ StateMachine::snapshotThreadMain()
         std::unique_lock<std::mutex> lockGuard(mutex);
         if (exiting)
             return;
-        if (shouldTakeSnapshot(lastEntryId))
-            takeSnapshot(lastEntryId, lockGuard);
+        if (shouldTakeSnapshot(lastIndex))
+            takeSnapshot(lastIndex, lockGuard);
         else
             snapshotSuggested.wait(lockGuard);
     }
