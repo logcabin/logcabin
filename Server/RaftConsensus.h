@@ -926,16 +926,16 @@ class RaftConsensus {
                 Protocol::Raft::AppendEntries::Response& response);
 
     /**
-     * Process an AppendSnapshotChunk RPC from another server. Called by
+     * Process an InstallSnapshot RPC from another server. Called by
      * RaftService.
      * \param[in] request
      *      The request that was received from the other server.
      * \param[out] response
      *      Where the reply should be placed.
      */
-    void handleAppendSnapshotChunk(
-                const Protocol::Raft::AppendSnapshotChunk::Request& request,
-                Protocol::Raft::AppendSnapshotChunk::Response& response);
+    void handleInstallSnapshot(
+                const Protocol::Raft::InstallSnapshot::Request& request,
+                Protocol::Raft::InstallSnapshot::Response& response);
 
     /**
      * Process a RequestVote RPC from another server. Called by RaftService.
@@ -1117,7 +1117,7 @@ class RaftConsensus {
     void appendEntries(std::unique_lock<Mutex>& lockGuard, Peer& peer);
 
     /**
-     * Send an AppendSnapshotChunk RPC to the server (containing part of a
+     * Send an InstallSnapshot RPC to the server (containing part of a
      * snapshot file to replicate).
      * \param lockGuard
      *      Used to temporarily release the lock while invoking the RPC, so as
@@ -1126,7 +1126,7 @@ class RaftConsensus {
      *      State used in communicating with the follower, building the RPC
      *      request, and processing its result.
      */
-    void appendSnapshotChunk(std::unique_lock<Mutex>& lockGuard, Peer& peer);
+    void installSnapshot(std::unique_lock<Mutex>& lockGuard, Peer& peer);
 
     /**
      * Transition to being a leader. This is called when a candidate has
@@ -1408,7 +1408,7 @@ class RaftConsensus {
     mutable std::unique_ptr<Storage::SnapshotFile::Reader> snapshotReader;
 
     /**
-     * This is used in handleAppendSnapshotChunk when receiving a snapshot from
+     * This is used in handleInstallSnapshot when receiving a snapshot from
      * the current leader. The leader is assumed to send at most one snapshot
      * at a time, and any partial snapshots here are discarded when the term
      * changes.

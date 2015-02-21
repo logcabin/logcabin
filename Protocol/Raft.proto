@@ -216,9 +216,9 @@ message AppendEntries {
 }
 
 /**
- * AppendSnapshotChunk RPC: replicate part of a snapshot file to a follower.
+ * InstallSnapshot RPC: replicate part of a snapshot file to a follower.
  */
-message AppendSnapshotChunk {
+message InstallSnapshot {
     message Request {
         /**
          * ID of leader (caller), so the follower can redirect clients.

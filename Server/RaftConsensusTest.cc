@@ -1048,11 +1048,11 @@ readEntireFileAsString(const Storage::FilesystemUtil::File& parentDir,
                        f.getFileLength());
 }
 
-TEST_F(ServerRaftConsensusTest, handleAppendSnapshotChunk_callerStale)
+TEST_F(ServerRaftConsensusTest, handleInstallSnapshot_callerStale)
 {
     init();
-    Protocol::Raft::AppendSnapshotChunk::Request request;
-    Protocol::Raft::AppendSnapshotChunk::Response response;
+    Protocol::Raft::InstallSnapshot::Request request;
+    Protocol::Raft::InstallSnapshot::Response response;
     request.set_server_id(3);
     request.set_term(10);
     request.set_last_snapshot_index(1);
@@ -1060,7 +1060,7 @@ TEST_F(ServerRaftConsensusTest, handleAppendSnapshotChunk_callerStale)
     request.set_data("hello");
     request.set_done(false);
     consensus->stepDown(11);
-    consensus->handleAppendSnapshotChunk(request, response);
+    consensus->handleInstallSnapshot(request, response);
     EXPECT_EQ("term: 11 ", response);
 }
 
@@ -1069,8 +1069,8 @@ TEST_F(ServerRaftConsensusTest, handleAppendSnapshotChunk_callerStale)
 TEST_F(ServerRaftConsensusTest, handleSnapshotChunk_newLeader)
 {
     init();
-    Protocol::Raft::AppendSnapshotChunk::Request request;
-    Protocol::Raft::AppendSnapshotChunk::Response response;
+    Protocol::Raft::InstallSnapshot::Request request;
+    Protocol::Raft::InstallSnapshot::Response response;
     request.set_server_id(3);
     request.set_term(10);
     request.set_last_snapshot_index(1);
@@ -1083,7 +1083,7 @@ TEST_F(ServerRaftConsensusTest, handleSnapshotChunk_newLeader)
     EXPECT_EQ(State::CANDIDATE, consensus->state);
     EXPECT_EQ(9U, consensus->currentTerm);
     Clock::mockValue += milliseconds(10000);
-    consensus->handleAppendSnapshotChunk(request, response);
+    consensus->handleInstallSnapshot(request, response);
     EXPECT_EQ(3U, consensus->leaderId);
     EXPECT_EQ(State::FOLLOWER, consensus->state);
     EXPECT_EQ(0U, consensus->votedFor);
@@ -1096,7 +1096,7 @@ TEST_F(ServerRaftConsensusTest, handleSnapshotChunk_newLeader)
     consensus->snapshotWriter->discard();
 }
 
-TEST_F(ServerRaftConsensusTest, handleAppendSnapshotChunk)
+TEST_F(ServerRaftConsensusTest, handleInstallSnapshot)
 {
     init();
     consensus->stepDown(10);
@@ -1111,8 +1111,8 @@ TEST_F(ServerRaftConsensusTest, handleAppendSnapshotChunk)
     std::string snapshotContents =
         readEntireFileAsString(consensus->storageDirectory, "snapshot");
 
-    Protocol::Raft::AppendSnapshotChunk::Request request;
-    Protocol::Raft::AppendSnapshotChunk::Response response;
+    Protocol::Raft::InstallSnapshot::Request request;
+    Protocol::Raft::InstallSnapshot::Response response;
     request.set_server_id(3);
     request.set_term(10);
     request.set_last_snapshot_index(1);
@@ -1121,7 +1121,7 @@ TEST_F(ServerRaftConsensusTest, handleAppendSnapshotChunk)
     request.set_done(false);
 
     // useful data, but not done yet
-    consensus->handleAppendSnapshotChunk(request, response);
+    consensus->handleInstallSnapshot(request, response);
     EXPECT_EQ("term: 10 ", response);
     EXPECT_EQ(0U, consensus->lastSnapshotIndex);
     EXPECT_TRUE(bool(consensus->snapshotWriter));
@@ -1130,7 +1130,7 @@ TEST_F(ServerRaftConsensusTest, handleAppendSnapshotChunk)
     LogCabin::Core::Debug::setLogPolicy({
         {"Server/RaftConsensus.cc", "ERROR"}
     });
-    consensus->handleAppendSnapshotChunk(request, response);
+    consensus->handleInstallSnapshot(request, response);
     LogCabin::Core::Debug::setLogPolicy({
         {"Server/RaftConsensus.cc", "WARNING"}
     });
@@ -1142,7 +1142,7 @@ TEST_F(ServerRaftConsensusTest, handleAppendSnapshotChunk)
     request.set_byte_offset(snapshotContents.size());
     request.set_data("hello world!");
     request.set_done(true);
-    consensus->handleAppendSnapshotChunk(request, response);
+    consensus->handleInstallSnapshot(request, response);
     EXPECT_EQ("term: 10 ", response);
     EXPECT_EQ(1U, consensus->lastSnapshotIndex);
     EXPECT_FALSE(bool(consensus->snapshotWriter));
@@ -2031,7 +2031,7 @@ TEST_F(ServerRaftConsensusPATest, appendEntries_ok)
     // TODO(ongaro): test catchup code
 }
 
-// test that appendSnapshotChunk gets called
+// test that installSnapshot gets called
 TEST_F(ServerRaftConsensusPATest, appendEntries_snapshot)
 {
     std::unique_lock<Mutex> lockGuard(consensus->mutex);
@@ -2052,7 +2052,7 @@ TEST_F(ServerRaftConsensusPATest, appendEntries_snapshot)
     // but it's not easily testable
 }
 
-// used in AppendSnapshotChunk tests
+// used in InstallSnapshot tests
 class ServerRaftConsensusPSTest : public ServerRaftConsensusPTest {
     ServerRaftConsensusPSTest()
         : peer()
@@ -2089,11 +2089,11 @@ class ServerRaftConsensusPSTest : public ServerRaftConsensusPTest {
     }
 
     std::shared_ptr<Peer> peer;
-    Protocol::Raft::AppendSnapshotChunk::Request request;
-    Protocol::Raft::AppendSnapshotChunk::Response response;
+    Protocol::Raft::InstallSnapshot::Request request;
+    Protocol::Raft::InstallSnapshot::Response response;
 };
 
-TEST_F(ServerRaftConsensusPSTest, appendSnapshotChunk_rpcFailed)
+TEST_F(ServerRaftConsensusPSTest, installSnapshot_rpcFailed)
 {
     peerService->closeSession(Protocol::Raft::OpCode::APPEND_SNAPSHOT_CHUNK,
                               request);
@@ -2102,37 +2102,37 @@ TEST_F(ServerRaftConsensusPSTest, appendSnapshotChunk_rpcFailed)
         {"Server/RaftConsensus.cc", "ERROR"}
     });
     std::unique_lock<Mutex> lockGuard(consensus->mutex);
-    consensus->appendSnapshotChunk(lockGuard, *peer);
+    consensus->installSnapshot(lockGuard, *peer);
     EXPECT_LT(Clock::now(), peer->backoffUntil);
     EXPECT_EQ(0U, peer->snapshotFileOffset);
 }
 
 
-TEST_F(ServerRaftConsensusPSTest, appendSnapshotChunk_termChanged)
+TEST_F(ServerRaftConsensusPSTest, installSnapshot_termChanged)
 {
     peerService->runArbitraryCode(
             Protocol::Raft::OpCode::APPEND_SNAPSHOT_CHUNK,
             request,
             std::make_shared<BumpTermAndReply>(*consensus, response));
     std::unique_lock<Mutex> lockGuard(consensus->mutex);
-    consensus->appendSnapshotChunk(lockGuard, *peer);
+    consensus->installSnapshot(lockGuard, *peer);
     EXPECT_EQ(TimePoint::min(), peer->backoffUntil);
     EXPECT_EQ(0U, peer->snapshotFileOffset);
 }
 
-TEST_F(ServerRaftConsensusPSTest, appendSnapshotChunk_termStale)
+TEST_F(ServerRaftConsensusPSTest, installSnapshot_termStale)
 {
     response.set_term(10);
     peerService->reply(Protocol::Raft::OpCode::APPEND_SNAPSHOT_CHUNK,
                        request, response);
     std::unique_lock<Mutex> lockGuard(consensus->mutex);
-    consensus->appendSnapshotChunk(lockGuard, *peer);
+    consensus->installSnapshot(lockGuard, *peer);
     EXPECT_EQ(0U, peer->snapshotFileOffset);
     EXPECT_EQ(State::FOLLOWER, consensus->state);
     EXPECT_EQ(10U, consensus->currentTerm);
 }
 
-TEST_F(ServerRaftConsensusPSTest, appendSnapshotChunk_ok)
+TEST_F(ServerRaftConsensusPSTest, installSnapshot_ok)
 {
     consensus->SOFT_RPC_SIZE_LIMIT = 7;
     request.set_data("hello, ");
@@ -2145,10 +2145,10 @@ TEST_F(ServerRaftConsensusPSTest, appendSnapshotChunk_ok)
     peerService->reply(Protocol::Raft::OpCode::APPEND_SNAPSHOT_CHUNK,
                        request, response);
     std::unique_lock<Mutex> lockGuard(consensus->mutex);
-    consensus->appendSnapshotChunk(lockGuard, *peer);
+    consensus->installSnapshot(lockGuard, *peer);
     // make sure we don't use an updated lastSnapshotIndex value
     consensus->lastSnapshotIndex = 1;
-    consensus->appendSnapshotChunk(lockGuard, *peer);
+    consensus->installSnapshot(lockGuard, *peer);
     EXPECT_EQ(2U, peer->lastAgreeIndex);
     EXPECT_EQ(3U, peer->nextIndex);
     EXPECT_FALSE(peer->snapshotFile);

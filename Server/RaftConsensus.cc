@@ -1190,9 +1190,9 @@ RaftConsensus::handleAppendEntries(
 }
 
 void
-RaftConsensus::handleAppendSnapshotChunk(
-        const Protocol::Raft::AppendSnapshotChunk::Request& request,
-        Protocol::Raft::AppendSnapshotChunk::Response& response)
+RaftConsensus::handleInstallSnapshot(
+        const Protocol::Raft::InstallSnapshot::Request& request,
+        Protocol::Raft::InstallSnapshot::Response& response)
 {
     std::unique_lock<Mutex> lockGuard(mutex);
     assert(!exiting);
@@ -1206,7 +1206,7 @@ RaftConsensus::handleAppendSnapshotChunk(
         return;
     }
     if (request.term() > currentTerm) {
-        NOTICE("Received AppendSnapshotChunk request from server %lu in "
+        NOTICE("Received InstallSnapshot request from server %lu in "
                "term %lu (this server's term was %lu)",
                 request.server_id(), request.term(), currentTerm);
         // We're about to bump our term in the stepDown below: update
@@ -1671,7 +1671,7 @@ RaftConsensus::peerThreadMain(std::shared_ptr<Peer> peer)
                 case State::LEADER:
                     if (peer->getLastAgreeIndex() < log->getLastLogIndex() ||
                         peer->nextHeartbeatTime < now) {
-                        // appendEntries delegates to appendSnapshotChunk if we
+                        // appendEntries delegates to installSnapshot if we
                         // need to send a snapshot instead
                         appendEntries(lockGuard, *peer);
                     } else {
@@ -1825,7 +1825,7 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
 
     // Don't have needed entry: send a snapshot instead.
     if (peer.nextIndex < log->getLogStartIndex()) {
-        appendSnapshotChunk(lockGuard, peer);
+        installSnapshot(lockGuard, peer);
         return;
     }
 
@@ -1839,7 +1839,7 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
         prevLogTerm = lastSnapshotTerm;
     } else {
         // Don't have needed entry for prevLogTerm: send snapshot instead.
-        appendSnapshotChunk(lockGuard, peer);
+        installSnapshot(lockGuard, peer);
         return;
     }
 
@@ -1949,11 +1949,11 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
 }
 
 void
-RaftConsensus::appendSnapshotChunk(std::unique_lock<Mutex>& lockGuard,
-                                   Peer& peer)
+RaftConsensus::installSnapshot(std::unique_lock<Mutex>& lockGuard,
+                               Peer& peer)
 {
     // Build up request
-    Protocol::Raft::AppendSnapshotChunk::Request request;
+    Protocol::Raft::InstallSnapshot::Request request;
     request.set_server_id(serverId);
     request.set_recipient_id(peer.serverId);
     request.set_term(currentTerm);
@@ -1982,7 +1982,7 @@ RaftConsensus::appendSnapshotChunk(std::unique_lock<Mutex>& lockGuard,
                      peer.snapshotFile->getFileLength());
 
     // Execute RPC
-    Protocol::Raft::AppendSnapshotChunk::Response response;
+    Protocol::Raft::InstallSnapshot::Response response;
     TimePoint start = Clock::now();
     uint64_t epoch = currentEpoch;
     bool ok = peer.callRPC(Protocol::Raft::OpCode::APPEND_SNAPSHOT_CHUNK,
@@ -2004,7 +2004,7 @@ RaftConsensus::appendSnapshotChunk(std::unique_lock<Mutex>& lockGuard,
     // this term.
     assert(state == State::LEADER);
     if (response.term() > currentTerm) {
-        NOTICE("Received AppendSnapshotChunk response from server %lu in "
+        NOTICE("Received InstallSnapshot response from server %lu in "
                "term %lu (this server's term was %lu)",
                 peer.serverId, response.term(), currentTerm);
         stepDown(response.term());

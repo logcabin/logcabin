@@ -93,10 +93,10 @@ RaftService::appendEntries(RPC::ServerRPC rpc)
 void
 RaftService::appendSnapshotChunk(RPC::ServerRPC rpc)
 {
-    PRELUDE(AppendSnapshotChunk);
-    //VERBOSE("AppendSnapshotChunk:\n%s",
+    PRELUDE(InstallSnapshot);
+    //VERBOSE("InstallSnapshot:\n%s",
     //        Core::ProtoBuf::dumpString(request).c_str());
-    globals.raft->handleAppendSnapshotChunk(request, response);
+    globals.raft->handleInstallSnapshot(request, response);
     rpc.reply(response);
 }
 
