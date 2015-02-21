@@ -888,7 +888,7 @@ class RaftConsensus {
      * replicated log. This is used to provide non-stale reads to the state
      * machine.
      */
-    std::pair<ClientResult, uint64_t> getLastCommittedId() const;
+    std::pair<ClientResult, uint64_t> getLastCommitIndex() const;
 
     /**
      * Return the network address for a recent leader, if known,
@@ -1095,9 +1095,8 @@ class RaftConsensus {
      *
      * \pre
      *      state is LEADER.
-     * TODO(ongaro): rename to advanceCommitIndex
      */
-    void advanceCommittedId();
+    void advanceCommitIndex();
 
     /**
      * Append entries to the log, set the configuration if this contains a

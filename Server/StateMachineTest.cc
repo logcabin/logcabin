@@ -66,7 +66,7 @@ class ServerStateMachineTest : public ::testing::Test {
         consensus->startNewElection();
         consensus->configuration->localServer->lastSyncedIndex =
             consensus->log->getLastLogIndex();
-        consensus->advanceCommittedId();
+        consensus->advanceCommitIndex();
 
         stateMachineSuppressThreads = true;
         stateMachine.reset(new StateMachine(consensus, globals.config));

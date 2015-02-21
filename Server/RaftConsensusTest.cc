@@ -417,7 +417,7 @@ TEST_F(ServerRaftConsensusConfigurationManagerTest, restoreInvariants) {
 void drainDiskQueue(RaftConsensus& consensus)
 {
     assert(consensus.state == State::LEADER);
-    // This is a while loop since advanceCommittedId can append, causing
+    // This is a while loop since advanceCommitIndex can append, causing
     // logSyncQueued to go true again.
     while (consensus.logSyncQueued) {
         std::unique_ptr<Log::Sync> sync = consensus.log->takeSync();
@@ -425,7 +425,7 @@ void drainDiskQueue(RaftConsensus& consensus)
         sync->wait();
         consensus.configuration->localServer->lastSyncedIndex =
                     sync->lastIndex;
-        consensus.advanceCommittedId();
+        consensus.advanceCommitIndex();
         consensus.log->syncComplete(std::move(sync));
     }
 }
@@ -704,7 +704,7 @@ TEST_F(ServerRaftConsensusTest, getConfiguration_ok)
     EXPECT_EQ(1U, id);
 }
 
-// TODO(ongaro): getLastCommittedId: low-priority test
+// TODO(ongaro): getLastCommitIndex: low-priority test
 
 TEST_F(ServerRaftConsensusTest, getNextEntry)
 {
@@ -814,7 +814,7 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntries_callerStale)
 
 // this tests the callee stale and leaderId == 0 branches, setElectionTimer(),
 // and heartbeat
-TEST_F(ServerRaftConsensusTest, handleAppendEntries_newLeaderAndCommittedId)
+TEST_F(ServerRaftConsensusTest, handleAppendEntries_newLeaderAndCommitIndex)
 {
     init();
     Protocol::Raft::AppendEntries::Request request;
@@ -1341,15 +1341,15 @@ class SetConfigurationHelper3 {
         } else if (iter == 2) { // no-op entry
             drainDiskQueue(*consensus);
             peer->lastAgreeIndex = 2;
-            consensus->advanceCommittedId();
+            consensus->advanceCommitIndex();
         } else if (iter == 3) { // transitional entry
             drainDiskQueue(*consensus);
             peer->lastAgreeIndex = 3;
-            consensus->advanceCommittedId();
+            consensus->advanceCommitIndex();
         } else if (iter == 4) { // new configuration entry
             drainDiskQueue(*consensus);
             peer->lastAgreeIndex = 4;
-            consensus->advanceCommittedId();
+            consensus->advanceCommitIndex();
         } else {
             FAIL();
         }
@@ -1772,7 +1772,7 @@ TEST_F(ServerRaftConsensusTest, stepDownThreadMain_twoServers)
     consensus->stepDownThreadMain();
 }
 
-TEST_F(ServerRaftConsensusTest, advanceCommittedId_noAdvanceMissingQuorum)
+TEST_F(ServerRaftConsensusTest, advanceCommitIndex_noAdvanceMissingQuorum)
 {
     init();
     consensus->append({&entry1});
@@ -1780,14 +1780,14 @@ TEST_F(ServerRaftConsensusTest, advanceCommittedId_noAdvanceMissingQuorum)
     consensus->stepDown(5);
     consensus->startNewElection();
     consensus->becomeLeader();
-    consensus->advanceCommittedId();
+    consensus->advanceCommitIndex();
     drainDiskQueue(*consensus);
     EXPECT_EQ(State::LEADER, consensus->state);
     EXPECT_EQ(0U, consensus->commitIndex);
 }
 
 TEST_F(ServerRaftConsensusTest,
-       advanceCommittedId_noAdvanceNoEntryFromCurrentTerm)
+       advanceCommitIndex_noAdvanceNoEntryFromCurrentTerm)
 {
     init();
     consensus->append({&entry1});
@@ -1797,15 +1797,15 @@ TEST_F(ServerRaftConsensusTest,
     consensus->becomeLeader();
     drainDiskQueue(*consensus);
     getPeer(2)->lastAgreeIndex = 2;
-    consensus->advanceCommittedId();
+    consensus->advanceCommitIndex();
     EXPECT_EQ(State::LEADER, consensus->state);
     EXPECT_EQ(0U, consensus->commitIndex);
     getPeer(2)->lastAgreeIndex = 3;
-    consensus->advanceCommittedId();
+    consensus->advanceCommitIndex();
     EXPECT_EQ(3U, consensus->commitIndex);
 }
 
-TEST_F(ServerRaftConsensusTest, advanceCommittedId_commitCfgWithoutSelf)
+TEST_F(ServerRaftConsensusTest, advanceCommitIndex_commitCfgWithoutSelf)
 {
     // Log:
     // 1,t1: cfg { server 1 }
@@ -1827,18 +1827,18 @@ TEST_F(ServerRaftConsensusTest, advanceCommittedId_commitCfgWithoutSelf)
     consensus->append({&entry1});
     drainDiskQueue(*consensus);
     getPeer(2)->lastAgreeIndex = 3;
-    consensus->advanceCommittedId();
+    consensus->advanceCommitIndex();
     EXPECT_EQ(3U, consensus->commitIndex);
     EXPECT_EQ(4U, consensus->log->getLastLogIndex());
     EXPECT_EQ(State::LEADER, consensus->state);
 
     getPeer(2)->lastAgreeIndex = 4;
-    consensus->advanceCommittedId();
+    consensus->advanceCommitIndex();
     EXPECT_EQ(4U, consensus->commitIndex);
     EXPECT_EQ(State::FOLLOWER, consensus->state);
 }
 
-TEST_F(ServerRaftConsensusTest, advanceCommittedId_commitTransitionToSelf)
+TEST_F(ServerRaftConsensusTest, advanceCommitIndex_commitTransitionToSelf)
 {
     // Log:
     // 1,t1: cfg { server 1:61023 }
@@ -2642,7 +2642,7 @@ class UpToDateLeaderHelper {
             peer->lastAckEpoch = consensus->currentEpoch;
         } else if (iter == 2) {
             peer->lastAgreeIndex = 4;
-            consensus->advanceCommittedId();
+            consensus->advanceCommitIndex();
         } else {
             FAIL();
         }

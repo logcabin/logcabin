@@ -980,7 +980,7 @@ RaftConsensus::getConfiguration(
 }
 
 std::pair<RaftConsensus::ClientResult, uint64_t>
-RaftConsensus::getLastCommittedId() const
+RaftConsensus::getLastCommitIndex() const
 {
     std::unique_lock<Mutex> lockGuard(mutex);
     if (!upToDateLeader(lockGuard))
@@ -1616,7 +1616,7 @@ RaftConsensus::leaderDiskThreadMain()
             }
             if (state == State::LEADER && currentTerm == term) {
                 configuration->localServer->lastSyncedIndex = sync->lastIndex;
-                advanceCommittedId();
+                advanceCommitIndex();
             }
             log->syncComplete(std::move(sync));
             continue;
@@ -1742,28 +1742,28 @@ RaftConsensus::stepDownThreadMain()
 //// RaftConsensus private methods that MUST NOT acquire the lock
 
 void
-RaftConsensus::advanceCommittedId()
+RaftConsensus::advanceCommitIndex()
 {
     if (state != State::LEADER) {
         // getLastAgreeIndex is undefined unless we're leader
-        WARNING("advanceCommittedId called as %s",
+        WARNING("advanceCommitIndex called as %s",
                 Core::StringUtil::toString(state).c_str());
         return;
     }
 
     // calculate the largest entry ID stored on a quorum of servers
-    uint64_t newCommittedId =
+    uint64_t newCommitIndex =
         configuration->quorumMin(&Server::getLastAgreeIndex);
-    if (commitIndex >= newCommittedId)
+    if (commitIndex >= newCommitIndex)
         return;
     // If we have discarded the entry, it's because we already knew it was
     // committed.
-    assert(newCommittedId >= log->getLogStartIndex());
+    assert(newCommitIndex >= log->getLogStartIndex());
     // At least one of these entries must also be from the current term to
     // guarantee that no server without them can be elected.
-    if (log->getEntry(newCommittedId).term() != currentTerm)
+    if (log->getEntry(newCommitIndex).term() != currentTerm)
         return;
-    commitIndex = newCommittedId;
+    commitIndex = newCommitIndex;
     VERBOSE("New commitIndex: %lu", commitIndex);
     assert(commitIndex <= log->getLastLogIndex());
     stateChanged.notify_all();
@@ -1918,7 +1918,7 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
                         "didn't.");
             } else {
                 peer.lastAgreeIndex = prevLogIndex + numEntries;
-                advanceCommittedId();
+                advanceCommitIndex();
             }
             peer.nextIndex = peer.lastAgreeIndex + 1;
             peer.forceHeartbeat = false;
@@ -2021,8 +2021,8 @@ RaftConsensus::appendSnapshotChunk(std::unique_lock<Mutex>& lockGuard,
             // These entries are already committed if they're in a snapshot, so
             // the commitIndex shouldn't advance, but let's just follow the
             // simple rule that bumping lastAgreeIndex should always be
-            // followed by a call to advanceCommittedId():
-            advanceCommittedId();
+            // followed by a call to advanceCommitIndex():
+            advanceCommitIndex();
             peer.snapshotFile.reset();
             peer.snapshotFileOffset = 0;
             peer.lastSnapshotIndex = 0;

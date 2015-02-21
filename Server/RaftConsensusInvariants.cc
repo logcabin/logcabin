@@ -171,7 +171,7 @@ Invariants::checkBasic()
     assert(consensus.log->getLastLogIndex() >=
            consensus.log->getLogStartIndex() - 1);
 
-    // advanceCommittedId is called everywhere it needs to be.
+    // advanceCommitIndex is called everywhere it needs to be.
     if (consensus.state == RaftConsensus::State::LEADER) {
         uint64_t majorityEntry =
             consensus.configuration->quorumMin(&Server::getLastAgreeIndex);

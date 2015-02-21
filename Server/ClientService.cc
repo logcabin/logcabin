@@ -139,7 +139,7 @@ ClientService::submit(RPC::ServerRPC& rpc,
 Result
 ClientService::catchUpStateMachine(RPC::ServerRPC& rpc)
 {
-    std::pair<Result, uint64_t> result = globals.raft->getLastCommittedId();
+    std::pair<Result, uint64_t> result = globals.raft->getLastCommitIndex();
     if (result.first == Result::RETRY || result.first == Result::NOT_LEADER) {
         Protocol::Client::Error error;
         error.set_error_code(Protocol::Client::Error::NOT_LEADER);
