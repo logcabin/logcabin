@@ -29,6 +29,7 @@ TEST(ServerGlobalsTest, basics) {
     globals.config.set("storageModule", "Memory");
     globals.config.set("uuid", "my-fake-uuid-123");
     globals.config.set("servers", "127.0.0.1");
+    globals.config.set("use-temporary-storage", "true");
     globals.init();
     globals.eventLoop.exit();
     globals.run();
@@ -38,6 +39,7 @@ TEST(ServerGlobalsTest, initNoServers) {
     Globals globals;
     globals.config.set("storageModule", "Memory");
     globals.config.set("uuid", "my-fake-uuid-123");
+    globals.config.set("use-temporary-storage", "true");
     EXPECT_DEATH(globals.init(),
                  "No server addresses specified");
 }
@@ -47,6 +49,7 @@ TEST(ServerGlobalsTest, initEmptyServers) {
     globals.config.set("storageModule", "Memory");
     globals.config.set("uuid", "my-fake-uuid-123");
     globals.config.set("servers", ";");
+    globals.config.set("use-temporary-storage", "true");
     EXPECT_DEATH(globals.init(),
                  "invalid address");
 }
@@ -63,6 +66,7 @@ TEST(ServerGlobalsTest, initAddressTaken) {
     globals.config.set("storageModule", "Memory");
     globals.config.set("uuid", "my-fake-uuid-123");
     globals.config.set("servers", "127.0.0.1");
+    globals.config.set("use-temporary-storage", "true");
     EXPECT_DEATH(globals.init(),
                  "in use");
 }
@@ -77,6 +81,7 @@ TEST(ServerGlobalsTest, initBindToOneOnly) {
     globals.config.set("storageModule", "Memory");
     globals.config.set("uuid", "my-fake-uuid-123");
     globals.config.set("servers", "127.0.0.1:61023;127.0.0.1:61024");
+    globals.config.set("use-temporary-storage", "true");
     globals.init();
 }
 

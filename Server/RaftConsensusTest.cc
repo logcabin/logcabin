@@ -432,7 +432,8 @@ void drainDiskQueue(RaftConsensus& consensus)
 
 class ServerRaftConsensusTest : public ::testing::Test {
     ServerRaftConsensusTest()
-        : globals()
+        : storageLayout()
+        , globals()
         , clockMocker()
         , consensus()
         , entry1()
@@ -440,11 +441,11 @@ class ServerRaftConsensusTest : public ::testing::Test {
         , entry3()
         , entry4()
         , entry5()
-        , storageDirectory()
     {
         globals.config.set("electionTimeoutMilliseconds", 5000);
         globals.config.set("heartbeatPeriodMilliseconds", 2500);
         globals.config.set("rpcFailureBackoffMilliseconds", 3000);
+        globals.config.set("use-temporary-storage", "true");
         startThreads = false;
         consensus.reset(new RaftConsensus(globals));
         consensus->SOFT_RPC_SIZE_LIMIT = 1024;
@@ -470,14 +471,6 @@ class ServerRaftConsensusTest : public ::testing::Test {
         entry5.set_term(5);
         entry5.set_type(Protocol::Raft::EntryType::CONFIGURATION);
         *entry5.mutable_configuration() = desc(d3);
-
-        std::string path = Storage::FilesystemUtil::mkdtemp();
-        storageDirectory =
-            Storage::FilesystemUtil::File(open(path.c_str(),
-                                               O_RDONLY|O_DIRECTORY),
-                                          path);
-        consensus->storageDirectory =
-            Storage::FilesystemUtil::dup(storageDirectory);
     }
     void init() {
         consensus->log.reset(new Storage::MemoryLog());
@@ -489,7 +482,6 @@ class ServerRaftConsensusTest : public ::testing::Test {
         EXPECT_EQ(0U, consensus->invariants.errors);
         startThreads = true;
         consensus.reset();
-        Storage::FilesystemUtil::remove(storageDirectory.path);
     }
 
     Peer* getPeer(uint64_t serverId) {
@@ -504,6 +496,7 @@ class ServerRaftConsensusTest : public ::testing::Test {
         return std::dynamic_pointer_cast<Peer>(server);
     }
 
+    Storage::Layout storageLayout;
     Globals globals;
     Clock::Mocker clockMocker;
     std::unique_ptr<RaftConsensus> consensus;
@@ -512,7 +505,6 @@ class ServerRaftConsensusTest : public ::testing::Test {
     Log::Entry entry3;
     Log::Entry entry4;
     Log::Entry entry5;
-    Storage::FilesystemUtil::File storageDirectory;
 };
 
 
@@ -604,8 +596,7 @@ TEST_F(ServerRaftConsensusTest, init_withsnapshot)
 {
     { // write snapshot
         RaftConsensus c1(globals);
-        c1.storageDirectory =
-            Storage::FilesystemUtil::dup(consensus->storageDirectory);
+        c1.storageLayout = std::move(consensus->storageLayout);
         c1.log.reset(new Storage::MemoryLog());
         c1.serverId = 1;
         c1.init();
@@ -621,6 +612,7 @@ TEST_F(ServerRaftConsensusTest, init_withsnapshot)
             c1.beginSnapshot(2);
         writer->getStream().WriteLittleEndian32(0xdeadbeef);
         c1.snapshotDone(2, std::move(writer));
+        consensus->storageLayout = std::move(c1.storageLayout);
     }
 
     consensus->log.reset(new Storage::MemoryLog());
@@ -1109,7 +1101,7 @@ TEST_F(ServerRaftConsensusTest, handleInstallSnapshot)
         consensus->beginSnapshot(1);
     writer->save();
     std::string snapshotContents =
-        readEntireFileAsString(consensus->storageDirectory, "snapshot");
+        readEntireFileAsString(consensus->storageLayout.serverDir, "snapshot");
 
     Protocol::Raft::InstallSnapshot::Request request;
     Protocol::Raft::InstallSnapshot::Response response;
@@ -2072,7 +2064,7 @@ class ServerRaftConsensusPSTest : public ServerRaftConsensusPTest {
 
         // First create a snapshot file on disk.
         // Note that this one doesn't have a Raft header.
-        Storage::SnapshotFile::Writer w(consensus->storageDirectory);
+        Storage::SnapshotFile::Writer w(consensus->storageLayout);
         w.getStream().WriteString("hello, world!");
         w.save();
         consensus->lastSnapshotIndex = 2;
@@ -2539,7 +2531,7 @@ TEST_F(ServerRaftConsensusTest, startNewElection)
     consensus->append({&entry5});
 
     consensus->snapshotWriter.reset(
-        new Storage::SnapshotFile::Writer(consensus->storageDirectory));
+        new Storage::SnapshotFile::Writer(consensus->storageLayout));
     consensus->startNewElection();
     EXPECT_EQ(State::CANDIDATE, consensus->state);
     EXPECT_EQ(6U, consensus->currentTerm);
@@ -2611,7 +2603,7 @@ TEST_F(ServerRaftConsensusTest, stepDown)
 
     // from follower to new term
     consensus->snapshotWriter.reset(
-        new Storage::SnapshotFile::Writer(consensus->storageDirectory));
+        new Storage::SnapshotFile::Writer(consensus->storageLayout));
     consensus->stepDown(consensus->currentTerm + 1);
     EXPECT_EQ(oldStartElectionAt, consensus->startElectionAt);
     EXPECT_FALSE(bool(consensus->snapshotWriter));

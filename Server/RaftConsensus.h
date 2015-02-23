@@ -33,6 +33,7 @@
 #include "Core/ConditionVariable.h"
 #include "Core/Time.h"
 #include "RPC/ClientRPC.h"
+#include "Storage/Layout.h"
 #include "Storage/Log.h"
 #include "Storage/SnapshotFile.h"
 
@@ -1283,7 +1284,7 @@ class RaftConsensus {
     /**
      * Where the files for the log and snapshots are stored.
      */
-    Storage::FilesystemUtil::File storageDirectory;
+    Storage::Layout storageLayout;
 
     /**
      * This class behaves mostly like a monitor. This protects all the state in

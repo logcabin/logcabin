@@ -30,7 +30,8 @@
 #include "Core/StringUtil.h"
 #include "Core/ThreadId.h"
 #include "Core/Util.h"
-#include "Storage/FilesystemUtil.h"
+#include "Storage/Layout.h"
+#include "Storage/Log.h"
 #include "Storage/LogFactory.h"
 #include "Storage/SnapshotFile.h"
 #include "Tree/Tree.h"
@@ -145,33 +146,23 @@ main(int argc, char** argv)
     Core::Config config;
     config.readFile(options.configFilename.c_str());
 
-    Storage::FilesystemUtil::File parentDir =
-        Storage::FilesystemUtil::openDir(
-            config.read<std::string>("storagePath", "storage"));
-    Storage::FilesystemUtil::File storageDir =
-        Storage::FilesystemUtil::openDir(parentDir,
-             Core::StringUtil::format("server%lu", options.serverId));
-    std::string error = Storage::FilesystemUtil::tryFlock(storageDir,
-                                                          LOCK_EX|LOCK_NB);
-    if (!error.empty()) {
-        PANIC("Could not lock storage directory. Is LogCabin running? "
-              "Error was: %s", error.c_str());
-    }
+    Storage::Layout storageLayout;
+    storageLayout.init(config, options.serverId);
 
-    NOTICE("Opening log at %s", storageDir.path.c_str());
+    NOTICE("Opening log at %s", storageLayout.serverDir.path.c_str());
     {
         std::unique_ptr<Storage::Log> log =
-            Storage::LogFactory::makeLog(config, storageDir);
+            Storage::LogFactory::makeLog(config, storageLayout);
         NOTICE("Log contents start");
         std::cout << *log << std::endl;
         NOTICE("Log contents end");
     }
 
-    NOTICE("Reading snapshot at %s", storageDir.path.c_str());
+    NOTICE("Reading snapshot at %s", storageLayout.serverDir.path.c_str());
 
     std::unique_ptr<Storage::SnapshotFile::Reader> reader;
     try {
-        reader.reset(new Storage::SnapshotFile::Reader(storageDir));
+        reader.reset(new Storage::SnapshotFile::Reader(storageLayout));
     } catch (const std::runtime_error& e) { // file not found
         NOTICE("%s", e.what());
     }

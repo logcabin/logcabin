@@ -42,17 +42,13 @@ class ServerStateMachineTest : public ::testing::Test {
       : globals()
       , consensus()
       , stateMachine()
-      , tmpdir()
     {
         RaftConsensusInternal::startThreads = false;
         consensus.reset(new RaftConsensus(globals));
         consensus->serverId = 1;
         consensus->log.reset(new Storage::MemoryLog());
-        std::string path = Storage::FilesystemUtil::mkdtemp();
-        consensus->storageDirectory =
-            Storage::FilesystemUtil::File(open(path.c_str(),
-                                               O_RDONLY|O_DIRECTORY),
-                                          path);
+        consensus->storageLayout.initTemporary();
+
         Storage::Log::Entry entry;
         entry.set_term(1);
         entry.set_type(Protocol::Raft::EntryType::CONFIGURATION);
@@ -74,7 +70,6 @@ class ServerStateMachineTest : public ::testing::Test {
     ~ServerStateMachineTest() {
         stateMachineSuppressThreads = false;
         stateMachineChildSleepMs = 0;
-        Storage::FilesystemUtil::remove(consensus->storageDirectory.path);
     }
 
 
@@ -88,7 +83,6 @@ class ServerStateMachineTest : public ::testing::Test {
     Globals globals;
     std::shared_ptr<RaftConsensus> consensus;
     std::unique_ptr<StateMachine> stateMachine;
-    Storage::FilesystemUtil::File tmpdir;
 };
 
 TEST_F(ServerStateMachineTest, getResponse)
@@ -238,7 +232,7 @@ TEST_F(ServerStateMachineTest, dumpSessionSnapshot)
     stateMachine->sessions.insert({91, s3});
 
     {
-        Storage::SnapshotFile::Writer writer(consensus->storageDirectory);
+        Storage::SnapshotFile::Writer writer(consensus->storageLayout);
         stateMachine->dumpSessionSnapshot(writer.getStream());
         writer.save();
     }
@@ -247,7 +241,7 @@ TEST_F(ServerStateMachineTest, dumpSessionSnapshot)
     stateMachine->sessions.at(80).firstOutstandingRPC = 10;
 
     {
-        Storage::SnapshotFile::Reader reader(consensus->storageDirectory);
+        Storage::SnapshotFile::Reader reader(consensus->storageLayout);
         stateMachine->loadSessionSnapshot(reader.getStream());
     }
     EXPECT_EQ((std::vector<std::uint64_t>{4, 80, 91}),

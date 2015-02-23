@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 Stanford University
+/* Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -13,10 +13,10 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <memory>
+#ifndef LOGCABIN_STORAGE_LAYOUT_H
+#define LOGCABIN_STORAGE_LAYOUT_H
 
-#ifndef LOGCABIN_STORAGE_LOGFACTORY_H
-#define LOGCABIN_STORAGE_LOGFACTORY_H
+#include "Storage/FilesystemUtil.h"
 
 namespace LogCabin {
 
@@ -25,32 +25,26 @@ namespace Core {
 class Config;
 }
 
-
 namespace Storage {
 
-// forward declarations
-class Log;
-class Layout;
+class Layout {
+  public:
+    Layout();
+    Layout(Layout&& other);
+    ~Layout();
+    Layout& operator=(Layout&& other);
+    void init(const Core::Config& config, uint64_t serverId);
+    void init(const std::string& storagePath, uint64_t serverId);
+    void initTemporary(uint64_t serverId = 1);
 
-namespace LogFactory {
+    FilesystemUtil::File topDir;
+    FilesystemUtil::File serverDir;
+    FilesystemUtil::File lockFile;
+  private:
+    bool removeAllFiles;
+};
 
-/**
- * Construct and return a Log object.
- * \param config
- *      Determines which concrete type of Log to construct.
- *      PANICs if this is invalid.
- * \param storageLayout
- *      Log implementations that write to the filesystem should place their
- *      files in here.
- * \return
- *      The newly constructed Log instance.
- */
-std::unique_ptr<Log>
-makeLog(const Core::Config& config,
-        const Storage::Layout& storageLayout);
-
-} // namespace LogCabin::Storage::LogFactory
 } // namespace LogCabin::Storage
 } // namespace LogCabin
 
-#endif /* LOGCABIN_STORAGE_LOGFACTORY_H */
+#endif /* LOGCABIN_STORAGE_LAYOUT_H */

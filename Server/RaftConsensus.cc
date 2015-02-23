@@ -810,7 +810,7 @@ RaftConsensus::RaftConsensus(Globals& globals)
     , serverId(0)
     , serverAddress()
     , globals(globals)
-    , storageDirectory()
+    , storageLayout()
     , mutex()
     , stateChanged()
     , exiting(false)
@@ -871,21 +871,18 @@ RaftConsensus::init()
     // makes sense with reconfiguration.
     NOTICE("My server ID is %lu", serverId);
 
-    if (storageDirectory.fd == -1) {
-        Storage::FilesystemUtil::File parentDir =
-            Storage::FilesystemUtil::openDir(
-                globals.config.read<std::string>("storagePath", "storage"));
-        storageDirectory = Storage::FilesystemUtil::openDir(parentDir,
-                              Core::StringUtil::format("server%lu", serverId));
-        // lock storage directory so that Storage/Tool doesn't open it
-        Storage::FilesystemUtil::flock(storageDirectory, LOCK_EX|LOCK_NB);
+    if (storageLayout.topDir.fd == -1) {
+        if (globals.config.read("use-temporary-storage", false))
+            storageLayout.initTemporary(serverId); // unit tests
+        else
+            storageLayout.init(globals.config, serverId);
     }
 
     configuration.reset(new Configuration(serverId, *this));
     configurationManager.reset(new ConfigurationManager(*configuration));
 
     if (!log) { // some unit tests pre-set the log; don't overwrite it
-        log = Storage::LogFactory::makeLog(globals.config, storageDirectory);
+        log = Storage::LogFactory::makeLog(globals.config, storageLayout);
     }
     for (uint64_t index = log->getLogStartIndex();
          index <= log->getLastLogIndex();
@@ -1230,7 +1227,7 @@ RaftConsensus::handleInstallSnapshot(
 
     if (!snapshotWriter) {
         snapshotWriter.reset(
-            new Storage::SnapshotFile::Writer(storageDirectory));
+            new Storage::SnapshotFile::Writer(storageLayout));
     }
     if (request.byte_offset() <
         uint64_t(snapshotWriter->getStream().ByteCount())) {
@@ -1421,7 +1418,7 @@ RaftConsensus::beginSnapshot(uint64_t lastIncludedIndex)
     NOTICE("Creating new snapshot through log index %lu (inclusive)",
            lastIncludedIndex);
     std::unique_ptr<Storage::SnapshotFile::Writer> writer(
-                new Storage::SnapshotFile::Writer(storageDirectory));
+                new Storage::SnapshotFile::Writer(storageLayout));
 
     // Only committed entries may be snapshotted.
     // (This check relies on commitIndex monotonically increasing.)
@@ -1962,9 +1959,9 @@ RaftConsensus::installSnapshot(std::unique_lock<Mutex>& lockGuard,
     // lastSnapshotIndex that goes along with the file, since it's possible
     // that this will change while we're transferring chunks).
     if (!peer.snapshotFile) {
-        namespace FilesystemUtil = Storage::FilesystemUtil;
-        peer.snapshotFile.reset(new FilesystemUtil::FileContents(
-            FilesystemUtil::openFile(storageDirectory, "snapshot", O_RDONLY)));
+        namespace FS = Storage::FilesystemUtil;
+        peer.snapshotFile.reset(new FS::FileContents(
+            FS::openFile(storageLayout.serverDir, "snapshot", O_RDONLY)));
         peer.snapshotFileOffset = 0;
         peer.lastSnapshotIndex = lastSnapshotIndex;
     }
@@ -2102,9 +2099,9 @@ void
 RaftConsensus::readSnapshot()
 {
     std::unique_ptr<Storage::SnapshotFile::Reader> reader;
-    if (storageDirectory.fd != -1) {
+    if (storageLayout.serverDir.fd != -1) {
         try {
-            reader.reset(new Storage::SnapshotFile::Reader(storageDirectory));
+            reader.reset(new Storage::SnapshotFile::Reader(storageLayout));
         } catch (const std::runtime_error& e) { // file not found
             NOTICE("%s", e.what());
         }

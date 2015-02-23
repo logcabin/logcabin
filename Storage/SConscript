@@ -2,6 +2,7 @@ Import('env', 'object_files')
 
 src = [
     "FilesystemUtil.cc",
+    "Layout.cc",
     "Log.cc",
     "LogFactory.cc",
     "MemoryLog.cc",

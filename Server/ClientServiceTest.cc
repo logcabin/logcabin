@@ -23,6 +23,7 @@
 #include "RPC/ClientRPC.h"
 #include "RPC/ClientSession.h"
 #include "Server/Globals.h"
+#include "Storage/FilesystemUtil.h"
 
 namespace LogCabin {
 namespace Server {
@@ -34,7 +35,8 @@ typedef RPC::ClientRPC::TimePoint TimePoint;
 
 class ServerClientServiceTest : public ::testing::Test {
     ServerClientServiceTest()
-        : globals()
+        : storagePath(Storage::FilesystemUtil::mkdtemp())
+        , globals()
         , session()
         , thread()
     {
@@ -48,6 +50,7 @@ class ServerClientServiceTest : public ::testing::Test {
             globals->config.set("storageModule", "Memory");
             globals->config.set("uuid", "my-fake-uuid-123");
             globals->config.set("servers", "127.0.0.1");
+            globals->config.set("storagePath", storagePath);
             globals->init();
             RPC::Address address("127.0.0.1", Protocol::Common::DEFAULT_PORT);
             address.refresh(RPC::Address::TimePoint::max());
@@ -67,6 +70,7 @@ class ServerClientServiceTest : public ::testing::Test {
             globals->eventLoop.exit();
             thread.join();
         }
+        Storage::FilesystemUtil::remove(storagePath);
     }
 
     void
@@ -82,6 +86,10 @@ class ServerClientServiceTest : public ::testing::Test {
             << rpc.getErrorMessage();
     }
 
+    // Because of the EXPECT_DEATH call below, we need to take extra care to
+    // clean up the storagePath tmpdir: destructors in the child process won't
+    // get a chance.
+    std::string storagePath;
     std::unique_ptr<Globals> globals;
     std::shared_ptr<RPC::ClientSession> session;
     std::thread thread;
