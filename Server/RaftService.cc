@@ -74,6 +74,8 @@ RaftService::getName() const
         return; \
     /* TODO(ongaro): pass RPC into Raft so it can do this check instead */ \
     if (request.recipient_id() != globals.raft->serverId) { \
+        WARNING("RPC received but destined for wrong server:\n%s", \
+                Core::ProtoBuf::dumpString(request).c_str()); \
         rpc.closeSession(); \
         return; \
     }
