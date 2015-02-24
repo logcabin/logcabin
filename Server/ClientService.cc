@@ -208,7 +208,7 @@ ClientService::getConfiguration(RPC::ServerRPC rpc)
          ++it) {
         Protocol::Client::Server* server = response.add_servers();
         server->set_server_id(it->server_id());
-        server->set_address(it->address());
+        server->set_addresses(it->addresses());
     }
     rpc.reply(response);
 }
@@ -223,7 +223,7 @@ ClientService::setConfiguration(RPC::ServerRPC rpc)
          ++it) {
         Protocol::Raft::Server* s = newConfiguration.add_servers();
         s->set_server_id(it->server_id());
-        s->set_address(it->address());
+        s->set_addresses(it->addresses());
     }
     Result result = globals.raft->setConfiguration(
                         request.old_id(),

@@ -190,9 +190,10 @@ class Server {
      */
     const uint64_t serverId;
     /**
-     * The network address at which this server may be available.
+     * The network addresses at which this server may be available
+     * (semicolon-delimited)
      */
-    std::string address;
+    std::string addresses;
 
     /**
      * Used internally by Configuration for garbage collection.
@@ -519,7 +520,8 @@ class Configuration {
     bool hasVote(ServerRef server) const;
 
     /**
-     * Lookup the network address for a particular server.
+     * Lookup the network addresses for a particular server
+     * (semicolon-delimited).
      * Returns empty string if not found.
      */
     std::string lookupAddress(uint64_t serverId) const;
@@ -1269,10 +1271,10 @@ class RaftConsensus {
     uint64_t serverId;
 
     /**
-     * The address that this server is listening on. Not available until init()
-     * is called.
+     * The addresses that this server is listening on. Not available until
+     * init() is called.
      */
-    std::string serverAddress;
+    std::string serverAddresses;
 
   private:
 

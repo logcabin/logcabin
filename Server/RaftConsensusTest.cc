@@ -61,7 +61,7 @@ void
 setAddr(Server& server)
 {
     using Core::StringUtil::format;
-    server.address = format("server%lu", server.serverId);
+    server.addresses = format("server%lu", server.serverId);
 }
 
 uint64_t
@@ -167,9 +167,9 @@ TEST_F(ServerRaftConsensusSimpleConfigurationTest, contains) {
 TEST_F(ServerRaftConsensusSimpleConfigurationTest, forEach) {
     cfg.forEach(setAddr);
     emptyCfg.forEach(setAddr);
-    EXPECT_EQ("server1", cfg.servers.at(0)->address);
-    EXPECT_EQ("server2", cfg.servers.at(1)->address);
-    EXPECT_EQ("server3", cfg.servers.at(2)->address);
+    EXPECT_EQ("server1", cfg.servers.at(0)->addresses);
+    EXPECT_EQ("server2", cfg.servers.at(1)->addresses);
+    EXPECT_EQ("server3", cfg.servers.at(2)->addresses);
 }
 
 TEST_F(ServerRaftConsensusSimpleConfigurationTest, min) {
@@ -205,7 +205,7 @@ class ServerRaftConsensusConfigurationTest
 
 TEST_F(ServerRaftConsensusConfigurationTest, forEach) {
     cfg.forEach(setAddr);
-    EXPECT_EQ("server1", cfg.localServer->address);
+    EXPECT_EQ("server1", cfg.localServer->addresses);
 }
 
 TEST_F(ServerRaftConsensusConfigurationTest, hasVote) {
@@ -237,29 +237,29 @@ TEST_F(ServerRaftConsensusConfigurationTest, quorumMin) {
 
 const char* d =
     "prev_configuration {"
-    "    servers { server_id: 1, address: '127.0.0.1:61023' }"
+    "    servers { server_id: 1, addresses: '127.0.0.1:61023' }"
     "}";
 
 const char* d2 =
     "prev_configuration {"
-    "    servers { server_id: 1, address: '127.0.0.1:61023' }"
+    "    servers { server_id: 1, addresses: '127.0.0.1:61023' }"
     "}"
     "next_configuration {"
-        "servers { server_id: 1, address: '127.0.0.1:61025' }"
+        "servers { server_id: 1, addresses: '127.0.0.1:61025' }"
     "}";
 
 const char* d3 =
     "prev_configuration {"
-    "    servers { server_id: 1, address: '127.0.0.1:61023' }"
-    "    servers { server_id: 2, address: '127.0.0.1:61024' }"
+    "    servers { server_id: 1, addresses: '127.0.0.1:61023' }"
+    "    servers { server_id: 2, addresses: '127.0.0.1:61024' }"
     "}";
 
 const char* d4 =
     "prev_configuration {"
-    "    servers { server_id: 1, address: '127.0.0.1:61023' }"
+    "    servers { server_id: 1, addresses: '127.0.0.1:61023' }"
     "}"
     "next_configuration {"
-        "servers { server_id: 2, address: '127.0.0.1:61024' }"
+        "servers { server_id: 2, addresses: '127.0.0.1:61024' }"
     "}";
 
 TEST_F(ServerRaftConsensusConfigurationTest, reset) {
@@ -278,7 +278,7 @@ TEST_F(ServerRaftConsensusConfigurationTest, setConfiguration) {
     EXPECT_EQ(d, cfg.description);
     EXPECT_EQ(1U, cfg.oldServers.servers.size());
     EXPECT_EQ(0U, cfg.newServers.servers.size());
-    EXPECT_EQ("127.0.0.1:61023", cfg.oldServers.servers.at(0)->address);
+    EXPECT_EQ("127.0.0.1:61023", cfg.oldServers.servers.at(0)->addresses);
     EXPECT_EQ(1U, cfg.knownServers.size());
 
     cfg.setConfiguration(2, desc(d2));
@@ -287,31 +287,31 @@ TEST_F(ServerRaftConsensusConfigurationTest, setConfiguration) {
     EXPECT_EQ(d2, cfg.description);
     EXPECT_EQ(1U, cfg.oldServers.servers.size());
     EXPECT_EQ(1U, cfg.newServers.servers.size());
-    EXPECT_EQ("127.0.0.1:61025", cfg.oldServers.servers.at(0)->address);
-    EXPECT_EQ("127.0.0.1:61025", cfg.newServers.servers.at(0)->address);
+    EXPECT_EQ("127.0.0.1:61025", cfg.oldServers.servers.at(0)->addresses);
+    EXPECT_EQ("127.0.0.1:61025", cfg.newServers.servers.at(0)->addresses);
     EXPECT_EQ(1U, cfg.knownServers.size());
 }
 
 TEST_F(ServerRaftConsensusConfigurationTest, setStagingServers) {
     cfg.setConfiguration(1, desc(
         "prev_configuration {"
-        "    servers { server_id: 1, address: '127.0.0.1:61023' }"
+        "    servers { server_id: 1, addresses: '127.0.0.1:61023' }"
         "}"));
     cfg.setStagingServers(sdesc(
-        "servers { server_id: 1, address: '127.0.0.1:61025' }"
-        "servers { server_id: 2, address: '127.0.0.1:61027' }"));
+        "servers { server_id: 1, addresses: '127.0.0.1:61025' }"
+        "servers { server_id: 2, addresses: '127.0.0.1:61027' }"));
     EXPECT_EQ(Configuration::State::STAGING, cfg.state);
     EXPECT_EQ(2U, cfg.newServers.servers.size());
     EXPECT_EQ(1U, cfg.newServers.servers.at(0)->serverId);
     EXPECT_EQ(2U, cfg.newServers.servers.at(1)->serverId);
-    EXPECT_EQ("127.0.0.1:61025", cfg.newServers.servers.at(0)->address);
-    EXPECT_EQ("127.0.0.1:61027", cfg.newServers.servers.at(1)->address);
+    EXPECT_EQ("127.0.0.1:61025", cfg.newServers.servers.at(0)->addresses);
+    EXPECT_EQ("127.0.0.1:61027", cfg.newServers.servers.at(1)->addresses);
     EXPECT_EQ(cfg.localServer, cfg.newServers.servers.at(0));
 
     cfg.resetStagingServers();
     EXPECT_EQ(Configuration::State::STABLE, cfg.state);
     EXPECT_EQ(0U, cfg.newServers.servers.size());
-    EXPECT_EQ("127.0.0.1:61023", cfg.localServer->address);
+    EXPECT_EQ("127.0.0.1:61023", cfg.localServer->addresses);
     EXPECT_EQ(1U, cfg.knownServers.size());
 
     // TODO(ongaro): test the gc code at the end of the function
@@ -450,7 +450,7 @@ class ServerRaftConsensusTest : public ::testing::Test {
         consensus.reset(new RaftConsensus(globals));
         consensus->SOFT_RPC_SIZE_LIMIT = 1024;
         consensus->serverId = 1;
-        consensus->serverAddress = "127.0.0.1:61023";
+        consensus->serverAddresses = "127.0.0.1:61023";
 
         entry1.set_term(1);
         entry1.set_type(Protocol::Raft::EntryType::CONFIGURATION);
@@ -583,7 +583,7 @@ TEST_F(ServerRaftConsensusTest, init_nonblanklog)
     EXPECT_EQ(63U, consensus->votedFor);
     EXPECT_EQ(1U, consensus->configuration->localServer->serverId);
     EXPECT_EQ("127.0.0.1:61023",
-              consensus->configuration->localServer->address);
+              consensus->configuration->localServer->addresses);
     EXPECT_EQ(Configuration::State::STABLE, consensus->configuration->state);
     EXPECT_EQ(3U, consensus->configuration->id);
     EXPECT_EQ(State::FOLLOWER, consensus->state);
@@ -638,7 +638,7 @@ TEST_F(ServerRaftConsensusTest, bootstrapConfiguration)
               "type: CONFIGURATION "
               "configuration { "
               "  prev_configuration { "
-              "    servers { server_id: 1 address: '127.0.0.1:61023' } "
+              "    servers { server_id: 1 addresses: '127.0.0.1:61023' } "
               "  } "
               "} ",
               consensus->log->getEntry(1));
@@ -692,7 +692,7 @@ TEST_F(ServerRaftConsensusTest, getConfiguration_ok)
     Protocol::Raft::SimpleConfiguration c;
     uint64_t id;
     EXPECT_EQ(ClientResult::SUCCESS, consensus->getConfiguration(c, id));
-    EXPECT_EQ("servers { server_id: 1, address: '127.0.0.1:61023' }", c);
+    EXPECT_EQ("servers { server_id: 1, addresses: '127.0.0.1:61023' }", c);
     EXPECT_EQ(1U, id);
 }
 
@@ -1257,7 +1257,7 @@ TEST_F(ServerRaftConsensusTest, setConfiguration_catchupFail)
     consensus->startNewElection();
     drainDiskQueue(*consensus);
     Protocol::Raft::SimpleConfiguration c = sdesc(
-        "servers { server_id: 2, address: '127.0.0.1:61024' }");
+        "servers { server_id: 2, addresses: '127.0.0.1:61024' }");
     consensus->stateChanged.callback = std::bind(setConfigurationHelper,
                                                  consensus.get());
     EXPECT_EQ(ClientResult::FAIL, consensus->setConfiguration(1, c));
@@ -1280,7 +1280,7 @@ TEST_F(ServerRaftConsensusTest, setConfiguration_replicateFail)
     consensus->stepDown(1);
     consensus->startNewElection();
     Protocol::Raft::SimpleConfiguration c = sdesc(
-        "servers { server_id: 2, address: '127.0.0.1:61024' }");
+        "servers { server_id: 2, addresses: '127.0.0.1:61024' }");
     consensus->stateChanged.callback = std::bind(setConfigurationHelper2,
                                                  consensus.get());
     EXPECT_EQ(ClientResult::NOT_LEADER, consensus->setConfiguration(1, c));
@@ -1289,10 +1289,10 @@ TEST_F(ServerRaftConsensusTest, setConfiguration_replicateFail)
     const Log::Entry& l2 = consensus->log->getEntry(3);
     EXPECT_EQ(Protocol::Raft::EntryType::CONFIGURATION, l2.type());
     EXPECT_EQ("prev_configuration {"
-                  "servers { server_id: 1, address: '127.0.0.1:61023' }"
+                  "servers { server_id: 1, addresses: '127.0.0.1:61023' }"
               "}"
               "next_configuration {"
-                  "servers { server_id: 2, address: '127.0.0.1:61024' }"
+                  "servers { server_id: 2, addresses: '127.0.0.1:61024' }"
               "}",
               l2.configuration());
 }
@@ -1306,14 +1306,14 @@ TEST_F(ServerRaftConsensusTest, setConfiguration_replicateOkJustUs)
     consensus->leaderDiskThread =
         std::thread(&RaftConsensus::leaderDiskThreadMain, consensus.get());
     Protocol::Raft::SimpleConfiguration c = sdesc(
-        "servers { server_id: 1, address: '127.0.0.1:61024' }");
+        "servers { server_id: 1, addresses: '127.0.0.1:61024' }");
     EXPECT_EQ(ClientResult::SUCCESS, consensus->setConfiguration(1, c));
     // 1: entry1, 2: no-op, 3: transitional, 4: new config
     EXPECT_EQ(4U, consensus->log->getLastLogIndex());
     const Log::Entry& l3 = consensus->log->getEntry(4);
     EXPECT_EQ(Protocol::Raft::EntryType::CONFIGURATION, l3.type());
     EXPECT_EQ("prev_configuration {"
-                  "servers { server_id: 1, address: '127.0.0.1:61024' }"
+                  "servers { server_id: 1, addresses: '127.0.0.1:61024' }"
               "}",
               l3.configuration());
 }
@@ -1364,7 +1364,7 @@ TEST_F(ServerRaftConsensusTest, setConfiguration_replicateOkNontrivial)
     consensus->startNewElection();
     drainDiskQueue(*consensus);
     Protocol::Raft::SimpleConfiguration c = sdesc(
-        "servers { server_id: 2, address: '127.0.0.1:61024' }");
+        "servers { server_id: 2, addresses: '127.0.0.1:61024' }");
     consensus->stateChanged.callback =
         SetConfigurationHelper3(consensus.get());
     EXPECT_EQ(ClientResult::SUCCESS, consensus->setConfiguration(1, c));
@@ -1642,11 +1642,11 @@ TEST_F(ServerRaftConsensusPTest, peerThreadMain)
     consensus->stepDown(5);
     *entry5.mutable_configuration() = desc(
         "prev_configuration {"
-        "    servers { server_id: 1, address: '127.0.0.1:61023' }"
-        "    servers { server_id: 2, address: '127.0.0.1:61024' }"
-        "    servers { server_id: 3, address: '127.0.0.1:61024' }"
-        "    servers { server_id: 4, address: '127.0.0.1:61024' }"
-        "    servers { server_id: 5, address: '127.0.0.1:61024' }"
+        "    servers { server_id: 1, addresses: '127.0.0.1:61023' }"
+        "    servers { server_id: 2, addresses: '127.0.0.1:61024' }"
+        "    servers { server_id: 3, addresses: '127.0.0.1:61024' }"
+        "    servers { server_id: 4, addresses: '127.0.0.1:61024' }"
+        "    servers { server_id: 5, addresses: '127.0.0.1:61024' }"
         "}");
     consensus->append({&entry5});
     std::shared_ptr<Peer> peer = getPeerRef(2);
@@ -1811,10 +1811,10 @@ TEST_F(ServerRaftConsensusTest, advanceCommitIndex_commitCfgWithoutSelf)
     entry1.set_term(6);
     *entry1.mutable_configuration() = desc(
         "prev_configuration {"
-        "    servers { server_id: 1, address: '127.0.0.1:61023' }"
+        "    servers { server_id: 1, addresses: '127.0.0.1:61023' }"
         "}"
         "next_configuration {"
-            "servers { server_id: 2, address: '127.0.0.1:61024' }"
+            "servers { server_id: 2, addresses: '127.0.0.1:61024' }"
         "}");
     consensus->append({&entry1});
     drainDiskQueue(*consensus);
@@ -1851,7 +1851,7 @@ TEST_F(ServerRaftConsensusTest, advanceCommitIndex_commitTransitionToSelf)
     const Log::Entry& l3 = consensus->log->getEntry(4);
     EXPECT_EQ(Protocol::Raft::EntryType::CONFIGURATION, l3.type());
     EXPECT_EQ("prev_configuration {"
-                  "servers { server_id: 1, address: '127.0.0.1:61025' }"
+                  "servers { server_id: 1, addresses: '127.0.0.1:61025' }"
               "}",
               l3.configuration());
 }
@@ -2438,11 +2438,11 @@ TEST_F(ServerRaftConsensusPTest, requestVote_termOkAsLeader)
     consensus->stepDown(5);
     *entry1.mutable_configuration() = desc(
         "prev_configuration {"
-        "    servers { server_id: 1, address: '127.0.0.1:61023' }"
-        "    servers { server_id: 2, address: '127.0.0.1:61024' }"
-        "    servers { server_id: 3, address: '127.0.0.1:61024' }"
-        "    servers { server_id: 4, address: '127.0.0.1:61024' }"
-        "    servers { server_id: 5, address: '127.0.0.1:61024' }"
+        "    servers { server_id: 1, addresses: '127.0.0.1:61023' }"
+        "    servers { server_id: 2, addresses: '127.0.0.1:61024' }"
+        "    servers { server_id: 3, addresses: '127.0.0.1:61024' }"
+        "    servers { server_id: 4, addresses: '127.0.0.1:61024' }"
+        "    servers { server_id: 5, addresses: '127.0.0.1:61024' }"
         "}");
     consensus->append({&entry1});
     consensus->append({&entry2});
@@ -2555,7 +2555,7 @@ TEST_F(ServerRaftConsensusTest, startNewElection)
     entry1.set_term(9);
     *entry1.mutable_configuration() = desc(
         "prev_configuration {"
-            "servers { server_id: 2, address: '127.0.0.1:61025' }"
+            "servers { server_id: 2, addresses: '127.0.0.1:61025' }"
         "}");
     consensus->append({&entry1});
     consensus->startNewElection();

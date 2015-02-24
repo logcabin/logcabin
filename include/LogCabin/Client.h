@@ -50,7 +50,8 @@ class TreeDetails; // forward declaration
 /**
  * A list of servers.
  * The first component is the server ID.
- * The second component is the network address of the server.
+ * The second component is the network addresses of the server
+ * (semicolon-delimited).
  * Used in Cluster::getConfiguration and Cluster::setConfiguration.
  */
 typedef std::vector<std::pair<uint64_t, std::string>> Configuration;

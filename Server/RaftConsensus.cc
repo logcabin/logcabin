@@ -53,7 +53,7 @@ bool startThreads = true;
 
 Server::Server(uint64_t serverId)
     : serverId(serverId)
-    , address()
+    , addresses()
     , gcFlag(false)
 {
 }
@@ -302,7 +302,7 @@ Peer::getSession(std::unique_lock<Mutex>& lockGuard)
     if (!session || !session->getErrorMessage().empty()) {
         // release lock for concurrency
         Core::MutexUnlock<Mutex> unlockGuard(lockGuard);
-        RPC::Address target(address, Protocol::Common::DEFAULT_PORT);
+        RPC::Address target(addresses, Protocol::Common::DEFAULT_PORT);
         target.refresh(RPC::Address::TimePoint::max());
         session = RPC::ClientSession::makeSession(
             eventLoop,
@@ -318,7 +318,7 @@ std::ostream&
 Peer::dumpToStream(std::ostream& os) const
 {
     os << "Peer " << serverId << std::endl;
-    os << "address: " << address << std::endl;
+    os << "addresses: " << addresses << std::endl;
     switch (consensus.state) {
         case RaftConsensus::State::FOLLOWER:
             break;
@@ -340,7 +340,6 @@ Peer::dumpToStream(std::ostream& os) const
             os << "lastAgreeIndex: " << lastAgreeIndex << std::endl;
             break;
     }
-    os << "address: " << address << std::endl;
     return os;
 }
 
@@ -476,7 +475,7 @@ Configuration::lookupAddress(uint64_t serverId) const
 {
     auto it = knownServers.find(serverId);
     if (it != knownServers.end())
-        return it->second->address;
+        return it->second->addresses;
     return "";
 }
 
@@ -553,7 +552,7 @@ Configuration::setConfiguration(
          confIt != description.prev_configuration().servers().end();
          ++confIt) {
         std::shared_ptr<Server> server = getServer(confIt->server_id());
-        server->address = confIt->address();
+        server->addresses = confIt->addresses();
         oldServers.servers.push_back(server);
     }
 
@@ -562,7 +561,7 @@ Configuration::setConfiguration(
          confIt != description.next_configuration().servers().end();
          ++confIt) {
         std::shared_ptr<Server> server = getServer(confIt->server_id());
-        server->address = confIt->address();
+        server->addresses = confIt->addresses();
         newServers.servers.push_back(server);
     }
 
@@ -593,7 +592,7 @@ Configuration::setStagingServers(
          it != stagingServers.servers().end();
          ++it) {
         std::shared_ptr<Server> server = getServer(it->server_id());
-        server->address = it->address();
+        server->addresses = it->addresses();
         newServers.servers.push_back(server);
     }
 }
@@ -627,7 +626,7 @@ Configuration::updateServerStats(Protocol::ServerStats& serverStats,
             *serverStats.mutable_raft()->add_peer();
         peerStats.set_server_id(it->first);
         const ServerRef& peer = it->second;
-        peerStats.set_address(peer->address);
+        peerStats.set_addresses(peer->addresses);
         peerStats.set_old_member(oldServers.contains(peer));
         peerStats.set_new_member(state == State::TRANSITIONAL &&
                                  newServers.contains(peer));
@@ -808,7 +807,7 @@ RaftConsensus::RaftConsensus(Globals& globals)
         ELECTION_TIMEOUT_MS / 2))
     , SOFT_RPC_SIZE_LIMIT(Protocol::Common::MAX_MESSAGE_LENGTH - 1024)
     , serverId(0)
-    , serverAddress()
+    , serverAddresses()
     , globals(globals)
     , storageLayout()
     , mutex()
@@ -955,7 +954,7 @@ RaftConsensus::bootstrapConfiguration()
     Protocol::Raft::Server& server =
         *configuration.mutable_prev_configuration()->add_servers();
     server.set_server_id(serverId);
-    server.set_address(serverAddress);
+    server.set_addresses(serverAddresses);
     append({&entry});
 }
 

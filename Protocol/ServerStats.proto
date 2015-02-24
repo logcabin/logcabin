@@ -28,7 +28,7 @@ message ServerStats {
         // See RaftConsensus::Server.
         message Peer {
             optional uint64 server_id = 1;
-            optional string address = 2;
+            optional string addresses = 2;
 
             optional bool old_member = 21;
             optional bool new_member = 22;
@@ -81,9 +81,9 @@ message ServerStats {
      */
     optional uint64 server_id = 1;
     /**
-     * The network address of the server.
+     * The network address(es) of the server (semicolon-delimited).
      */
-    optional string address = 2;
+    optional string addresses = 2;
 
     /**
      * The time in nanoseconds since the Unix epoch when the collection of these

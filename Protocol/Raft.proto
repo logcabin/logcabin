@@ -50,9 +50,9 @@ message Server {
      */
     required uint64 server_id = 1;
     /**
-     * The network address of the server.
+     * The network address(es) of the server (semicolon-delimited).
      */
-    required string address = 2;
+    required string addresses = 2;
 }
 
 /**
