@@ -65,6 +65,38 @@ void throwException(const Result& result)
 } // anonymous namespace
 
 
+////////// Server //////////
+
+Server::Server(uint64_t serverId, const std::string& addresses)
+    : serverId(serverId)
+    , addresses(addresses)
+{
+}
+
+Server::Server()
+    : serverId(~0UL)
+    , addresses("")
+{
+}
+
+Server::Server(const Server& other)
+    : serverId(other.serverId)
+    , addresses(other.addresses)
+{
+}
+
+Server::~Server()
+{
+}
+
+Server&
+Server::operator=(const Server& other)
+{
+    serverId = other.serverId;
+    addresses = other.addresses;
+    return *this;
+}
+
 ////////// ConfigurationResult //////////
 
 ConfigurationResult::ConfigurationResult()

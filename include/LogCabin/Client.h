@@ -48,13 +48,36 @@ class ClientImpl; // forward declaration
 class TreeDetails; // forward declaration
 
 /**
- * A list of servers.
- * The first component is the server ID.
- * The second component is the network addresses of the server
- * (semicolon-delimited).
+ * A member of the cluster Configuration.
+ */
+struct Server {
+    /// Constructor.
+    Server(uint64_t serverId, const std::string& addresses);
+    /// Default constructor.
+    Server();
+    /// Copy constructor.
+    Server(const Server& other);
+    /// Destructor.
+    ~Server();
+    /// Copy assignment.
+    Server& operator=(const Server& other);
+
+    /**
+     * The unique ID of the server.
+     */
+    uint64_t serverId;
+
+    /**
+     * The network addresses of the server (semicolon-delimited).
+     */
+    std::string addresses;
+};
+
+/**
+ * Defines the members of the cluster.
  * Used in Cluster::getConfiguration and Cluster::setConfiguration.
  */
-typedef std::vector<std::pair<uint64_t, std::string>> Configuration;
+typedef std::vector<Server> Configuration;
 
 /**
  * Returned by Cluster::setConfiguration.

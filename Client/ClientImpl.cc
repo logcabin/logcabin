@@ -362,7 +362,7 @@ ClientImpl::getConfiguration()
     for (auto it = response.servers().begin();
          it != response.servers().end();
          ++it) {
-        configuration.emplace_back(it->server_id(), it->addresses());
+        configuration.push_back({it->server_id(), it->addresses()});
     }
     return {response.id(), configuration};
 }
@@ -378,8 +378,8 @@ ClientImpl::setConfiguration(uint64_t oldId,
          it != newConfiguration.end();
          ++it) {
         Protocol::Client::Server* s = request.add_new_servers();
-        s->set_server_id(it->first);
-        s->set_addresses(it->second);
+        s->set_server_id(it->serverId);
+        s->set_addresses(it->addresses);
     }
     Protocol::Client::SetConfiguration::Response response;
     leaderRPC->call(OpCode::SET_CONFIGURATION, request, response,

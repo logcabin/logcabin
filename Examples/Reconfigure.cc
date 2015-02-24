@@ -103,7 +103,8 @@ printConfiguration(const std::pair<uint64_t, Configuration>& configuration)
     for (auto it = configuration.second.begin();
          it != configuration.second.end();
          ++it) {
-        std::cout << "- " << it->first << ": " << it->second << std::endl;
+        std::cout << "- " << it->serverId << ": " << it->addresses
+                  << std::endl;
     }
     std::cout << std::endl;
 }
@@ -137,7 +138,8 @@ main(int argc, char** argv)
         for (auto it = result.badServers.begin();
              it != result.badServers.end();
              ++it) {
-            std::cout << "- " << it->first << ": " << it->second << std::endl;
+            std::cout << "- " << it->serverId << ": " << it->addresses
+                      << std::endl;
         }
     }
 
