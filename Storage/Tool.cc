@@ -49,7 +49,7 @@ class OptionParser {
         : argc(argc)
         , argv(argv)
         , configFilename("logcabin.conf")
-        , serverId(0)
+        , serverId(~0UL)
     {
         while (true) {
             static struct option longOptions[] = {
@@ -83,7 +83,15 @@ class OptionParser {
         }
 
         // We don't expect any additional command line arguments (not options).
-        if (optind != argc || serverId == 0) {
+        if (optind != argc) {
+            usage();
+            exit(1);
+        }
+
+        // server ID is required
+        if (serverId == ~0UL) {
+            std::cout << "Error: --id is required" << std::endl;
+            std::cout << std::endl;
             usage();
             exit(1);
         }

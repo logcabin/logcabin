@@ -40,7 +40,7 @@ class OptionParser {
         , daemon(false)
         , debugLogFilename() // empty for default
         , pidFilename() // empty for none
-        , serverId(1)
+        , serverId(~0UL)
         , testConfig(false)
     {
         while (true) {
@@ -99,6 +99,14 @@ class OptionParser {
             usage();
             exit(1);
         }
+
+        // server ID is required
+        if (serverId == ~0UL) {
+            std::cout << "Error: --id is required" << std::endl;
+            std::cout << std::endl;
+            usage();
+            exit(1);
+        }
     }
 
     void usage() {
@@ -118,7 +126,7 @@ class OptionParser {
                   << std::endl;
         std::cout << "  -i, --id <id>         "
                   << "Set server id to <id> "
-                  << "(default: index of first bindable address + 1)"
+                  << "(required)"
                   << std::endl;
         std::cout << "  -l, --log <file>      "
                   << "Write debug logs to <file> "
