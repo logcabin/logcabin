@@ -528,6 +528,27 @@ Cluster::setConfiguration(uint64_t oldId,
     return clientImpl->setConfiguration(oldId, newConfiguration);
 }
 
+
+Result
+Cluster::getServerInfo(const std::string& host,
+                       uint64_t timeoutNanoseconds,
+                       Server& info)
+{
+    return clientImpl->getServerInfo(
+                host,
+                absTimeout(timeoutNanoseconds),
+                info);
+}
+
+Server
+Cluster::getServerInfoEx(const std::string& host,
+                         uint64_t timeoutNanoseconds)
+{
+    Server info;
+    throwException(getServerInfo(host, timeoutNanoseconds, info));
+    return info;
+}
+
 Result
 Cluster::getServerStats(const std::string& host,
                         uint64_t timeoutNanoseconds,

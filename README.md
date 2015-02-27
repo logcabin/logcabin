@@ -133,21 +133,31 @@ cluster:
     ALLSERVERS='127.0.0.1:61023;127.0.0.1:61024;127.0.0.1:61025'
     build/Examples/Reconfigure --cluster=$ALLSERVERS 127.0.0.1:61023 127.0.0.1:61024 127.0.0.1:61025
 
-This `Reconfigure` command is a special LogCabin client. It connects to the
-cluster given by the `--cluster` option (semicolon-delimited) and asks the leader
-to set the cluster membership to consist of the (space-delimited) servers given on
-its command line. Note that the existing cluster members should be included in
-the second list if they are to remain in the cluster; otherwise, they will be
-evicted from the cluster.
+This `Reconfigure` command is a special LogCabin client. It first queries each
+of the servers given in its positional command line arguments (space-delimited)
+to retrieve their server IDs and listening addresses (as set in their
+configuration files). Then, it connects to the cluster given by the `--cluster`
+option (semicolon-delimited) and asks the leader to set the cluster membership
+to consist of those servers. Note that the existing cluster members should be
+included in the positional arguments if they are to remain in the cluster;
+otherwise, they will be evicted from the cluster.
 
 If this succeeded, you should see that the first server has added the others to
 the cluster, and the second and third servers are now participating. It should
 have output something like:
 
+    Current configuration:
     Configuration 1:
     - 1: 127.0.0.1:61023
-    
-    Reconfiguration OK
+
+    Attempting to change cluster membership to the following:
+    1: 127.0.0.1:61023 (given as 127.0.0.1:61023)
+    2: 127.0.0.1:61024 (given as 127.0.0.1:61024)
+    3: 127.0.0.1:61025 (given as 127.0.0.1:61025)
+
+    Membership change result: OK
+
+    Current configuration:
     Configuration 4:
     - 1: 127.0.0.1:61023
     - 2: 127.0.0.1:61024

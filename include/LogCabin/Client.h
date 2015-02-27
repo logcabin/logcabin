@@ -619,6 +619,36 @@ class Cluster {
                                 const Configuration& newConfiguration);
 
     /**
+     * Retrieve basic information from the given server, like its ID and the
+     * addresses on which it is listening.
+     * \param host
+     *      The hostname or IP address of the server to retrieve stats from. It
+     *      is recommended that you do not use a DNS name that resolves to
+     *      multiple hosts here.
+     * \param timeoutNanoseconds
+     *      Abort the operation if it has not completed within the specified
+     *      period of time. Time is specified in nanoseconds, and the special
+     *      value of 0 indicates no timeout.
+     * \warning
+     *      The client library does not currently implement timeouts for DNS
+     *      lookups. See https://github.com/logcabin/logcabin/issues/75
+     * \param[out] info
+     *      Protocol buffer of Stats as retrieved from the server.
+     * \return
+     *      Either OK or TIMEOUT.
+     */
+    Result
+    getServerInfo(const std::string& host,
+                  uint64_t timeoutNanoseconds,
+                  Server& info);
+    /**
+     * Like getServerStats but throws exceptions upon errors.
+     */
+    Server
+    getServerInfoEx(const std::string& host,
+                    uint64_t timeoutNanoseconds);
+
+    /**
      * Retrieve statistics from the given server, which are useful for
      * diagnostics.
      * \param host

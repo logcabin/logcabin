@@ -45,6 +45,9 @@ ClientService::handleRPC(RPC::ServerRPC rpc)
 
     // Call the appropriate RPC handler based on the request's opCode.
     switch (rpc.getOpCode()) {
+        case OpCode::GET_SERVER_INFO:
+            getServerInfo(std::move(rpc));
+            break;
         case OpCode::GET_SERVER_STATS:
             getServerStats(std::move(rpc));
             break;
@@ -94,6 +97,16 @@ ClientService::getName() const
 
 ////////// RPC handlers //////////
 
+
+void
+ClientService::getServerInfo(RPC::ServerRPC rpc)
+{
+    PRELUDE(GetServerInfo);
+    Protocol::Client::Server& info = *response.mutable_server_info();
+    info.set_server_id(globals.raft->serverId);
+    info.set_addresses(globals.raft->serverAddresses);
+    rpc.reply(response);
+}
 
 void
 ClientService::getServerStats(RPC::ServerRPC rpc)

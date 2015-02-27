@@ -406,6 +406,69 @@ ClientImpl::setConfiguration(uint64_t oldId,
 }
 
 Result
+ClientImpl::getServerInfo(const std::string& host,
+                          TimePoint timeout,
+                          Server& info)
+{
+    Result timeoutResult;
+    timeoutResult.status = Client::Status::TIMEOUT;
+    timeoutResult.error = "Client-specified timeout elapsed";
+
+    while (true) {
+        sessionCreationBackoff.delayAndBegin(timeout);
+
+        RPC::Address address(host, Protocol::Common::DEFAULT_PORT);
+        address.refresh(timeout);
+
+        std::shared_ptr<RPC::ClientSession> session =
+            RPC::ClientSession::makeSession(
+                            eventLoop,
+                            address,
+                            Protocol::Common::MAX_MESSAGE_LENGTH,
+                            timeout,
+                            config);
+
+        Protocol::Client::GetServerInfo::Request request;
+        RPC::ClientRPC rpc(session,
+                           Protocol::Common::ServiceId::CLIENT_SERVICE,
+                           1,
+                           OpCode::GET_SERVER_INFO,
+                           request);
+
+        typedef RPC::ClientRPC::Status RPCStatus;
+        Protocol::Client::GetServerInfo::Response response;
+        Protocol::Client::Error error;
+        RPCStatus status = rpc.waitForReply(&response, &error, timeout);
+
+        // Decode the response
+        switch (status) {
+            case RPCStatus::OK:
+                info.serverId = response.server_info().server_id();
+                info.addresses = response.server_info().addresses();
+                return Result();
+            case RPCStatus::RPC_FAILED:
+                break;
+            case RPCStatus::TIMEOUT:
+                return timeoutResult;
+            case RPCStatus::SERVICE_SPECIFIC_ERROR:
+                // Hmm, we don't know what this server is trying to tell us,
+                // but something is wrong. The server shouldn't reply back with
+                // error codes we don't understand. That's why we gave it a
+                // serverSpecificErrorVersion number in the request header.
+                PANIC("Unknown error code %u returned in service-specific "
+                      "error. This probably indicates a bug in the server",
+                      error.error_code());
+            case RPCStatus::RPC_CANCELED:
+                PANIC("RPC canceled unexpectedly");
+        }
+        if (timeout < Clock::now())
+            return timeoutResult;
+        else
+            continue;
+    }
+}
+
+Result
 ClientImpl::getServerStats(const std::string& host,
                            TimePoint timeout,
                            Protocol::ServerStats& stats)

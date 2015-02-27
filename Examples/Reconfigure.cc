@@ -29,6 +29,9 @@ namespace {
 using LogCabin::Client::Cluster;
 using LogCabin::Client::Configuration;
 using LogCabin::Client::ConfigurationResult;
+using LogCabin::Client::Result;
+using LogCabin::Client::Server;
+using LogCabin::Client::Status;
 
 /**
  * Parses argv for the main function.
@@ -120,15 +123,44 @@ main(int argc, char** argv)
 
     std::pair<uint64_t, Configuration> configuration =
         cluster.getConfiguration();
+    uint64_t id = configuration.first;
+    std::cout << "Current configuration:" << std::endl;
     printConfiguration(configuration);
 
-    uint64_t id = configuration.first;
+    std::cout << "Attempting to change cluster membership to the following:"
+              << std::endl;
     Configuration servers;
-    for (uint64_t i = 0; i < options.servers.size(); ++i)
-        servers.emplace_back(i + 1, options.servers.at(i));
-    ConfigurationResult result = cluster.setConfiguration(id, servers);
+    for (auto it = options.servers.begin();
+         it != options.servers.end();
+         ++it) {
+        Server info;
+        Result result = cluster.getServerInfo(*it,
+                                              /* timeout = 2s */ 2000000000UL,
+                                              info);
+        switch (result.status) {
+            case Status::OK:
+                std::cout << info.serverId << ": "
+                          << info.addresses
+                          << " (given as " << *it << ")"
+                          << std::endl;
+                servers.emplace_back(info.serverId, info.addresses);
+                break;
+            case Status::TIMEOUT:
+                std::cout << "Could not fetch server info from "
+                          << *it << " (" << result.error << "). Aborting."
+                          << std::endl;
+                return 1;
+            default:
+                std::cout << "Unknown error from "
+                          << *it << " (" << result.error << "). Aborting."
+                          << std::endl;
+                return 1;
+        }
+    }
+    std::cout << std::endl;
 
-    std::cout << "Reconfiguration ";
+    ConfigurationResult result = cluster.setConfiguration(id, servers);
+    std::cout << "Membership change result: ";
     if (result.status == ConfigurationResult::OK) {
         std::cout << "OK" << std::endl;
     } else if (result.status == ConfigurationResult::CHANGED) {
@@ -142,7 +174,9 @@ main(int argc, char** argv)
                       << std::endl;
         }
     }
+    std::cout << std::endl;
 
+    std::cout << "Current configuration:" << std::endl;
     printConfiguration(cluster.getConfiguration());
 
     if (result.status == ConfigurationResult::OK)
