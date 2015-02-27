@@ -40,7 +40,6 @@ class OptionParser {
         , daemon(false)
         , debugLogFilename() // empty for default
         , pidFilename() // empty for none
-        , serverId(~0UL)
         , testConfig(false)
     {
         while (true) {
@@ -49,13 +48,12 @@ class OptionParser {
                {"config",  required_argument, NULL, 'c'},
                {"daemon",  no_argument, NULL, 'd'},
                {"help",  no_argument, NULL, 'h'},
-               {"id",  required_argument, NULL, 'i'},
                {"log",  required_argument, NULL, 'l'},
                {"pidfile",  required_argument, NULL, 'p'},
                {"test",  no_argument, NULL, 't'},
                {0, 0, 0, 0}
             };
-            int c = getopt_long(argc, argv, "bc:dhi:l:p:t", longOptions, NULL);
+            int c = getopt_long(argc, argv, "bc:dhl:p:t", longOptions, NULL);
 
             // Detect the end of the options.
             if (c == -1)
@@ -73,9 +71,6 @@ class OptionParser {
                     break;
                 case 'd':
                     daemon = true;
-                    break;
-                case 'i':
-                    serverId = uint64_t(atol(optarg));
                     break;
                 case 'l':
                     debugLogFilename = optarg;
@@ -99,14 +94,6 @@ class OptionParser {
             usage();
             exit(1);
         }
-
-        // server ID is required
-        if (serverId == ~0UL) {
-            std::cout << "Error: --id is required" << std::endl;
-            std::cout << std::endl;
-            usage();
-            exit(1);
-        }
     }
 
     void usage() {
@@ -123,10 +110,6 @@ class OptionParser {
                   << "(default: logcabin.conf)" << std::endl;
         std::cout << "  -d, --daemon          "
                   << "Detach and run in the background (requires --log)"
-                  << std::endl;
-        std::cout << "  -i, --id <id>         "
-                  << "Set server id to <id> "
-                  << "(required)"
                   << std::endl;
         std::cout << "  -l, --log <file>      "
                   << "Write debug logs to <file> "
@@ -147,7 +130,6 @@ class OptionParser {
     bool daemon;
     std::string debugLogFilename;
     std::string pidFilename;
-    uint64_t serverId;
     bool testConfig;
 };
 
@@ -252,6 +234,9 @@ main(int argc, char** argv)
     if (options.testConfig) {
         Server::Globals globals;
         globals.config.readFile(options.configFilename.c_str());
+        // The following settings are required, and Config::read() throws an
+        // exception with an OK error message if they aren't found:
+        globals.config.read<uint64_t>("serverId");
         return 0;
     }
 
@@ -295,7 +280,7 @@ main(int argc, char** argv)
         // Initialize and run Globals.
         Server::Globals globals;
         globals.config.readFile(options.configFilename.c_str());
-        globals.init(options.serverId);
+        globals.init();
         if (options.bootstrap) {
             globals.raft->bootstrapConfiguration();
             NOTICE("Done bootstrapping configuration. Exiting.");

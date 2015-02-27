@@ -29,6 +29,7 @@ TEST(ServerGlobalsTest, basics) {
     globals.config.set("storageModule", "Memory");
     globals.config.set("uuid", "my-fake-uuid-123");
     globals.config.set("listenAddresses", "127.0.0.1");
+    globals.config.set("serverId", "1");
     globals.config.set("use-temporary-storage", "true");
     globals.init();
     globals.eventLoop.exit();
@@ -40,6 +41,7 @@ TEST(ServerGlobalsTest, initNoServers) {
     globals.config.set("storageModule", "Memory");
     globals.config.set("uuid", "my-fake-uuid-123");
     globals.config.set("use-temporary-storage", "true");
+    globals.config.set("serverId", "1");
     globals.config.set("listenAddresses", "");
     EXPECT_DEATH(globals.init(),
                  "No server addresses specified");
@@ -50,6 +52,7 @@ TEST(ServerGlobalsTest, initEmptyServers) {
     globals.config.set("storageModule", "Memory");
     globals.config.set("uuid", "my-fake-uuid-123");
     globals.config.set("listenAddresses", ";");
+    globals.config.set("serverId", "1");
     globals.config.set("use-temporary-storage", "true");
     EXPECT_DEATH(globals.init(),
                  "invalid address");
@@ -67,6 +70,7 @@ TEST(ServerGlobalsTest, initAddressTaken) {
     globals.config.set("storageModule", "Memory");
     globals.config.set("uuid", "my-fake-uuid-123");
     globals.config.set("listenAddresses", "127.0.0.1");
+    globals.config.set("serverId", "1");
     globals.config.set("use-temporary-storage", "true");
     EXPECT_DEATH(globals.init(),
                  "in use");
@@ -77,6 +81,7 @@ TEST(ServerGlobalsTest, initBindToAll) {
     globals.config.set("storageModule", "Memory");
     globals.config.set("uuid", "my-fake-uuid-123");
     globals.config.set("listenAddresses", "127.0.0.1:61023;127.0.0.1:61024");
+    globals.config.set("serverId", "1");
     globals.config.set("use-temporary-storage", "true");
     globals.init();
     Event::Loop eventLoop;

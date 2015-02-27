@@ -49,7 +49,6 @@ class OptionParser {
         : argc(argc)
         , argv(argv)
         , configFilename("logcabin.conf")
-        , serverId(~0UL)
     {
         while (true) {
             static struct option longOptions[] = {
@@ -71,9 +70,6 @@ class OptionParser {
                 case 'c':
                     configFilename = optarg;
                     break;
-                case 'i':
-                    serverId = uint64_t(atol(optarg));
-                    break;
                 case '?':
                 default:
                     // getopt_long already printed an error message.
@@ -84,14 +80,6 @@ class OptionParser {
 
         // We don't expect any additional command line arguments (not options).
         if (optind != argc) {
-            usage();
-            exit(1);
-        }
-
-        // server ID is required
-        if (serverId == ~0UL) {
-            std::cout << "Error: --id is required" << std::endl;
-            std::cout << std::endl;
             usage();
             exit(1);
         }
@@ -115,7 +103,6 @@ class OptionParser {
     int& argc;
     char**& argv;
     std::string configFilename;
-    uint64_t serverId;
 };
 
 void
@@ -154,8 +141,11 @@ main(int argc, char** argv)
     Core::Config config;
     config.readFile(options.configFilename.c_str());
 
+    uint64_t serverId = config.read<uint64_t>("serverId");
+    NOTICE("Server ID is %lu", serverId);
+
     Storage::Layout storageLayout;
-    storageLayout.init(config, options.serverId);
+    storageLayout.init(config, serverId);
 
     NOTICE("Opening log at %s", storageLayout.serverDir.path.c_str());
     {

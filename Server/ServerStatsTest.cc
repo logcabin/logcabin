@@ -30,12 +30,13 @@ TEST(ServerServerStatsTest, getCurrent) {
     globals.config.set("uuid", "my-fake-uuid-123");
     globals.config.set("servers", "127.0.0.1");
     globals.config.set("use-temporary-storage", "true");
+    globals.config.set("serverId", "1");
     Protocol::ServerStats stat = globals.serverStats.getCurrent();
     EXPECT_LT(stat.start_at(),
               stat.end_at());
     EXPECT_FALSE(stat.has_raft());
     EXPECT_TRUE(NULL == globals.serverStats.deferred.get());
-    globals.init(1); // calls globals.ServerStats.enable()
+    globals.init(); // calls globals.ServerStats.enable()
     EXPECT_TRUE(NULL != globals.serverStats.deferred.get());
     stat = globals.serverStats.getCurrent();
     EXPECT_TRUE(stat.has_raft());

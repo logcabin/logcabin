@@ -57,12 +57,6 @@ def main():
         sh('rm -rf smoketeststorage/')
         sh('rm -f debug/*')
         sh('mkdir -p debug')
-        print('Initializing first server\'s log')
-        sandbox.rsh(smokehosts[0][0],
-                    '%s --bootstrap --id 1 --config smoketest.conf' %
-                    server_command,
-                   stderr=open('debug/bootstrap', 'w'))
-        print()
 
         for server_id in server_ids:
             host = smokehosts[server_id - 1]
@@ -72,11 +66,23 @@ def main():
                     f.write('\n\n')
                 except:
                     pass
-                f.write('listenAddresses = %s' % smokehosts[server_id - 1][0])
-            command = ('%s --id %d --config smoketest-%d.conf' %
-                       (server_command, server_id, server_id))
-            print('Starting %s on %s' % (command, smokehosts[server_id - 1][0]))
-            sandbox.rsh(smokehosts[server_id - 1][0], command, bg=True,
+                f.write('serverId = %d\n' % server_id)
+                f.write('listenAddresses = %s\n' % host[0])
+
+
+        print('Initializing first server\'s log')
+        sandbox.rsh(smokehosts[0][0],
+                    '%s --bootstrap --config smoketest-%d.conf' %
+                    (server_command, server_ids[0]),
+                   stderr=open('debug/bootstrap', 'w'))
+        print()
+
+        for server_id in server_ids:
+            host = smokehosts[server_id - 1]
+            command = ('%s --config smoketest-%d.conf' %
+                       (server_command, server_id))
+            print('Starting %s on %s' % (command, host[0]))
+            sandbox.rsh(host[0], command, bg=True,
                         stderr=open('debug/%d' % server_id, 'w'))
             sandbox.checkFailures()
 

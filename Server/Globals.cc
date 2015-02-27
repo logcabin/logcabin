@@ -72,8 +72,9 @@ Globals::~Globals()
 }
 
 void
-Globals::init(uint64_t serverId)
+Globals::init()
 {
+    uint64_t serverId = config.read<uint64_t>("serverId");
     Core::Debug::processName = Core::StringUtil::format("%lu", serverId);
     {
         ServerStats::Lock serverStatsLock(serverStats);

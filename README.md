@@ -84,28 +84,31 @@ sample.conf, or the following will work for now:
 
 File `logcabin-1.conf`:
 
+    serverId = 1
     listenAddresses = 127.0.0.1:61023
 
 File `logcabin-2.conf`:
 
+    serverId = 2
     listenAddresses = 127.0.0.1:61024
 
 File `logcabin-3.conf`:
 
+    serverId = 3
     listenAddresses = 127.0.0.1:61025
 
 Now you're almost ready to start the servers. First, initialize one of the
 server's logs with a cluster membership configuration that contains just
 itself:
 
-    build/LogCabin --id 1 --config logcabin-1.conf --bootstrap 
+    build/LogCabin --config logcabin-1.conf --bootstrap
 
 The server with ID 1 will now have a valid cluster membership configuration in
 its log. At this point, there's only 1 server in the cluster, so only 1 vote is
 needed: it'll be able to elect itself leader and commit new entries. We can now
 start this server (leave it running):
 
-    build/LogCabin --id 1 --config logcabin-1.conf
+    build/LogCabin --config logcabin-1.conf
 
 We don't want to stop here, though, because the cluster isn't fault-tolerant
 with just one server! We're going to start two more servers and then add them
@@ -113,7 +116,7 @@ both to the first server's cluster.
 
 Let's start up the second server in another terminal (leave it running):
 
-    build/LogCabin --id 2 --config logcabin-2.conf
+    build/LogCabin --config logcabin-2.conf
 
 Note how this server is just idling, awaiting a cluster membership
 configuration. It's still not part of the cluster.
@@ -122,7 +125,7 @@ Start the third server also (LogCabin checks to make sure all the servers in
 your new configuration are available before committing to switch to it, just to
 keep you from doing anything stupid):
 
-    build/LogCabin --id 3 --config logcabin-3.conf
+    build/LogCabin --config logcabin-3.conf
 
 Now use the reconfiguration command to add the second and third servers to the
 cluster:
