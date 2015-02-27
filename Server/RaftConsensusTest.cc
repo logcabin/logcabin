@@ -446,6 +446,7 @@ class ServerRaftConsensusTest : public ::testing::Test {
         globals.config.set("heartbeatPeriodMilliseconds", 2500);
         globals.config.set("rpcFailureBackoffMilliseconds", 3000);
         globals.config.set("use-temporary-storage", "true");
+        globals.config.set("raftDebug", "true");
         startThreads = false;
         consensus.reset(new RaftConsensus(globals));
         consensus->SOFT_RPC_SIZE_LIMIT = 1024;
