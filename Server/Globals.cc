@@ -107,7 +107,7 @@ Globals::init()
                                    maxThreads);
 
         std::string listenAddressesStr =
-            config.read<std::string>("listenAddresses", "0.0.0.0:61023");
+            config.read<std::string>("listenAddresses");
         {
             ServerStats::Lock serverStatsLock(serverStats);
             serverStatsLock->set_server_id(serverId);

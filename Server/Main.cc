@@ -237,6 +237,7 @@ main(int argc, char** argv)
         // The following settings are required, and Config::read() throws an
         // exception with an OK error message if they aren't found:
         globals.config.read<uint64_t>("serverId");
+        globals.config.read<std::string>("listenAddresses");
         return 0;
     }
 
