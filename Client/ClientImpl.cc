@@ -362,7 +362,7 @@ ClientImpl::getConfiguration()
     for (auto it = response.servers().begin();
          it != response.servers().end();
          ++it) {
-        configuration.emplace_back(it->server_id(), it->address());
+        configuration.push_back({it->server_id(), it->addresses()});
     }
     return {response.id(), configuration};
 }
@@ -378,8 +378,8 @@ ClientImpl::setConfiguration(uint64_t oldId,
          it != newConfiguration.end();
          ++it) {
         Protocol::Client::Server* s = request.add_new_servers();
-        s->set_server_id(it->first);
-        s->set_address(it->second);
+        s->set_server_id(it->serverId);
+        s->set_addresses(it->addresses);
     }
     Protocol::Client::SetConfiguration::Response response;
     leaderRPC->call(OpCode::SET_CONFIGURATION, request, response,
@@ -397,12 +397,75 @@ ClientImpl::setConfiguration(uint64_t oldId,
         for (auto it = response.configuration_bad().bad_servers().begin();
              it != response.configuration_bad().bad_servers().end();
              ++it) {
-            result.badServers.emplace_back(it->server_id(), it->address());
+            result.badServers.emplace_back(it->server_id(), it->addresses());
         }
         return result;
     }
-    PANIC("Did not understand server response to append RPC:\n%s",
+    PANIC("Did not understand server response to setConfiguration RPC:\n%s",
           Core::ProtoBuf::dumpString(response).c_str());
+}
+
+Result
+ClientImpl::getServerInfo(const std::string& host,
+                          TimePoint timeout,
+                          Server& info)
+{
+    Result timeoutResult;
+    timeoutResult.status = Client::Status::TIMEOUT;
+    timeoutResult.error = "Client-specified timeout elapsed";
+
+    while (true) {
+        sessionCreationBackoff.delayAndBegin(timeout);
+
+        RPC::Address address(host, Protocol::Common::DEFAULT_PORT);
+        address.refresh(timeout);
+
+        std::shared_ptr<RPC::ClientSession> session =
+            RPC::ClientSession::makeSession(
+                            eventLoop,
+                            address,
+                            Protocol::Common::MAX_MESSAGE_LENGTH,
+                            timeout,
+                            config);
+
+        Protocol::Client::GetServerInfo::Request request;
+        RPC::ClientRPC rpc(session,
+                           Protocol::Common::ServiceId::CLIENT_SERVICE,
+                           1,
+                           OpCode::GET_SERVER_INFO,
+                           request);
+
+        typedef RPC::ClientRPC::Status RPCStatus;
+        Protocol::Client::GetServerInfo::Response response;
+        Protocol::Client::Error error;
+        RPCStatus status = rpc.waitForReply(&response, &error, timeout);
+
+        // Decode the response
+        switch (status) {
+            case RPCStatus::OK:
+                info.serverId = response.server_info().server_id();
+                info.addresses = response.server_info().addresses();
+                return Result();
+            case RPCStatus::RPC_FAILED:
+                break;
+            case RPCStatus::TIMEOUT:
+                return timeoutResult;
+            case RPCStatus::SERVICE_SPECIFIC_ERROR:
+                // Hmm, we don't know what this server is trying to tell us,
+                // but something is wrong. The server shouldn't reply back with
+                // error codes we don't understand. That's why we gave it a
+                // serverSpecificErrorVersion number in the request header.
+                PANIC("Unknown error code %u returned in service-specific "
+                      "error. This probably indicates a bug in the server",
+                      error.error_code());
+            case RPCStatus::RPC_CANCELED:
+                PANIC("RPC canceled unexpectedly");
+        }
+        if (timeout < Clock::now())
+            return timeoutResult;
+        else
+            continue;
+    }
 }
 
 Result

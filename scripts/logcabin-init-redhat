@@ -21,11 +21,6 @@
 # Source function library.
 . /etc/rc.d/init.d/functions
 
-if [ -f /etc/sysconfig/logcabin ]; then
-    # each daemon should have a variable myid defined here
-    . /etc/sysconfig/logcabin
-fi
-
 prog=logcabin
 logcabin=${LOGCABIN-/usr/bin/logcabind}
 conffile=${CONFFILE-/etc/logcabin.conf}
@@ -36,7 +31,7 @@ RETVAL=0
 
 start() {
     echo -n $"Starting $prog: "
-    daemon ${logcabin} --daemon --id ${myid} --config ${conffile} --log /var/log/${prog}.log --pidfile ${pidfile}
+    daemon ${logcabin} --daemon --config ${conffile} --log /var/log/${prog}.log --pidfile ${pidfile}
     RETVAL=$?
     echo
     [ $RETVAL = 0 ] && touch ${lockfile}

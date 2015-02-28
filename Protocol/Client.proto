@@ -34,6 +34,7 @@ enum OpCode {
     READ_ONLY_TREE = 4;
     READ_WRITE_TREE = 5;
     GET_SERVER_STATS = 6;
+    GET_SERVER_INFO = 7;
 };
 
 /**
@@ -127,9 +128,9 @@ message Server {
      */
     required uint64 server_id = 1;
     /**
-     * The network address of the server.
+     * The network address(es) of the server (semicolon-delimited).
      */
-    required string address = 2;
+    required string addresses = 2;
 }
 
 /**
@@ -295,6 +296,22 @@ message ReadWriteTree {
         optional string error = 2;
     }
 }
+
+/**
+ * GetServerInfo RPC: Retrieve basic information from the given server used for
+ * reconfiguration.
+ */
+message GetServerInfo {
+    message Request {
+    }
+    message Response {
+        /**
+         * Server ID, listening addresses.
+         */
+        required Server server_info = 1;
+    }
+}
+
 
 /**
  * GetServerStats RPC: Retrieve statistics from the given server, which are

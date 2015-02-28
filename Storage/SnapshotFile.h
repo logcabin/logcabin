@@ -26,6 +26,9 @@
 
 namespace LogCabin {
 namespace Storage {
+
+class Layout; // forward declaration
+
 namespace SnapshotFile {
 
 // TODO(ongaro): protobuf::io uses 32-bit integer file offsets, but snapshots
@@ -39,13 +42,13 @@ class Reader {
   public:
     /**
      * Constructor.
-     * \param parentDir
-     *      The directory in which to find the snapshot (in a file called
-     *      "snapshot").
+     * \param storageLayout
+     *      The directories in which to find the snapshot (in a file called
+     *      "snapshot" in the serverDir).
      * \throw std::runtime_error
      *      If the file can't be found.
      */
-    explicit Reader(const Storage::FilesystemUtil::File& parentDir);
+    explicit Reader(const Storage::Layout& storageLayout);
     /// Destructor.
     ~Reader();
     /// Return the size in bytes for the file.
@@ -68,12 +71,12 @@ class Writer {
   public:
     /**
      * Constructor.
-     * \param parentDir
-     *      The directory in which to create the snapshot (in a file called
-     *      "snapshot").
+     * \param storageLayout
+     *      The directories in which to create the snapshot (in a file called
+     *      "snapshot" in the serverDir).
      * TODO(ongaro): what if it can't be written?
      */
-    explicit Writer(const Storage::FilesystemUtil::File& parentDir);
+    explicit Writer(const Storage::Layout& storageLayout);
     /**
      * Destructor.
      * If the file hasn't been explicitly saved or discarded, prints a warning

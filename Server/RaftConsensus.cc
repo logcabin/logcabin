@@ -53,7 +53,7 @@ bool startThreads = true;
 
 Server::Server(uint64_t serverId)
     : serverId(serverId)
-    , address()
+    , addresses()
     , gcFlag(false)
 {
 }
@@ -302,7 +302,7 @@ Peer::getSession(std::unique_lock<Mutex>& lockGuard)
     if (!session || !session->getErrorMessage().empty()) {
         // release lock for concurrency
         Core::MutexUnlock<Mutex> unlockGuard(lockGuard);
-        RPC::Address target(address, Protocol::Common::DEFAULT_PORT);
+        RPC::Address target(addresses, Protocol::Common::DEFAULT_PORT);
         target.refresh(RPC::Address::TimePoint::max());
         session = RPC::ClientSession::makeSession(
             eventLoop,
@@ -318,7 +318,7 @@ std::ostream&
 Peer::dumpToStream(std::ostream& os) const
 {
     os << "Peer " << serverId << std::endl;
-    os << "address: " << address << std::endl;
+    os << "addresses: " << addresses << std::endl;
     switch (consensus.state) {
         case RaftConsensus::State::FOLLOWER:
             break;
@@ -340,7 +340,6 @@ Peer::dumpToStream(std::ostream& os) const
             os << "lastAgreeIndex: " << lastAgreeIndex << std::endl;
             break;
     }
-    os << "address: " << address << std::endl;
     return os;
 }
 
@@ -476,7 +475,7 @@ Configuration::lookupAddress(uint64_t serverId) const
 {
     auto it = knownServers.find(serverId);
     if (it != knownServers.end())
-        return it->second->address;
+        return it->second->addresses;
     return "";
 }
 
@@ -553,7 +552,7 @@ Configuration::setConfiguration(
          confIt != description.prev_configuration().servers().end();
          ++confIt) {
         std::shared_ptr<Server> server = getServer(confIt->server_id());
-        server->address = confIt->address();
+        server->addresses = confIt->addresses();
         oldServers.servers.push_back(server);
     }
 
@@ -562,7 +561,7 @@ Configuration::setConfiguration(
          confIt != description.next_configuration().servers().end();
          ++confIt) {
         std::shared_ptr<Server> server = getServer(confIt->server_id());
-        server->address = confIt->address();
+        server->addresses = confIt->addresses();
         newServers.servers.push_back(server);
     }
 
@@ -593,7 +592,7 @@ Configuration::setStagingServers(
          it != stagingServers.servers().end();
          ++it) {
         std::shared_ptr<Server> server = getServer(it->server_id());
-        server->address = it->address();
+        server->addresses = it->addresses();
         newServers.servers.push_back(server);
     }
 }
@@ -627,7 +626,7 @@ Configuration::updateServerStats(Protocol::ServerStats& serverStats,
             *serverStats.mutable_raft()->add_peer();
         peerStats.set_server_id(it->first);
         const ServerRef& peer = it->second;
-        peerStats.set_address(peer->address);
+        peerStats.set_addresses(peer->addresses);
         peerStats.set_old_member(oldServers.contains(peer));
         peerStats.set_new_member(state == State::TRANSITIONAL &&
                                  newServers.contains(peer));
@@ -811,18 +810,18 @@ ClusterClock::interpolate() const
 ////////// RaftConsensus::Entry //////////
 
 RaftConsensus::Entry::Entry()
-    : entryId()
+    : index(0)
     , type(SKIP)
-    , data()
+    , command()
     , snapshotReader()
     , clusterTime(0)
 {
 }
 
 RaftConsensus::Entry::Entry(Entry&& other)
-    : entryId(other.entryId)
+    : index(other.index)
     , type(other.type)
-    , data(std::move(other.data))
+    , command(std::move(other.command))
     , snapshotReader(std::move(other.snapshotReader))
     , clusterTime(other.clusterTime)
 {
@@ -846,9 +845,9 @@ RaftConsensus::RaftConsensus(Globals& globals)
         ELECTION_TIMEOUT_MS / 2))
     , SOFT_RPC_SIZE_LIMIT(Protocol::Common::MAX_MESSAGE_LENGTH - 1024)
     , serverId(0)
-    , serverAddress()
+    , serverAddresses()
     , globals(globals)
-    , storageDirectory()
+    , storageLayout()
     , mutex()
     , stateChanged()
     , exiting(false)
@@ -905,34 +904,32 @@ RaftConsensus::init()
 {
     std::unique_lock<Mutex> lockGuard(mutex);
 #if DEBUG
-    mutex.callback = std::bind(&Invariants::checkAll, &invariants);
+    if (globals.config.read<bool>("raftDebug", false)) {
+        mutex.callback = std::bind(&Invariants::checkAll, &invariants);
+    }
 #endif
-    // TODO(ongaro): uhh, how are server ID's assigned? I don't think this
-    // makes sense with reconfiguration.
+
     NOTICE("My server ID is %lu", serverId);
 
-    if (storageDirectory.fd == -1) {
-        Storage::FilesystemUtil::File parentDir =
-            Storage::FilesystemUtil::openDir(
-                globals.config.read<std::string>("storagePath", "storage"));
-        storageDirectory = Storage::FilesystemUtil::openDir(parentDir,
-                              Core::StringUtil::format("server%lu", serverId));
-        // lock storage directory so that Storage/Tool doesn't open it
-        Storage::FilesystemUtil::flock(storageDirectory, LOCK_EX|LOCK_NB);
+    if (storageLayout.topDir.fd == -1) {
+        if (globals.config.read("use-temporary-storage", false))
+            storageLayout.initTemporary(serverId); // unit tests
+        else
+            storageLayout.init(globals.config, serverId);
     }
 
     configuration.reset(new Configuration(serverId, *this));
     configurationManager.reset(new ConfigurationManager(*configuration));
 
     if (!log) { // some unit tests pre-set the log; don't overwrite it
-        log = Storage::LogFactory::makeLog(globals.config, storageDirectory);
+        log = Storage::LogFactory::makeLog(globals.config, storageLayout);
     }
-    for (uint64_t entryId = log->getLogStartIndex();
-         entryId <= log->getLastLogIndex();
-         ++entryId) {
-        const Log::Entry& entry = log->getEntry(entryId);
+    for (uint64_t index = log->getLogStartIndex();
+         index <= log->getLastLogIndex();
+         ++index) {
+        const Log::Entry& entry = log->getEntry(index);
         if (entry.type() == Protocol::Raft::EntryType::CONFIGURATION) {
-            configurationManager->add(entryId, entry.configuration());
+            configurationManager->add(index, entry.configuration());
         }
     }
 
@@ -1005,7 +1002,7 @@ RaftConsensus::bootstrapConfiguration()
     Protocol::Raft::Server& server =
         *configuration.mutable_prev_configuration()->add_servers();
     server.set_server_id(serverId);
-    server.set_address(serverAddress);
+    server.set_addresses(serverAddresses);
     append({&entry});
 }
 
@@ -1027,7 +1024,7 @@ RaftConsensus::getConfiguration(
 }
 
 std::pair<RaftConsensus::ClientResult, uint64_t>
-RaftConsensus::getLastCommittedId() const
+RaftConsensus::getLastCommitIndex() const
 {
     std::unique_lock<Mutex> lockGuard(mutex);
     if (!upToDateLeader(lockGuard))
@@ -1044,19 +1041,19 @@ RaftConsensus::getLeaderHint() const
 }
 
 RaftConsensus::Entry
-RaftConsensus::getNextEntry(uint64_t lastEntryId) const
+RaftConsensus::getNextEntry(uint64_t lastIndex) const
 {
     std::unique_lock<Mutex> lockGuard(mutex);
-    uint64_t nextEntryId = lastEntryId + 1;
+    uint64_t nextIndex = lastIndex + 1;
     while (true) {
         if (exiting)
             throw Core::Util::ThreadInterruptedException();
-        if (commitIndex >= nextEntryId) {
+        if (commitIndex >= nextIndex) {
             RaftConsensus::Entry entry;
 
             // Make the state machine load a snapshot if we don't have the next
             // entry it needs in the log.
-            if (log->getLogStartIndex() > nextEntryId) {
+            if (log->getLogStartIndex() > nextIndex) {
                 entry.type = Entry::SNAPSHOT;
                 // For well-behaved state machines, we expect 'snapshotReader'
                 // to contain a SnapshotFile::Reader that we can return
@@ -1074,15 +1071,19 @@ RaftConsensus::getNextEntry(uint64_t lastEntryId) const
                     const_cast<RaftConsensus*>(this)->readSnapshot();
                     entry.snapshotReader = std::move(snapshotReader);
                 }
-                entry.entryId = lastSnapshotIndex;
+                entry.index = lastSnapshotIndex;
                 entry.clusterTime = lastSnapshotClusterTime;
             } else {
                 // not a snapshot
-                const Log::Entry& logEntry = log->getEntry(nextEntryId);
-                entry.entryId = nextEntryId;
+                const Log::Entry& logEntry = log->getEntry(nextIndex);
+                entry.index = nextIndex;
                 if (logEntry.type() == Protocol::Raft::EntryType::DATA) {
                     entry.type = Entry::DATA;
-                    entry.data = logEntry.data();
+                    const std::string& s = logEntry.data();
+                    entry.command = Core::Buffer(
+                        memcpy(new char[s.length()], s.data(), s.length()),
+                        s.length(),
+                        Core::Buffer::deleteArrayFn<char>);
                 } else {
                     entry.type = Entry::SKIP;
                 }
@@ -1188,27 +1189,27 @@ RaftConsensus::handleAppendEntries(
     // acknowledged data is safe. However, there is a window of vulnerability
     // on the follower's disk between the truncate and append operations (which
     // are not done atomically) when the follower processes the later request.
-    uint64_t entryId = request.prev_log_index();
+    uint64_t index = request.prev_log_index();
     for (auto it = request.entries().begin();
          it != request.entries().end();
          ++it) {
-        ++entryId;
+        ++index;
         const Protocol::Raft::Entry& entry = *it;
-        if (entryId < log->getLogStartIndex()) {
+        if (index < log->getLogStartIndex()) {
             // We already snapshotted and discarded this index, so presumably
             // we've received a committed entry we once already had.
             continue;
         }
-        if (log->getLastLogIndex() >= entryId) {
-            if (log->getEntry(entryId).term() == entry.term())
+        if (log->getLastLogIndex() >= index) {
+            if (log->getEntry(index).term() == entry.term())
                 continue;
             // should never truncate committed entries:
-            assert(commitIndex < entryId);
+            assert(commitIndex < index);
             NOTICE("Truncating %lu entries after %lu from the log",
-                   log->getLastLogIndex() - entryId + 1,
-                   entryId - 1);
-            log->truncateSuffix(entryId - 1);
-            configurationManager->truncateSuffix(entryId - 1);
+                   log->getLastLogIndex() - index + 1,
+                   index - 1);
+            log->truncateSuffix(index - 1);
+            configurationManager->truncateSuffix(index - 1);
         }
 
         // Append this and all following entries.
@@ -1236,9 +1237,9 @@ RaftConsensus::handleAppendEntries(
 }
 
 void
-RaftConsensus::handleAppendSnapshotChunk(
-        const Protocol::Raft::AppendSnapshotChunk::Request& request,
-        Protocol::Raft::AppendSnapshotChunk::Response& response)
+RaftConsensus::handleInstallSnapshot(
+        const Protocol::Raft::InstallSnapshot::Request& request,
+        Protocol::Raft::InstallSnapshot::Response& response)
 {
     std::unique_lock<Mutex> lockGuard(mutex);
     assert(!exiting);
@@ -1252,7 +1253,7 @@ RaftConsensus::handleAppendSnapshotChunk(
         return;
     }
     if (request.term() > currentTerm) {
-        NOTICE("Received AppendSnapshotChunk request from server %lu in "
+        NOTICE("Received InstallSnapshot request from server %lu in "
                "term %lu (this server's term was %lu)",
                 request.server_id(), request.term(), currentTerm);
         // We're about to bump our term in the stepDown below: update
@@ -1276,7 +1277,7 @@ RaftConsensus::handleAppendSnapshotChunk(
 
     if (!snapshotWriter) {
         snapshotWriter.reset(
-            new Storage::SnapshotFile::Writer(storageDirectory));
+            new Storage::SnapshotFile::Writer(storageLayout));
     }
     if (request.byte_offset() <
         uint64_t(snapshotWriter->getStream().ByteCount())) {
@@ -1372,13 +1373,12 @@ RaftConsensus::handleRequestVote(
 }
 
 std::pair<RaftConsensus::ClientResult, uint64_t>
-RaftConsensus::replicate(const std::string& operation)
+RaftConsensus::replicate(const Core::Buffer& operation)
 {
     std::unique_lock<Mutex> lockGuard(mutex);
-    VERBOSE("replicate(%s)", operation.c_str());
     Log::Entry entry;
     entry.set_type(Protocol::Raft::EntryType::DATA);
-    entry.set_data(operation);
+    entry.set_data(operation.getData(), operation.getLength());
     return replicateEntry(entry, lockGuard);
 }
 
@@ -1468,7 +1468,7 @@ RaftConsensus::beginSnapshot(uint64_t lastIncludedIndex)
     NOTICE("Creating new snapshot through log index %lu (inclusive)",
            lastIncludedIndex);
     std::unique_ptr<Storage::SnapshotFile::Writer> writer(
-                new Storage::SnapshotFile::Writer(storageDirectory));
+                new Storage::SnapshotFile::Writer(storageLayout));
 
     // Only committed entries may be snapshotted.
     // (This check relies on commitIndex monotonically increasing.)
@@ -1677,7 +1677,7 @@ RaftConsensus::leaderDiskThreadMain()
             }
             if (state == State::LEADER && currentTerm == term) {
                 configuration->localServer->lastSyncedIndex = sync->lastIndex;
-                advanceCommittedId();
+                advanceCommitIndex();
             }
             log->syncComplete(std::move(sync));
             continue;
@@ -1732,7 +1732,7 @@ RaftConsensus::peerThreadMain(std::shared_ptr<Peer> peer)
                 case State::LEADER:
                     if (peer->getLastAgreeIndex() < log->getLastLogIndex() ||
                         peer->nextHeartbeatTime < now) {
-                        // appendEntries delegates to appendSnapshotChunk if we
+                        // appendEntries delegates to installSnapshot if we
                         // need to send a snapshot instead
                         appendEntries(lockGuard, *peer);
                     } else {
@@ -1803,28 +1803,28 @@ RaftConsensus::stepDownThreadMain()
 //// RaftConsensus private methods that MUST NOT acquire the lock
 
 void
-RaftConsensus::advanceCommittedId()
+RaftConsensus::advanceCommitIndex()
 {
     if (state != State::LEADER) {
         // getLastAgreeIndex is undefined unless we're leader
-        WARNING("advanceCommittedId called as %s",
+        WARNING("advanceCommitIndex called as %s",
                 Core::StringUtil::toString(state).c_str());
         return;
     }
 
     // calculate the largest entry ID stored on a quorum of servers
-    uint64_t newCommittedId =
+    uint64_t newCommitIndex =
         configuration->quorumMin(&Server::getLastAgreeIndex);
-    if (commitIndex >= newCommittedId)
+    if (commitIndex >= newCommitIndex)
         return;
     // If we have discarded the entry, it's because we already knew it was
     // committed.
-    assert(newCommittedId >= log->getLogStartIndex());
+    assert(newCommitIndex >= log->getLogStartIndex());
     // At least one of these entries must also be from the current term to
     // guarantee that no server without them can be elected.
-    if (log->getEntry(newCommittedId).term() != currentTerm)
+    if (log->getEntry(newCommitIndex).term() != currentTerm)
         return;
-    commitIndex = newCommittedId;
+    commitIndex = newCommitIndex;
     VERBOSE("New commitIndex: %lu", commitIndex);
     assert(commitIndex <= log->getLastLogIndex());
     stateChanged.notify_all();
@@ -1887,7 +1887,7 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
 
     // Don't have needed entry: send a snapshot instead.
     if (peer.nextIndex < log->getLogStartIndex()) {
-        appendSnapshotChunk(lockGuard, peer);
+        installSnapshot(lockGuard, peer);
         return;
     }
 
@@ -1901,7 +1901,7 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
         prevLogTerm = lastSnapshotTerm;
     } else {
         // Don't have needed entry for prevLogTerm: send snapshot instead.
-        appendSnapshotChunk(lockGuard, peer);
+        installSnapshot(lockGuard, peer);
         return;
     }
 
@@ -1918,17 +1918,17 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
     // the last one out.
     uint64_t numEntries = 0;
     if (!peer.forceHeartbeat) {
-        for (uint64_t entryId = peer.nextIndex;
-             entryId <= lastLogIndex;
-             ++entryId) {
-            const Log::Entry& entry = log->getEntry(entryId);
+        for (uint64_t index = peer.nextIndex;
+             index <= lastLogIndex;
+             ++index) {
+            const Log::Entry& entry = log->getEntry(index);
             *request.add_entries() = entry;
             uint64_t requestSize =
                 Core::Util::downCast<uint64_t>(request.ByteSize());
             if (requestSize < SOFT_RPC_SIZE_LIMIT || numEntries == 0) {
                 // this entry fits, send it
-                VERBOSE("sending entry <id=%lu,term=%lu>",
-                        entryId, entry.term());
+                VERBOSE("sending entry <index=%lu,term=%lu>",
+                        index, entry.term());
                 ++numEntries;
             } else {
                 // this entry doesn't fit, discard it
@@ -1980,7 +1980,7 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
                         "didn't.");
             } else {
                 peer.lastAgreeIndex = prevLogIndex + numEntries;
-                advanceCommittedId();
+                advanceCommitIndex();
             }
             peer.nextIndex = peer.lastAgreeIndex + 1;
             peer.forceHeartbeat = false;
@@ -2011,11 +2011,11 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
 }
 
 void
-RaftConsensus::appendSnapshotChunk(std::unique_lock<Mutex>& lockGuard,
-                                   Peer& peer)
+RaftConsensus::installSnapshot(std::unique_lock<Mutex>& lockGuard,
+                               Peer& peer)
 {
     // Build up request
-    Protocol::Raft::AppendSnapshotChunk::Request request;
+    Protocol::Raft::InstallSnapshot::Request request;
     request.set_server_id(serverId);
     request.set_recipient_id(peer.serverId);
     request.set_term(currentTerm);
@@ -2024,9 +2024,9 @@ RaftConsensus::appendSnapshotChunk(std::unique_lock<Mutex>& lockGuard,
     // lastSnapshotIndex that goes along with the file, since it's possible
     // that this will change while we're transferring chunks).
     if (!peer.snapshotFile) {
-        namespace FilesystemUtil = Storage::FilesystemUtil;
-        peer.snapshotFile.reset(new FilesystemUtil::FileContents(
-            FilesystemUtil::openFile(storageDirectory, "snapshot", O_RDONLY)));
+        namespace FS = Storage::FilesystemUtil;
+        peer.snapshotFile.reset(new FS::FileContents(
+            FS::openFile(storageLayout.serverDir, "snapshot", O_RDONLY)));
         peer.snapshotFileOffset = 0;
         peer.lastSnapshotIndex = lastSnapshotIndex;
     }
@@ -2044,7 +2044,7 @@ RaftConsensus::appendSnapshotChunk(std::unique_lock<Mutex>& lockGuard,
                      peer.snapshotFile->getFileLength());
 
     // Execute RPC
-    Protocol::Raft::AppendSnapshotChunk::Response response;
+    Protocol::Raft::InstallSnapshot::Response response;
     TimePoint start = Clock::now();
     uint64_t epoch = currentEpoch;
     bool ok = peer.callRPC(Protocol::Raft::OpCode::APPEND_SNAPSHOT_CHUNK,
@@ -2066,7 +2066,7 @@ RaftConsensus::appendSnapshotChunk(std::unique_lock<Mutex>& lockGuard,
     // this term.
     assert(state == State::LEADER);
     if (response.term() > currentTerm) {
-        NOTICE("Received AppendSnapshotChunk response from server %lu in "
+        NOTICE("Received InstallSnapshot response from server %lu in "
                "term %lu (this server's term was %lu)",
                 peer.serverId, response.term(), currentTerm);
         stepDown(response.term());
@@ -2083,8 +2083,8 @@ RaftConsensus::appendSnapshotChunk(std::unique_lock<Mutex>& lockGuard,
             // These entries are already committed if they're in a snapshot, so
             // the commitIndex shouldn't advance, but let's just follow the
             // simple rule that bumping lastAgreeIndex should always be
-            // followed by a call to advanceCommittedId():
-            advanceCommittedId();
+            // followed by a call to advanceCommitIndex():
+            advanceCommitIndex();
             peer.snapshotFile.reset();
             peer.snapshotFileOffset = 0;
             peer.lastSnapshotIndex = 0;
@@ -2171,9 +2171,9 @@ void
 RaftConsensus::readSnapshot()
 {
     std::unique_ptr<Storage::SnapshotFile::Reader> reader;
-    if (storageDirectory.fd != -1) {
+    if (storageLayout.serverDir.fd != -1) {
         try {
-            reader.reset(new Storage::SnapshotFile::Reader(storageDirectory));
+            reader.reset(new Storage::SnapshotFile::Reader(storageLayout));
         } catch (const std::runtime_error& e) { // file not found
             NOTICE("%s", e.what());
         }

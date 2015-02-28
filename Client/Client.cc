@@ -65,6 +65,38 @@ void throwException(const Result& result)
 } // anonymous namespace
 
 
+////////// Server //////////
+
+Server::Server(uint64_t serverId, const std::string& addresses)
+    : serverId(serverId)
+    , addresses(addresses)
+{
+}
+
+Server::Server()
+    : serverId(~0UL)
+    , addresses("")
+{
+}
+
+Server::Server(const Server& other)
+    : serverId(other.serverId)
+    , addresses(other.addresses)
+{
+}
+
+Server::~Server()
+{
+}
+
+Server&
+Server::operator=(const Server& other)
+{
+    serverId = other.serverId;
+    addresses = other.addresses;
+    return *this;
+}
+
 ////////// ConfigurationResult //////////
 
 ConfigurationResult::ConfigurationResult()
@@ -494,6 +526,27 @@ Cluster::setConfiguration(uint64_t oldId,
                           const Configuration& newConfiguration)
 {
     return clientImpl->setConfiguration(oldId, newConfiguration);
+}
+
+
+Result
+Cluster::getServerInfo(const std::string& host,
+                       uint64_t timeoutNanoseconds,
+                       Server& info)
+{
+    return clientImpl->getServerInfo(
+                host,
+                absTimeout(timeoutNanoseconds),
+                info);
+}
+
+Server
+Cluster::getServerInfoEx(const std::string& host,
+                         uint64_t timeoutNanoseconds)
+{
+    Server info;
+    throwException(getServerInfo(host, timeoutNanoseconds, info));
+    return info;
 }
 
 Result

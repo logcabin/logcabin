@@ -78,7 +78,7 @@ TEST_F(CoreBufferTest, destructor) {
 TEST_F(CoreBufferTest, assignment_move) {
     {
         Buffer buffer1(buf, sizeof(buf), deleterCounter);
-        Buffer buffer2(buf + 1, uint32_t(sizeof(buf) - 1), deleterCounter);
+        Buffer buffer2(buf + 1, sizeof(buf) - 1, deleterCounter);
         buffer2 = std::move(buffer1);
         EXPECT_TRUE(NULL == buffer1.getData());
         EXPECT_EQ(0U, buffer1.getLength());
@@ -106,7 +106,7 @@ TEST_F(CoreBufferTest, setData) {
         buffer.setData(buf, sizeof(buf), deleterCounter);
         EXPECT_EQ(buf, buffer.getData());
         EXPECT_EQ(sizeof(buf), buffer.getLength());
-        buffer.setData(buf + 1, uint32_t(sizeof(buf) - 1), deleterCounter);
+        buffer.setData(buf + 1, sizeof(buf) - 1, deleterCounter);
         EXPECT_EQ(buf + 1, buffer.getData());
         EXPECT_EQ(sizeof(buf) - 1, buffer.getLength());
     }

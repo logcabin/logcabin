@@ -81,6 +81,11 @@ class ClientImpl {
                             uint64_t oldId,
                             const Configuration& newConfiguration);
 
+    /// See Cluster::getServerInfo.
+    Result getServerInfo(const std::string& host,
+                         TimePoint timeout,
+                         Server& info);
+
     /// See Cluster::getServerStats.
     Result getServerStats(const std::string& host,
                           TimePoint timeout,

@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 Stanford University
+/* Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -13,44 +13,25 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <memory>
+#include <gtest/gtest.h>
 
-#ifndef LOGCABIN_STORAGE_LOGFACTORY_H
-#define LOGCABIN_STORAGE_LOGFACTORY_H
+#include "Storage/Layout.h"
 
 namespace LogCabin {
-
-// forward declaration
-namespace Core {
-class Config;
-}
-
-
 namespace Storage {
 
-// forward declarations
-class Log;
-class Layout;
+namespace {
 
-namespace LogFactory {
+TEST(StorageLayoutTest, basics)
+{
+    Layout layout;
+    layout.initTemporary();
+    Layout layout2;
+    EXPECT_DEATH(
+        layout2.init(layout.topDir.path, 1),
+        "Could not lock storage directory");
+}
 
-/**
- * Construct and return a Log object.
- * \param config
- *      Determines which concrete type of Log to construct.
- *      PANICs if this is invalid.
- * \param storageLayout
- *      Log implementations that write to the filesystem should place their
- *      files in here.
- * \return
- *      The newly constructed Log instance.
- */
-std::unique_ptr<Log>
-makeLog(const Core::Config& config,
-        const Storage::Layout& storageLayout);
-
-} // namespace LogCabin::Storage::LogFactory
+} // namespace LogCabin::Storage::<anonymous>
 } // namespace LogCabin::Storage
 } // namespace LogCabin
-
-#endif /* LOGCABIN_STORAGE_LOGFACTORY_H */

@@ -20,6 +20,7 @@
 #include "Core/Debug.h"
 #include "Core/StringUtil.h"
 #include "Core/Time.h"
+#include "Storage/Layout.h"
 #include "Storage/SnapshotFile.h"
 
 namespace LogCabin {
@@ -28,16 +29,18 @@ namespace SnapshotFile {
 
 namespace FilesystemUtil = Storage::FilesystemUtil;
 
-Reader::Reader(const FilesystemUtil::File& parentDir)
+Reader::Reader(const Storage::Layout& storageLayout)
     : file()
     , fileStream()
     , codedStream()
 {
-    file = FilesystemUtil::tryOpenFile(parentDir, "snapshot", O_RDONLY);
+    file = FilesystemUtil::tryOpenFile(storageLayout.serverDir,
+                                       "snapshot",
+                                       O_RDONLY);
     if (file.fd < 0) {
-        throw std::runtime_error(
-                Core::StringUtil::format("Snapshot file not found in %s",
-                                         parentDir.path.c_str()));
+        throw std::runtime_error(Core::StringUtil::format(
+                "Snapshot file not found in %s",
+                storageLayout.serverDir.path.c_str()));
     }
     fileStream.reset(new google::protobuf::io::FileInputStream(file.fd));
     codedStream.reset(
@@ -60,8 +63,8 @@ Reader::getStream()
      return *codedStream;
 }
 
-Writer::Writer(const FilesystemUtil::File& parentDir)
-    : parentDir(FilesystemUtil::dup(parentDir))
+Writer::Writer(const Storage::Layout& storageLayout)
+    : parentDir(FilesystemUtil::dup(storageLayout.serverDir))
     , stagingName()
     , file()
     , fileStream()

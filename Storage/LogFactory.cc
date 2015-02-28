@@ -14,7 +14,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include "Core/Config.h"
 #include "Core/Debug.h"
+#include "Storage/Layout.h"
 #include "Storage/LogFactory.h"
 #include "Storage/MemoryLog.h"
 #include "Storage/SegmentedLog.h"
@@ -26,8 +28,9 @@ namespace LogFactory {
 
 std::unique_ptr<Log>
 makeLog(const Core::Config& config,
-        const FilesystemUtil::File& parentDir)
+        const Storage::Layout& storageLayout)
 {
+    const FilesystemUtil::File& parentDir = storageLayout.serverDir;
     std::string module =
         config.read<std::string>("storageModule", "SimpleFile");
     std::unique_ptr<Log> log;

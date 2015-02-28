@@ -51,32 +51,51 @@ def main():
     timeout = int(arguments['--timeout'])
 
     server_ids = range(1, num_servers + 1)
+    cluster = "--cluster=%s" % '\\;'.join([h[0] for h in
+                                           smokehosts[:num_servers]])
     with Sandbox() as sandbox:
         sh('rm -rf smoketeststorage/')
         sh('rm -f debug/*')
         sh('mkdir -p debug')
+
+        for server_id in server_ids:
+            host = smokehosts[server_id - 1]
+            with open('smoketest-%d.conf' % server_id, 'w') as f:
+                try:
+                    f.write(open('smoketest.conf').read())
+                    f.write('\n\n')
+                except:
+                    pass
+                f.write('serverId = %d\n' % server_id)
+                f.write('listenAddresses = %s\n' % host[0])
+
+
         print('Initializing first server\'s log')
         sandbox.rsh(smokehosts[0][0],
-                    '%s --bootstrap --id 1 --config smoketest.conf' %
-                    server_command,
+                    '%s --bootstrap --config smoketest-%d.conf' %
+                    (server_command, server_ids[0]),
                    stderr=open('debug/bootstrap', 'w'))
         print()
 
         for server_id in server_ids:
             host = smokehosts[server_id - 1]
-            command = ('%s --id %d --config smoketest.conf' %
+            command = ('%s --config smoketest-%d.conf' %
                        (server_command, server_id))
-            print('Starting %s on %s' % (command, smokehosts[server_id - 1][0]))
-            sandbox.rsh(smokehosts[server_id - 1][0], command, bg=True,
+            print('Starting %s on %s' % (command, host[0]))
+            sandbox.rsh(host[0], command, bg=True,
                         stderr=open('debug/%d' % server_id, 'w'))
             sandbox.checkFailures()
 
         print('Growing cluster')
-        sh('build/Examples/Reconfigure %s %s' %
-           (reconf_opts, ' '.join([h[0] for h in smokehosts[:num_servers]])))
+        sh('build/Examples/Reconfigure %s %s %s' %
+           (cluster,
+            reconf_opts,
+            ' '.join([h[0] for h in smokehosts[:num_servers]])))
 
-        print('Starting %s on localhost' % client_command)
-        client = sandbox.rsh('localhost', client_command, bg=True,
+        print('Starting %s %s on localhost' % (client_command, cluster))
+        client = sandbox.rsh('localhost',
+                             '%s %s' % (client_command, cluster),
+                             bg=True,
                              stderr=open('debug/client', 'w'))
 
         start = time.time()

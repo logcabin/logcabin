@@ -45,6 +45,9 @@ ClientService::handleRPC(RPC::ServerRPC rpc)
 
     // Call the appropriate RPC handler based on the request's opCode.
     switch (rpc.getOpCode()) {
+        case OpCode::GET_SERVER_INFO:
+            getServerInfo(std::move(rpc));
+            break;
         case OpCode::GET_SERVER_STATS:
             getServerStats(std::move(rpc));
             break;
@@ -96,6 +99,16 @@ ClientService::getName() const
 
 
 void
+ClientService::getServerInfo(RPC::ServerRPC rpc)
+{
+    PRELUDE(GetServerInfo);
+    Protocol::Client::Server& info = *response.mutable_server_info();
+    info.set_server_id(globals.raft->serverId);
+    info.set_addresses(globals.raft->serverAddresses);
+    rpc.reply(response);
+}
+
+void
 ClientService::getServerStats(RPC::ServerRPC rpc)
 {
     PRELUDE(GetServerStats);
@@ -122,10 +135,9 @@ std::pair<Result, uint64_t>
 ClientService::submit(RPC::ServerRPC& rpc,
                       const google::protobuf::Message& command)
 {
-    // TODO(ongaro): Switch from string to binary format. This is probably
-    // really slow to serialize.
-    std::string cmdStr = Core::ProtoBuf::dumpString(command);
-    std::pair<Result, uint64_t> result = globals.raft->replicate(cmdStr);
+    Core::Buffer cmdBuffer;
+    Core::ProtoBuf::serialize(command, cmdBuffer);
+    std::pair<Result, uint64_t> result = globals.raft->replicate(cmdBuffer);
     if (result.first == Result::RETRY || result.first == Result::NOT_LEADER) {
         Protocol::Client::Error error;
         error.set_error_code(Protocol::Client::Error::NOT_LEADER);
@@ -140,7 +152,7 @@ ClientService::submit(RPC::ServerRPC& rpc,
 Result
 ClientService::catchUpStateMachine(RPC::ServerRPC& rpc)
 {
-    std::pair<Result, uint64_t> result = globals.raft->getLastCommittedId();
+    std::pair<Result, uint64_t> result = globals.raft->getLastCommitIndex();
     if (result.first == Result::RETRY || result.first == Result::NOT_LEADER) {
         Protocol::Client::Error error;
         error.set_error_code(Protocol::Client::Error::NOT_LEADER);
@@ -156,11 +168,11 @@ ClientService::catchUpStateMachine(RPC::ServerRPC& rpc)
 
 bool
 ClientService::getResponse(RPC::ServerRPC& rpc,
-                           uint64_t entryId,
+                           uint64_t index,
                            const Protocol::Client::ExactlyOnceRPCInfo& rpcInfo,
                            Protocol::Client::CommandResponse& response)
 {
-    globals.stateMachine->wait(entryId);
+    globals.stateMachine->wait(index);
     bool ok = globals.stateMachine->getResponse(rpcInfo, response);
     if (!ok) {
         Protocol::Client::Error error;
@@ -206,7 +218,7 @@ ClientService::getConfiguration(RPC::ServerRPC rpc)
          ++it) {
         Protocol::Client::Server* server = response.add_servers();
         server->set_server_id(it->server_id());
-        server->set_address(it->address());
+        server->set_addresses(it->addresses());
     }
     rpc.reply(response);
 }
@@ -221,7 +233,7 @@ ClientService::setConfiguration(RPC::ServerRPC rpc)
          ++it) {
         Protocol::Raft::Server* s = newConfiguration.add_servers();
         s->set_server_id(it->server_id());
-        s->set_address(it->address());
+        s->set_addresses(it->addresses());
     }
     Result result = globals.raft->setConfiguration(
                         request.old_id(),

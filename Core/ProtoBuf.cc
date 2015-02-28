@@ -19,6 +19,7 @@
 #include "Core/Debug.h"
 #include "Core/ProtoBuf.h"
 #include "Core/StringUtil.h"
+#include "Core/Util.h"
 
 namespace google {
 namespace protobuf {
@@ -155,7 +156,7 @@ parse(const Core::Buffer& from,
     google::protobuf::LogSilencer logSilencer;
     if (!to.ParseFromArray(
                         static_cast<const char*>(from.getData()) + skipBytes,
-                        from.getLength() - skipBytes)) {
+                        Util::downCast<int>(from.getLength() - skipBytes))) {
         WARNING("Missing fields in protocol buffer of type %s: %s",
                 to.GetTypeName().c_str(),
                 to.InitializationErrorString().c_str());

@@ -33,6 +33,7 @@
 #include "Core/ConditionVariable.h"
 #include "Core/Time.h"
 #include "RPC/ClientRPC.h"
+#include "Storage/Layout.h"
 #include "Storage/Log.h"
 #include "Storage/SnapshotFile.h"
 
@@ -189,9 +190,10 @@ class Server {
      */
     const uint64_t serverId;
     /**
-     * The network address at which this server may be available.
+     * The network addresses at which this server may be available
+     * (semicolon-delimited)
      */
-    std::string address;
+    std::string addresses;
 
     /**
      * Used internally by Configuration for garbage collection.
@@ -518,7 +520,8 @@ class Configuration {
     bool hasVote(ServerRef server) const;
 
     /**
-     * Lookup the network address for a particular server.
+     * Lookup the network addresses for a particular server
+     * (semicolon-delimited).
      * Returns empty string if not found.
      */
     std::string lookupAddress(uint64_t serverId) const;
@@ -855,11 +858,11 @@ class RaftConsensus {
         ~Entry();
 
         /**
-         * The entry ID for this entry (or the last one a snapshot covers).
-         * Pass this as the lastEntryId argument to the next call to
+         * The Raft log index for this entry (or the last one a snapshot
+         * covers). Pass this as the lastIndex argument to the next call to
          * getNextEntry().
          */
-        uint64_t entryId;
+        uint64_t index;
 
         /**
          * The type of the entry.
@@ -893,7 +896,7 @@ class RaftConsensus {
         /**
          * The client request for entries of type 'DATA'.
          */
-        std::string data;
+        Core::Buffer command;
 
         /**
          * A handle to the snapshot file for entries of type 'SNAPSHOT'.
@@ -957,7 +960,7 @@ class RaftConsensus {
      * replicated log. This is used to provide non-stale reads to the state
      * machine.
      */
-    std::pair<ClientResult, uint64_t> getLastCommittedId() const;
+    std::pair<ClientResult, uint64_t> getLastCommitIndex() const;
 
     /**
      * Return the network address for a recent leader, if known,
@@ -966,17 +969,17 @@ class RaftConsensus {
     std::string getLeaderHint() const;
 
     /**
-     * This returns the entry following lastEntryId in the replicated log. Some
+     * This returns the entry following lastIndex in the replicated log. Some
      * entries may be used internally by the consensus module. These will have
      * Entry.hasData set to false. The reason these are exposed to the state
      * machine is that the state machine waits to be caught up to the latest
-     * committed entry ID in the replicated log; sometimes, but that entry
-     * would otherwise never reach the state machine if it was for internal
-     * use.
+     * committed entry in the replicated log sometimes, but if that entry
+     * was for internal use, it would would otherwise never reach the state
+     * machine.
      * \throw Core::Util::ThreadInterruptedException
      *      Thread should exit.
      */
-    Entry getNextEntry(uint64_t lastEntryId) const;
+    Entry getNextEntry(uint64_t lastIndex) const;
 
     /**
      * Return statistics that may be useful in deciding when to snapshot.
@@ -995,16 +998,16 @@ class RaftConsensus {
                 Protocol::Raft::AppendEntries::Response& response);
 
     /**
-     * Process an AppendSnapshotChunk RPC from another server. Called by
+     * Process an InstallSnapshot RPC from another server. Called by
      * RaftService.
      * \param[in] request
      *      The request that was received from the other server.
      * \param[out] response
      *      Where the reply should be placed.
      */
-    void handleAppendSnapshotChunk(
-                const Protocol::Raft::AppendSnapshotChunk::Request& request,
-                Protocol::Raft::AppendSnapshotChunk::Response& response);
+    void handleInstallSnapshot(
+                const Protocol::Raft::InstallSnapshot::Request& request,
+                Protocol::Raft::InstallSnapshot::Response& response);
 
     /**
      * Process a RequestVote RPC from another server. Called by RaftService.
@@ -1026,7 +1029,7 @@ class RaftConsensus {
      *      log index at which the entry has been committed to the replicated
      *      log.
      */
-    std::pair<ClientResult, uint64_t> replicate(const std::string& operation);
+    std::pair<ClientResult, uint64_t> replicate(const Core::Buffer& operation);
 
     /**
      * Change the cluster's configuration.
@@ -1164,9 +1167,8 @@ class RaftConsensus {
      *
      * \pre
      *      state is LEADER.
-     * TODO(ongaro): rename to advanceCommitIndex
      */
-    void advanceCommittedId();
+    void advanceCommitIndex();
 
     /**
      * Append entries to the log, set the configuration if this contains a
@@ -1187,7 +1189,7 @@ class RaftConsensus {
     void appendEntries(std::unique_lock<Mutex>& lockGuard, Peer& peer);
 
     /**
-     * Send an AppendSnapshotChunk RPC to the server (containing part of a
+     * Send an InstallSnapshot RPC to the server (containing part of a
      * snapshot file to replicate).
      * \param lockGuard
      *      Used to temporarily release the lock while invoking the RPC, so as
@@ -1196,7 +1198,7 @@ class RaftConsensus {
      *      State used in communicating with the follower, building the RPC
      *      request, and processing its result.
      */
-    void appendSnapshotChunk(std::unique_lock<Mutex>& lockGuard, Peer& peer);
+    void installSnapshot(std::unique_lock<Mutex>& lockGuard, Peer& peer);
 
     /**
      * Transition to being a leader. This is called when a candidate has
@@ -1338,10 +1340,10 @@ class RaftConsensus {
     uint64_t serverId;
 
     /**
-     * The address that this server is listening on. Not available until init()
-     * is called.
+     * The addresses that this server is listening on. Not available until
+     * init() is called.
      */
-    std::string serverAddress;
+    std::string serverAddresses;
 
   private:
 
@@ -1353,7 +1355,7 @@ class RaftConsensus {
     /**
      * Where the files for the log and snapshots are stored.
      */
-    Storage::FilesystemUtil::File storageDirectory;
+    Storage::Layout storageLayout;
 
     /**
      * This class behaves mostly like a monitor. This protects all the state in
@@ -1484,7 +1486,7 @@ class RaftConsensus {
     mutable std::unique_ptr<Storage::SnapshotFile::Reader> snapshotReader;
 
     /**
-     * This is used in handleAppendSnapshotChunk when receiving a snapshot from
+     * This is used in handleInstallSnapshot when receiving a snapshot from
      * the current leader. The leader is assumed to send at most one snapshot
      * at a time, and any partial snapshots here are discarded when the term
      * changes.

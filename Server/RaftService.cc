@@ -74,6 +74,8 @@ RaftService::getName() const
         return; \
     /* TODO(ongaro): pass RPC into Raft so it can do this check instead */ \
     if (request.recipient_id() != globals.raft->serverId) { \
+        WARNING("RPC received but destined for wrong server:\n%s", \
+                Core::ProtoBuf::dumpString(request).c_str()); \
         rpc.closeSession(); \
         return; \
     }
@@ -93,10 +95,10 @@ RaftService::appendEntries(RPC::ServerRPC rpc)
 void
 RaftService::appendSnapshotChunk(RPC::ServerRPC rpc)
 {
-    PRELUDE(AppendSnapshotChunk);
-    //VERBOSE("AppendSnapshotChunk:\n%s",
+    PRELUDE(InstallSnapshot);
+    //VERBOSE("InstallSnapshot:\n%s",
     //        Core::ProtoBuf::dumpString(request).c_str());
-    globals.raft->handleAppendSnapshotChunk(request, response);
+    globals.raft->handleInstallSnapshot(request, response);
     rpc.reply(response);
 }
 

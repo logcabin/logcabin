@@ -180,6 +180,38 @@ class ClientClientImplServiceMockTest : public ClientClientImplTest {
     std::unique_ptr<RPC::Server> server;
 };
 
+TEST_F(ClientClientImplServiceMockTest, getServerInfo) {
+    Protocol::Client::GetServerInfo::Request request;
+    Protocol::Client::GetServerInfo::Response response;
+    Protocol::Client::Server& ret = *response.mutable_server_info();
+    ret.set_server_id(3);
+    ret.set_addresses("roflcopter");
+
+    service->closeSession(Protocol::Client::OpCode::GET_SERVER_INFO,
+                          request);
+    service->reply(Protocol::Client::OpCode::GET_SERVER_INFO,
+                   request, response);
+    Client::Server info;
+    Client::Result result = client.getServerInfo("127.0.0.1",
+                                                 TimePoint::max(),
+                                                 info);
+    EXPECT_EQ(Client::Status::OK, result.status);
+    EXPECT_EQ(3U, info.serverId);
+    EXPECT_EQ("roflcopter", info.addresses);
+}
+
+TEST_F(ClientClientImplTest, getServerInfo_timeout) {
+    Client::Server info;
+    info.serverId = 9;
+    Client::Result result = client.getServerInfo("127.0.0.1",
+                                                 TimePoint::min(),
+                                                 info);
+    EXPECT_EQ(Client::Status::TIMEOUT, result.status);
+    EXPECT_EQ("Client-specified timeout elapsed", result.error);
+    EXPECT_EQ(9U, info.serverId);
+}
+
+
 TEST_F(ClientClientImplServiceMockTest, getServerStats) {
     Protocol::Client::GetServerStats::Request request;
     Protocol::Client::GetServerStats::Response response;

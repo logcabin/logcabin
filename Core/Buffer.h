@@ -86,7 +86,7 @@ class Buffer {
      *      owns the memory and guarantees its lifetime will extend beyond that
      *      of the Buffer.
      */
-    Buffer(void* data, uint32_t length, Deleter deleter);
+    Buffer(void* data, uint64_t length, Deleter deleter);
 
     /**
      * Move constructor.
@@ -117,7 +117,7 @@ class Buffer {
     /**
      * Return the number of bytes that make up the data.
      */
-    uint32_t getLength() const { return length; }
+    uint64_t getLength() const { return length; }
 
     /**
      * Replace the data contained in this Buffer.
@@ -133,7 +133,7 @@ class Buffer {
      *      owns the memory and guarantees its lifetime will extend beyond that
      *      of the Buffer.
      */
-    void setData(void* data, uint32_t length, Deleter deleter);
+    void setData(void* data, uint64_t length, Deleter deleter);
 
     /**
      * Empty the Buffer. The memory for the existing data, if any, will be
@@ -150,7 +150,7 @@ class Buffer {
     /**
      * The number of bytes that make up data or 0 if none has been set.
      */
-    uint32_t length;
+    uint64_t length;
 
     /**
      * Describes how to release the memory for 'data' when this Buffer is

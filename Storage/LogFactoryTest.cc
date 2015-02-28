@@ -18,8 +18,10 @@
 #include <gtest/gtest.h>
 #include <sys/stat.h>
 
+#include "Core/Config.h"
 #include "Core/Debug.h"
 #include "Core/StringUtil.h"
+#include "Storage/Layout.h"
 #include "Storage/LogFactory.h"
 #include "Storage/MemoryLog.h"
 #include "Storage/SegmentedLog.h"
@@ -33,24 +35,21 @@ namespace {
 class StorageLogFactoryTest : public ::testing::Test {
   public:
     StorageLogFactoryTest()
-        : tmpdir()
+        : layout()
         , config()
     {
-        std::string path = FilesystemUtil::mkdtemp();
-        tmpdir = FilesystemUtil::File(open(path.c_str(), O_RDONLY|O_DIRECTORY),
-                                      path);
+        layout.initTemporary();
     }
     ~StorageLogFactoryTest() {
-        FilesystemUtil::remove(tmpdir.path);
     }
-    FilesystemUtil::File tmpdir;
+    Storage::Layout layout;
     Core::Config config;
 };
 
 TEST_F(StorageLogFactoryTest, makeLog_Memory)
 {
     config.set("storageModule", "Memory");
-    std::unique_ptr<Log> log = LogFactory::makeLog(config, tmpdir);
+    std::unique_ptr<Log> log = LogFactory::makeLog(config, layout);
     EXPECT_STREQ(typeid(MemoryLog).name(), typeid(*log).name());
 }
 
@@ -62,12 +61,12 @@ TEST_F(StorageLogFactoryTest, makeLog_SimpleFile)
     });
 
     // default
-    std::unique_ptr<Log> log = LogFactory::makeLog(config, tmpdir);
+    std::unique_ptr<Log> log = LogFactory::makeLog(config, layout);
     EXPECT_STREQ(typeid(SimpleFileLog).name(), typeid(*log).name());
     log.reset();
 
     config.set("storageModule", "SimpleFile");
-    log = LogFactory::makeLog(config, tmpdir);
+    log = LogFactory::makeLog(config, layout);
     EXPECT_STREQ(typeid(SimpleFileLog).name(), typeid(*log).name());
 }
 
@@ -79,12 +78,12 @@ TEST_F(StorageLogFactoryTest, makeLog_Segmented_Binary)
     });
 
     config.set("storageModule", "Segmented");
-    std::unique_ptr<Log> log = LogFactory::makeLog(config, tmpdir);
+    std::unique_ptr<Log> log = LogFactory::makeLog(config, layout);
     EXPECT_STREQ(typeid(SegmentedLog).name(), typeid(*log).name());
     log.reset();
 
     config.set("storageModule", "Segmented-Binary");
-    log = LogFactory::makeLog(config, tmpdir);
+    log = LogFactory::makeLog(config, layout);
     EXPECT_STREQ(typeid(SegmentedLog).name(), typeid(*log).name());
 }
 
@@ -96,14 +95,14 @@ TEST_F(StorageLogFactoryTest, makeLog_Segmented_Text)
     });
 
     config.set("storageModule", "Segmented-Text");
-    std::unique_ptr<Log> log = LogFactory::makeLog(config, tmpdir);
+    std::unique_ptr<Log> log = LogFactory::makeLog(config, layout);
     EXPECT_STREQ(typeid(SegmentedLog).name(), typeid(*log).name());
 }
 
 TEST_F(StorageLogFactoryTest, makeLog_notfound)
 {
     config.set("storageModule", "punchcard");
-    EXPECT_DEATH(LogFactory::makeLog(config, tmpdir),
+    EXPECT_DEATH(LogFactory::makeLog(config, layout),
                  "Unknown storage module");
 }
 

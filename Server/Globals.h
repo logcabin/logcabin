@@ -72,7 +72,7 @@ class Globals {
      * Finish initializing this object.
      * This should be called after #config has been filled in.
      */
-    void init(uint64_t serverId = 0);
+    void init();
 
     /**
      * Run the event loop until SIGINT, SIGTERM, or someone calls

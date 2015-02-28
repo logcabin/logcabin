@@ -48,12 +48,36 @@ class ClientImpl; // forward declaration
 class TreeDetails; // forward declaration
 
 /**
- * A list of servers.
- * The first component is the server ID.
- * The second component is the network address of the server.
+ * A member of the cluster Configuration.
+ */
+struct Server {
+    /// Constructor.
+    Server(uint64_t serverId, const std::string& addresses);
+    /// Default constructor.
+    Server();
+    /// Copy constructor.
+    Server(const Server& other);
+    /// Destructor.
+    ~Server();
+    /// Copy assignment.
+    Server& operator=(const Server& other);
+
+    /**
+     * The unique ID of the server.
+     */
+    uint64_t serverId;
+
+    /**
+     * The network addresses of the server (semicolon-delimited).
+     */
+    std::string addresses;
+};
+
+/**
+ * Defines the members of the cluster.
  * Used in Cluster::getConfiguration and Cluster::setConfiguration.
  */
-typedef std::vector<std::pair<uint64_t, std::string>> Configuration;
+typedef std::vector<Server> Configuration;
 
 /**
  * Returned by Cluster::setConfiguration.
@@ -593,6 +617,36 @@ class Cluster {
     ConfigurationResult setConfiguration(
                                 uint64_t oldId,
                                 const Configuration& newConfiguration);
+
+    /**
+     * Retrieve basic information from the given server, like its ID and the
+     * addresses on which it is listening.
+     * \param host
+     *      The hostname or IP address of the server to retrieve stats from. It
+     *      is recommended that you do not use a DNS name that resolves to
+     *      multiple hosts here.
+     * \param timeoutNanoseconds
+     *      Abort the operation if it has not completed within the specified
+     *      period of time. Time is specified in nanoseconds, and the special
+     *      value of 0 indicates no timeout.
+     * \warning
+     *      The client library does not currently implement timeouts for DNS
+     *      lookups. See https://github.com/logcabin/logcabin/issues/75
+     * \param[out] info
+     *      Protocol buffer of Stats as retrieved from the server.
+     * \return
+     *      Either OK or TIMEOUT.
+     */
+    Result
+    getServerInfo(const std::string& host,
+                  uint64_t timeoutNanoseconds,
+                  Server& info);
+    /**
+     * Like getServerStats but throws exceptions upon errors.
+     */
+    Server
+    getServerInfoEx(const std::string& host,
+                    uint64_t timeoutNanoseconds);
 
     /**
      * Retrieve statistics from the given server, which are useful for

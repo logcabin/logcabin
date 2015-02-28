@@ -189,19 +189,28 @@ for target in env.FindInstalledFiles():
     install_commands.append('cp %s $RPM_BUILD_ROOT%s' % (source, target))
 
 # We probably don't want rpm to strip binaries.
-#
-# The normal __os_install_post consists of:
-#    %{_rpmconfigdir}/brp-compress
-#    %{_rpmconfigdir}/brp-strip %{__strip}
-#    %{_rpmconfigdir}/brp-strip-static-archive %{__strip}
-#    %{_rpmconfigdir}/brp-strip-comment-note %{__strip} %{__objdump}
-# as shown by: rpm --showrc | grep ' __os_install_post' -A10
-#
-# brp-compress just gzips manpages, which is fine. The others are probably
-# undesirable. This can go anywhere in the spec file (it's tacked onto
-# X_RPM_INSTALL below).
+# This is kludged into the spec file.
 skip_stripping_binaries_commands = [
+    # The normal __os_install_post consists of:
+    #    %{_rpmconfigdir}/brp-compress
+    #    %{_rpmconfigdir}/brp-strip %{__strip}
+    #    %{_rpmconfigdir}/brp-strip-static-archive %{__strip}
+    #    %{_rpmconfigdir}/brp-strip-comment-note %{__strip} %{__objdump}
+    # as shown by: rpm --showrc | grep ' __os_install_post' -A10
+    #
+    # brp-compress just gzips manpages, which is fine. The others are probably
+    # undesirable.
+    #
+    # This can go anywhere in the spec file.
     '%define __os_install_post /usr/lib/rpm/brp-compress',
+
+    # Your distro may also be configured to build -debuginfo packages by default,
+    # stripping the binaries and placing their symbols there. Let's not do that
+    # either.
+    #
+    # This has to go at the top of the spec file.
+    '%global _enable_debug_package 0',
+    '%global debug_package %{nil}',
 ]
 
 VERSION = '0.0.1-alpha.0'
@@ -213,16 +222,15 @@ PACKAGEROOT = 'logcabin-%s' % RPM_VERSION
 rpms=RPMPackager.package(env,
     target         = ['logcabin-%s' % RPM_VERSION],
     source         = env.FindInstalledFiles(),
-    X_RPM_INSTALL  = '\n'.join(install_commands +
-                               [''] +
-                               skip_stripping_binaries_commands),
+    X_RPM_INSTALL  = '\n'.join(install_commands),
     PACKAGEROOT    = PACKAGEROOT,
     NAME           = 'logcabin',
     VERSION        = RPM_VERSION,
     PACKAGEVERSION = RPM_RELEASE,
     LICENSE        = 'ISC',
     SUMMARY        = 'LogCabin is clustered consensus deamon',
-    X_RPM_GROUP    = 'Application/logcabin',
+    X_RPM_GROUP    = ('Application/logcabin' + '\n' +
+                      '\n'.join(skip_stripping_binaries_commands)),
     DESCRIPTION    =
     'LogCabin is a distributed system that provides a small amount of\n'
     'highly replicated, consistent storage. It is a reliable place for\n'

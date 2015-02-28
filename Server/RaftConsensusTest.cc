@@ -61,7 +61,7 @@ void
 setAddr(Server& server)
 {
     using Core::StringUtil::format;
-    server.address = format("server%lu", server.serverId);
+    server.addresses = format("server%lu", server.serverId);
 }
 
 uint64_t
@@ -167,9 +167,9 @@ TEST_F(ServerRaftConsensusSimpleConfigurationTest, contains) {
 TEST_F(ServerRaftConsensusSimpleConfigurationTest, forEach) {
     cfg.forEach(setAddr);
     emptyCfg.forEach(setAddr);
-    EXPECT_EQ("server1", cfg.servers.at(0)->address);
-    EXPECT_EQ("server2", cfg.servers.at(1)->address);
-    EXPECT_EQ("server3", cfg.servers.at(2)->address);
+    EXPECT_EQ("server1", cfg.servers.at(0)->addresses);
+    EXPECT_EQ("server2", cfg.servers.at(1)->addresses);
+    EXPECT_EQ("server3", cfg.servers.at(2)->addresses);
 }
 
 TEST_F(ServerRaftConsensusSimpleConfigurationTest, min) {
@@ -205,7 +205,7 @@ class ServerRaftConsensusConfigurationTest
 
 TEST_F(ServerRaftConsensusConfigurationTest, forEach) {
     cfg.forEach(setAddr);
-    EXPECT_EQ("server1", cfg.localServer->address);
+    EXPECT_EQ("server1", cfg.localServer->addresses);
 }
 
 TEST_F(ServerRaftConsensusConfigurationTest, hasVote) {
@@ -237,29 +237,29 @@ TEST_F(ServerRaftConsensusConfigurationTest, quorumMin) {
 
 const char* d =
     "prev_configuration {"
-    "    servers { server_id: 1, address: '127.0.0.1:61023' }"
+    "    servers { server_id: 1, addresses: '127.0.0.1:61023' }"
     "}";
 
 const char* d2 =
     "prev_configuration {"
-    "    servers { server_id: 1, address: '127.0.0.1:61023' }"
+    "    servers { server_id: 1, addresses: '127.0.0.1:61023' }"
     "}"
     "next_configuration {"
-        "servers { server_id: 1, address: '127.0.0.1:61025' }"
+        "servers { server_id: 1, addresses: '127.0.0.1:61025' }"
     "}";
 
 const char* d3 =
     "prev_configuration {"
-    "    servers { server_id: 1, address: '127.0.0.1:61023' }"
-    "    servers { server_id: 2, address: '127.0.0.1:61024' }"
+    "    servers { server_id: 1, addresses: '127.0.0.1:61023' }"
+    "    servers { server_id: 2, addresses: '127.0.0.1:61024' }"
     "}";
 
 const char* d4 =
     "prev_configuration {"
-    "    servers { server_id: 1, address: '127.0.0.1:61023' }"
+    "    servers { server_id: 1, addresses: '127.0.0.1:61023' }"
     "}"
     "next_configuration {"
-        "servers { server_id: 2, address: '127.0.0.1:61024' }"
+        "servers { server_id: 2, addresses: '127.0.0.1:61024' }"
     "}";
 
 TEST_F(ServerRaftConsensusConfigurationTest, reset) {
@@ -278,7 +278,7 @@ TEST_F(ServerRaftConsensusConfigurationTest, setConfiguration) {
     EXPECT_EQ(d, cfg.description);
     EXPECT_EQ(1U, cfg.oldServers.servers.size());
     EXPECT_EQ(0U, cfg.newServers.servers.size());
-    EXPECT_EQ("127.0.0.1:61023", cfg.oldServers.servers.at(0)->address);
+    EXPECT_EQ("127.0.0.1:61023", cfg.oldServers.servers.at(0)->addresses);
     EXPECT_EQ(1U, cfg.knownServers.size());
 
     cfg.setConfiguration(2, desc(d2));
@@ -287,31 +287,31 @@ TEST_F(ServerRaftConsensusConfigurationTest, setConfiguration) {
     EXPECT_EQ(d2, cfg.description);
     EXPECT_EQ(1U, cfg.oldServers.servers.size());
     EXPECT_EQ(1U, cfg.newServers.servers.size());
-    EXPECT_EQ("127.0.0.1:61025", cfg.oldServers.servers.at(0)->address);
-    EXPECT_EQ("127.0.0.1:61025", cfg.newServers.servers.at(0)->address);
+    EXPECT_EQ("127.0.0.1:61025", cfg.oldServers.servers.at(0)->addresses);
+    EXPECT_EQ("127.0.0.1:61025", cfg.newServers.servers.at(0)->addresses);
     EXPECT_EQ(1U, cfg.knownServers.size());
 }
 
 TEST_F(ServerRaftConsensusConfigurationTest, setStagingServers) {
     cfg.setConfiguration(1, desc(
         "prev_configuration {"
-        "    servers { server_id: 1, address: '127.0.0.1:61023' }"
+        "    servers { server_id: 1, addresses: '127.0.0.1:61023' }"
         "}"));
     cfg.setStagingServers(sdesc(
-        "servers { server_id: 1, address: '127.0.0.1:61025' }"
-        "servers { server_id: 2, address: '127.0.0.1:61027' }"));
+        "servers { server_id: 1, addresses: '127.0.0.1:61025' }"
+        "servers { server_id: 2, addresses: '127.0.0.1:61027' }"));
     EXPECT_EQ(Configuration::State::STAGING, cfg.state);
     EXPECT_EQ(2U, cfg.newServers.servers.size());
     EXPECT_EQ(1U, cfg.newServers.servers.at(0)->serverId);
     EXPECT_EQ(2U, cfg.newServers.servers.at(1)->serverId);
-    EXPECT_EQ("127.0.0.1:61025", cfg.newServers.servers.at(0)->address);
-    EXPECT_EQ("127.0.0.1:61027", cfg.newServers.servers.at(1)->address);
+    EXPECT_EQ("127.0.0.1:61025", cfg.newServers.servers.at(0)->addresses);
+    EXPECT_EQ("127.0.0.1:61027", cfg.newServers.servers.at(1)->addresses);
     EXPECT_EQ(cfg.localServer, cfg.newServers.servers.at(0));
 
     cfg.resetStagingServers();
     EXPECT_EQ(Configuration::State::STABLE, cfg.state);
     EXPECT_EQ(0U, cfg.newServers.servers.size());
-    EXPECT_EQ("127.0.0.1:61023", cfg.localServer->address);
+    EXPECT_EQ("127.0.0.1:61023", cfg.localServer->addresses);
     EXPECT_EQ(1U, cfg.knownServers.size());
 
     // TODO(ongaro): test the gc code at the end of the function
@@ -417,7 +417,7 @@ TEST_F(ServerRaftConsensusConfigurationManagerTest, restoreInvariants) {
 void drainDiskQueue(RaftConsensus& consensus)
 {
     assert(consensus.state == State::LEADER);
-    // This is a while loop since advanceCommittedId can append, causing
+    // This is a while loop since advanceCommitIndex can append, causing
     // logSyncQueued to go true again.
     while (consensus.logSyncQueued) {
         std::unique_ptr<Log::Sync> sync = consensus.log->takeSync();
@@ -425,7 +425,7 @@ void drainDiskQueue(RaftConsensus& consensus)
         sync->wait();
         consensus.configuration->localServer->lastSyncedIndex =
                     sync->lastIndex;
-        consensus.advanceCommittedId();
+        consensus.advanceCommitIndex();
         consensus.log->syncComplete(std::move(sync));
     }
 }
@@ -443,7 +443,8 @@ TEST(ServerRaftConsensusClusterClockTest, basics) {
 
 class ServerRaftConsensusTest : public ::testing::Test {
     ServerRaftConsensusTest()
-        : globals()
+        : storageLayout()
+        , globals()
         , clockMocker()
         , consensus()
         , entry1()
@@ -451,17 +452,18 @@ class ServerRaftConsensusTest : public ::testing::Test {
         , entry3()
         , entry4()
         , entry5()
-        , storageDirectory()
     {
         globals.config.set("electionTimeoutMilliseconds", 5000);
         globals.config.set("heartbeatPeriodMilliseconds", 2500);
         globals.config.set("rpcFailureBackoffMilliseconds", 3000);
+        globals.config.set("use-temporary-storage", "true");
+        globals.config.set("raftDebug", "true");
 
         startThreads = false;
         consensus.reset(new RaftConsensus(globals));
         consensus->SOFT_RPC_SIZE_LIMIT = 1024;
         consensus->serverId = 1;
-        consensus->serverAddress = "127.0.0.1:61023";
+        consensus->serverAddresses = "127.0.0.1:61023";
 
         entry1.set_term(1);
         entry1.set_cluster_time(0);
@@ -487,14 +489,6 @@ class ServerRaftConsensusTest : public ::testing::Test {
         entry5.set_cluster_time(0);
         entry5.set_type(Protocol::Raft::EntryType::CONFIGURATION);
         *entry5.mutable_configuration() = desc(d3);
-
-        std::string path = Storage::FilesystemUtil::mkdtemp();
-        storageDirectory =
-            Storage::FilesystemUtil::File(open(path.c_str(),
-                                               O_RDONLY|O_DIRECTORY),
-                                          path);
-        consensus->storageDirectory =
-            Storage::FilesystemUtil::dup(storageDirectory);
     }
     void init() {
         consensus->log.reset(new Storage::MemoryLog());
@@ -506,7 +500,6 @@ class ServerRaftConsensusTest : public ::testing::Test {
         EXPECT_EQ(0U, consensus->invariants.errors);
         startThreads = true;
         consensus.reset();
-        Storage::FilesystemUtil::remove(storageDirectory.path);
     }
 
     Peer* getPeer(uint64_t serverId) {
@@ -521,6 +514,7 @@ class ServerRaftConsensusTest : public ::testing::Test {
         return std::dynamic_pointer_cast<Peer>(server);
     }
 
+    Storage::Layout storageLayout;
     Globals globals;
     Clock::Mocker clockMocker;
     std::unique_ptr<RaftConsensus> consensus;
@@ -529,7 +523,6 @@ class ServerRaftConsensusTest : public ::testing::Test {
     Log::Entry entry3;
     Log::Entry entry4;
     Log::Entry entry5;
-    Storage::FilesystemUtil::File storageDirectory;
 };
 
 
@@ -613,7 +606,7 @@ TEST_F(ServerRaftConsensusTest, init_nonblanklog)
     EXPECT_EQ(63U, consensus->votedFor);
     EXPECT_EQ(1U, consensus->configuration->localServer->serverId);
     EXPECT_EQ("127.0.0.1:61023",
-              consensus->configuration->localServer->address);
+              consensus->configuration->localServer->addresses);
     EXPECT_EQ(Configuration::State::STABLE, consensus->configuration->state);
     EXPECT_EQ(3U, consensus->configuration->id);
     EXPECT_EQ(State::FOLLOWER, consensus->state);
@@ -628,8 +621,7 @@ TEST_F(ServerRaftConsensusTest, init_withsnapshot)
 {
     { // write snapshot
         RaftConsensus c1(globals);
-        c1.storageDirectory =
-            Storage::FilesystemUtil::dup(consensus->storageDirectory);
+        c1.storageLayout = std::move(consensus->storageLayout);
         c1.log.reset(new Storage::MemoryLog());
         c1.serverId = 1;
         c1.init();
@@ -649,6 +641,7 @@ TEST_F(ServerRaftConsensusTest, init_withsnapshot)
             c1.beginSnapshot(2);
         writer->getStream().WriteLittleEndian32(0xdeadbeef);
         c1.snapshotDone(2, std::move(writer));
+        consensus->storageLayout = std::move(c1.storageLayout);
     }
 
     consensus->log.reset(new Storage::MemoryLog());
@@ -678,7 +671,7 @@ TEST_F(ServerRaftConsensusTest, bootstrapConfiguration)
               "type: CONFIGURATION "
               "configuration { "
               "  prev_configuration { "
-              "    servers { server_id: 1 address: '127.0.0.1:61023' } "
+              "    servers { server_id: 1 addresses: '127.0.0.1:61023' } "
               "  } "
               "} ",
               consensus->log->getEntry(1));
@@ -732,11 +725,11 @@ TEST_F(ServerRaftConsensusTest, getConfiguration_ok)
     Protocol::Raft::SimpleConfiguration c;
     uint64_t id;
     EXPECT_EQ(ClientResult::SUCCESS, consensus->getConfiguration(c, id));
-    EXPECT_EQ("servers { server_id: 1, address: '127.0.0.1:61023' }", c);
+    EXPECT_EQ("servers { server_id: 1, addresses: '127.0.0.1:61023' }", c);
     EXPECT_EQ(1U, id);
 }
 
-// TODO(ongaro): getLastCommittedId: low-priority test
+// TODO(ongaro): getLastCommitIndex: low-priority test
 
 TEST_F(ServerRaftConsensusTest, getNextEntry)
 {
@@ -755,24 +748,24 @@ TEST_F(ServerRaftConsensusTest, getNextEntry)
     consensus->stateChanged.callback = std::bind(&RaftConsensus::exit,
                                                  consensus.get());
     RaftConsensus::Entry e1 = consensus->getNextEntry(0);
-    EXPECT_EQ(1U, e1.entryId);
+    EXPECT_EQ(1U, e1.index);
     EXPECT_EQ(RaftConsensus::Entry::SKIP, e1.type);
     EXPECT_EQ(10U, e1.clusterTime);
-    RaftConsensus::Entry e2 = consensus->getNextEntry(e1.entryId);
-    EXPECT_EQ(2U, e2.entryId);
+    RaftConsensus::Entry e2 = consensus->getNextEntry(e1.index);
+    EXPECT_EQ(2U, e2.index);
     EXPECT_EQ(RaftConsensus::Entry::DATA, e2.type);
     EXPECT_EQ(20U, e2.clusterTime);
-    EXPECT_EQ("hello", e2.data);
-    RaftConsensus::Entry e3 = consensus->getNextEntry(e2.entryId);
-    EXPECT_EQ(3U, e3.entryId);
+    EXPECT_STREQ("hello", static_cast<const char*>(e2.command.getData()));
+    RaftConsensus::Entry e3 = consensus->getNextEntry(e2.index);
+    EXPECT_EQ(3U, e3.index);
     EXPECT_EQ(RaftConsensus::Entry::SKIP, e3.type);
     EXPECT_EQ(30U, e3.clusterTime);
-    RaftConsensus::Entry e4 = consensus->getNextEntry(e3.entryId);
-    EXPECT_EQ(4U, e4.entryId);
+    RaftConsensus::Entry e4 = consensus->getNextEntry(e3.index);
+    EXPECT_EQ(4U, e4.index);
     EXPECT_EQ(RaftConsensus::Entry::DATA, e4.type);
-    EXPECT_EQ("goodbye", e4.data);
+    EXPECT_STREQ("goodbye", static_cast<const char*>(e4.command.getData()));
     EXPECT_EQ(40U, e4.clusterTime);
-    EXPECT_THROW(consensus->getNextEntry(e4.entryId),
+    EXPECT_THROW(consensus->getNextEntry(e4.index),
                  Core::Util::ThreadInterruptedException);
 }
 
@@ -800,7 +793,7 @@ TEST_F(ServerRaftConsensusTest, getNextEntry_snapshot)
         {"Server/RaftConsensus.cc", "ERROR"}
     });
     RaftConsensus::Entry e1 = consensus->getNextEntry(0);
-    EXPECT_EQ(2U, e1.entryId);
+    EXPECT_EQ(2U, e1.index);
     EXPECT_EQ(RaftConsensus::Entry::SNAPSHOT, e1.type);
     EXPECT_EQ(10U, e1.clusterTime);
     uint32_t x;
@@ -808,7 +801,7 @@ TEST_F(ServerRaftConsensusTest, getNextEntry_snapshot)
     EXPECT_EQ(0xdeadbeef, x);
 
     RaftConsensus::Entry e2 = consensus->getNextEntry(2);
-    EXPECT_EQ(3U, e2.entryId);
+    EXPECT_EQ(3U, e2.index);
     EXPECT_EQ(20U, e2.clusterTime);
 }
 
@@ -862,7 +855,7 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntries_callerStale)
 
 // this tests the callee stale and leaderId == 0 branches, setElectionTimer(),
 // and heartbeat
-TEST_F(ServerRaftConsensusTest, handleAppendEntries_newLeaderAndCommittedId)
+TEST_F(ServerRaftConsensusTest, handleAppendEntries_newLeaderAndCommitIndex)
 {
     init();
     Protocol::Raft::AppendEntries::Request request;
@@ -1106,11 +1099,11 @@ readEntireFileAsString(const Storage::FilesystemUtil::File& parentDir,
                        f.getFileLength());
 }
 
-TEST_F(ServerRaftConsensusTest, handleAppendSnapshotChunk_callerStale)
+TEST_F(ServerRaftConsensusTest, handleInstallSnapshot_callerStale)
 {
     init();
-    Protocol::Raft::AppendSnapshotChunk::Request request;
-    Protocol::Raft::AppendSnapshotChunk::Response response;
+    Protocol::Raft::InstallSnapshot::Request request;
+    Protocol::Raft::InstallSnapshot::Response response;
     request.set_server_id(3);
     request.set_term(10);
     request.set_last_snapshot_index(1);
@@ -1118,7 +1111,7 @@ TEST_F(ServerRaftConsensusTest, handleAppendSnapshotChunk_callerStale)
     request.set_data("hello");
     request.set_done(false);
     consensus->stepDown(11);
-    consensus->handleAppendSnapshotChunk(request, response);
+    consensus->handleInstallSnapshot(request, response);
     EXPECT_EQ("term: 11 ", response);
 }
 
@@ -1127,8 +1120,8 @@ TEST_F(ServerRaftConsensusTest, handleAppendSnapshotChunk_callerStale)
 TEST_F(ServerRaftConsensusTest, handleSnapshotChunk_newLeader)
 {
     init();
-    Protocol::Raft::AppendSnapshotChunk::Request request;
-    Protocol::Raft::AppendSnapshotChunk::Response response;
+    Protocol::Raft::InstallSnapshot::Request request;
+    Protocol::Raft::InstallSnapshot::Response response;
     request.set_server_id(3);
     request.set_term(10);
     request.set_last_snapshot_index(1);
@@ -1141,7 +1134,7 @@ TEST_F(ServerRaftConsensusTest, handleSnapshotChunk_newLeader)
     EXPECT_EQ(State::CANDIDATE, consensus->state);
     EXPECT_EQ(9U, consensus->currentTerm);
     Clock::mockValue += milliseconds(10000);
-    consensus->handleAppendSnapshotChunk(request, response);
+    consensus->handleInstallSnapshot(request, response);
     EXPECT_EQ(3U, consensus->leaderId);
     EXPECT_EQ(State::FOLLOWER, consensus->state);
     EXPECT_EQ(0U, consensus->votedFor);
@@ -1154,7 +1147,7 @@ TEST_F(ServerRaftConsensusTest, handleSnapshotChunk_newLeader)
     consensus->snapshotWriter->discard();
 }
 
-TEST_F(ServerRaftConsensusTest, handleAppendSnapshotChunk)
+TEST_F(ServerRaftConsensusTest, handleInstallSnapshot)
 {
     init();
     consensus->stepDown(10);
@@ -1167,10 +1160,10 @@ TEST_F(ServerRaftConsensusTest, handleAppendSnapshotChunk)
         consensus->beginSnapshot(1);
     writer->save();
     std::string snapshotContents =
-        readEntireFileAsString(consensus->storageDirectory, "snapshot");
+        readEntireFileAsString(consensus->storageLayout.serverDir, "snapshot");
 
-    Protocol::Raft::AppendSnapshotChunk::Request request;
-    Protocol::Raft::AppendSnapshotChunk::Response response;
+    Protocol::Raft::InstallSnapshot::Request request;
+    Protocol::Raft::InstallSnapshot::Response response;
     request.set_server_id(3);
     request.set_term(10);
     request.set_last_snapshot_index(1);
@@ -1179,7 +1172,7 @@ TEST_F(ServerRaftConsensusTest, handleAppendSnapshotChunk)
     request.set_done(false);
 
     // useful data, but not done yet
-    consensus->handleAppendSnapshotChunk(request, response);
+    consensus->handleInstallSnapshot(request, response);
     EXPECT_EQ("term: 10 ", response);
     EXPECT_EQ(0U, consensus->lastSnapshotIndex);
     EXPECT_TRUE(bool(consensus->snapshotWriter));
@@ -1188,7 +1181,7 @@ TEST_F(ServerRaftConsensusTest, handleAppendSnapshotChunk)
     LogCabin::Core::Debug::setLogPolicy({
         {"Server/RaftConsensus.cc", "ERROR"}
     });
-    consensus->handleAppendSnapshotChunk(request, response);
+    consensus->handleInstallSnapshot(request, response);
     LogCabin::Core::Debug::setLogPolicy({
         {"Server/RaftConsensus.cc", "WARNING"}
     });
@@ -1200,7 +1193,7 @@ TEST_F(ServerRaftConsensusTest, handleAppendSnapshotChunk)
     request.set_byte_offset(snapshotContents.size());
     request.set_data("hello world!");
     request.set_done(true);
-    consensus->handleAppendSnapshotChunk(request, response);
+    consensus->handleInstallSnapshot(request, response);
     EXPECT_EQ("term: 10 ", response);
     EXPECT_EQ(1U, consensus->lastSnapshotIndex);
     EXPECT_FALSE(bool(consensus->snapshotWriter));
@@ -1323,7 +1316,7 @@ TEST_F(ServerRaftConsensusTest, setConfiguration_catchupFail)
     consensus->startNewElection();
     drainDiskQueue(*consensus);
     Protocol::Raft::SimpleConfiguration c = sdesc(
-        "servers { server_id: 2, address: '127.0.0.1:61024' }");
+        "servers { server_id: 2, addresses: '127.0.0.1:61024' }");
     consensus->stateChanged.callback = std::bind(setConfigurationHelper,
                                                  consensus.get());
     EXPECT_EQ(ClientResult::FAIL, consensus->setConfiguration(1, c));
@@ -1346,7 +1339,7 @@ TEST_F(ServerRaftConsensusTest, setConfiguration_replicateFail)
     consensus->stepDown(1);
     consensus->startNewElection();
     Protocol::Raft::SimpleConfiguration c = sdesc(
-        "servers { server_id: 2, address: '127.0.0.1:61024' }");
+        "servers { server_id: 2, addresses: '127.0.0.1:61024' }");
     consensus->stateChanged.callback = std::bind(setConfigurationHelper2,
                                                  consensus.get());
     EXPECT_EQ(ClientResult::NOT_LEADER, consensus->setConfiguration(1, c));
@@ -1355,10 +1348,10 @@ TEST_F(ServerRaftConsensusTest, setConfiguration_replicateFail)
     const Log::Entry& l2 = consensus->log->getEntry(3);
     EXPECT_EQ(Protocol::Raft::EntryType::CONFIGURATION, l2.type());
     EXPECT_EQ("prev_configuration {"
-                  "servers { server_id: 1, address: '127.0.0.1:61023' }"
+                  "servers { server_id: 1, addresses: '127.0.0.1:61023' }"
               "}"
               "next_configuration {"
-                  "servers { server_id: 2, address: '127.0.0.1:61024' }"
+                  "servers { server_id: 2, addresses: '127.0.0.1:61024' }"
               "}",
               l2.configuration());
 }
@@ -1372,14 +1365,14 @@ TEST_F(ServerRaftConsensusTest, setConfiguration_replicateOkJustUs)
     consensus->leaderDiskThread =
         std::thread(&RaftConsensus::leaderDiskThreadMain, consensus.get());
     Protocol::Raft::SimpleConfiguration c = sdesc(
-        "servers { server_id: 1, address: '127.0.0.1:61024' }");
+        "servers { server_id: 1, addresses: '127.0.0.1:61024' }");
     EXPECT_EQ(ClientResult::SUCCESS, consensus->setConfiguration(1, c));
     // 1: entry1, 2: no-op, 3: transitional, 4: new config
     EXPECT_EQ(4U, consensus->log->getLastLogIndex());
     const Log::Entry& l3 = consensus->log->getEntry(4);
     EXPECT_EQ(Protocol::Raft::EntryType::CONFIGURATION, l3.type());
     EXPECT_EQ("prev_configuration {"
-                  "servers { server_id: 1, address: '127.0.0.1:61024' }"
+                  "servers { server_id: 1, addresses: '127.0.0.1:61024' }"
               "}",
               l3.configuration());
 }
@@ -1399,15 +1392,15 @@ class SetConfigurationHelper3 {
         } else if (iter == 2) { // no-op entry
             drainDiskQueue(*consensus);
             peer->lastAgreeIndex = 2;
-            consensus->advanceCommittedId();
+            consensus->advanceCommitIndex();
         } else if (iter == 3) { // transitional entry
             drainDiskQueue(*consensus);
             peer->lastAgreeIndex = 3;
-            consensus->advanceCommittedId();
+            consensus->advanceCommitIndex();
         } else if (iter == 4) { // new configuration entry
             drainDiskQueue(*consensus);
             peer->lastAgreeIndex = 4;
-            consensus->advanceCommittedId();
+            consensus->advanceCommitIndex();
         } else {
             FAIL();
         }
@@ -1430,7 +1423,7 @@ TEST_F(ServerRaftConsensusTest, setConfiguration_replicateOkNontrivial)
     consensus->startNewElection();
     drainDiskQueue(*consensus);
     Protocol::Raft::SimpleConfiguration c = sdesc(
-        "servers { server_id: 2, address: '127.0.0.1:61024' }");
+        "servers { server_id: 2, addresses: '127.0.0.1:61024' }");
     consensus->stateChanged.callback =
         SetConfigurationHelper3(consensus.get());
     EXPECT_EQ(ClientResult::SUCCESS, consensus->setConfiguration(1, c));
@@ -1721,11 +1714,11 @@ TEST_F(ServerRaftConsensusPTest, peerThreadMain)
     consensus->stepDown(5);
     *entry5.mutable_configuration() = desc(
         "prev_configuration {"
-        "    servers { server_id: 1, address: '127.0.0.1:61023' }"
-        "    servers { server_id: 2, address: '127.0.0.1:61024' }"
-        "    servers { server_id: 3, address: '127.0.0.1:61024' }"
-        "    servers { server_id: 4, address: '127.0.0.1:61024' }"
-        "    servers { server_id: 5, address: '127.0.0.1:61024' }"
+        "    servers { server_id: 1, addresses: '127.0.0.1:61023' }"
+        "    servers { server_id: 2, addresses: '127.0.0.1:61024' }"
+        "    servers { server_id: 3, addresses: '127.0.0.1:61024' }"
+        "    servers { server_id: 4, addresses: '127.0.0.1:61024' }"
+        "    servers { server_id: 5, addresses: '127.0.0.1:61024' }"
         "}");
     consensus->append({&entry5});
     std::shared_ptr<Peer> peer = getPeerRef(2);
@@ -1843,7 +1836,7 @@ TEST_F(ServerRaftConsensusTest, stepDownThreadMain_twoServers)
     consensus->stepDownThreadMain();
 }
 
-TEST_F(ServerRaftConsensusTest, advanceCommittedId_noAdvanceMissingQuorum)
+TEST_F(ServerRaftConsensusTest, advanceCommitIndex_noAdvanceMissingQuorum)
 {
     init();
     consensus->append({&entry1});
@@ -1851,14 +1844,14 @@ TEST_F(ServerRaftConsensusTest, advanceCommittedId_noAdvanceMissingQuorum)
     consensus->stepDown(5);
     consensus->startNewElection();
     consensus->becomeLeader();
-    consensus->advanceCommittedId();
+    consensus->advanceCommitIndex();
     drainDiskQueue(*consensus);
     EXPECT_EQ(State::LEADER, consensus->state);
     EXPECT_EQ(0U, consensus->commitIndex);
 }
 
 TEST_F(ServerRaftConsensusTest,
-       advanceCommittedId_noAdvanceNoEntryFromCurrentTerm)
+       advanceCommitIndex_noAdvanceNoEntryFromCurrentTerm)
 {
     init();
     consensus->append({&entry1});
@@ -1868,15 +1861,15 @@ TEST_F(ServerRaftConsensusTest,
     consensus->becomeLeader();
     drainDiskQueue(*consensus);
     getPeer(2)->lastAgreeIndex = 2;
-    consensus->advanceCommittedId();
+    consensus->advanceCommitIndex();
     EXPECT_EQ(State::LEADER, consensus->state);
     EXPECT_EQ(0U, consensus->commitIndex);
     getPeer(2)->lastAgreeIndex = 3;
-    consensus->advanceCommittedId();
+    consensus->advanceCommitIndex();
     EXPECT_EQ(3U, consensus->commitIndex);
 }
 
-TEST_F(ServerRaftConsensusTest, advanceCommittedId_commitCfgWithoutSelf)
+TEST_F(ServerRaftConsensusTest, advanceCommitIndex_commitCfgWithoutSelf)
 {
     // Log:
     // 1,t1: cfg { server 1 }
@@ -1890,26 +1883,26 @@ TEST_F(ServerRaftConsensusTest, advanceCommittedId_commitCfgWithoutSelf)
     entry1.set_term(6);
     *entry1.mutable_configuration() = desc(
         "prev_configuration {"
-        "    servers { server_id: 1, address: '127.0.0.1:61023' }"
+        "    servers { server_id: 1, addresses: '127.0.0.1:61023' }"
         "}"
         "next_configuration {"
-            "servers { server_id: 2, address: '127.0.0.1:61024' }"
+            "servers { server_id: 2, addresses: '127.0.0.1:61024' }"
         "}");
     consensus->append({&entry1});
     drainDiskQueue(*consensus);
     getPeer(2)->lastAgreeIndex = 3;
-    consensus->advanceCommittedId();
+    consensus->advanceCommitIndex();
     EXPECT_EQ(3U, consensus->commitIndex);
     EXPECT_EQ(4U, consensus->log->getLastLogIndex());
     EXPECT_EQ(State::LEADER, consensus->state);
 
     getPeer(2)->lastAgreeIndex = 4;
-    consensus->advanceCommittedId();
+    consensus->advanceCommitIndex();
     EXPECT_EQ(4U, consensus->commitIndex);
     EXPECT_EQ(State::FOLLOWER, consensus->state);
 }
 
-TEST_F(ServerRaftConsensusTest, advanceCommittedId_commitTransitionToSelf)
+TEST_F(ServerRaftConsensusTest, advanceCommitIndex_commitTransitionToSelf)
 {
     // Log:
     // 1,t1: cfg { server 1:61023 }
@@ -1930,7 +1923,7 @@ TEST_F(ServerRaftConsensusTest, advanceCommittedId_commitTransitionToSelf)
     const Log::Entry& l3 = consensus->log->getEntry(4);
     EXPECT_EQ(Protocol::Raft::EntryType::CONFIGURATION, l3.type());
     EXPECT_EQ("prev_configuration {"
-                  "servers { server_id: 1, address: '127.0.0.1:61025' }"
+                  "servers { server_id: 1, addresses: '127.0.0.1:61025' }"
               "}",
               l3.configuration());
 }
@@ -2106,7 +2099,7 @@ TEST_F(ServerRaftConsensusPATest, appendEntries_ok)
     // TODO(ongaro): test catchup code
 }
 
-// test that appendSnapshotChunk gets called
+// test that installSnapshot gets called
 TEST_F(ServerRaftConsensusPATest, appendEntries_snapshot)
 {
     std::unique_lock<Mutex> lockGuard(consensus->mutex);
@@ -2127,7 +2120,7 @@ TEST_F(ServerRaftConsensusPATest, appendEntries_snapshot)
     // but it's not easily testable
 }
 
-// used in AppendSnapshotChunk tests
+// used in InstallSnapshot tests
 class ServerRaftConsensusPSTest : public ServerRaftConsensusPTest {
     ServerRaftConsensusPSTest()
         : peer()
@@ -2147,7 +2140,7 @@ class ServerRaftConsensusPSTest : public ServerRaftConsensusPTest {
 
         // First create a snapshot file on disk.
         // Note that this one doesn't have a Raft header.
-        Storage::SnapshotFile::Writer w(consensus->storageDirectory);
+        Storage::SnapshotFile::Writer w(consensus->storageLayout);
         w.getStream().WriteString("hello, world!");
         w.save();
         consensus->lastSnapshotIndex = 2;
@@ -2164,11 +2157,11 @@ class ServerRaftConsensusPSTest : public ServerRaftConsensusPTest {
     }
 
     std::shared_ptr<Peer> peer;
-    Protocol::Raft::AppendSnapshotChunk::Request request;
-    Protocol::Raft::AppendSnapshotChunk::Response response;
+    Protocol::Raft::InstallSnapshot::Request request;
+    Protocol::Raft::InstallSnapshot::Response response;
 };
 
-TEST_F(ServerRaftConsensusPSTest, appendSnapshotChunk_rpcFailed)
+TEST_F(ServerRaftConsensusPSTest, installSnapshot_rpcFailed)
 {
     peerService->closeSession(Protocol::Raft::OpCode::APPEND_SNAPSHOT_CHUNK,
                               request);
@@ -2177,37 +2170,37 @@ TEST_F(ServerRaftConsensusPSTest, appendSnapshotChunk_rpcFailed)
         {"Server/RaftConsensus.cc", "ERROR"}
     });
     std::unique_lock<Mutex> lockGuard(consensus->mutex);
-    consensus->appendSnapshotChunk(lockGuard, *peer);
+    consensus->installSnapshot(lockGuard, *peer);
     EXPECT_LT(Clock::now(), peer->backoffUntil);
     EXPECT_EQ(0U, peer->snapshotFileOffset);
 }
 
 
-TEST_F(ServerRaftConsensusPSTest, appendSnapshotChunk_termChanged)
+TEST_F(ServerRaftConsensusPSTest, installSnapshot_termChanged)
 {
     peerService->runArbitraryCode(
             Protocol::Raft::OpCode::APPEND_SNAPSHOT_CHUNK,
             request,
             std::make_shared<BumpTermAndReply>(*consensus, response));
     std::unique_lock<Mutex> lockGuard(consensus->mutex);
-    consensus->appendSnapshotChunk(lockGuard, *peer);
+    consensus->installSnapshot(lockGuard, *peer);
     EXPECT_EQ(TimePoint::min(), peer->backoffUntil);
     EXPECT_EQ(0U, peer->snapshotFileOffset);
 }
 
-TEST_F(ServerRaftConsensusPSTest, appendSnapshotChunk_termStale)
+TEST_F(ServerRaftConsensusPSTest, installSnapshot_termStale)
 {
     response.set_term(10);
     peerService->reply(Protocol::Raft::OpCode::APPEND_SNAPSHOT_CHUNK,
                        request, response);
     std::unique_lock<Mutex> lockGuard(consensus->mutex);
-    consensus->appendSnapshotChunk(lockGuard, *peer);
+    consensus->installSnapshot(lockGuard, *peer);
     EXPECT_EQ(0U, peer->snapshotFileOffset);
     EXPECT_EQ(State::FOLLOWER, consensus->state);
     EXPECT_EQ(10U, consensus->currentTerm);
 }
 
-TEST_F(ServerRaftConsensusPSTest, appendSnapshotChunk_ok)
+TEST_F(ServerRaftConsensusPSTest, installSnapshot_ok)
 {
     consensus->SOFT_RPC_SIZE_LIMIT = 7;
     request.set_data("hello, ");
@@ -2220,10 +2213,10 @@ TEST_F(ServerRaftConsensusPSTest, appendSnapshotChunk_ok)
     peerService->reply(Protocol::Raft::OpCode::APPEND_SNAPSHOT_CHUNK,
                        request, response);
     std::unique_lock<Mutex> lockGuard(consensus->mutex);
-    consensus->appendSnapshotChunk(lockGuard, *peer);
+    consensus->installSnapshot(lockGuard, *peer);
     // make sure we don't use an updated lastSnapshotIndex value
     consensus->lastSnapshotIndex = 1;
-    consensus->appendSnapshotChunk(lockGuard, *peer);
+    consensus->installSnapshot(lockGuard, *peer);
     EXPECT_EQ(2U, peer->lastAgreeIndex);
     EXPECT_EQ(3U, peer->nextIndex);
     EXPECT_FALSE(peer->snapshotFile);
@@ -2548,11 +2541,11 @@ TEST_F(ServerRaftConsensusPTest, requestVote_termOkAsLeader)
     consensus->stepDown(5);
     *entry1.mutable_configuration() = desc(
         "prev_configuration {"
-        "    servers { server_id: 1, address: '127.0.0.1:61023' }"
-        "    servers { server_id: 2, address: '127.0.0.1:61024' }"
-        "    servers { server_id: 3, address: '127.0.0.1:61024' }"
-        "    servers { server_id: 4, address: '127.0.0.1:61024' }"
-        "    servers { server_id: 5, address: '127.0.0.1:61024' }"
+        "    servers { server_id: 1, addresses: '127.0.0.1:61023' }"
+        "    servers { server_id: 2, addresses: '127.0.0.1:61024' }"
+        "    servers { server_id: 3, addresses: '127.0.0.1:61024' }"
+        "    servers { server_id: 4, addresses: '127.0.0.1:61024' }"
+        "    servers { server_id: 5, addresses: '127.0.0.1:61024' }"
         "}");
     consensus->append({&entry1});
     consensus->append({&entry2});
@@ -2641,7 +2634,7 @@ TEST_F(ServerRaftConsensusTest, startNewElection)
     consensus->append({&entry5});
 
     consensus->snapshotWriter.reset(
-        new Storage::SnapshotFile::Writer(consensus->storageDirectory));
+        new Storage::SnapshotFile::Writer(consensus->storageLayout));
     consensus->startNewElection();
     EXPECT_EQ(State::CANDIDATE, consensus->state);
     EXPECT_EQ(6U, consensus->currentTerm);
@@ -2665,7 +2658,7 @@ TEST_F(ServerRaftConsensusTest, startNewElection)
     entry1.set_term(9);
     *entry1.mutable_configuration() = desc(
         "prev_configuration {"
-            "servers { server_id: 2, address: '127.0.0.1:61025' }"
+            "servers { server_id: 2, addresses: '127.0.0.1:61025' }"
         "}");
     consensus->append({&entry1});
     consensus->startNewElection();
@@ -2713,7 +2706,7 @@ TEST_F(ServerRaftConsensusTest, stepDown)
 
     // from follower to new term
     consensus->snapshotWriter.reset(
-        new Storage::SnapshotFile::Writer(consensus->storageDirectory));
+        new Storage::SnapshotFile::Writer(consensus->storageLayout));
     consensus->stepDown(consensus->currentTerm + 1);
     EXPECT_EQ(oldStartElectionAt, consensus->startElectionAt);
     EXPECT_FALSE(bool(consensus->snapshotWriter));
@@ -2744,7 +2737,7 @@ class UpToDateLeaderHelper {
             peer->lastAckEpoch = consensus->currentEpoch;
         } else if (iter == 2) {
             peer->lastAgreeIndex = 4;
-            consensus->advanceCommittedId();
+            consensus->advanceCommitIndex();
         } else {
             FAIL();
         }

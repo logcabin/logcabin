@@ -53,6 +53,7 @@ class ClientService : public RPC::Service {
 
     ////////// RPC handlers //////////
 
+    void getServerInfo(RPC::ServerRPC rpc);
     void getServerStats(RPC::ServerRPC rpc);
     void getSupportedRPCVersions(RPC::ServerRPC rpc);
     void openSession(RPC::ServerRPC rpc);
@@ -69,7 +70,7 @@ class ClientService : public RPC::Service {
 
     bool
     getResponse(RPC::ServerRPC& rpc,
-                uint64_t entryId,
+                uint64_t index,
                 const Protocol::Client::ExactlyOnceRPCInfo& rpcInfo,
                 Protocol::Client::CommandResponse& response);
 
