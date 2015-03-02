@@ -1,5 +1,5 @@
 /* Copyright (c) 2012 Stanford University
- * Copyright (c) 2014 Diego Ongaro
+ * Copyright (c) 2014-2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -15,9 +15,12 @@
  */
 
 #include <gtest/gtest.h>
+#include <unordered_map>
 
 #include "Core/Debug.h"
 #include "Core/STLUtil.h"
+#include "Core/Util.h"
+#include "include/LogCabin/Debug.h"
 
 namespace LogCabin {
 namespace Core {
@@ -101,6 +104,33 @@ TEST_F(CoreDebugTest, isLogging) {
 TEST_F(CoreDebugTest, setLogFile) {
     EXPECT_EQ(stderr, setLogFile(stdout));
     EXPECT_EQ(stdout, setLogFile(stderr));
+}
+
+struct VectorHandler {
+    VectorHandler()
+        : messages()
+    {
+    }
+    void operator()(DebugMessage message) {
+        messages.push_back(message);
+    }
+    std::vector<DebugMessage> messages;
+};
+
+TEST_F(CoreDebugTest, setLogHandler) {
+    Core::Util::Finally _(std::bind(setLogHandler,
+                                    std::function<void(DebugMessage)>()));
+    VectorHandler handler;
+    setLogHandler(std::ref(handler));
+    ERROR("Hello, world! %d", 9);
+    EXPECT_EQ(1U, handler.messages.size());
+    const DebugMessage& m = handler.messages.at(0);
+    EXPECT_STREQ("Core/DebugTest.cc", m.filename);
+    EXPECT_LT(1, m.linenum);
+    EXPECT_STREQ("TestBody", m.function);
+    EXPECT_EQ(int(LogLevel::ERROR), m.logLevel);
+    EXPECT_STREQ("ERROR", m.logLevelString);
+    EXPECT_EQ("Hello, world! 9", m.message);
 }
 
 // log: low cost-benefit in testing

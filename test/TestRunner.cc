@@ -14,12 +14,13 @@
  */
 
 #include <cstdlib>
+#include <google/protobuf/stubs/common.h>
 #include <gtest/gtest.h>
 #include <memory>
 
 #include "Core/Debug.h"
 #include "Storage/FilesystemUtil.h"
-#include <google/protobuf/stubs/common.h>
+#include "include/LogCabin/Debug.h"
 
 namespace {
 

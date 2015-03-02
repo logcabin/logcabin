@@ -16,10 +16,7 @@
 
 #include <cinttypes>
 #include <cstdlib>
-#include <ostream>
 #include <string>
-#include <unordered_map>
-#include <vector>
 
 #ifndef LOGCABIN_CORE_DEBUG_H
 #define LOGCABIN_CORE_DEBUG_H
@@ -28,39 +25,14 @@ namespace LogCabin {
 namespace Core {
 namespace Debug {
 
-/**
- * Change the file on which debug log messages are written.
- * \param newFile
- *      Handle to open file where log messages will be written.
- * \return
- *      Handle to previous log file (initialized to stderr on process start).
- */
-FILE*
-setLogFile(FILE* newFile);
-
-/**
- * Specify the log messages that should be displayed for each filename.
- * This first component is a pattern; the second is a log level.
- * A filename is matched against each pattern in order: if the filename starts
- * with or ends with the pattern, the corresponding log level defines the most
- * verbose messages that are to be displayed for the file. If a filename
- * matches no pattern, its log level will default to NOTICE.
- */
-void
-setLogPolicy(const std::vector<
-                        std::pair<std::string, std::string>>& newPolicy);
-/**
- * \copydoc setLogPolicy().
- */
-void
-setLogPolicy(const std::initializer_list<
-                        std::pair<std::string, std::string>>& newPolicy);
+// Configuring logging is exposed to clients as well as servers,
+// so that stuff goes in a public header file: "include/LogCabin/Debug.h"
 
 /**
  * The levels of verbosity for log messages. Higher values are noisier.
  */
 enum class LogLevel {
-    // Keep this in sync with logLevelToString.
+    // Keep this in sync with logLevelToString in Core/Debug.cc.
     /**
      * This log level is just used for disabling all log messages, which is
      * really only useful in unit tests.
@@ -69,31 +41,27 @@ enum class LogLevel {
     /**
      * Bad stuff that shouldn't happen. The system broke its contract to users
      * in some way or some major assumption was violated.
-     * See the ERROR macro below.
      */
     ERROR = 1,
     /**
      * Messages at the WARNING level indicate that, although something went
      * wrong or something unexpected happened, it was transient and
      * recoverable.
-     * See WARNING macro below.
      */
     WARNING = 2,
     /**
      * A system message that might be useful for administrators and developers.
-     * See NOTICE macro below.
      */
     NOTICE = 3,
     /**
      * Messages at the VERBOSE level don't necessarily indicate that anything
      * went wrong, but they could be useful in diagnosing problems.
-     * See VERBOSE macro below.
      */
     VERBOSE = 4,
 };
 
 /**
- * Output a LogLevel to a stream. This improves gtest error messages.
+ * Output a LogLevel to a stream. Having this improves gtest error messages.
  */
 std::ostream& operator<<(std::ostream& ostream, LogLevel level);
 

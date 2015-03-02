@@ -18,6 +18,7 @@
 #include "Core/Debug.h"
 #include "Core/ProtoBuf.h"
 #include "build/Core/ProtoBufTest.pb.h"
+#include "include/LogCabin/Debug.h"
 
 namespace LogCabin {
 namespace Core {

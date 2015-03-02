@@ -24,6 +24,7 @@
 #include "Core/Util.h"
 #include "Storage/FilesystemUtil.h"
 #include "Storage/SegmentedLog.h"
+#include "include/LogCabin/Debug.h"
 
 namespace LogCabin {
 namespace Storage {

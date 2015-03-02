@@ -23,6 +23,7 @@
 #include "Core/Debug.h"
 #include "Event/Loop.h"
 #include "RPC/MessageSocket.h"
+#include "include/LogCabin/Debug.h"
 
 namespace LogCabin {
 namespace RPC {

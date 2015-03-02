@@ -30,6 +30,7 @@
 #include "Event/Loop.h"
 #include "Event/Timer.h"
 #include "RPC/ClientSession.h"
+#include "include/LogCabin/Debug.h"
 
 namespace LogCabin {
 namespace RPC {

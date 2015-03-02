@@ -32,6 +32,12 @@
 namespace LogCabin {
 
 // forward declarations
+namespace Core {
+namespace Debug {
+} // namespace LogCabin::Core::Debug
+} // namespace LogCabin::Core
+
+// forward declarations
 namespace Protocol {
 class ServerStats;
 namespace Client {
@@ -46,6 +52,12 @@ namespace Client {
 
 class ClientImpl; // forward declaration
 class TreeDetails; // forward declaration
+
+// To control how the debug log operates, clients should
+// #include <LogCabin/Debug.h>
+// and access it through
+// LogCabin::Client::Debug.
+namespace Debug = Core::Debug;
 
 /**
  * A member of the cluster Configuration.
