@@ -14,29 +14,34 @@
 # ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 # OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
+
 """
-This runs some basic tests against a LogCabin cluster.
+This runs some basic tests against a LogCabin cluster while periodically
+killing servers.
 
 Usage:
-  smoketest.py [options]
-  smoketest.py (-h | --help)
+  failovertest.py [options]
+  failovertest.py (-h | --help)
 
 Options:
   -h --help            Show this help message and exit
   --binary=<cmd>       Server binary to execute [default: build/LogCabin]
   --client=<cmd>       Client binary to execute
-                       [default: build/Examples/SmokeTest]
+                       [default: build/Examples/FailoverTest]
   --reconf=<opts>      Additional options to pass through to the Reconfigure
                        binary. [default: '']
   --servers=<num>      Number of servers [default: 5]
   --timeout=<seconds>  Number of seconds to wait for client to complete before
-                       exiting with an error [default: 10]
+                       exiting with an ok [default: 20]
+  --killinterval=<seconds>  Number of seconds to wait between killing servers
+                            [default: 5]
 """
 
 from __future__ import print_function, division
 from common import sh, captureSh, Sandbox, smokehosts
 from docopt import docopt
 import os
+import random
 import subprocess
 import time
 
@@ -49,6 +54,7 @@ def main():
     if reconf_opts == "''":
         reconf_opts = ""
     timeout = int(arguments['--timeout'])
+    killinterval = int(arguments['--killinterval'])
 
     server_ids = range(1, num_servers + 1)
     cluster = "--cluster=%s" % '\\;'.join([h[0] for h in
@@ -77,14 +83,19 @@ def main():
                    stderr=open('debug/bootstrap', 'w'))
         print()
 
-        for server_id in server_ids:
+        processes = {}
+
+        def launch_server(server_id):
             host = smokehosts[server_id - 1]
-            command = ('%s --config smoketest-%d.conf' %
-                       (server_command, server_id))
+            command = ('%s --config smoketest-%d.conf -l %s' %
+                       (server_command, server_id, 'debug/%d' % server_id))
             print('Starting %s on %s' % (command, host[0]))
-            sandbox.rsh(host[0], command, bg=True,
-                        stderr=open('debug/%d' % server_id, 'w'))
+            processes[server_id] = sandbox.rsh(
+                host[0], command, bg=True)
             sandbox.checkFailures()
+
+        for server_id in server_ids:
+            launch_server(server_id)
 
         print('Growing cluster')
         sh('build/Examples/Reconfigure %s %s %s' %
@@ -99,11 +110,20 @@ def main():
                              stderr=open('debug/client', 'w'))
 
         start = time.time()
-        while client.proc.returncode is None:
-            sandbox.checkFailures()
+        lastkill = start
+        while True:
             time.sleep(.1)
-            if time.time() - start > timeout:
-                raise Exception('timeout exceeded')
+            sandbox.checkFailures()
+            now = time.time()
+            if now - start > timeout:
+                print('Timeout met with no errors')
+                break
+            if now - lastkill > killinterval:
+                server_id = random.choice(server_ids)
+                print('Killing server %d' % server_id)
+                sandbox.kill(processes[server_id])
+                launch_server(server_id)
+                lastkill = now
 
 if __name__ == '__main__':
     main()

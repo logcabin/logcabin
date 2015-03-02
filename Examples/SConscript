@@ -11,6 +11,10 @@ env.Default([
                 ["DumpTree.cc", "#build/liblogcabin.a"],
                 LIBS = libs),
 
+    env.Program("FailoverTest",
+                ["FailoverTest.cc", "#build/liblogcabin.a"],
+                LIBS = libs),
+
     env.Program("HelloWorld",
                 ["HelloWorld.cc", "#build/liblogcabin.a"],
                 LIBS = libs),
