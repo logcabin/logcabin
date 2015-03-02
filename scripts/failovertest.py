@@ -35,6 +35,8 @@ Options:
                        exiting with an ok [default: 20]
   --killinterval=<seconds>  Number of seconds to wait between killing servers
                             [default: 5]
+  --launchdelay=<seconds>  Number of seconds to wait before restarting server
+                           [default: 0]
 """
 
 from __future__ import print_function, division
@@ -55,6 +57,7 @@ def main():
         reconf_opts = ""
     timeout = int(arguments['--timeout'])
     killinterval = int(arguments['--killinterval'])
+    launchdelay = int(arguments['--launchdelay'])
 
     server_ids = range(1, num_servers + 1)
     cluster = "--cluster=%s" % '\\;'.join([h[0] for h in
@@ -111,6 +114,7 @@ def main():
 
         start = time.time()
         lastkill = start
+        tolaunch = [] # [(time to launch, server id)]
         while True:
             time.sleep(.1)
             sandbox.checkFailures()
@@ -119,11 +123,14 @@ def main():
                 print('Timeout met with no errors')
                 break
             if now - lastkill > killinterval:
-                server_id = random.choice(server_ids)
+                server_id = random.choice(processes.keys())
                 print('Killing server %d' % server_id)
                 sandbox.kill(processes[server_id])
-                launch_server(server_id)
+                del processes[server_id]
                 lastkill = now
+                tolaunch.append((now + launchdelay, server_id))
+            while tolaunch and now > tolaunch[0][0]:
+                launch_server(tolaunch.pop(0)[1])
 
 if __name__ == '__main__':
     main()
