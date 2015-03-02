@@ -110,16 +110,16 @@ LeaderRPC::Call::wait(google::protobuf::Message& response,
                 case Protocol::Client::Error::NOT_LEADER:
                     // The server we tried is not the current cluster leader.
                     if (error.has_leader_hint()) {
-                        VERBOSE("Will try suggested %s as new leader "
-                                "(was using %s)",
-                                error.leader_hint().c_str(),
-                                cachedSession->toString().c_str());
+                        NOTICE("Will try suggested %s as new leader "
+                               "(was using %s)",
+                               error.leader_hint().c_str(),
+                               cachedSession->toString().c_str());
                         leaderRPC.reportRedirect(cachedSession,
                                                  error.leader_hint());
                     } else {
-                        VERBOSE("Will try random host as new leader "
-                                "(was using %s)",
-                                cachedSession->toString().c_str());
+                        NOTICE("Will try random host as new leader "
+                               "(was using %s)",
+                               cachedSession->toString().c_str());
                         leaderRPC.reportFailure(cachedSession);
                     }
                     break;
@@ -137,6 +137,7 @@ LeaderRPC::Call::wait(google::protobuf::Message& response,
             }
             break;
         case RPCStatus::RPC_FAILED:
+            NOTICE("RPC failed: %s", cachedSession->toString().c_str());
             leaderRPC.reportFailure(cachedSession);
             break;
         case RPCStatus::RPC_CANCELED:
@@ -220,6 +221,7 @@ LeaderRPC::getSession(TimePoint timeout)
         address.refresh(timeout);
         leaderHint.clear();
     }
+    NOTICE("Connecting to: %s", address.toString().c_str());
     leaderSession = RPC::ClientSession::makeSession(
                         eventLoop,
                         address,
