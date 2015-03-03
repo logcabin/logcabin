@@ -85,7 +85,7 @@ message ServerStats {
      */
     optional uint64 server_id = 1;
     /**
-     * The network address(es) of the server (semicolon-delimited).
+     * The network address(es) of the server (comma-delimited).
      */
     optional string addresses = 2;
 

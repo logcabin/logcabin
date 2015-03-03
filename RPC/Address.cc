@@ -40,7 +40,7 @@ Address::Address(const std::string& str, uint16_t defaultPort)
 {
     memset(&storage, 0, sizeof(storage));
 
-    std::vector<std::string> hostsList = Core::StringUtil::split(str, ';');
+    std::vector<std::string> hostsList = Core::StringUtil::split(str, ',');
     for (auto it = hostsList.begin(); it != hostsList.end(); ++it) {
         std::string host = *it;
         std::string port;

@@ -51,8 +51,8 @@ def main():
     timeout = int(arguments['--timeout'])
 
     server_ids = range(1, num_servers + 1)
-    cluster = "--cluster=%s" % '\\;'.join([h[0] for h in
-                                           smokehosts[:num_servers]])
+    cluster = "--cluster=%s" % ','.join([h[0] for h in
+                                        smokehosts[:num_servers]])
     with Sandbox() as sandbox:
         sh('rm -rf smoketeststorage/')
         sh('rm -f debug/*')

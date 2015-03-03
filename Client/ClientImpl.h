@@ -66,7 +66,7 @@ class ClientImpl {
      * \param hosts
      *      A string describing the hosts in the cluster. This should be of the
      *      form host:port, where host is usually a DNS name that resolves to
-     *      multiple IP addresses, or a semicolon-delimited list.
+     *      multiple IP addresses, or a comma-delimited list.
      */
     void init(const std::string& hosts);
 

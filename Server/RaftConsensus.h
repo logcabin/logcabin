@@ -191,7 +191,7 @@ class Server {
     const uint64_t serverId;
     /**
      * The network addresses at which this server may be available
-     * (semicolon-delimited)
+     * (comma-delimited)
      */
     std::string addresses;
 
@@ -521,7 +521,7 @@ class Configuration {
 
     /**
      * Lookup the network addresses for a particular server
-     * (semicolon-delimited).
+     * (comma-delimited).
      * Returns empty string if not found.
      */
     std::string lookupAddress(uint64_t serverId) const;

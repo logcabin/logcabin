@@ -73,12 +73,12 @@ TEST(RPCAddressTest, constructor) {
     EXPECT_EQ("[::1]", ipv6Short.originalString);
 
     // multiple hosts
-    Address all("example.com;"
-                "example.com:80;"
-                "1.2.3.4;"
-                "1.2.3.4:80;"
-                "[1:2:3:4:5:6:7:8];"
-                "[1:2:3:4:5:6:7:8]:80;"
+    Address all("example.com,"
+                "example.com:80,"
+                "1.2.3.4,"
+                "1.2.3.4:80,"
+                "[1:2:3:4:5:6:7:8],"
+                "[1:2:3:4:5:6:7:8]:80,"
                 "[::1]", 80);
     all.refresh(TimePoint::max());
     EXPECT_EQ((std::vector<std::pair<std::string, std::string>> {
@@ -92,12 +92,12 @@ TEST(RPCAddressTest, constructor) {
                }),
               all.hosts);
 
-    Address semicolons(";;;example.com;;;;", 80);
-    semicolons.refresh(TimePoint::max());
+    Address commas(",,,example.com,,,,", 80);
+    commas.refresh(TimePoint::max());
     EXPECT_EQ((std::vector<std::pair<std::string, std::string>> {
                 {"example.com", "80"},
                }),
-              semicolons.hosts);
+              commas.hosts);
 }
 
 TEST(RPCAddressTest, constructor_copy) {
@@ -150,7 +150,7 @@ TEST(RPCAddressTest, refresh) {
     EXPECT_FALSE(empty.isValid());
 
     // should be random, but should eventually refresh to all addresses
-    Address multi("1.2.3.4;5.6.7.8", 80);
+    Address multi("1.2.3.4,5.6.7.8", 80);
     std::set<std::string> resolved;
     for (uint64_t i = 0; i < 20; ++i) {
         multi.refresh(Address::TimePoint::max());

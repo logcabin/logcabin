@@ -36,7 +36,7 @@ pid2=$!
 build/LogCabin --config logcabin-3.conf --log debug/3 &
 pid3=$!
 
-ALLSERVERS='127.0.0.1:61023;127.0.0.1:61024;127.0.0.1:61025'
+ALLSERVERS=127.0.0.1:61023,127.0.0.1:61024,127.0.0.1:61025
 build/Examples/Reconfigure --cluster=$ALLSERVERS 127.0.0.1:61023 127.0.0.1:61024 127.0.0.1:61025
 
 build/Examples/HelloWorld --cluster=$ALLSERVERS

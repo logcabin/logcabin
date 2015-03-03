@@ -80,7 +80,7 @@ struct Server {
     uint64_t serverId;
 
     /**
-     * The network addresses of the server (semicolon-delimited).
+     * The network addresses of the server (comma-delimited).
      */
     std::string addresses;
 };
@@ -598,7 +598,7 @@ class Cluster {
      *      A string describing the hosts in the cluster. This should be of the
      *      form host:port, where host is usually a DNS name that resolves to
      *      multiple IP addresses. Alternatively, you can pass a list of hosts
-     *      as host1:port1;host2:port2;host3:port3.
+     *      as host1:port1,host2:port2,host3:port3.
      * \param options
      *      Settings for the client library.
      */

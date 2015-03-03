@@ -114,7 +114,7 @@ Globals::init()
             serverStatsLock->set_addresses(listenAddressesStr);
         }
         std::vector<std::string> listenAddresses =
-            Core::StringUtil::split(listenAddressesStr, ';');
+            Core::StringUtil::split(listenAddressesStr, ',');
         if (listenAddresses.empty()) {
             PANIC("No server addresses specified to listen on");
         }

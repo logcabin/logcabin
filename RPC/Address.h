@@ -49,7 +49,7 @@ class Address {
      *          - IPv4Address
      *          - [IPv6Address]:port
      *          - [IPv6Address]
-     *      Or a semicolon-delimited list of these to represent multiple hosts.
+     *      Or a comma-delimited list of these to represent multiple hosts.
      * \param defaultPort
      *      The port number to use if none is specified in str.
      */
