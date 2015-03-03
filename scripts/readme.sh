@@ -41,6 +41,9 @@ build/Examples/Reconfigure --cluster=$ALLSERVERS 127.0.0.1:61023 127.0.0.1:61024
 
 build/Examples/HelloWorld --cluster=$ALLSERVERS
 
+echo -n hello | build/Examples/TreeOps --cluster=$ALLSERVERS write /world
+build/Examples/TreeOps --cluster=$ALLSERVERS dump
+
 kill $pid1
 kill $pid2
 kill $pid3

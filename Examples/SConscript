@@ -7,10 +7,6 @@ env.Default([
                 ["Benchmark.cc", "#build/liblogcabin.a"],
                 LIBS = libs),
 
-    env.Program("DumpTree",
-                ["DumpTree.cc", "#build/liblogcabin.a"],
-                LIBS = libs),
-
     env.Program("FailoverTest",
                 ["FailoverTest.cc", "#build/liblogcabin.a"],
                 LIBS = libs),
@@ -29,5 +25,9 @@ env.Default([
 
     env.Program("SmokeTest",
                 ["SmokeTest.cc", "#build/liblogcabin.a"],
+                LIBS = libs),
+
+    env.Program("TreeOps",
+                ["TreeOps.cc", "#build/liblogcabin.a"],
                 LIBS = libs),
 ])

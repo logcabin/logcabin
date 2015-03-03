@@ -167,9 +167,16 @@ Finally, you can run a LogCabin client to exercise the cluster:
 
     build/Examples/HelloWorld --cluster=$ALLSERVERS
 
-That program doesn't do anything very interesting. You should be able to kill
-one server at a time and maintain availability, or kill more and restart
-them and maintain safety (with an availability hiccup).
+That program doesn't do anything very interesting. Another tool called
+TreeOps exposes LogCabin's data structure on the command line:
+
+    echo -n hello | build/Examples/TreeOps --cluster=$ALLSERVERS write /world
+    build/Examples/TreeOps --cluster=$ALLSERVERS dump
+
+See the --help for a complete listing of the available commands.
+
+You should be able to kill one server at a time and maintain availability, or
+kill more and restart them and maintain safety (with an availability hiccup).
 
 If you find it annoying to pass --cluster=$ALLSERVERS everywhere, you can also
 use a DNS name to return all the IP addresses. However, you will need distinct
