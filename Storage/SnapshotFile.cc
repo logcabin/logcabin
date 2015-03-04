@@ -29,6 +29,21 @@ namespace SnapshotFile {
 
 namespace FilesystemUtil = Storage::FilesystemUtil;
 
+void
+discardPartialSnapshots(const Storage::Layout& layout)
+{
+    std::vector<std::string> files = FilesystemUtil::ls(layout.snapshotDir);
+    for (auto it = files.begin(); it != files.end(); ++it) {
+        const std::string& filename = *it;
+        if (Core::StringUtil::startsWith(filename, "partial")) {
+            NOTICE("Removing incomplete snapshot %s. This was probably being "
+                   "written when the server crashed.",
+                   filename.c_str());
+            FilesystemUtil::removeFile(layout.snapshotDir, filename);
+        }
+    }
+}
+
 Reader::Reader(const Storage::Layout& storageLayout)
     : file()
     , fileStream()
@@ -83,8 +98,10 @@ Writer::Writer(const Storage::Layout& storageLayout)
 
 Writer::~Writer()
 {
-    if (file.fd >= 0)
-        WARNING("Leaving behind partial snapshot %s", file.path.c_str());
+    if (file.fd >= 0) {
+        WARNING("Discarding partial snapshot %s", file.path.c_str());
+        discard();
+    }
 }
 
 void

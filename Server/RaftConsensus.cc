@@ -952,6 +952,11 @@ RaftConsensus::init()
     // conflicting log entries
     readSnapshot();
 
+    // Clean up incomplete snapshots left by prior runs. This could be done
+    // earlier, but maybe it's nicer to make sure we can get to this point
+    // without PANICing before deleting these files.
+    Storage::SnapshotFile::discardPartialSnapshots(storageLayout);
+
     if (configuration->id == 0)
         NOTICE("No configuration, waiting to receive one.");
 

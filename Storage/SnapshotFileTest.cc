@@ -58,12 +58,37 @@ TEST_F(StorageSnapshotFileTest, basic)
     }
 }
 
+TEST_F(StorageSnapshotFileTest, discardPartialSnapshots)
+{
+    FilesystemUtil::openFile(layout.snapshotDir, "partial.1",
+                             O_WRONLY|O_CREAT);
+    FilesystemUtil::openFile(layout.snapshotDir, "partial.2",
+                             O_WRONLY|O_CREAT);
+    FilesystemUtil::openFile(layout.snapshotDir, "partial.3",
+                             O_WRONLY|O_CREAT);
+    FilesystemUtil::openFile(layout.snapshotDir, "snapshot",
+                             O_WRONLY|O_CREAT);
+    FilesystemUtil::openFile(layout.snapshotDir, "misc",
+                             O_WRONLY|O_CREAT);
+    // expect warning
+    Core::Debug::setLogPolicy({
+        {"Storage/SnapshotFile.cc", "ERROR"}
+    });
+    discardPartialSnapshots(layout);
+    std::vector<std::string> files =
+        Core::STLUtil::sorted(FilesystemUtil::ls(layout.snapshotDir));
+    EXPECT_EQ((std::vector<std::string> {
+                "misc",
+                "snapshot"
+               }), files);
+}
+
 TEST_F(StorageSnapshotFileTest, reader_fileNotFound)
 {
     EXPECT_THROW(Reader reader(layout), std::runtime_error);
 }
 
-TEST_F(StorageSnapshotFileTest, writer_orphan)
+TEST_F(StorageSnapshotFileTest, writer_orphanDiscarded)
 {
     // expect warning
     Core::Debug::setLogPolicy({
@@ -75,10 +100,8 @@ TEST_F(StorageSnapshotFileTest, writer_orphan)
     }
     std::vector<std::string> files =
         Core::STLUtil::sorted(FilesystemUtil::ls(layout.snapshotDir));
-    EXPECT_EQ(1U, files.size()) <<
+    EXPECT_EQ(0U, files.size()) <<
         Core::StringUtil::join(files, " ");
-    std::string file = files.at(0);
-    EXPECT_TRUE(Core::StringUtil::startsWith(file, "partial")) << file;
 }
 
 TEST_F(StorageSnapshotFileTest, writer_discard)

@@ -36,6 +36,12 @@ namespace SnapshotFile {
 // than 2 or 4GB.
 
 /**
+ * Remove any partial snapshots found on disk. This is normally called when the
+ * server boots up.
+ */
+void discardPartialSnapshots(const Storage::Layout& storageLayout);
+
+/**
  * Assists in reading snapshot files from the local filesystem.
  */
 class Reader {
