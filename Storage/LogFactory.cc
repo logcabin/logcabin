@@ -30,7 +30,7 @@ std::unique_ptr<Log>
 makeLog(const Core::Config& config,
         const Storage::Layout& storageLayout)
 {
-    const FilesystemUtil::File& parentDir = storageLayout.serverDir;
+    const FilesystemUtil::File& parentDir = storageLayout.logDir;
     std::string module =
         config.read<std::string>("storageModule", "SimpleFile");
     std::unique_ptr<Log> log;

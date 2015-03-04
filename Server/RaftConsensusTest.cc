@@ -1161,7 +1161,8 @@ TEST_F(ServerRaftConsensusTest, handleInstallSnapshot)
         consensus->beginSnapshot(1);
     writer->save();
     std::string snapshotContents =
-        readEntireFileAsString(consensus->storageLayout.serverDir, "snapshot");
+        readEntireFileAsString(consensus->storageLayout.snapshotDir,
+                               "snapshot");
 
     Protocol::Raft::InstallSnapshot::Request request;
     Protocol::Raft::InstallSnapshot::Response response;

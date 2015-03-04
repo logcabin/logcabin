@@ -34,13 +34,13 @@ Reader::Reader(const Storage::Layout& storageLayout)
     , fileStream()
     , codedStream()
 {
-    file = FilesystemUtil::tryOpenFile(storageLayout.serverDir,
+    file = FilesystemUtil::tryOpenFile(storageLayout.snapshotDir,
                                        "snapshot",
                                        O_RDONLY);
     if (file.fd < 0) {
         throw std::runtime_error(Core::StringUtil::format(
                 "Snapshot file not found in %s",
-                storageLayout.serverDir.path.c_str()));
+                storageLayout.snapshotDir.path.c_str()));
     }
     fileStream.reset(new google::protobuf::io::FileInputStream(file.fd));
     codedStream.reset(
@@ -64,7 +64,7 @@ Reader::getStream()
 }
 
 Writer::Writer(const Storage::Layout& storageLayout)
-    : parentDir(FilesystemUtil::dup(storageLayout.serverDir))
+    : parentDir(FilesystemUtil::dup(storageLayout.snapshotDir))
     , stagingName()
     , file()
     , fileStream()

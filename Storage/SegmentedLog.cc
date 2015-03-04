@@ -279,7 +279,10 @@ SegmentedLog::SegmentedLog(const FS::File& parentDir,
                                              8 * 1024 * 1024))
     , shouldCheckInvariants(config.read<bool>("storageDebug", false))
     , metadata()
-    , dir(FS::openDir(parentDir, "log"))
+    , dir(FS::openDir(parentDir,
+                      (encoding == Encoding::BINARY
+                        ? "Segmented-Binary"
+                        : "Segmented-Text")))
     , openSegmentFile()
     , logStartIndex(1)
     , segmentsByStartIndex()

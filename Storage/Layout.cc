@@ -31,6 +31,8 @@ Layout::Layout()
     : topDir()
     , serverDir()
     , lockFile()
+    , logDir()
+    , snapshotDir()
     , removeAllFiles(false)
 {
 }
@@ -39,6 +41,8 @@ Layout::Layout(Layout&& other)
     : topDir(std::move(other.topDir))
     , serverDir(std::move(other.serverDir))
     , lockFile(std::move(other.lockFile))
+    , logDir(std::move(other.logDir))
+    , snapshotDir(std::move(other.snapshotDir))
     , removeAllFiles(other.removeAllFiles)
 {
     other.removeAllFiles = false;
@@ -60,6 +64,8 @@ Layout::operator=(Layout&& other)
     topDir = std::move(other.topDir);
     serverDir = std::move(other.serverDir);
     lockFile = std::move(other.lockFile);
+    logDir = std::move(other.logDir);
+    snapshotDir = std::move(other.snapshotDir);
     removeAllFiles = other.removeAllFiles;
     other.removeAllFiles = false;
     return *this;
@@ -96,6 +102,8 @@ Layout::init(const std::string& storagePath, uint64_t serverId)
         PANIC("Could not lock storage directory. Is LogCabin already running? "
               "Error was: %s", error.c_str());
     }
+    logDir = FS::openDir(serverDir, "log");
+    snapshotDir = FS::openDir(serverDir, "snapshot");
 }
 
 void

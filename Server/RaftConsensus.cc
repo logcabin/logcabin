@@ -2026,7 +2026,7 @@ RaftConsensus::installSnapshot(std::unique_lock<Mutex>& lockGuard,
     if (!peer.snapshotFile) {
         namespace FS = Storage::FilesystemUtil;
         peer.snapshotFile.reset(new FS::FileContents(
-            FS::openFile(storageLayout.serverDir, "snapshot", O_RDONLY)));
+            FS::openFile(storageLayout.snapshotDir, "snapshot", O_RDONLY)));
         peer.snapshotFileOffset = 0;
         peer.lastSnapshotIndex = lastSnapshotIndex;
     }

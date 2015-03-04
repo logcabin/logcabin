@@ -35,9 +35,10 @@ namespace Storage {
  *
  * / - topDir, defined by config option 'storagePath'
  *     "server%lu" % serverId/ - serverDir
- *         log/ - Storage::Log implementation-defined
- *         snapshot -  last complete snapshot
- *         "partial.%010lu.%06lu" % (seconds, micro) - snapshot(s) in progress
+ *         log/ - logDir, Storage::Log implementation-defined
+ *         snapshot/ -  snapshotDir, contains snapshots
+ *             snapshot - latest complete snapshot
+ *             "partial.%010lu.%06lu" % (seconds, micro) - in progress
  *         lock - lockFile, ensures only 1 process accesses serverDir a time
  */
 class Layout {
@@ -97,6 +98,16 @@ class Layout {
      * Sits underneath serverDir in a file called "lock".
      */
     FilesystemUtil::File lockFile;
+    /**
+     * Contains all log files for this particular server.
+     * Sits underneath serverDir in a directory called "log".
+     */
+    FilesystemUtil::File logDir;
+    /**
+     * Contains all snapshot files for this particular server.
+     * Sits underneath serverDir in a directory called "snapshot".
+     */
+    FilesystemUtil::File snapshotDir;
 
   private:
     /**

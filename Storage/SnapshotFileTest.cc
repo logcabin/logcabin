@@ -19,6 +19,7 @@
 
 #include "Core/Debug.h"
 #include "Core/StringUtil.h"
+#include "Core/STLUtil.h"
 #include "Storage/FilesystemUtil.h"
 #include "Storage/Layout.h"
 #include "Storage/SnapshotFile.h"
@@ -35,8 +36,6 @@ class StorageSnapshotFileTest : public ::testing::Test {
         : layout()
     {
         layout.initTemporary();
-        // the lock file pollutes the directory. we don't need it.
-        Storage::FilesystemUtil::removeFile(layout.serverDir, "lock");
     }
     ~StorageSnapshotFileTest() {
     }
@@ -74,7 +73,8 @@ TEST_F(StorageSnapshotFileTest, writer_orphan)
         Writer writer(layout);
         writer.getStream().WriteVarint32(482);
     }
-    std::vector<std::string> files = FilesystemUtil::ls(layout.serverDir);
+    std::vector<std::string> files =
+        Core::STLUtil::sorted(FilesystemUtil::ls(layout.snapshotDir));
     EXPECT_EQ(1U, files.size()) <<
         Core::StringUtil::join(files, " ");
     std::string file = files.at(0);
@@ -88,7 +88,9 @@ TEST_F(StorageSnapshotFileTest, writer_discard)
         writer.getStream().WriteVarint32(482);
         writer.discard();
     }
-    EXPECT_EQ(0U, FilesystemUtil::ls(layout.serverDir).size());
+    std::vector<std::string> files = FilesystemUtil::ls(layout.snapshotDir);
+    EXPECT_EQ(0U, files.size()) <<
+        Core::StringUtil::join(files, " ");
 }
 
 TEST_F(StorageSnapshotFileTest, writer_flushToOS_continue)
