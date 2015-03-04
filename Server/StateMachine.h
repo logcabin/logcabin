@@ -87,8 +87,7 @@ class StateMachine {
     /**
      * Write the #sessions table to a snapshot file.
      */
-    void dumpSessionSnapshot(
-                google::protobuf::io::CodedOutputStream& stream) const;
+    void dumpSessionSnapshot(Core::ProtoBuf::OutputStream& stream) const;
 
     /**
      * Update the session and clean up unnecessary responses.
@@ -110,8 +109,7 @@ class StateMachine {
     /**
      * Read the #sessions table from a snapshot file.
      */
-    void loadSessionSnapshot(
-                google::protobuf::io::CodedInputStream& stream);
+    void loadSessionSnapshot(Core::ProtoBuf::InputStream& stream);
 
     /**
      * Return true if it is time to create a new snapshot.

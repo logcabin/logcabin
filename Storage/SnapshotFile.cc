@@ -1,4 +1,5 @@
 /* Copyright (c) 2013 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -48,6 +49,7 @@ Reader::Reader(const Storage::Layout& storageLayout)
     : file()
     , fileStream()
     , codedStream()
+    , bytesRead(0)
 {
     file = FilesystemUtil::tryOpenFile(storageLayout.snapshotDir,
                                        "snapshot",
@@ -72,10 +74,39 @@ Reader::getSizeBytes()
     return FilesystemUtil::getSize(file);
 }
 
-google::protobuf::io::CodedInputStream&
-Reader::getStream()
+
+uint64_t
+Reader::getBytesRead() const
 {
-     return *codedStream;
+    return bytesRead;
+}
+
+bool
+Reader::readMessage(google::protobuf::Message& message)
+{
+    auto& stream = *codedStream;
+    bytesRead += 4;
+    uint32_t numBytes = 0;
+    bool ok = stream.ReadLittleEndian32(&numBytes);
+    if (!ok)
+        return false;
+    auto limit = stream.PushLimit(numBytes);
+    ok = message.MergePartialFromCodedStream(&stream);
+    stream.PopLimit(limit);
+    bytesRead += numBytes;
+    return ok;
+}
+
+uint64_t
+Reader::readRaw(void* data, uint64_t length)
+{
+    length = std::min(length, getSizeBytes() - getBytesRead());
+    if (codedStream->ReadRaw(data, int(length))) {
+        bytesRead += length;
+        return length;
+    } else {
+        return 0;
+    }
 }
 
 Writer::Writer(const Storage::Layout& storageLayout)
@@ -146,10 +177,24 @@ Writer::save()
     return fileSize;
 }
 
-google::protobuf::io::CodedOutputStream&
-Writer::getStream()
+uint64_t
+Writer::getBytesWritten() const
 {
-     return *codedStream;
+    return uint64_t(codedStream->ByteCount());
+}
+
+void
+Writer::writeMessage(const google::protobuf::Message& message)
+{
+    int size = message.ByteSize();
+    codedStream->WriteLittleEndian32(size);
+    message.SerializeWithCachedSizes(codedStream.get());
+}
+
+void
+Writer::writeRaw(const void* data, uint64_t length)
+{
+    codedStream->WriteRaw(data, int(length));
 }
 
 } // namespace LogCabin::Storage::SnapshotFile

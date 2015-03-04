@@ -191,8 +191,8 @@ StateMachine::applyThreadMain()
                 case RaftConsensus::Entry::SNAPSHOT:
                     NOTICE("Loading snapshot through entry %lu into "
                            "state machine", entry.index);
-                    loadSessionSnapshot(entry.snapshotReader->getStream());
-                    tree.loadSnapshot(entry.snapshotReader->getStream());
+                    loadSessionSnapshot(*entry.snapshotReader);
+                    tree.loadSnapshot(*entry.snapshotReader);
                     break;
             }
             expireSessions(entry.clusterTime);
@@ -218,8 +218,7 @@ StateMachine::applyThreadMain()
 }
 
 void
-StateMachine::dumpSessionSnapshot(
-                google::protobuf::io::CodedOutputStream& stream) const
+StateMachine::dumpSessionSnapshot(Core::ProtoBuf::OutputStream& stream) const
 {
     // dump into protobuf
     SessionsProto::Sessions sessionsProto;
@@ -238,9 +237,7 @@ StateMachine::dumpSessionSnapshot(
     }
 
     // write protobuf to stream
-    int size = sessionsProto.ByteSize();
-    stream.WriteLittleEndian32(size);
-    sessionsProto.SerializeWithCachedSizes(&stream);
+    stream.writeMessage(sessionsProto);
 }
 
 void
@@ -281,23 +278,12 @@ StateMachine::expireSessions(uint64_t clusterTime)
 
 
 void
-StateMachine::loadSessionSnapshot(
-                google::protobuf::io::CodedInputStream& stream)
+StateMachine::loadSessionSnapshot(Core::ProtoBuf::InputStream& stream)
 {
-    // read protobuf from stream
-    bool ok = true;
-    uint32_t numBytes = 0;
-    ok = stream.ReadLittleEndian32(&numBytes);
-    if (!ok)
-        PANIC("couldn't read snapshot");
     SessionsProto::Sessions sessionsProto;
-    auto limit = stream.PushLimit(numBytes);
-    ok = sessionsProto.MergePartialFromCodedStream(&stream);
-    stream.PopLimit(limit);
-    if (!ok)
+    if (!stream.readMessage(sessionsProto))
         PANIC("couldn't read snapshot");
 
-    // load from protobuf
     sessions.clear();
     for (auto it = sessionsProto.session().begin();
          it != sessionsProto.session().end();
@@ -361,8 +347,8 @@ StateMachine::takeSnapshot(uint64_t lastIncludedIndex,
         PANIC("Couldn't fork: %s", strerror(errno));
     } else if (pid == 0) { // child
         usleep(stateMachineChildSleepMs * 1000); // for testing purposes
-        dumpSessionSnapshot(writer->getStream());
-        tree.dumpSnapshot(writer->getStream());
+        dumpSessionSnapshot(*writer);
+        tree.dumpSnapshot(*writer);
         // Flush the changes to the snapshot file before exiting.
         writer->flushToOS();
         _exit(0);

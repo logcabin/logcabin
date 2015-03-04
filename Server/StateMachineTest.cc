@@ -248,7 +248,7 @@ TEST_F(ServerStateMachineTest, dumpSessionSnapshot)
 
     {
         Storage::SnapshotFile::Writer writer(consensus->storageLayout);
-        stateMachine->dumpSessionSnapshot(writer.getStream());
+        stateMachine->dumpSessionSnapshot(writer);
         writer.save();
     }
 
@@ -257,7 +257,7 @@ TEST_F(ServerStateMachineTest, dumpSessionSnapshot)
 
     {
         Storage::SnapshotFile::Reader reader(consensus->storageLayout);
-        stateMachine->loadSessionSnapshot(reader.getStream());
+        stateMachine->loadSessionSnapshot(reader);
     }
     EXPECT_EQ((std::vector<std::uint64_t>{4, 80, 91}),
               Core::STLUtil::sorted(
@@ -334,8 +334,8 @@ TEST_F(ServerStateMachineTest, takeSnapshot)
     EXPECT_EQ(1U, consensus->lastSnapshotIndex);
     consensus->discardUnneededEntries();
     consensus->readSnapshot();
-    stateMachine->loadSessionSnapshot(consensus->snapshotReader->getStream());
-    stateMachine->tree.loadSnapshot(consensus->snapshotReader->getStream());
+    stateMachine->loadSessionSnapshot(*consensus->snapshotReader);
+    stateMachine->tree.loadSnapshot(*consensus->snapshotReader);
     std::vector<std::string> children;
     stateMachine->tree.listDirectory("/", children);
     EXPECT_EQ((std::vector<std::string>{"foo/"}), children);

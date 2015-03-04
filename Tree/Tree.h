@@ -14,10 +14,11 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <google/protobuf/io/coded_stream.h>
 #include <map>
 #include <string>
 #include <vector>
+
+#include "Core/ProtoBuf.h"
 
 #ifndef LOGCABIN_TREE_TREE_H
 #define LOGCABIN_TREE_TREE_H
@@ -97,11 +98,11 @@ class File {
     /**
      * Write the file to the stream.
      */
-    void dumpSnapshot(google::protobuf::io::CodedOutputStream& stream) const;
+    void dumpSnapshot(Core::ProtoBuf::OutputStream& stream) const;
     /**
      * Load the file from the stream.
      */
-    void loadSnapshot(google::protobuf::io::CodedInputStream& stream);
+    void loadSnapshot(Core::ProtoBuf::InputStream& stream);
     /**
      * Opaque data stored in the File.
      */
@@ -193,11 +194,11 @@ class Directory {
     /**
      * Write the directory and its children to the stream.
      */
-    void dumpSnapshot(google::protobuf::io::CodedOutputStream& stream) const;
+    void dumpSnapshot(Core::ProtoBuf::OutputStream& stream) const;
     /**
      * Load the directory and its children from the stream.
      */
-    void loadSnapshot(google::protobuf::io::CodedInputStream& stream);
+    void loadSnapshot(Core::ProtoBuf::InputStream& stream);
 
   private:
     /**
@@ -284,14 +285,14 @@ class Tree {
     /**
      * Write the tree to the given stream.
      */
-    void dumpSnapshot(google::protobuf::io::CodedOutputStream& stream) const;
+    void dumpSnapshot(Core::ProtoBuf::OutputStream& stream) const;
 
     /**
      * Load the tree from the given stream.
      * \warning
      *      This will blow away any existing files and directories.
      */
-    void loadSnapshot(google::protobuf::io::CodedInputStream& stream);
+    void loadSnapshot(Core::ProtoBuf::InputStream& stream);
 
     /**
      * Verify that the file at path has the given contents.

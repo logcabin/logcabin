@@ -1,4 +1,5 @@
 /* Copyright (c) 2013 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -13,12 +14,14 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <google/protobuf/message.h>
 #include <google/protobuf/io/coded_stream.h>
 #include <google/protobuf/io/zero_copy_stream_impl.h>
 #include <memory>
 #include <stdexcept>
 #include <string>
 
+#include "Core/ProtoBuf.h"
 #include "Storage/FilesystemUtil.h"
 
 #ifndef LOGCABIN_STORAGE_SNAPSHOTFILE_H
@@ -44,13 +47,13 @@ void discardPartialSnapshots(const Storage::Layout& storageLayout);
 /**
  * Assists in reading snapshot files from the local filesystem.
  */
-class Reader {
+class Reader : public Core::ProtoBuf::InputStream {
   public:
     /**
      * Constructor.
      * \param storageLayout
      *      The directories in which to find the snapshot (in a file called
-     *      "snapshot" in the serverDir).
+     *      "snapshot" in the snapshotDir).
      * \throw std::runtime_error
      *      If the file can't be found.
      */
@@ -59,8 +62,12 @@ class Reader {
     ~Reader();
     /// Return the size in bytes for the file.
     uint64_t getSizeBytes();
-    /// Returns the input stream to read from.
-    google::protobuf::io::CodedInputStream& getStream();
+    // See Core::ProtoBuf::InputStream.
+    uint64_t getBytesRead() const;
+    // See Core::ProtoBuf::InputStream.
+    bool readMessage(google::protobuf::Message& message);
+    // See Core::ProtoBuf::InputStream.
+    uint64_t readRaw(void* data, uint64_t length);
   private:
     /// Wraps the raw file descriptor; in charge of closing it when done.
     Storage::FilesystemUtil::File file;
@@ -68,25 +75,27 @@ class Reader {
     std::unique_ptr<google::protobuf::io::FileInputStream> fileStream;
     /// Interprets the raw bytes from the 'fileStream'.
     std::unique_ptr<google::protobuf::io::CodedInputStream> codedStream;
+    /// The number of bytes read from codedStream.
+    uint64_t bytesRead;
 };
 
 /**
  * Assists in writing snapshot files to the local filesystem.
  */
-class Writer {
+class Writer : public Core::ProtoBuf::OutputStream {
   public:
     /**
      * Constructor.
      * \param storageLayout
      *      The directories in which to create the snapshot (in a file called
-     *      "snapshot" in the serverDir).
+     *      "snapshot" in the snapshotDir).
      * TODO(ongaro): what if it can't be written?
      */
     explicit Writer(const Storage::Layout& storageLayout);
     /**
      * Destructor.
      * If the file hasn't been explicitly saved or discarded, prints a warning
-     * and leaves the file around for manual inspection.
+     * and discards the file.
      */
     ~Writer();
     /**
@@ -118,8 +127,12 @@ class Writer {
      *      Size in bytes of the file
      */
     uint64_t save();
-    /// Returns the output stream to write into.
-    google::protobuf::io::CodedOutputStream& getStream();
+    // See Core::ProtoBuf::OutputStream.
+    uint64_t getBytesWritten() const;
+    // See Core::ProtoBuf::OutputStream.
+    void writeMessage(const google::protobuf::Message& message);
+    // See Core::ProtoBuf::OutputStream.
+    void writeRaw(const void* data, uint64_t length);
   private:
     /// A handle to the directory containing the snapshot. Used for renameat on
     /// close.
