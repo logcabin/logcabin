@@ -281,8 +281,10 @@ void
 StateMachine::loadSessionSnapshot(Core::ProtoBuf::InputStream& stream)
 {
     SessionsProto::Sessions sessionsProto;
-    if (!stream.readMessage(sessionsProto))
-        PANIC("couldn't read snapshot");
+    std::string error = stream.readMessage(sessionsProto);
+    if (!error.empty()) {
+        PANIC("couldn't read snapshot: %s", error.c_str());
+    }
 
     sessions.clear();
     for (auto it = sessionsProto.session().begin();
@@ -368,6 +370,7 @@ StateMachine::takeSnapshot(uint64_t lastIncludedIndex,
         if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
             NOTICE("Child completed writing state machine contents to "
                    "snapshot staging file");
+            writer->seekToEnd();
             consensus->snapshotDone(lastIncludedIndex, std::move(writer));
         } else if (exiting &&
                    WIFSIGNALED(status) && WTERMSIG(status) == SIGHUP) {

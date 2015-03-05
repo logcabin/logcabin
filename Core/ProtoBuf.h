@@ -15,7 +15,6 @@
  */
 
 #include <google/protobuf/message.h>
-#include <google/protobuf/text_format.h>
 #include <memory>
 #include <string>
 
@@ -163,10 +162,10 @@ struct InputStream {
     /**
      * Read a ProtoBuf message from the stream. 
      * \return
-     *      True if successful, false if an error occurred. The stream is
-     *      probably no longer usable after an error.
+     *      Empty string if successful, otherwise an error message if an error
+     *      occurred. The stream is probably no longer usable after an error.
      */
-    virtual bool readMessage(google::protobuf::Message& message) = 0;
+    virtual std::string readMessage(google::protobuf::Message& message) = 0;
     /**
      * Read some raw bytes from the stream.
      * \return

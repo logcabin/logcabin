@@ -81,8 +81,10 @@ void
 File::loadSnapshot(Core::ProtoBuf::InputStream& stream)
 {
     Snapshot::File node;
-    if (!stream.readMessage(node))
-        PANIC("couldn't read snapshot");
+    std::string error = stream.readMessage(node);
+    if (!error.empty()) {
+        PANIC("Couldn't read snapshot: %s", error.c_str());
+    }
     contents = node.contents();
 }
 
@@ -202,8 +204,10 @@ void
 Directory::loadSnapshot(Core::ProtoBuf::InputStream& stream)
 {
     Snapshot::Directory dir;
-    if (!stream.readMessage(dir))
-        PANIC("couldn't read snapshot");
+    std::string error = stream.readMessage(dir);
+    if (!error.empty()) {
+        PANIC("Couldn't read snapshot: %s", error.c_str());
+    }
     for (auto it = dir.directories().begin();
          it != dir.directories().end();
          ++it) {

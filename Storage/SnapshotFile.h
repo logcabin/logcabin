@@ -15,8 +15,6 @@
  */
 
 #include <google/protobuf/message.h>
-#include <google/protobuf/io/coded_stream.h>
-#include <google/protobuf/io/zero_copy_stream_impl.h>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -33,10 +31,6 @@ namespace Storage {
 class Layout; // forward declaration
 
 namespace SnapshotFile {
-
-// TODO(ongaro): protobuf::io uses 32-bit integer file offsets, but snapshots
-// can be larger than that. A lot of this is going to break for files larger
-// than 2 or 4GB.
 
 /**
  * Remove any partial snapshots found on disk. This is normally called when the
@@ -65,17 +59,15 @@ class Reader : public Core::ProtoBuf::InputStream {
     // See Core::ProtoBuf::InputStream.
     uint64_t getBytesRead() const;
     // See Core::ProtoBuf::InputStream.
-    bool readMessage(google::protobuf::Message& message);
+    std::string readMessage(google::protobuf::Message& message);
     // See Core::ProtoBuf::InputStream.
     uint64_t readRaw(void* data, uint64_t length);
   private:
     /// Wraps the raw file descriptor; in charge of closing it when done.
     Storage::FilesystemUtil::File file;
-    /// Actually reads the file from disk.
-    std::unique_ptr<google::protobuf::io::FileInputStream> fileStream;
-    /// Interprets the raw bytes from the 'fileStream'.
-    std::unique_ptr<google::protobuf::io::CodedInputStream> codedStream;
-    /// The number of bytes read from codedStream.
+    /// Maps the file into memory for reading.
+    std::unique_ptr<Storage::FilesystemUtil::FileContents> contents;
+    /// The number of bytes read from the file.
     uint64_t bytesRead;
 };
 
@@ -106,7 +98,6 @@ class Writer : public Core::ProtoBuf::OutputStream {
     /**
      * Flush changes just down to the operating system's buffer cache.
      * Leave the file open for additional writes.
-     * If you call this after the file has been closed, it will PANIC.
      *
      * This is useful when forking child processes to write to the file.
      * The correct procedure for that is:
@@ -116,10 +107,17 @@ class Writer : public Core::ProtoBuf::OutputStream {
      *  3. child process: write stuff
      *  4. child process: call flushToOS()
      *  5. child process: call _exit()
-     *  6. parent process: write stuff
-     *  7. parent process: call save()
+     *  6. parent process: call seekToEnd()
+     *  7. parent process: write stuff
+     *  8. parent process: call save()
      */
     void flushToOS();
+    /**
+     * Seek to the end of the file, in case another process has written to it.
+     * Subsequent calls to getBytesWritten() will include data written by other
+     * processes.
+     */
+    void seekToEnd();
     /**
      * Flush changes all the way down to the disk and close the file.
      * If you call this after the file has been closed, it will PANIC.
@@ -141,10 +139,8 @@ class Writer : public Core::ProtoBuf::OutputStream {
     std::string stagingName;
     /// Wraps the raw file descriptor; in charge of closing it when done.
     Storage::FilesystemUtil::File file;
-    /// Actually writes the file to disk.
-    std::unique_ptr<google::protobuf::io::FileOutputStream> fileStream;
-    /// Generates the raw bytes for the 'fileStream'.
-    std::unique_ptr<google::protobuf::io::CodedOutputStream> codedStream;
+    /// The number of bytes accumulated in the file so far.
+    uint64_t bytesWritten;
 };
 
 } // namespace LogCabin::Storage::SnapshotFile

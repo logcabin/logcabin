@@ -13,6 +13,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <google/protobuf/text_format.h>
 #include <memory>
 #include <sstream>
 
@@ -176,9 +177,10 @@ serialize(const google::protobuf::Message& from,
     // SerializeToArray seems to always return true, so we explicitly check
     // IsInitialized to make sure all required fields are set.
     if (!from.IsInitialized()) {
-        PANIC("Missing fields in protocol buffer of type %s: %s",
+        PANIC("Missing fields in protocol buffer of type %s: %s (have %s)",
               from.GetTypeName().c_str(),
-              from.InitializationErrorString().c_str());
+              from.InitializationErrorString().c_str(),
+              dumpString(from).c_str());
     }
     uint32_t length = from.ByteSize();
     char* data = new char[skipBytes + length];

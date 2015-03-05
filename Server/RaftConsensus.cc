@@ -2180,8 +2180,10 @@ RaftConsensus::readSnapshot()
     if (reader) {
         // load header contents
         SnapshotMetadata::Header header;
-        if (!reader->readMessage(header))
-            PANIC("couldn't read snapshot");
+        std::string error = reader->readMessage(header);
+        if (!error.empty()) {
+            PANIC("couldn't read snapshot: %s", error.c_str());
+        }
         if (header.last_included_index() < lastSnapshotIndex) {
             PANIC("Trying to load a snapshot that is more stale than one this "
                   "server loaded earlier. The earlier snapshot covers through "
