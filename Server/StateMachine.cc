@@ -193,6 +193,7 @@ StateMachine::applyThreadMain()
                            "state machine", entry.index);
                     loadSessionSnapshot(*entry.snapshotReader);
                     tree.loadSnapshot(*entry.snapshotReader);
+                    NOTICE("Done loading snapshot");
                     break;
             }
             expireSessions(entry.clusterTime);
@@ -306,6 +307,21 @@ bool
 StateMachine::shouldTakeSnapshot(uint64_t lastIncludedIndex) const
 {
     SnapshotStats::SnapshotStats stats = consensus->getSnapshotStats();
+
+    // print every 10% but not at 100% because then we'd be printing all the
+    // time
+    uint64_t curr = 0;
+    if (lastIncludedIndex > stats.last_snapshot_index())
+        curr = lastIncludedIndex - stats.last_snapshot_index();
+    uint64_t prev = curr - 1;
+    uint64_t logEntries = stats.last_log_index() - stats.last_snapshot_index();
+    if (curr != logEntries &&
+        10 * prev / logEntries != 10 * curr / logEntries) {
+        NOTICE("Have applied %lu%% of the %lu total log entries",
+               100 * curr / logEntries,
+               logEntries);
+    }
+
     if (stats.log_bytes() < snapshotMinLogSize)
         return false;
     if (stats.log_bytes() < stats.last_snapshot_bytes() * snapshotRatio)

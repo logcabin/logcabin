@@ -921,6 +921,7 @@ RaftConsensus::init()
     configuration.reset(new Configuration(serverId, *this));
     configurationManager.reset(new ConfigurationManager(*configuration));
 
+    NOTICE("Reading the log");
     if (!log) { // some unit tests pre-set the log; don't overwrite it
         log = Storage::LogFactory::makeLog(globals.config, storageLayout);
     }
@@ -976,6 +977,7 @@ RaftConsensus::init()
 void
 RaftConsensus::exit()
 {
+    NOTICE("Shutting down");
     std::unique_lock<Mutex> lockGuard(mutex);
     exiting = true;
     if (configuration)
