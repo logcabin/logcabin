@@ -78,13 +78,13 @@ TEST(TreeFileTest, dumpSnapshot)
         Storage::SnapshotFile::Writer writer(layout);
         File f;
         f.contents = "hello, world!";
-        f.dumpSnapshot(writer.getStream());
+        f.dumpSnapshot(writer);
         writer.save();
     }
     {
         Storage::SnapshotFile::Reader reader(layout);
         File f;
-        f.loadSnapshot(reader.getStream());
+        f.loadSnapshot(reader);
         EXPECT_EQ("hello, world!", f.contents);
     }
 }
@@ -218,13 +218,13 @@ TEST(TreeDirectoryTest, dumpSnapshot)
     layout.initTemporary();
     {
         Storage::SnapshotFile::Writer writer(layout);
-        tree.superRoot.dumpSnapshot(writer.getStream());
+        tree.superRoot.dumpSnapshot(writer);
         writer.save();
     }
     {
         Storage::SnapshotFile::Reader reader(layout);
         Tree t2;
-        t2.superRoot.loadSnapshot(reader.getStream());
+        t2.superRoot.loadSnapshot(reader);
         EXPECT_EQ(dumpTree(tree), dumpTree(t2));
     }
 }
@@ -288,14 +288,14 @@ TEST_F(TreeTreeTest, dumpSnapshot)
     {
         Storage::SnapshotFile::Writer writer(layout);
         tree.write("/c", "foo");
-        tree.dumpSnapshot(writer.getStream());
+        tree.dumpSnapshot(writer);
         writer.save();
     }
     tree.removeFile("/c");
     tree.write("/d", "bar");
     {
         Storage::SnapshotFile::Reader reader(layout);
-        tree.loadSnapshot(reader.getStream());
+        tree.loadSnapshot(reader);
     }
     std::vector<std::string> children;
     EXPECT_OK(tree.listDirectory("/", children));

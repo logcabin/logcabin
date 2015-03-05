@@ -1,4 +1,5 @@
 /* Copyright (c) 2013 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -28,6 +29,7 @@ namespace Storage {
 namespace SnapshotFile {
 
 namespace FilesystemUtil = Storage::FilesystemUtil;
+using Core::StringUtil::format;
 
 void
 discardPartialSnapshots(const Storage::Layout& layout)
@@ -46,20 +48,18 @@ discardPartialSnapshots(const Storage::Layout& layout)
 
 Reader::Reader(const Storage::Layout& storageLayout)
     : file()
-    , fileStream()
-    , codedStream()
+    , contents()
+    , bytesRead(0)
 {
     file = FilesystemUtil::tryOpenFile(storageLayout.snapshotDir,
                                        "snapshot",
                                        O_RDONLY);
     if (file.fd < 0) {
-        throw std::runtime_error(Core::StringUtil::format(
+        throw std::runtime_error(format(
                 "Snapshot file not found in %s",
                 storageLayout.snapshotDir.path.c_str()));
     }
-    fileStream.reset(new google::protobuf::io::FileInputStream(file.fd));
-    codedStream.reset(
-            new google::protobuf::io::CodedInputStream(fileStream.get()));
+    contents.reset(new FilesystemUtil::FileContents(file));
 }
 
 Reader::~Reader()
@@ -69,31 +69,80 @@ Reader::~Reader()
 uint64_t
 Reader::getSizeBytes()
 {
-    return FilesystemUtil::getSize(file);
+    return contents->getFileLength();
 }
 
-google::protobuf::io::CodedInputStream&
-Reader::getStream()
+
+uint64_t
+Reader::getBytesRead() const
 {
-     return *codedStream;
+    return bytesRead;
+}
+
+std::string
+Reader::readMessage(google::protobuf::Message& message)
+{
+    uint32_t length = 0;
+    uint64_t r = readRaw(&length, sizeof(length));
+    if (r < sizeof(length)) {
+        return format("Could only read %lu bytes of %lu-byte length field in "
+                      "file %s (at offset %lu of %lu-byte file)",
+                      r,
+                      sizeof(length),
+                      file.path.c_str(),
+                      bytesRead - r,
+                      getSizeBytes());
+    }
+    length = be32toh(length);
+    if (getSizeBytes() - bytesRead < length) {
+        return format("ProtoBuf is %u bytes long but there are only %lu "
+                      "bytes remaining in file %s (at offset %lu)",
+                      length,
+                      getSizeBytes() - bytesRead,
+                      file.path.c_str(),
+                      bytesRead);
+    }
+    const Core::Buffer buf(const_cast<void*>(contents->get(bytesRead, length)),
+                           length,
+                           NULL);
+    std::string error;
+    if (!Core::ProtoBuf::parse(buf, message)) {
+        error = format("Could not parse ProtoBuf at bytes %lu-%lu (inclusive) "
+                       "in file %s of length %lu",
+                       bytesRead,
+                       bytesRead + length -1,
+                       file.path.c_str(),
+                       getSizeBytes());
+    }
+    bytesRead += length;
+    if (10 * bytesRead / getSizeBytes() !=
+        10 * (bytesRead - length) / getSizeBytes()) {
+        NOTICE("Read %lu%% of snapshot",
+               100 * bytesRead / getSizeBytes());
+    }
+    return error;
+}
+
+uint64_t
+Reader::readRaw(void* data, uint64_t length)
+{
+    uint64_t r = contents->copyPartial(bytesRead, data, length);
+    bytesRead += r;
+    return r;
 }
 
 Writer::Writer(const Storage::Layout& storageLayout)
     : parentDir(FilesystemUtil::dup(storageLayout.snapshotDir))
     , stagingName()
     , file()
-    , fileStream()
-    , codedStream()
+    , bytesWritten(0)
 {
     struct timespec now =
         Core::Time::makeTimeSpec(Core::Time::SystemClock::now());
-    stagingName = Core::StringUtil::format("partial.%010lu.%06lu",
-                                           now.tv_sec, now.tv_nsec / 1000);
+    stagingName = format("partial.%010lu.%06lu",
+                         now.tv_sec, now.tv_nsec / 1000);
     file = FilesystemUtil::openFile(parentDir, stagingName,
                                     O_WRONLY|O_CREAT|O_EXCL);
-    fileStream.reset(new google::protobuf::io::FileOutputStream(file.fd));
-    codedStream.reset(
-            new google::protobuf::io::CodedOutputStream(fileStream.get()));
 }
 
 Writer::~Writer()
@@ -110,23 +159,22 @@ Writer::discard()
     if (file.fd < 0)
         PANIC("File already closed");
     FilesystemUtil::removeFile(parentDir, stagingName);
-    codedStream.reset();
-    fileStream.reset();
     file.close();
 }
 
 void
 Writer::flushToOS()
 {
-    if (file.fd < 0)
-        PANIC("File already closed");
-    // 1. Destroy the old CodedOutputStream.
-    codedStream.reset();
-    // 2. Flush the FileOutputStream.
-    fileStream->Flush();
-    // 3. Construct the new CodedOutputStream.
-    codedStream.reset(
-            new google::protobuf::io::CodedOutputStream(fileStream.get()));
+    // Nothing to do.
+}
+
+void
+Writer::seekToEnd()
+{
+    off64_t r = lseek64(file.fd, 0, SEEK_END);
+    if (r < 0)
+        PANIC("lseek failed: %s", strerror(errno));
+    bytesWritten = r;
 }
 
 uint64_t
@@ -134,9 +182,6 @@ Writer::save()
 {
     if (file.fd < 0)
         PANIC("File already closed");
-    codedStream.reset();
-    fileStream->Flush();
-    fileStream.reset();
     FilesystemUtil::fsync(file);
     uint64_t fileSize = FilesystemUtil::getSize(file);
     file.close();
@@ -146,10 +191,40 @@ Writer::save()
     return fileSize;
 }
 
-google::protobuf::io::CodedOutputStream&
-Writer::getStream()
+uint64_t
+Writer::getBytesWritten() const
 {
-     return *codedStream;
+    return bytesWritten;
+}
+
+void
+Writer::writeMessage(const google::protobuf::Message& message)
+{
+    Core::Buffer buf;
+    Core::ProtoBuf::serialize(message, buf);
+    uint32_t beSize = htobe32(uint32_t(buf.getLength()));
+    ssize_t r = FilesystemUtil::write(file.fd, {
+                                          {&beSize, sizeof(beSize)},
+                                          {buf.getData(), buf.getLength()},
+                                      });
+    if (r < 0) {
+        PANIC("Could not write ProtoBuf into %s: %s",
+              file.path.c_str(),
+              strerror(errno));
+    }
+    bytesWritten += r;
+}
+
+void
+Writer::writeRaw(const void* data, uint64_t length)
+{
+    ssize_t r = FilesystemUtil::write(file.fd, data, length);
+    if (r < 0) {
+        PANIC("Could not write ProtoBuf into %s: %s",
+              file.path.c_str(),
+              strerror(errno));
+    }
+    bytesWritten += r;
 }
 
 } // namespace LogCabin::Storage::SnapshotFile

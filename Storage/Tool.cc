@@ -165,38 +165,25 @@ main(int argc, char** argv)
         NOTICE("%s", e.what());
     }
     if (reader) {
-        google::protobuf::io::CodedInputStream& stream =
-            reader->getStream();
-
         { // read header protobuf from stream
-            bool ok = true;
-            uint32_t numBytes = 0;
-            ok = stream.ReadLittleEndian32(&numBytes);
-            if (!ok)
-                PANIC("couldn't read snapshot header");
             Server::SnapshotMetadata::Header header;
-            auto limit = stream.PushLimit(numBytes);
-            ok = header.MergePartialFromCodedStream(&stream);
-            stream.PopLimit(limit);
-            if (!ok)
-                PANIC("couldn't read snapshot header");
+            std::string error = reader->readMessage(header);
+            if (!error.empty()) {
+                PANIC("couldn't read snapshot header: %s",
+                      error.c_str());
+            }
             NOTICE("Snapshot header start");
             std::cout << Core::ProtoBuf::dumpString(header) << std::endl;
             NOTICE("Snapshot header end");
         }
 
         { // read StateMachine sessions from stream
-            bool ok = true;
-            uint32_t numBytes = 0;
-            ok = stream.ReadLittleEndian32(&numBytes);
-            if (!ok)
-                PANIC("couldn't read snapshot sessions");
             Server::SessionsProto::Sessions sessions;
-            auto limit = stream.PushLimit(numBytes);
-            ok = sessions.MergePartialFromCodedStream(&stream);
-            stream.PopLimit(limit);
-            if (!ok)
-                PANIC("couldn't read snapshot sessions");
+            std::string error = reader->readMessage(sessions);
+            if (!error.empty()) {
+                PANIC("couldn't read snapshot sessions: %s",
+                      error.c_str());
+            }
             NOTICE("Snapshot sessions start");
             std::cout << Core::ProtoBuf::dumpString(sessions) << std::endl;
             NOTICE("Snapshot sessions end");
@@ -204,7 +191,7 @@ main(int argc, char** argv)
 
         { // read Tree from stream
             Tree::Tree tree;
-            tree.loadSnapshot(stream);
+            tree.loadSnapshot(*reader);
             NOTICE("Snapshot tree start");
             dumpTree(tree);
             NOTICE("Snapshot tree end");

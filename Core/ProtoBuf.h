@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,7 +15,6 @@
  */
 
 #include <google/protobuf/message.h>
-#include <google/protobuf/text_format.h>
 #include <memory>
 #include <string>
 
@@ -147,6 +147,55 @@ serialize(const google::protobuf::Message& from,
           Core::Buffer& to,
           uint32_t skipBytes = 0);
 
+/**
+ * An abstract stream from which ProtoBufs may be read.
+ */
+struct InputStream {
+    /**
+     * Destructor.
+     */
+    virtual ~InputStream() {}
+    /**
+     * Return the number of bytes read so far.
+     */
+    virtual uint64_t getBytesRead() const = 0;
+    /**
+     * Read a ProtoBuf message from the stream. 
+     * \return
+     *      Empty string if successful, otherwise an error message if an error
+     *      occurred. The stream is probably no longer usable after an error.
+     */
+    virtual std::string readMessage(google::protobuf::Message& message) = 0;
+    /**
+     * Read some raw bytes from the stream.
+     * \return
+     *      The number of bytes read before the end of the stream was reached,
+     *      up to 'length'.
+     */
+    virtual uint64_t readRaw(void* data, uint64_t length) = 0;
+};
+
+/**
+ * An abstract stream to which ProtoBufs may be written.
+ */
+struct OutputStream {
+    /**
+     * Destructor.
+     */
+    virtual ~OutputStream() {}
+    /**
+     * Return the number of bytes written so far.
+     */
+    virtual uint64_t getBytesWritten() const = 0;
+    /**
+     * Write the given ProtoBuf message to the stream.
+     */
+    virtual void writeMessage(const google::protobuf::Message& message) = 0;
+    /**
+     * Write some raw bytes to the stream.
+     */
+    virtual void writeRaw(const void* data, uint64_t length) = 0;
+};
 
 } // namespace LogCabin::Core::ProtoBuf
 } // namespace LogCabin::Core

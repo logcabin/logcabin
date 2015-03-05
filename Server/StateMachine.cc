@@ -191,8 +191,9 @@ StateMachine::applyThreadMain()
                 case RaftConsensus::Entry::SNAPSHOT:
                     NOTICE("Loading snapshot through entry %lu into "
                            "state machine", entry.index);
-                    loadSessionSnapshot(entry.snapshotReader->getStream());
-                    tree.loadSnapshot(entry.snapshotReader->getStream());
+                    loadSessionSnapshot(*entry.snapshotReader);
+                    tree.loadSnapshot(*entry.snapshotReader);
+                    NOTICE("Done loading snapshot");
                     break;
             }
             expireSessions(entry.clusterTime);
@@ -218,8 +219,7 @@ StateMachine::applyThreadMain()
 }
 
 void
-StateMachine::dumpSessionSnapshot(
-                google::protobuf::io::CodedOutputStream& stream) const
+StateMachine::dumpSessionSnapshot(Core::ProtoBuf::OutputStream& stream) const
 {
     // dump into protobuf
     SessionsProto::Sessions sessionsProto;
@@ -238,9 +238,7 @@ StateMachine::dumpSessionSnapshot(
     }
 
     // write protobuf to stream
-    int size = sessionsProto.ByteSize();
-    stream.WriteLittleEndian32(size);
-    sessionsProto.SerializeWithCachedSizes(&stream);
+    stream.writeMessage(sessionsProto);
 }
 
 void
@@ -281,23 +279,14 @@ StateMachine::expireSessions(uint64_t clusterTime)
 
 
 void
-StateMachine::loadSessionSnapshot(
-                google::protobuf::io::CodedInputStream& stream)
+StateMachine::loadSessionSnapshot(Core::ProtoBuf::InputStream& stream)
 {
-    // read protobuf from stream
-    bool ok = true;
-    uint32_t numBytes = 0;
-    ok = stream.ReadLittleEndian32(&numBytes);
-    if (!ok)
-        PANIC("couldn't read snapshot");
     SessionsProto::Sessions sessionsProto;
-    auto limit = stream.PushLimit(numBytes);
-    ok = sessionsProto.MergePartialFromCodedStream(&stream);
-    stream.PopLimit(limit);
-    if (!ok)
-        PANIC("couldn't read snapshot");
+    std::string error = stream.readMessage(sessionsProto);
+    if (!error.empty()) {
+        PANIC("couldn't read snapshot: %s", error.c_str());
+    }
 
-    // load from protobuf
     sessions.clear();
     for (auto it = sessionsProto.session().begin();
          it != sessionsProto.session().end();
@@ -318,6 +307,21 @@ bool
 StateMachine::shouldTakeSnapshot(uint64_t lastIncludedIndex) const
 {
     SnapshotStats::SnapshotStats stats = consensus->getSnapshotStats();
+
+    // print every 10% but not at 100% because then we'd be printing all the
+    // time
+    uint64_t curr = 0;
+    if (lastIncludedIndex > stats.last_snapshot_index())
+        curr = lastIncludedIndex - stats.last_snapshot_index();
+    uint64_t prev = curr - 1;
+    uint64_t logEntries = stats.last_log_index() - stats.last_snapshot_index();
+    if (curr != logEntries &&
+        10 * prev / logEntries != 10 * curr / logEntries) {
+        NOTICE("Have applied %lu%% of the %lu total log entries",
+               100 * curr / logEntries,
+               logEntries);
+    }
+
     if (stats.log_bytes() < snapshotMinLogSize)
         return false;
     if (stats.log_bytes() < stats.last_snapshot_bytes() * snapshotRatio)
@@ -361,8 +365,8 @@ StateMachine::takeSnapshot(uint64_t lastIncludedIndex,
         PANIC("Couldn't fork: %s", strerror(errno));
     } else if (pid == 0) { // child
         usleep(stateMachineChildSleepMs * 1000); // for testing purposes
-        dumpSessionSnapshot(writer->getStream());
-        tree.dumpSnapshot(writer->getStream());
+        dumpSessionSnapshot(*writer);
+        tree.dumpSnapshot(*writer);
         // Flush the changes to the snapshot file before exiting.
         writer->flushToOS();
         _exit(0);
@@ -382,6 +386,7 @@ StateMachine::takeSnapshot(uint64_t lastIncludedIndex,
         if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
             NOTICE("Child completed writing state machine contents to "
                    "snapshot staging file");
+            writer->seekToEnd();
             consensus->snapshotDone(lastIncludedIndex, std::move(writer));
         } else if (exiting &&
                    WIFSIGNALED(status) && WTERMSIG(status) == SIGHUP) {

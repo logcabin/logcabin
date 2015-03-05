@@ -70,35 +70,21 @@ File::File()
 }
 
 void
-File::dumpSnapshot(google::protobuf::io::CodedOutputStream& stream) const
+File::dumpSnapshot(Core::ProtoBuf::OutputStream& stream) const
 {
-    // create protobuf of this file
     Snapshot::File file;
     file.set_contents(contents);
-
-    // write file into stream
-    int size = file.ByteSize();
-    stream.WriteLittleEndian32(size);
-    file.SerializeWithCachedSizes(&stream);
+    stream.writeMessage(file);
 }
 
 void
-File::loadSnapshot(google::protobuf::io::CodedInputStream& stream)
+File::loadSnapshot(Core::ProtoBuf::InputStream& stream)
 {
-    // read protobuf from stream
-    bool ok = true;
-    uint32_t numBytes = 0;
-    ok = stream.ReadLittleEndian32(&numBytes);
-    if (!ok)
-        PANIC("couldn't read snapshot");
     Snapshot::File node;
-    auto limit = stream.PushLimit(numBytes);
-    ok = node.MergePartialFromCodedStream(&stream);
-    stream.PopLimit(limit);
-    if (!ok)
-        PANIC("couldn't read snapshot");
-
-    // load content
+    std::string error = stream.readMessage(node);
+    if (!error.empty()) {
+        PANIC("Couldn't read snapshot: %s", error.c_str());
+    }
     contents = node.contents();
 }
 
@@ -195,7 +181,7 @@ Directory::removeFile(const std::string& name)
 }
 
 void
-Directory::dumpSnapshot(google::protobuf::io::CodedOutputStream& stream) const
+Directory::dumpSnapshot(Core::ProtoBuf::OutputStream& stream) const
 {
     // create protobuf of this dir, listing all children
     Snapshot::Directory dir;
@@ -205,9 +191,7 @@ Directory::dumpSnapshot(google::protobuf::io::CodedOutputStream& stream) const
         dir.add_files(it->first);
 
     // write dir into stream
-    int size = dir.ByteSize();
-    stream.WriteLittleEndian32(size);
-    dir.SerializeWithCachedSizes(&stream);
+    stream.writeMessage(dir);
 
     // dump children in the same order
     for (auto it = directories.begin(); it != directories.end(); ++it)
@@ -217,22 +201,13 @@ Directory::dumpSnapshot(google::protobuf::io::CodedOutputStream& stream) const
 }
 
 void
-Directory::loadSnapshot(google::protobuf::io::CodedInputStream& stream)
+Directory::loadSnapshot(Core::ProtoBuf::InputStream& stream)
 {
-    // read protobuf from stream
-    bool ok = true;
-    uint32_t numBytes = 0;
-    ok = stream.ReadLittleEndian32(&numBytes);
-    if (!ok)
-        PANIC("couldn't read snapshot");
     Snapshot::Directory dir;
-    auto limit = stream.PushLimit(numBytes);
-    ok = dir.MergePartialFromCodedStream(&stream);
-    stream.PopLimit(limit);
-    if (!ok)
-        PANIC("couldn't read snapshot");
-
-    // load children
+    std::string error = stream.readMessage(dir);
+    if (!error.empty()) {
+        PANIC("Couldn't read snapshot: %s", error.c_str());
+    }
     for (auto it = dir.directories().begin();
          it != dir.directories().end();
          ++it) {
@@ -366,7 +341,7 @@ Tree::mkdirLookup(const Path& path, Directory** parent)
 }
 
 void
-Tree::dumpSnapshot(google::protobuf::io::CodedOutputStream& stream) const
+Tree::dumpSnapshot(Core::ProtoBuf::OutputStream& stream) const
 {
     superRoot.dumpSnapshot(stream);
 }
@@ -375,7 +350,7 @@ Tree::dumpSnapshot(google::protobuf::io::CodedOutputStream& stream) const
  * Load the tree from the given stream.
  */
 void
-Tree::loadSnapshot(google::protobuf::io::CodedInputStream& stream)
+Tree::loadSnapshot(Core::ProtoBuf::InputStream& stream)
 {
     superRoot = Directory();
     superRoot.loadSnapshot(stream);

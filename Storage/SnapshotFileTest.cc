@@ -1,4 +1,5 @@
 /* Copyright (c) 2013 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -17,6 +18,7 @@
 #include <gtest/gtest.h>
 #include <sys/stat.h>
 
+#include "build/Core/ProtoBufTest.pb.h"
 #include "Core/Debug.h"
 #include "Core/StringUtil.h"
 #include "Core/STLUtil.h"
@@ -34,12 +36,16 @@ class StorageSnapshotFileTest : public ::testing::Test {
   public:
     StorageSnapshotFileTest()
         : layout()
+        , m1()
     {
         layout.initTemporary();
+        m1.set_field_a(10);
+        m1.set_field_b(20);
     }
     ~StorageSnapshotFileTest() {
     }
     Storage::Layout layout;
+    ProtoBuf::TestMessage m1;
 };
 
 
@@ -47,14 +53,14 @@ TEST_F(StorageSnapshotFileTest, basic)
 {
     {
         Writer writer(layout);
-        writer.getStream().WriteVarint32(482);
+        writer.writeMessage(m1);
         writer.save();
     }
     {
         Reader reader(layout);
-        uint32_t x = 0;
-        reader.getStream().ReadVarint32(&x);
-        EXPECT_EQ(482U, x);
+        ProtoBuf::TestMessage out;
+        EXPECT_EQ("", reader.readMessage(out));
+        EXPECT_EQ(m1, out);
     }
 }
 
@@ -88,6 +94,80 @@ TEST_F(StorageSnapshotFileTest, reader_fileNotFound)
     EXPECT_THROW(Reader reader(layout), std::runtime_error);
 }
 
+TEST_F(StorageSnapshotFileTest, getBytesRead)
+{
+    {
+        Writer writer(layout);
+        uint32_t d = 0xdeadbeef;
+        writer.writeRaw(&d, sizeof(d));
+        writer.save();
+    }
+    {
+        Reader reader(layout);
+        uint32_t x = 0;
+        EXPECT_EQ(0U, reader.getBytesRead());
+        reader.readRaw(&x, 1);
+        EXPECT_EQ(1U, reader.getBytesRead());
+        reader.readRaw(&x, 4);
+        EXPECT_EQ(4U, reader.getBytesRead());
+        reader.readRaw(&x, 2);
+        EXPECT_EQ(4U, reader.getBytesRead());
+    }
+}
+
+TEST_F(StorageSnapshotFileTest, readMessage)
+{
+    uint64_t m1bytes = 0;
+    {
+        Writer writer(layout);
+        writer.writeMessage(m1);
+        m1bytes = writer.getBytesWritten();
+        uint32_t len = 100;
+        len = htobe32(len);
+        writer.writeRaw(&len, sizeof(len));
+        writer.writeRaw(&len, 1);
+        writer.save();
+    }
+    {
+        Reader reader(layout);
+        ProtoBuf::TestMessage out;
+        EXPECT_EQ("", reader.readMessage(out));
+        EXPECT_EQ(m1, out);
+        EXPECT_EQ(m1bytes, reader.getBytesRead());
+        EXPECT_NE("", reader.readMessage(out));
+        EXPECT_EQ(m1bytes + 4, reader.getBytesRead());
+        uint32_t x;
+        EXPECT_EQ(1U, reader.readRaw(&x, 1));
+        EXPECT_NE("", reader.readMessage(out));
+        EXPECT_EQ(m1bytes + 5, reader.getBytesRead());
+    }
+}
+
+TEST_F(StorageSnapshotFileTest, readRaw)
+{
+    {
+        Writer writer(layout);
+        uint32_t d = 0xdeadbeef;
+        writer.writeRaw(&d, sizeof(d));
+        writer.save();
+    }
+    {
+        Reader reader(layout);
+        uint32_t x = 0;
+        reader.readRaw(&x, sizeof(x));
+        EXPECT_EQ(0xdeadbeefU, x);
+    }
+    {
+        Reader reader(layout);
+        uint32_t x = 0;
+        EXPECT_EQ(1U, reader.readRaw(&x, 1));
+        EXPECT_EQ(0xefU, x);
+        x = 0;
+        EXPECT_EQ(3U, reader.readRaw(&x, 4));
+        EXPECT_EQ(0xdeadbeU, x);
+    }
+}
+
 TEST_F(StorageSnapshotFileTest, writer_orphanDiscarded)
 {
     // expect warning
@@ -96,7 +176,8 @@ TEST_F(StorageSnapshotFileTest, writer_orphanDiscarded)
     });
     {
         Writer writer(layout);
-        writer.getStream().WriteVarint32(482);
+        uint32_t d = 482;
+        writer.writeRaw(&d, sizeof(d));
     }
     std::vector<std::string> files =
         Core::STLUtil::sorted(FilesystemUtil::ls(layout.snapshotDir));
@@ -108,7 +189,8 @@ TEST_F(StorageSnapshotFileTest, writer_discard)
 {
     {
         Writer writer(layout);
-        writer.getStream().WriteVarint32(482);
+        uint32_t d = 482;
+        writer.writeRaw(&d, sizeof(d));
         writer.discard();
     }
     std::vector<std::string> files = FilesystemUtil::ls(layout.snapshotDir);
@@ -120,32 +202,39 @@ TEST_F(StorageSnapshotFileTest, writer_flushToOS_continue)
 {
     {
         Writer writer(layout);
-        writer.getStream().WriteVarint32(482);
+        uint32_t d = 482;
+        writer.writeRaw(&d, sizeof(d));
         writer.flushToOS();
-        writer.getStream().WriteVarint32(998);
+        d = 998;
+        writer.writeRaw(&d, sizeof(d));
         writer.save();
     }
     {
         Reader reader(layout);
         uint32_t x = 0;
-        reader.getStream().ReadVarint32(&x);
+        reader.readRaw(&x, sizeof(x));
         EXPECT_EQ(482U, x);
-        reader.getStream().ReadVarint32(&x);
+        reader.readRaw(&x, sizeof(x));
         EXPECT_EQ(998U, x);
     }
 }
 
-TEST_F(StorageSnapshotFileTest, writer_flushToOS_forking)
+// tests flushToOS and seekToEnd
+TEST_F(StorageSnapshotFileTest, writer_forking)
 {
     {
         Writer writer(layout);
-        writer.getStream().WriteVarint32(482);
+        uint32_t d = 482;
+        writer.writeRaw(&d, sizeof(d));
         writer.flushToOS();
+        EXPECT_EQ(4U, writer.getBytesWritten());
         pid_t pid = fork();
         ASSERT_LE(0, pid);
         if (pid == 0) { // child
-            writer.getStream().WriteVarint32(127);
+            d = 127;
+            writer.writeRaw(&d, sizeof(d));
             writer.flushToOS();
+            EXPECT_EQ(8U, writer.getBytesWritten());
             _exit(0);
         } else { // parent
             int status = 0;
@@ -153,21 +242,40 @@ TEST_F(StorageSnapshotFileTest, writer_flushToOS_forking)
             EXPECT_LE(0, pid);
             EXPECT_TRUE(WIFEXITED(status));
             EXPECT_EQ(0, WEXITSTATUS(status));
-            writer.getStream().WriteVarint32(998);
+            writer.seekToEnd();
+            EXPECT_EQ(8U, writer.getBytesWritten());
+            d = 998;
+            writer.writeRaw(&d, sizeof(d));
             writer.save();
         }
     }
     {
         Reader reader(layout);
         uint32_t x = 0;
-        reader.getStream().ReadVarint32(&x);
+        EXPECT_EQ(sizeof(x), reader.readRaw(&x, sizeof(x)));
         EXPECT_EQ(482U, x);
-        reader.getStream().ReadVarint32(&x);
+        EXPECT_EQ(sizeof(x), reader.readRaw(&x, sizeof(x)));
         EXPECT_EQ(127U, x);
-        reader.getStream().ReadVarint32(&x);
+        EXPECT_EQ(sizeof(x), reader.readRaw(&x, sizeof(x)));
         EXPECT_EQ(998U, x);
     }
 }
+
+TEST_F(StorageSnapshotFileTest, getBytesWritten)
+{
+    Writer writer(layout);
+    EXPECT_EQ(0U, writer.getBytesWritten());
+    uint32_t d = 0xdeadbeef;
+    writer.writeRaw(&d, sizeof(d));
+    EXPECT_EQ(4U, writer.getBytesWritten());
+    writer.writeMessage(m1);
+    EXPECT_LT(4U, writer.getBytesWritten());
+    writer.discard();
+}
+
+// writeMessage tested with readMessage above
+
+// writeRaw tested with readRaw above
 
 } // namespace LogCabin::Storage::SnapshotFile::<anonymous>
 } // namespace LogCabin::Storage::SnapshotFile

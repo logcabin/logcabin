@@ -640,7 +640,8 @@ TEST_F(ServerRaftConsensusTest, init_withsnapshot)
 
         std::unique_ptr<Storage::SnapshotFile::Writer> writer =
             c1.beginSnapshot(2);
-        writer->getStream().WriteLittleEndian32(0xdeadbeef);
+        uint32_t d = 0xdeadbeef;
+        writer->writeRaw(&d, sizeof(d));
         c1.snapshotDone(2, std::move(writer));
         consensus->storageLayout = std::move(c1.storageLayout);
     }
@@ -785,7 +786,8 @@ TEST_F(ServerRaftConsensusTest, getNextEntry_snapshot)
 
     std::unique_ptr<Storage::SnapshotFile::Writer> writer =
         consensus->beginSnapshot(2);
-    writer->getStream().WriteLittleEndian32(0xdeadbeef);
+    uint32_t d = 0xdeadbeef;
+    writer->writeRaw(&d, sizeof(d));
     consensus->snapshotDone(2, std::move(writer));
     consensus->log->truncatePrefix(2);
 
@@ -798,7 +800,8 @@ TEST_F(ServerRaftConsensusTest, getNextEntry_snapshot)
     EXPECT_EQ(RaftConsensus::Entry::SNAPSHOT, e1.type);
     EXPECT_EQ(10U, e1.clusterTime);
     uint32_t x;
-    EXPECT_TRUE(e1.snapshotReader->getStream().ReadLittleEndian32(&x));
+    EXPECT_EQ(sizeof(x),
+              e1.snapshotReader->readRaw(&x, sizeof(x)));
     EXPECT_EQ(0xdeadbeef, x);
 
     RaftConsensus::Entry e2 = consensus->getNextEntry(2);
@@ -1199,11 +1202,12 @@ TEST_F(ServerRaftConsensusTest, handleInstallSnapshot)
     EXPECT_EQ("term: 10 ", response);
     EXPECT_EQ(1U, consensus->lastSnapshotIndex);
     EXPECT_FALSE(bool(consensus->snapshotWriter));
-    std::string helloWorld;
-    EXPECT_TRUE(consensus->snapshotReader->getStream()
-                  .ReadString(&helloWorld,
-                              int(strlen("hello world!"))));
-    EXPECT_EQ("hello world!", helloWorld);
+    char helloWorld[13];
+    EXPECT_EQ(sizeof(helloWorld) - 1,
+              consensus->snapshotReader->readRaw(helloWorld,
+                                                 sizeof(helloWorld) - 1));
+    helloWorld[sizeof(helloWorld) - 1] = '\0';
+    EXPECT_STREQ("hello world!", helloWorld);
 
     // TODO(ongaro): Test that the configuration is update accordingly
 }
@@ -1462,7 +1466,8 @@ TEST_F(ServerRaftConsensusTest, beginSnapshot)
     // call beginSnapshot
     std::unique_ptr<Storage::SnapshotFile::Writer> writer =
         consensus->beginSnapshot(3);
-    writer->getStream().WriteLittleEndian32(0xdeadbeef);
+    uint32_t d = 0xdeadbeef;
+    writer->writeRaw(&d, sizeof(d));
     writer->save();
 
     // make sure it had the right side-effects
@@ -1476,7 +1481,8 @@ TEST_F(ServerRaftConsensusTest, beginSnapshot)
     EXPECT_EQ(2U, consensus->lastSnapshotTerm);
     EXPECT_EQ(30U, consensus->lastSnapshotClusterTime);
     uint32_t x = 0;
-    EXPECT_TRUE(consensus->snapshotReader->getStream().ReadLittleEndian32(&x));
+    EXPECT_EQ(sizeof(x),
+              consensus->snapshotReader->readRaw(&x, sizeof(x)));
     EXPECT_EQ(0xdeadbeef, x);
     EXPECT_EQ((std::vector<uint64_t>{1, 4}),
               Core::STLUtil::getKeys(consensus->configurationManager->
@@ -2143,7 +2149,7 @@ class ServerRaftConsensusPSTest : public ServerRaftConsensusPTest {
         // First create a snapshot file on disk.
         // Note that this one doesn't have a Raft header.
         Storage::SnapshotFile::Writer w(consensus->storageLayout);
-        w.getStream().WriteString("hello, world!");
+        w.writeRaw("hello, world!", 13);
         w.save();
         consensus->lastSnapshotIndex = 2;
 
@@ -2274,7 +2280,8 @@ TEST_F(ServerRaftConsensusTest, discardUnneededEntries)
     drainDiskQueue(*consensus);
     std::unique_ptr<Storage::SnapshotFile::Writer> writer =
         consensus->beginSnapshot(2);
-    writer->getStream().WriteLittleEndian32(0xdeadbeef);
+    uint32_t d = 0xdeadbeef;
+    writer->writeRaw(&d, sizeof(d));
     consensus->snapshotDone(2, std::move(writer));
     consensus->discardUnneededEntries();
     EXPECT_EQ(3U, consensus->log->getLogStartIndex());
@@ -2293,7 +2300,8 @@ TEST_F(ServerRaftConsensusTest, getLastLogTerm)
     // snapshot only
     std::unique_ptr<Storage::SnapshotFile::Writer> writer =
         consensus->beginSnapshot(2);
-    writer->getStream().WriteLittleEndian32(0xdeadbeef);
+    uint32_t d = 0xdeadbeef;
+    writer->writeRaw(&d, sizeof(d));
     consensus->snapshotDone(2, std::move(writer));
     EXPECT_LT(consensus->log->getLastLogIndex(),
               consensus->log->getLogStartIndex());
@@ -2772,7 +2780,8 @@ TEST_F(ServerRaftConsensusTest, upToDateLeader)
     lockGuard.unlock();
     std::unique_ptr<Storage::SnapshotFile::Writer> writer =
         consensus->beginSnapshot(2);
-    writer->getStream().WriteLittleEndian32(0xdeadbeef);
+    uint32_t d = 0xdeadbeef;
+    writer->writeRaw(&d, sizeof(d));
     consensus->snapshotDone(2, std::move(writer));
     consensus->log->truncatePrefix(3);
     consensus->configurationManager->truncatePrefix(3);

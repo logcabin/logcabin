@@ -921,6 +921,7 @@ RaftConsensus::init()
     configuration.reset(new Configuration(serverId, *this));
     configurationManager.reset(new ConfigurationManager(*configuration));
 
+    NOTICE("Reading the log");
     if (!log) { // some unit tests pre-set the log; don't overwrite it
         log = Storage::LogFactory::makeLog(globals.config, storageLayout);
     }
@@ -976,6 +977,7 @@ RaftConsensus::init()
 void
 RaftConsensus::exit()
 {
+    NOTICE("Shutting down");
     std::unique_lock<Mutex> lockGuard(mutex);
     exiting = true;
     if (configuration)
@@ -1284,22 +1286,20 @@ RaftConsensus::handleInstallSnapshot(
         snapshotWriter.reset(
             new Storage::SnapshotFile::Writer(storageLayout));
     }
-    if (request.byte_offset() <
-        uint64_t(snapshotWriter->getStream().ByteCount())) {
+    if (request.byte_offset() < snapshotWriter->getBytesWritten()) {
         WARNING("Ignoring stale snapshot chunk for byte offset %lu when the "
                 "next byte needed is %lu",
                 request.byte_offset(),
-                uint64_t(snapshotWriter->getStream().ByteCount()));
+                snapshotWriter->getBytesWritten());
         return;
     }
-    if (request.byte_offset() >
-        uint64_t(snapshotWriter->getStream().ByteCount())) {
+    if (request.byte_offset() > snapshotWriter->getBytesWritten()) {
         PANIC("Leader tried to send snapshot chunk at byte offset %lu but the "
               "next byte needed is %lu. It's supposed to send these in order.",
               request.byte_offset(),
-              uint64_t(snapshotWriter->getStream().ByteCount()));
+              snapshotWriter->getBytesWritten());
     }
-    snapshotWriter->getStream().WriteString(request.data());
+    snapshotWriter->writeRaw(request.data().data(), request.data().length());
 
     if (request.done()) {
         if (request.last_snapshot_index() < lastSnapshotIndex) {
@@ -1525,11 +1525,7 @@ RaftConsensus::beginSnapshot(uint64_t lastIncludedIndex)
     }
 
     // write header to file
-    google::protobuf::io::CodedOutputStream& stream = writer->getStream();
-    int size = header.ByteSize();
-    stream.WriteLittleEndian32(size);
-    header.SerializeWithCachedSizes(&stream);
-
+    writer->writeMessage(header);
     return writer;
 }
 
@@ -2184,22 +2180,12 @@ RaftConsensus::readSnapshot()
         }
     }
     if (reader) {
-        google::protobuf::io::CodedInputStream& stream = reader->getStream();
-
-        // read header protobuf from stream
-        bool ok = true;
-        uint32_t numBytes = 0;
-        ok = stream.ReadLittleEndian32(&numBytes);
-        if (!ok)
-            PANIC("couldn't read snapshot");
-        SnapshotMetadata::Header header;
-        auto limit = stream.PushLimit(numBytes);
-        ok = header.MergePartialFromCodedStream(&stream);
-        stream.PopLimit(limit);
-        if (!ok)
-            PANIC("couldn't read snapshot");
-
         // load header contents
+        SnapshotMetadata::Header header;
+        std::string error = reader->readMessage(header);
+        if (!error.empty()) {
+            PANIC("couldn't read snapshot: %s", error.c_str());
+        }
         if (header.last_included_index() < lastSnapshotIndex) {
             PANIC("Trying to load a snapshot that is more stale than one this "
                   "server loaded earlier. The earlier snapshot covers through "
