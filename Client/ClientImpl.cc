@@ -103,13 +103,21 @@ treeCall(LeaderRPCBase& leaderRPC,
          ClientImpl::TimePoint timeout)
 {
     LeaderRPC::Status status;
+    VERBOSE("Calling %s with request: %s",
+            Protocol::Client::OpCode_Name(opCode).c_str(),
+            Core::ProtoBuf::dumpString(request).c_str());
     status = leaderRPC.call(opCode, request, response, timeout);
     switch (status) {
         case LeaderRPC::Status::OK:
+            VERBOSE("Reply to %s call: %s",
+                    Protocol::Client::OpCode_Name(opCode).c_str(),
+                    Core::ProtoBuf::dumpString(response).c_str());
             break;
         case LeaderRPC::Status::TIMEOUT:
             response.set_status(Protocol::Client::Status::TIMEOUT);
             response.set_error("Client-specified timeout elapsed");
+            VERBOSE("Timeout elapsed on %s call",
+                    Protocol::Client::OpCode_Name(opCode).c_str());
             break;
     }
 }

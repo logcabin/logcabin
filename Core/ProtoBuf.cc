@@ -163,9 +163,6 @@ parse(const Core::Buffer& from,
                 to.InitializationErrorString().c_str());
         return false;
     }
-    VERBOSE("%s:\n%s",
-            to.GetTypeName().c_str(),
-            truncateEnd(Core::ProtoBuf::dumpString(to, true)).c_str());
     return true;
 }
 
