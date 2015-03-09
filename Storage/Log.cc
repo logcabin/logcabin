@@ -18,7 +18,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "build/Protocol/Client.pb.h"
 #include "build/Protocol/Raft.pb.h"
+#include "Core/Debug.h"
 #include "Core/ProtoBuf.h"
 #include "Storage/Log.h"
 
@@ -56,12 +58,30 @@ operator<<(std::ostream& os, const Log& log)
     os << Core::ProtoBuf::dumpString(log.metadata);
     os << "end of metadata" << std::endl;
     os << "startIndex: " << log.getLogStartIndex() << std::endl;
+    os << std::endl;
     for (uint64_t i = log.getLogStartIndex();
          i <= log.getLastLogIndex();
          ++i) {
         os << "Entry " << i << " start:" << std::endl;
-        os << Core::ProtoBuf::dumpString(log.getEntry(i));
+        Log::Entry e = log.getEntry(i);
+        if (e.type() == Protocol::Raft::EntryType::DATA) {
+            std::string data = e.data();
+            Core::Buffer buffer(const_cast<char*>(data.data()),
+                                data.length(), NULL);
+            Protocol::Client::Command command;
+            if (!Core::ProtoBuf::parse(buffer, command)) {
+                WARNING("Could not parse protobuf in log entry %lu", i);
+                os << Core::ProtoBuf::dumpString(e);
+            } else {
+                e.clear_data();
+                os << Core::ProtoBuf::dumpString(e);
+                os << "data: " << Core::ProtoBuf::dumpString(command);
+            }
+        } else {
+            os << Core::ProtoBuf::dumpString(e);
+        }
         os << "end of entry " << i << std::endl;
+        os << std::endl;
     }
     os << std::endl;
     return os;
