@@ -23,6 +23,7 @@ Usage:
 
 Options:
   -h --help               Show this help message and exit
+  --args=<args>           Arguments to pass through to the ServerStats binary.
   --input=<file>          Instead of connecting to server(s) for stats, format
                           the previously gathered text-format stats found in
                           file(s). Pass - for stdin.
@@ -268,7 +269,7 @@ def printstats(allstats):
     print = Print()
     leaders  = checkleaders(allstats)
     for stats in allstats:
-        print('Server {0.server_id} at {0.address}:'.format(stats))
+        print('Server {0.server_id} at {0.addresses}:'.format(stats))
         print.indent()
         elapsed = stats.end_at - stats.start_at
         printraft(print, stats.raft, stats, leaders)
@@ -303,11 +304,12 @@ def main():
     for server in arguments['<server>']:
         try:
             binproto = subprocess.check_output(
-                ['ServerStats',
-                 '-b',
-                 '-t', arguments['--timeout'],
-                 server],
-                env=env)
+                'ServerStats -b -t {0:} {1:} {2:}'.format(
+                    arguments['--timeout'],
+                    arguments['--args'],
+                    server),
+                env=env,
+                shell=True)
         except OSError as e:
             if e.errno == errno.ENOENT:
                 raise RuntimeError('Could not find ServerStats binary. '
