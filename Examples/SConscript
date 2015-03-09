@@ -19,6 +19,10 @@ env.Default([
                 ["Reconfigure.cc", "#build/liblogcabin.a"],
                 LIBS = libs),
 
+    env.Program("ReconfigureTest",
+                ["ReconfigureTest.cc", "#build/liblogcabin.a"],
+                LIBS = libs),
+
     env.Program("ServerStats",
                 ["ServerStats.cc", "#build/liblogcabin.a"],
                 LIBS = libs),
