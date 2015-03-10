@@ -75,19 +75,6 @@ namespace ProtoBuf {
 
 using Core::StringUtil::replaceAll;
 
-namespace {
-
-/// Remove the last character from the end of a string.
-std::string
-truncateEnd(std::string str)
-{
-    if (!str.empty())
-        str.resize(str.length() - 1, 0);
-    return str;
-}
-
-} // anonymous namespace
-
 namespace Internal {
 
 void
