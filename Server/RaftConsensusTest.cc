@@ -265,11 +265,13 @@ const char* d4 =
 
 TEST_F(ServerRaftConsensusConfigurationTest, reset) {
     std::string expected = Core::StringUtil::toString(cfg);
-    cfg.setConfiguration(1, desc(d2));
+    cfg.setConfiguration(1, desc(d4));
+    std::shared_ptr<Server> s2 = cfg.getServer(2);
     cfg.reset();
     EXPECT_EQ(expected, Core::StringUtil::toString(cfg));
     EXPECT_EQ(0U, cfg.oldServers.servers.size());
     EXPECT_EQ(0U, cfg.newServers.servers.size());
+    EXPECT_TRUE(dynamic_cast<Peer*>(s2.get())->exiting);
 }
 
 TEST_F(ServerRaftConsensusConfigurationTest, setConfiguration) {

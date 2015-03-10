@@ -139,6 +139,8 @@ class Sandbox(object):
             if (p.ignoreFailures == False):
                 rc = p.proc.poll()
                 if rc is not None and rc != 0:
+                    print ('Process exited with status %d (%s)' %
+                           (rc, p.command))
                     raise subprocess.CalledProcessError(rc, p.command)
 
 @contextlib.contextmanager

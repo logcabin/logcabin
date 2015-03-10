@@ -325,7 +325,7 @@ class Peer : public Server {
     Event::Loop& eventLoop;
 
     /**
-     * Set to true when #thread should exit.
+     * Set to true when thread should exit.
      */
     bool exiting;
 
@@ -430,11 +430,6 @@ class Peer : public Server {
      * Raft lock; waiting on the RPC is done without holding that lock.
      */
     RPC::ClientRPC rpc;
-
-    /**
-     * A thread that is used to send RPCs to the follower.
-     */
-    std::thread thread;
 
     // Peer is not copyable.
     Peer(const Peer&) = delete;

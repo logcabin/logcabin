@@ -364,6 +364,7 @@ StateMachine::takeSnapshot(uint64_t lastIncludedIndex,
     if (pid == -1) { // error
         PANIC("Couldn't fork: %s", strerror(errno));
     } else if (pid == 0) { // child
+        Core::Debug::processName += "-child";
         usleep(stateMachineChildSleepMs * 1000); // for testing purposes
         dumpSessionSnapshot(*writer);
         tree.dumpSnapshot(*writer);

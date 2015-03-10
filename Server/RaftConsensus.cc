@@ -175,7 +175,6 @@ Peer::Peer(uint64_t serverId, RaftConsensus& consensus)
     , lastSnapshotIndex(0)
     , session()
     , rpc()
-    , thread()
 {
 }
 
@@ -204,6 +203,7 @@ Peer::beginLeadership()
 void
 Peer::exit()
 {
+    NOTICE("Flagging peer %lu to exit", serverId);
     exiting = true;
 }
 
@@ -292,8 +292,8 @@ Peer::startThread(std::shared_ptr<Peer> self)
     thisCatchUpIterationStart = Clock::now();
     thisCatchUpIterationGoalId = consensus.log->getLastLogIndex();
     ++consensus.numPeerThreads;
-    thread = std::thread(&RaftConsensus::peerThreadMain, &consensus, self);
-    thread.detach();
+    NOTICE("Starting peer thread for server %lu", serverId);
+    std::thread(&RaftConsensus::peerThreadMain, &consensus, self).detach();
 }
 
 std::shared_ptr<RPC::ClientSession>
@@ -521,11 +521,14 @@ void setGCFlag(Server& server)
 void
 Configuration::reset()
 {
+    NOTICE("Resetting to blank configuration");
     state = State::BLANK;
     id = 0;
     description = {};
     oldServers.servers.clear();
     newServers.servers.clear();
+    for (auto it = knownServers.begin(); it != knownServers.end(); ++it)
+        it->second->exit();
     knownServers.clear();
     knownServers[localServer->serverId] = localServer;
 }
@@ -881,22 +884,29 @@ RaftConsensus::RaftConsensus(Globals& globals)
 
 RaftConsensus::~RaftConsensus()
 {
-    exit();
+    if (!exiting)
+        exit();
     if (leaderDiskThread.joinable())
         leaderDiskThread.join();
     if (timerThread.joinable())
         timerThread.join();
     if (stepDownThread.joinable())
         stepDownThread.join();
+    NOTICE("Joined with disk and timer threads");
     std::unique_lock<Mutex> lockGuard(mutex);
-    while (numPeerThreads > 0)
-        stateChanged.wait(lockGuard);
+    if (numPeerThreads > 0) {
+        NOTICE("Waiting for %u peer threads to exit", numPeerThreads);
+        while (numPeerThreads > 0)
+            stateChanged.wait(lockGuard);
+    }
+    NOTICE("Peer threads have exited");
     // issue any outstanding disk flushes
     if (logSyncQueued) {
         std::unique_ptr<Log::Sync> sync = log->takeSync();
         sync->wait();
         log->syncComplete(std::move(sync));
     }
+    NOTICE("Completed disk writes");
 }
 
 void
@@ -1415,7 +1425,7 @@ RaftConsensus::setConfiguration(
 {
     std::unique_lock<Mutex> lockGuard(mutex);
 
-    if (state != State::LEADER) {
+    if (exiting || state != State::LEADER) {
         // caller fills out response
         return ClientResult::NOT_LEADER;
     }
@@ -1783,7 +1793,10 @@ RaftConsensus::peerThreadMain(std::shared_ptr<Peer> peer)
 {
     std::unique_lock<Mutex> lockGuard(mutex);
     Core::ThreadId::setName(
-        Core::StringUtil::format("Peer(%lu)", peer->serverId));
+        Core::StringUtil::format("Peer(%lu)-%lu",
+                                 peer->serverId,
+                                 Core::ThreadId::getId()));
+    NOTICE("Peer thread for server %lu started", peer->serverId);
 
     // Each iteration of this loop issues a new RPC or sleeps on the condition
     // variable.
@@ -1828,6 +1841,7 @@ RaftConsensus::peerThreadMain(std::shared_ptr<Peer> peer)
     // must return immediately after this
     --numPeerThreads;
     stateChanged.notify_all();
+    NOTICE("Peer thread for server %lu exiting", peer->serverId);
 }
 
 void
