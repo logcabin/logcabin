@@ -115,7 +115,8 @@ Reader::readMessage(google::protobuf::Message& message)
                        getSizeBytes());
     }
     bytesRead += length;
-    if (10 * bytesRead / getSizeBytes() !=
+    if (getSizeBytes() > 1024 && // minimum to keep quiet during unit tests
+        10 * bytesRead / getSizeBytes() !=
         10 * (bytesRead - length) / getSizeBytes()) {
         NOTICE("Read %lu%% of snapshot",
                100 * bytesRead / getSizeBytes());
