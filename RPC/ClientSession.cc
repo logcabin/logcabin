@@ -247,8 +247,13 @@ ClientSession::ClientSession(Event::Loop& eventLoop,
     }
 
     // Some TCP connection timeouts appear to be ridiculously long in the wild.
-    // Limit this to 10 seconds, after which you'd most likely want to retry.
-    timeout = std::min(timeout, Clock::now() + std::chrono::seconds(10));
+    // Limit this to 1 second by default, after which you'd most likely want to
+    // retry.
+    timeout = std::min(timeout,
+                       (Clock::now() +
+                        std::chrono::milliseconds(
+                            config.read<uint64_t>(
+                                "tcpConnectTimeoutMilliseconds", 1000))));
 
     // Setting NONBLOCK here makes connect return right away with EINPROGRESS.
     // Then we can monitor the fd until it's writable to know when it's done,

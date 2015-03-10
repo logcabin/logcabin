@@ -580,6 +580,7 @@ class Cluster {
      * Settings for the client library. These are all optional.
      * Currently supported options:
      * - tcpHeartbeatTimeoutMilliseconds (see sample.conf)
+     * - tcpConnectTimeoutMilliseconds (see sample.conf)
      */
     typedef std::map<std::string, std::string> Options;
 
