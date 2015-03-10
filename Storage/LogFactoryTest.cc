@@ -61,13 +61,8 @@ TEST_F(StorageLogFactoryTest, makeLog_SimpleFile)
         {"Storage/SimpleFileLog.cc", "ERROR"}
     });
 
-    // default
-    std::unique_ptr<Log> log = LogFactory::makeLog(config, layout);
-    EXPECT_STREQ(typeid(SimpleFileLog).name(), typeid(*log).name());
-    log.reset();
-
     config.set("storageModule", "SimpleFile");
-    log = LogFactory::makeLog(config, layout);
+    std::unique_ptr<Log> log = LogFactory::makeLog(config, layout);
     EXPECT_STREQ(typeid(SimpleFileLog).name(), typeid(*log).name());
 }
 
@@ -78,14 +73,20 @@ TEST_F(StorageLogFactoryTest, makeLog_Segmented_Binary)
         {"Storage/SegmentedLog.cc", "ERROR"}
     });
 
-    config.set("storageModule", "Segmented");
+    // default
     std::unique_ptr<Log> log = LogFactory::makeLog(config, layout);
+    EXPECT_STREQ(typeid(SegmentedLog).name(), typeid(*log).name());
+    log.reset();
+
+    config.set("storageModule", "Segmented");
+    log = LogFactory::makeLog(config, layout);
     EXPECT_STREQ(typeid(SegmentedLog).name(), typeid(*log).name());
     log.reset();
 
     config.set("storageModule", "Segmented-Binary");
     log = LogFactory::makeLog(config, layout);
     EXPECT_STREQ(typeid(SegmentedLog).name(), typeid(*log).name());
+
 }
 
 TEST_F(StorageLogFactoryTest, makeLog_Segmented_Text)
