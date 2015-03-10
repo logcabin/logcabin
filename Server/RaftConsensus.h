@@ -26,6 +26,7 @@
 #include <thread>
 #include <unordered_map>
 
+#include "build/Protocol/Client.pb.h"
 #include "build/Protocol/Raft.pb.h"
 #include "build/Protocol/ServerStats.pb.h"
 #include "build/Server/SnapshotStats.pb.h"
@@ -1033,17 +1034,15 @@ class RaftConsensus {
 
     /**
      * Change the cluster's configuration.
-     * Returns once operation completed and old servers are no longer needed.
-     * \param id
-     *      Identifies a cluster configuration previously returned by
-     *      getConfiguration().
-     * \param newConfiguration
-     *      Servers in new config, only use new_servers() part.
+     * Returns successfully once operation completed and old servers are no
+     * longer needed.
+     * \return
+     *      NOT_LEADER, or other code with response filled in.
      */
     ClientResult
     setConfiguration(
-            uint64_t id,
-            const Protocol::Raft::SimpleConfiguration& newConfiguration);
+            const Protocol::Client::SetConfiguration::Request& request,
+            Protocol::Client::SetConfiguration::Response& response);
 
     /**
      * Start taking a snapshot. Called by the state machine when it wants to

@@ -1286,8 +1286,11 @@ TEST_F(ServerRaftConsensusTest, handleRequestVote_termStale)
 TEST_F(ServerRaftConsensusTest, setConfiguration_notLeader)
 {
     init();
-    Protocol::Raft::SimpleConfiguration c;
-    EXPECT_EQ(ClientResult::NOT_LEADER, consensus->setConfiguration(1, c));
+    Protocol::Client::SetConfiguration::Request request;
+    Protocol::Client::SetConfiguration::Response response;
+    request.set_old_id(1);
+    EXPECT_EQ(ClientResult::NOT_LEADER,
+              consensus->setConfiguration(request, response));
 }
 
 TEST_F(ServerRaftConsensusTest, setConfiguration_changed)
@@ -1296,12 +1299,22 @@ TEST_F(ServerRaftConsensusTest, setConfiguration_changed)
     consensus->append({&entry1});
     consensus->startNewElection();
     drainDiskQueue(*consensus);
-    Protocol::Raft::SimpleConfiguration c;
-    EXPECT_EQ(ClientResult::FAIL, consensus->setConfiguration(0, c));
+
+    Protocol::Client::SetConfiguration::Request request;
+    Protocol::Client::SetConfiguration::Response response;
+    request.set_old_id(0);
+    EXPECT_EQ(ClientResult::FAIL,
+              consensus->setConfiguration(request, response));
+    EXPECT_TRUE(response.has_configuration_changed());
+
     consensus->configuration->setStagingServers(sdesc(""));
     consensus->stateChanged.notify_all();
     EXPECT_EQ(Configuration::State::STAGING, consensus->configuration->state);
-    EXPECT_EQ(ClientResult::FAIL, consensus->setConfiguration(1, c));
+
+    response.Clear();
+    EXPECT_EQ(ClientResult::FAIL,
+              consensus->setConfiguration(request, response));
+    EXPECT_TRUE(response.has_configuration_changed());
 }
 
 void
@@ -1321,11 +1334,25 @@ TEST_F(ServerRaftConsensusTest, setConfiguration_catchupFail)
     consensus->append({&entry1});
     consensus->startNewElection();
     drainDiskQueue(*consensus);
-    Protocol::Raft::SimpleConfiguration c = sdesc(
-        "servers { server_id: 2, addresses: '127.0.0.1:61024' }");
     consensus->stateChanged.callback = std::bind(setConfigurationHelper,
                                                  consensus.get());
-    EXPECT_EQ(ClientResult::FAIL, consensus->setConfiguration(1, c));
+
+    Protocol::Client::SetConfiguration::Request request;
+    Protocol::Client::SetConfiguration::Response response;
+    request = Core::ProtoBuf::fromString<
+        Protocol::Client::SetConfiguration::Request>(
+        "old_id: 1 "
+        "new_servers { server_id: 2, addresses: '127.0.0.1:61024' }");
+
+    EXPECT_EQ(ClientResult::FAIL,
+              consensus->setConfiguration(request, response));
+    EXPECT_EQ("configuration_bad { "
+                  "bad_servers { "
+                      "server_id: 2 "
+                      "addresses: '127.0.0.1:61024' "
+                  "}"
+              "}",
+              response);
 }
 
 void
@@ -1344,11 +1371,18 @@ TEST_F(ServerRaftConsensusTest, setConfiguration_replicateFail)
     consensus->append({&entry1});
     consensus->stepDown(1);
     consensus->startNewElection();
-    Protocol::Raft::SimpleConfiguration c = sdesc(
-        "servers { server_id: 2, addresses: '127.0.0.1:61024' }");
     consensus->stateChanged.callback = std::bind(setConfigurationHelper2,
                                                  consensus.get());
-    EXPECT_EQ(ClientResult::NOT_LEADER, consensus->setConfiguration(1, c));
+    Protocol::Client::SetConfiguration::Request request;
+    Protocol::Client::SetConfiguration::Response response;
+    request = Core::ProtoBuf::fromString<
+        Protocol::Client::SetConfiguration::Request>(
+        "old_id: 1 "
+        "new_servers { server_id: 2, addresses: '127.0.0.1:61024' }");
+
+    EXPECT_EQ(ClientResult::NOT_LEADER,
+              consensus->setConfiguration(request, response));
+
     // 1: entry1, 2: no-op, 3: transitional
     EXPECT_EQ(3U, consensus->log->getLastLogIndex());
     const Log::Entry& l2 = consensus->log->getEntry(3);
@@ -1370,9 +1404,16 @@ TEST_F(ServerRaftConsensusTest, setConfiguration_replicateOkJustUs)
     consensus->startNewElection();
     consensus->leaderDiskThread =
         std::thread(&RaftConsensus::leaderDiskThreadMain, consensus.get());
-    Protocol::Raft::SimpleConfiguration c = sdesc(
-        "servers { server_id: 1, addresses: '127.0.0.1:61024' }");
-    EXPECT_EQ(ClientResult::SUCCESS, consensus->setConfiguration(1, c));
+    Protocol::Client::SetConfiguration::Request request;
+    Protocol::Client::SetConfiguration::Response response;
+    request = Core::ProtoBuf::fromString<
+        Protocol::Client::SetConfiguration::Request>(
+        "old_id: 1 "
+        "new_servers { server_id: 1, addresses: '127.0.0.1:61024' }");
+
+    EXPECT_EQ(ClientResult::SUCCESS,
+              consensus->setConfiguration(request, response));
+
     // 1: entry1, 2: no-op, 3: transitional, 4: new config
     EXPECT_EQ(4U, consensus->log->getLastLogIndex());
     const Log::Entry& l3 = consensus->log->getEntry(4);
@@ -1428,11 +1469,16 @@ TEST_F(ServerRaftConsensusTest, setConfiguration_replicateOkNontrivial)
     consensus->stepDown(1);
     consensus->startNewElection();
     drainDiskQueue(*consensus);
-    Protocol::Raft::SimpleConfiguration c = sdesc(
-        "servers { server_id: 2, addresses: '127.0.0.1:61024' }");
     consensus->stateChanged.callback =
         SetConfigurationHelper3(consensus.get());
-    EXPECT_EQ(ClientResult::SUCCESS, consensus->setConfiguration(1, c));
+    Protocol::Client::SetConfiguration::Request request;
+    Protocol::Client::SetConfiguration::Response response;
+    request = Core::ProtoBuf::fromString<
+        Protocol::Client::SetConfiguration::Request>(
+        "old_id: 1 "
+        "new_servers { server_id: 2, addresses: '127.0.0.1:61024' }");
+    EXPECT_EQ(ClientResult::SUCCESS,
+              consensus->setConfiguration(request, response));
     EXPECT_EQ(4U, consensus->log->getLastLogIndex());
 }
 

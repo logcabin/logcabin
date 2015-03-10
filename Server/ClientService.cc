@@ -227,20 +227,8 @@ void
 ClientService::setConfiguration(RPC::ServerRPC rpc)
 {
     PRELUDE(SetConfiguration);
-    Protocol::Raft::SimpleConfiguration newConfiguration;
-    for (auto it = request.new_servers().begin();
-         it != request.new_servers().end();
-         ++it) {
-        Protocol::Raft::Server* s = newConfiguration.add_servers();
-        s->set_server_id(it->server_id());
-        s->set_addresses(it->addresses());
-    }
-    Result result = globals.raft->setConfiguration(
-                        request.old_id(),
-                        newConfiguration);
-    if (result == Result::SUCCESS) {
-        response.mutable_ok();
-    } else if (result == Result::RETRY || result == Result::NOT_LEADER) {
+    Result result = globals.raft->setConfiguration(request, response);
+    if (result == Result::RETRY || result == Result::NOT_LEADER) {
         Protocol::Client::Error error;
         error.set_error_code(Protocol::Client::Error::NOT_LEADER);
         std::string leaderHint = globals.raft->getLeaderHint();
@@ -248,9 +236,6 @@ ClientService::setConfiguration(RPC::ServerRPC rpc)
             error.set_leader_hint(leaderHint);
         rpc.returnError(error);
         return;
-    } else if (result == Result::FAIL) {
-        // TODO(ongaro): can't distinguish changed from bad
-        response.mutable_configuration_changed();
     }
     rpc.reply(response);
 }

@@ -102,6 +102,7 @@ Server::operator=(const Server& other)
 ConfigurationResult::ConfigurationResult()
     : status(OK)
     , badServers()
+    , error()
 {
 }
 

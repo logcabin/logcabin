@@ -1387,42 +1387,100 @@ RaftConsensus::replicate(const Core::Buffer& operation)
     return replicateEntry(entry, lockGuard);
 }
 
+struct StagingProgressing {
+    StagingProgressing(uint64_t epoch,
+                       Protocol::Client::SetConfiguration::Response& response)
+        : epoch(epoch)
+        , response(response)
+    {
+    }
+    bool operator()(Server& server) {
+        uint64_t serverEpoch = server.getLastAckEpoch();
+        if (serverEpoch < epoch) {
+            auto& s = *response.mutable_configuration_bad()->add_bad_servers();
+            s.set_server_id(server.serverId);
+            s.set_addresses(server.addresses);
+            return false;
+        }
+        return true;
+    }
+    const uint64_t epoch;
+    Protocol::Client::SetConfiguration::Response& response;
+};
+
 RaftConsensus::ClientResult
 RaftConsensus::setConfiguration(
-        uint64_t oldId,
-        const Protocol::Raft::SimpleConfiguration& nextConfiguration)
+        const Protocol::Client::SetConfiguration::Request& request,
+        Protocol::Client::SetConfiguration::Response& response)
 {
     std::unique_lock<Mutex> lockGuard(mutex);
 
-    if (state != State::LEADER)
+    if (state != State::LEADER) {
+        // caller fills out response
         return ClientResult::NOT_LEADER;
-    if (configuration->id != oldId ||
-        configuration->state != Configuration::State::STABLE) {
+    }
+    if (configuration->id != request.old_id()) {
         // configurations has changed in the meantime
+        response.mutable_configuration_changed()->set_error(
+            Core::StringUtil::format(
+                "The current configuration has ID %lu (no longer %lu) "
+                "and it's %s",
+                configuration->id,
+                request.old_id(),
+                Core::StringUtil::toString(configuration->state).c_str()));
+        return ClientResult::FAIL;
+    }
+    if (configuration->state != Configuration::State::STABLE) {
+        response.mutable_configuration_changed()->set_error(
+            Core::StringUtil::format(
+                "The current configuration (%lu) is not stable (it's %s)",
+                configuration->id,
+                Core::StringUtil::toString(configuration->state).c_str()));
         return ClientResult::FAIL;
     }
 
-    uint64_t term = currentTerm;
+    NOTICE("Attempting to change the configuration from %lu",
+           configuration->id);
+
+    // Set the staging servers in the configuration.
+    Protocol::Raft::SimpleConfiguration nextConfiguration;
+    for (auto it = request.new_servers().begin();
+         it != request.new_servers().end();
+         ++it) {
+        NOTICE("Adding server %lu at %s to staging servers",
+               it->server_id(), it->addresses().c_str());
+        Protocol::Raft::Server* s = nextConfiguration.add_servers();
+        s->set_server_id(it->server_id());
+        s->set_addresses(it->addresses());
+    }
     configuration->setStagingServers(nextConfiguration);
     stateChanged.notify_all();
 
     // Wait for new servers to be caught up. This will abort if not every
     // server makes progress in a ELECTION_TIMEOUT_MS period.
+    uint64_t term = currentTerm;
     ++currentEpoch;
     uint64_t epoch = currentEpoch;
     TimePoint checkProgressAt =
         Clock::now() + std::chrono::milliseconds(ELECTION_TIMEOUT_MS);
     while (true) {
-        if (exiting || term != currentTerm)
+        if (exiting || term != currentTerm) {
+            NOTICE("Lost leadership, aborting configuration change");
+            // caller will fill in response
             return ClientResult::NOT_LEADER;
-        if (configuration->stagingAll(&Server::isCaughtUp))
+        }
+        if (configuration->stagingAll(&Server::isCaughtUp)) {
+            NOTICE("Done catching up servers");
             break;
+        }
         if (Clock::now() >= checkProgressAt) {
-            if (configuration->stagingMin(&Server::getLastAckEpoch) < epoch) {
+            StagingProgressing progressing(epoch, response);
+            if (!configuration->stagingAll(progressing)) {
+                NOTICE("Failed to catch up new servers, aborting "
+                       "configuration change");
                 configuration->resetStagingServers();
                 stateChanged.notify_all();
-                // TODO(ongaro): probably need to return a different type of
-                // message: confuses oldId mismatch from new server down
+                // progressing filled in response
                 return ClientResult::FAIL;
             } else {
                 ++currentEpoch;
@@ -1436,6 +1494,7 @@ RaftConsensus::setConfiguration(
     }
 
     // Write and commit transitional configuration
+    NOTICE("Writing transitional configuration entry");
     Protocol::Raft::Configuration newConfiguration;
     *newConfiguration.mutable_prev_configuration() =
         configuration->description.prev_configuration();
@@ -1445,22 +1504,42 @@ RaftConsensus::setConfiguration(
     *entry.mutable_configuration() = newConfiguration;
     std::pair<ClientResult, uint64_t> result =
         replicateEntry(entry, lockGuard);
-    if (result.first != ClientResult::SUCCESS)
+    if (result.first != ClientResult::SUCCESS) {
+        NOTICE("Failed to commit transitional configuration entry, aborting "
+               "configuration change (%s)",
+               Core::StringUtil::toString(result.first).c_str());
+        if (result.first == ClientResult::NOT_LEADER) {
+            // caller will fill in response
+        } else {
+            response.mutable_configuration_changed()->set_error(
+                Core::StringUtil::format(
+                    "Couldn't successfully replicate the transitional "
+                    "configuration (%s)",
+                    Core::StringUtil::toString(result.first).c_str()));
+        }
         return result.first;
+    }
     uint64_t transitionalId = result.second;
 
     // Wait until the configuration that removes the old servers has been
     // committed. This is the first configuration with ID greater than
     // transitionalId.
+    NOTICE("Waiting for stable configuration to commit");
     while (true) {
         // Check this first: if the new configuration excludes us so we've
         // stepped down upon committing it, we still want to return success.
         if (configuration->id > transitionalId &&
             commitIndex >= configuration->id) {
+            response.mutable_ok();
+            NOTICE("Stable configuration committed. Configuration change "
+                   "completed successfully");
             return ClientResult::SUCCESS;
         }
-        if (exiting || term != currentTerm)
+        if (exiting || term != currentTerm) {
+            NOTICE("Lost leadership");
+            // caller fills in response
             return ClientResult::NOT_LEADER;
+        }
         stateChanged.wait(lockGuard);
     }
 }

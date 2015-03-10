@@ -164,9 +164,9 @@ main(int argc, char** argv)
     if (result.status == ConfigurationResult::OK) {
         std::cout << "OK" << std::endl;
     } else if (result.status == ConfigurationResult::CHANGED) {
-        std::cout << "CHANGED" << std::endl;
+        std::cout << "CHANGED (" << result.error << ")" << std::endl;
     } else if (result.status == ConfigurationResult::BAD) {
-        std::cout << "BAD SERVERS:" << std::endl;
+        std::cout << "BAD SERVERS (" << result.error << "):" << std::endl;
         for (auto it = result.badServers.begin();
              it != result.badServers.end();
              ++it) {

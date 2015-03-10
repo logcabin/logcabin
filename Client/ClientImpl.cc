@@ -394,10 +394,13 @@ ClientImpl::setConfiguration(uint64_t oldId,
                     TimePoint::max());
     ConfigurationResult result;
     if (response.has_ok()) {
+        result.status = ConfigurationResult::OK;
         return result;
     }
     if (response.has_configuration_changed()) {
         result.status = ConfigurationResult::CHANGED;
+        result.error = ("configuration changed: " +
+                        response.configuration_changed().error());
         return result;
     }
     if (response.has_configuration_bad()) {
@@ -407,6 +410,7 @@ ClientImpl::setConfiguration(uint64_t oldId,
              ++it) {
             result.badServers.emplace_back(it->server_id(), it->addresses());
         }
+        result.error = "servers slow or unavailable";
         return result;
     }
     PANIC("Did not understand server response to setConfiguration RPC:\n%s",

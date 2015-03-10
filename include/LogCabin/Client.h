@@ -97,6 +97,7 @@ typedef std::vector<Server> Configuration;
 struct ConfigurationResult {
     ConfigurationResult();
     ~ConfigurationResult();
+
     enum Status {
         /**
          * The operation succeeded.
@@ -118,6 +119,11 @@ struct ConfigurationResult {
      * If status is BAD, the servers that were unavailable to join the cluster.
      */
     Configuration badServers;
+
+    /**
+     * Error message, if status is not OK.
+     */
+    std::string error;
 };
 
 /**

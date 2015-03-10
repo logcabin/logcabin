@@ -43,15 +43,17 @@ class OptionParser {
         : argc(argc)
         , argv(argv)
         , cluster("logcabin:61023")
+        , fatal(false)
     {
         while (true) {
             static struct option longOptions[] = {
                {"cluster",  required_argument, NULL, 'c'},
+               {"fatal",  no_argument, NULL, 'f'},
                {"seed",  required_argument, NULL, 's'},
                {"help",  no_argument, NULL, 'h'},
                {0, 0, 0, 0}
             };
-            int c = getopt_long(argc, argv, "c:hs:", longOptions, NULL);
+            int c = getopt_long(argc, argv, "c:fhs:", longOptions, NULL);
 
             // Detect the end of the options.
             if (c == -1)
@@ -64,6 +66,9 @@ class OptionParser {
                 case 'h':
                     usage();
                     exit(0);
+                case 'f':
+                    fatal = true;
+                    break;
                 case 's':
                     srand(atoi(optarg));
                     break;
@@ -89,6 +94,8 @@ class OptionParser {
         std::cout << "  -c, --cluster <address> "
                   << "The network address of the LogCabin cluster "
                   << "(default: logcabin:61023)" << std::endl;
+        std::cout << "  -f, --fatal             "
+                  << "Exit on transient errors (default: false)" << std::endl;
         std::cout << "  -s, --seed <int>        "
                   << "Random seed (default: 1)" << std::endl;
         std::cout << "  -h, --help              "
@@ -98,6 +105,7 @@ class OptionParser {
     int& argc;
     char**& argv;
     std::string cluster;
+    bool fatal;
 };
 
 void
@@ -116,7 +124,8 @@ printConfiguration(const std::pair<uint64_t, Configuration>& configuration)
 uint64_t
 changeConfiguration(Cluster& cluster,
                     const Configuration& configuration,
-                    uint64_t lastId)
+                    uint64_t lastId,
+                    bool fatal)
 {
     std::cout << "Attempting to change cluster membership to the following:"
               << std::endl;
@@ -131,9 +140,9 @@ changeConfiguration(Cluster& cluster,
     if (result.status == ConfigurationResult::OK) {
         std::cout << "OK" << std::endl;
     } else if (result.status == ConfigurationResult::CHANGED) {
-        std::cout << "CHANGED" << std::endl;
+        std::cout << "CHANGED (" << result.error << ")" << std::endl;
     } else if (result.status == ConfigurationResult::BAD) {
-        std::cout << "BAD SERVERS:" << std::endl;
+        std::cout << "BAD SERVERS (" << result.error << "):" << std::endl;
         for (auto it = result.badServers.begin();
              it != result.badServers.end();
              ++it) {
@@ -146,8 +155,10 @@ changeConfiguration(Cluster& cluster,
     std::cout << "Current configuration:" << std::endl;
      std::pair<uint64_t, Configuration> current = cluster.getConfiguration();
     printConfiguration(current);
-    if (result.status != ConfigurationResult::OK)
+    if (result.status != ConfigurationResult::OK && fatal) {
+        std::cout << "Exiting" << std::endl;
         exit(1);
+    }
     return current.first;
 }
 
@@ -178,6 +189,7 @@ main(int argc, char** argv)
                       remainingServers.back());
             remainingServers.pop_back();
         }
-        lastId = changeConfiguration(cluster, newConfiguration, lastId);
+        lastId = changeConfiguration(cluster, newConfiguration, lastId,
+                                     options.fatal);
     }
 }

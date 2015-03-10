@@ -172,6 +172,7 @@ message SetConfiguration {
         message OK {
         }
         message ConfigurationChanged {
+            optional string error = 1;
         }
         message ConfigurationBad {
             /**
@@ -190,7 +191,7 @@ message SetConfiguration {
         optional ConfigurationChanged configuration_changed = 2;
         /**
          * Set if the reconfiguration was aborted because some servers are
-         * unavailable.
+         * unavailable or too slow.
          */
         optional ConfigurationBad configuration_bad = 3;
     }
