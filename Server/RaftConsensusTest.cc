@@ -759,7 +759,9 @@ TEST_F(ServerRaftConsensusTest, getNextEntry)
     EXPECT_EQ(2U, e2.index);
     EXPECT_EQ(RaftConsensus::Entry::DATA, e2.type);
     EXPECT_EQ(20U, e2.clusterTime);
-    EXPECT_STREQ("hello", static_cast<const char*>(e2.command.getData()));
+    EXPECT_EQ("hello",
+              std::string(static_cast<const char*>(e2.command.getData()),
+                          e2.command.getLength()));
     RaftConsensus::Entry e3 = consensus->getNextEntry(e2.index);
     EXPECT_EQ(3U, e3.index);
     EXPECT_EQ(RaftConsensus::Entry::SKIP, e3.type);
@@ -767,7 +769,9 @@ TEST_F(ServerRaftConsensusTest, getNextEntry)
     RaftConsensus::Entry e4 = consensus->getNextEntry(e3.index);
     EXPECT_EQ(4U, e4.index);
     EXPECT_EQ(RaftConsensus::Entry::DATA, e4.type);
-    EXPECT_STREQ("goodbye", static_cast<const char*>(e4.command.getData()));
+    EXPECT_EQ("goodbye",
+              std::string(static_cast<const char*>(e4.command.getData()),
+                          e4.command.getLength()));
     EXPECT_EQ(40U, e4.clusterTime);
     EXPECT_THROW(consensus->getNextEntry(e4.index),
                  Core::Util::ThreadInterruptedException);
