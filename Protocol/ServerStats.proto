@@ -80,6 +80,12 @@ message ServerStats {
         optional uint64 metadata_version = 3;
     };
 
+    message StateMachine {
+        optional bool snapshotting = 1;
+        optional uint64 last_applied = 2;
+        optional uint64 num_sessions = 3;
+    };
+
     /**
      * The ID of the server.
      */
@@ -110,6 +116,11 @@ message ServerStats {
      * Storage module (log) stats.
      */
     optional Storage storage = 12;
+
+    /**
+     * Stats for this server's StateMachine.
+     */
+    optional StateMachine state_machine = 13;
 
 };
 

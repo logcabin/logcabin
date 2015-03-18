@@ -31,9 +31,7 @@
 namespace LogCabin {
 namespace Server {
 
-
 namespace PC = LogCabin::Protocol::Client;
-static const uint64_t NO_ENTRY_ID = ~0UL;
 
 // for testing purposes
 bool stateMachineSuppressThreads = false;
@@ -111,6 +109,18 @@ StateMachine::readOnlyTreeRPC(const PC::ReadOnlyTree::Request& request,
 {
     std::unique_lock<std::mutex> lockGuard(mutex);
     Tree::ProtoBuf::readOnlyTreeRPC(tree, request, response);
+}
+
+void
+StateMachine::updateServerStats(Protocol::ServerStats& serverStats) const
+{
+    std::unique_lock<std::mutex> lockGuard(mutex);
+    serverStats.clear_state_machine();
+    Protocol::ServerStats::StateMachine& smStats =
+        *serverStats.mutable_state_machine();
+    smStats.set_snapshotting(childPid != 0);
+    smStats.set_last_applied(lastIndex);
+    smStats.set_num_sessions(sessions.size());
 }
 
 void

@@ -20,6 +20,7 @@
 #include "Event/Signal.h"
 #include "Server/Globals.h"
 #include "Server/RaftConsensus.h"
+#include "Server/StateMachine.h"
 #include "Server/ServerStats.h"
 
 namespace LogCabin {
@@ -136,6 +137,7 @@ ServerStats::getCurrent()
     copy.set_start_at(startTime);
     if (enabled) {
         globals.raft->updateServerStats(copy);
+        globals.stateMachine->updateServerStats(copy);
     }
     copy.set_end_at(std::chrono::nanoseconds(
         Core::Time::SystemClock::now().time_since_epoch()).count());

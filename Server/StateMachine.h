@@ -66,6 +66,11 @@ class StateMachine {
                 Protocol::Client::ReadOnlyTree_Response& response) const;
 
     /**
+     * Add information about the state machine state to the given structure.
+     */
+    void updateServerStats(Protocol::ServerStats& serverStats) const;
+
+    /**
      * Return once the state machine has applied at least the given entry.
      */
     void wait(uint64_t index) const;
@@ -177,14 +182,16 @@ class StateMachine {
     /**
      * The PID of snapshotThread's child process, if any. This is used by
      * applyThread to signal exits: if applyThread is exiting, it sends SIGHUP
-     * to this child process.
+     * to this child process. A childPid of 0 indicates that there is no child
+     * process.
      */
     pid_t childPid;
 
     /**
      * The index of the last log entry that this state machine has applied.
      * This variable is only written to by applyThread, so applyThread is free
-     * to access this variable without holding 'mutex'.
+     * to access this variable without holding 'mutex'. Other readers must hold
+     * 'mutex'.
      */
     uint64_t lastIndex;
 
