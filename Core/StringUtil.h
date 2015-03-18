@@ -121,6 +121,12 @@ toString(const T& t)
     return ss.str();
 }
 
+/**
+ * Return a copy of the given string except with no leading or trailing
+ * whitespace.
+ */
+std::string trim(const std::string& s);
+
 } // namespace LogCabin::Core::StringUtil
 } // namespace LogCabin::Core
 } // namespace LogCabin

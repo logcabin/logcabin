@@ -113,6 +113,13 @@ TEST(CoreStringUtilTest, toString) {
     EXPECT_EQ("3", toString(3));
 }
 
+TEST(CoreStringUtilTest, trim) {
+    EXPECT_EQ("abc", trim("abc"));
+    EXPECT_EQ("abc", trim(" abc "));
+    EXPECT_EQ("abc", trim("\tabc\n"));
+    EXPECT_EQ("", trim("  "));
+}
+
 } // namespace LogCabin::Core::StringUtil::<anonymous>
 } // namespace LogCabin::Core::StringUtil
 } // namespace LogCabin::Core

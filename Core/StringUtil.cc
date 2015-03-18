@@ -20,8 +20,11 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cctype>
 #include <cstdarg>
 #include <cstring>
+#include <functional>
+#include <locale>
 #include <sstream>
 
 #include "Core/StringUtil.h"
@@ -159,6 +162,27 @@ endsWith(const std::string& haystack, const std::string& needle)
     return (haystack.compare(haystack.length() - needle.length(),
                              needle.length(), needle) == 0);
 }
+
+std::string
+trim(const std::string& original)
+{
+    // The black magic is from https://stackoverflow.com/a/217605
+    std::string s = original;
+
+    // trim whitespace at end of string
+    s.erase(std::find_if(s.rbegin(), s.rend(),
+                         std::not1(std::ptr_fun<int, int>(std::isspace)))
+                .base(),
+            s.end());
+
+    // trim whitespace at beginning of string
+    s.erase(s.begin(),
+            std::find_if(s.begin(), s.end(),
+                         std::not1(std::ptr_fun<int, int>(std::isspace))));
+
+    return s;
+}
+
 
 } // namespace LogCabin::Core::StringUtil
 } // namespace LogCabin::Core
