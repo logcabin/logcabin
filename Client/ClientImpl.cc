@@ -326,6 +326,11 @@ ClientImpl::ClientImpl(const std::map<std::string, std::string>& options)
     , exactlyOnceRPCHelper(this)
     , eventLoopThread()
 {
+    NOTICE("Configuration settings:\n"
+           "# begin config\n"
+           "%s"
+           "# end config",
+           Core::StringUtil::toString(config).c_str());
 }
 
 ClientImpl::~ClientImpl()

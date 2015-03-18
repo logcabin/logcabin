@@ -21,6 +21,7 @@
 #include <string>
 
 #include "Core/Debug.h"
+#include "Core/StringUtil.h"
 #include "Core/ThreadId.h"
 #include "Server/Globals.h"
 #include "Server/RaftConsensus.h"
@@ -282,6 +283,11 @@ main(int argc, char** argv)
         // Initialize and run Globals.
         Server::Globals globals;
         globals.config.readFile(options.configFilename.c_str());
+        NOTICE("Config file settings:\n"
+               "# begin config\n"
+               "%s"
+               "# end config",
+               Core::StringUtil::toString(globals.config).c_str());
         globals.init();
         if (options.bootstrap) {
             globals.raft->bootstrapConfiguration();

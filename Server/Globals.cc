@@ -79,7 +79,6 @@ Globals::init()
     {
         ServerStats::Lock serverStatsLock(serverStats);
         serverStatsLock->set_server_id(serverId);
-        // TODO(ongaro): write entire 'config' into serverStats
     }
     if (!raft) {
         raft.reset(new RaftConsensus(*this));
