@@ -19,7 +19,6 @@
 
 #include <iostream>
 #include <string>
-#include <thread>
 
 #include "Core/Debug.h"
 #include "Core/ThreadId.h"
@@ -220,8 +219,10 @@ class PidFile {
     int written;
 };
 
-void
-runServer(int argc, char** argv)
+} // anonymous namespace
+
+int
+main(int argc, char** argv)
 {
     using namespace LogCabin;
 
@@ -238,7 +239,7 @@ runServer(int argc, char** argv)
         // exception with an OK error message if they aren't found:
         globals.config.read<uint64_t>("serverId");
         globals.config.read<std::string>("listenAddresses");
-        return;
+        return 0;
     }
 
     // Set debug log file
@@ -291,18 +292,5 @@ runServer(int argc, char** argv)
     }
 
     google::protobuf::ShutdownProtobufLibrary();
-}
-
-} // anonymous namespace
-
-int
-main(int argc, char** argv)
-{
-    // In the daemon, each thread gets named for its purpose (e.g., "evloop"
-    // for the event loop). Tools like "top" seem to take the first thread's
-    // name as the process's name, so we don't do anything with the first
-    // thread. See https://github.com/logcabin/logcabin/issues/103 for history.
-    std::thread thread(runServer, argc, argv);
-    thread.join();
     return 0;
 }
