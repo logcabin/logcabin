@@ -2444,7 +2444,20 @@ RaftConsensus::startNewElection()
         return;
     }
 
-    NOTICE("Running for election in term %lu", currentTerm + 1);
+    if (leaderId > 0) {
+        NOTICE("Running for election in term %lu "
+               "(haven't heard from leader %lu lately)",
+               currentTerm + 1,
+               leaderId);
+    } else if (state == State::CANDIDATE) {
+        NOTICE("Running for election in term %lu "
+               "(previous candidacy for term %lu timed out)",
+               currentTerm + 1,
+               currentTerm);
+    } else {
+        NOTICE("Running for election in term %lu",
+               currentTerm + 1);
+    }
     ++currentTerm;
     state = State::CANDIDATE;
     leaderId = 0;
