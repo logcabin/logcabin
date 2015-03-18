@@ -102,16 +102,18 @@ treeCall(LeaderRPCBase& leaderRPC,
          Protocol::Client::ReadOnlyTree::Response& response,
          ClientImpl::TimePoint timeout)
 {
-    LeaderRPC::Status status;
-    VERBOSE("Calling %s with request: %s",
+    VERBOSE("Calling %s with request:\n%s",
             Protocol::Client::OpCode_Name(opCode).c_str(),
-            Core::ProtoBuf::dumpString(request).c_str());
+            Core::StringUtil::trim(
+                Core::ProtoBuf::dumpString(request)).c_str());
+    LeaderRPC::Status status;
     status = leaderRPC.call(opCode, request, response, timeout);
     switch (status) {
         case LeaderRPC::Status::OK:
-            VERBOSE("Reply to %s call: %s",
+            VERBOSE("Reply to %s call:\n%s",
                     Protocol::Client::OpCode_Name(opCode).c_str(),
-                    Core::ProtoBuf::dumpString(response).c_str());
+                    Core::StringUtil::trim(
+                        Core::ProtoBuf::dumpString(response)).c_str());
             break;
         case LeaderRPC::Status::TIMEOUT:
             response.set_status(Protocol::Client::Status::TIMEOUT);
@@ -134,18 +136,31 @@ treeCall(LeaderRPCBase& leaderRPC,
          Protocol::Client::ReadWriteTree::Response& response,
          ClientImpl::TimePoint timeout)
 {
+    VERBOSE("Calling %s with request:\n%s",
+            Protocol::Client::OpCode_Name(opCode).c_str(),
+            Core::StringUtil::trim(
+                Core::ProtoBuf::dumpString(request)).c_str());
     LeaderRPC::Status status;
-    if (request.exactly_once().client_id() == 0)
+    if (request.exactly_once().client_id() == 0) {
+        VERBOSE("Already timed out on establishing session for %s call",
+                Protocol::Client::OpCode_Name(opCode).c_str());
         status = LeaderRPC::Status::TIMEOUT;
-    else
+    } else {
         status = leaderRPC.call(opCode, request, response, timeout);
+    }
 
     switch (status) {
         case LeaderRPC::Status::OK:
+            VERBOSE("Reply to %s call:\n%s",
+                    Protocol::Client::OpCode_Name(opCode).c_str(),
+                    Core::StringUtil::trim(
+                        Core::ProtoBuf::dumpString(response)).c_str());
             break;
         case LeaderRPC::Status::TIMEOUT:
             response.set_status(Protocol::Client::Status::TIMEOUT);
             response.set_error("Client-specified timeout elapsed");
+            VERBOSE("Timeout elapsed on %s call",
+                    Protocol::Client::OpCode_Name(opCode).c_str());
             break;
     }
 }
