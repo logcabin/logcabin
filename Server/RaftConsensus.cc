@@ -1793,9 +1793,7 @@ RaftConsensus::peerThreadMain(std::shared_ptr<Peer> peer)
 {
     std::unique_lock<Mutex> lockGuard(mutex);
     Core::ThreadId::setName(
-        Core::StringUtil::format("Peer(%lu)-%lu",
-                                 peer->serverId,
-                                 Core::ThreadId::getId()));
+        Core::StringUtil::format("Peer(%lu)", peer->serverId));
     NOTICE("Peer thread for server %lu started", peer->serverId);
 
     // Each iteration of this loop issues a new RPC or sleeps on the condition
