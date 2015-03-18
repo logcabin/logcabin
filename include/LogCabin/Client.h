@@ -512,6 +512,8 @@ class Tree {
  * When running in testing mode, these callbacks serve as a way for the
  * application to interpose on requests and responses to inject failures and
  * model dynamic scenarios. See Cluster's constructor for more information.
+ *
+ * This is experimental and is not part of LogCabin's public API.
  */
 class TestingCallbacks {
   public:
@@ -588,13 +590,16 @@ class Cluster {
      * Construct a Cluster object for testing purposes only. Instead of
      * connecting to a LogCabin cluster, it will keep all state locally in
      * memory.
+     *
+     * This is experimental and is not part of LogCabin's public API.
+     *
      * \param testingCallbacks
      *      These allow the application to interpose on requests. A
      *      default-constructed TestingCallbacks will execute requests against
      *      an in-memory structure. Applications can pass in classes derived
      *      from TestingCallbacks to model failures and more dynamic scenarios.
      * \param options
-     *      Settings for the client library.
+     *      Settings for the client library (see #Options).
      */
     explicit Cluster(std::shared_ptr<TestingCallbacks> testingCallbacks,
                      const Options& options = Options());
@@ -607,7 +612,7 @@ class Cluster {
      *      multiple IP addresses. Alternatively, you can pass a list of hosts
      *      as host1:port1,host2:port2,host3:port3.
      * \param options
-     *      Settings for the client library.
+     *      Settings for the client library (see #Options).
      */
     explicit Cluster(const std::string& hosts,
                      const Options& options = Options());

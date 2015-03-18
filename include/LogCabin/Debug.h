@@ -14,6 +14,14 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+/**
+ * \file
+ * This file is used to control how LogCabin's debug log (event log) messages
+ * are handled. When used by client applications, this should be accessed as
+ * LogCabin::Client::Debug (the LogCabin::Core namespace is used internally in
+ * LogCabin).
+ */
+
 #include <cstdio>
 #include <initializer_list>
 #include <functional>
