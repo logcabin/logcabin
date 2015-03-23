@@ -1140,6 +1140,7 @@ RaftConsensus::handleAppendEntries(
     // accepting the request.
     response.set_term(currentTerm);
     response.set_success(false);
+    response.set_last_log_index(log->getLastLogIndex());
 
     // If the caller's term is stale, just return our term to it.
     if (request.term() < currentTerm) {
@@ -1241,6 +1242,7 @@ RaftConsensus::handleAppendEntries(
         clusterClock.newEpoch(entries.back()->cluster_time());
         break;
     }
+    response.set_last_log_index(log->getLastLogIndex());
 
     // Set our committed ID from the request's. In rare cases, this would make
     // our committed ID decrease. For example, this could happen with a new
@@ -1342,6 +1344,13 @@ RaftConsensus::handleRequestVote(
     std::unique_lock<Mutex> lockGuard(mutex);
     assert(!exiting);
 
+    // If the caller has a less complete log, we can't give it our vote.
+    uint64_t lastLogIndex = log->getLastLogIndex();
+    uint64_t lastLogTerm = getLastLogTerm();
+    bool logIsOk = (request.last_log_term() > lastLogTerm ||
+                    (request.last_log_term() == lastLogTerm &&
+                     request.last_log_index() >= lastLogIndex));
+
     if (withholdVotesUntil > Clock::now()) {
         NOTICE("Rejecting RequestVote for term %lu from server %lu, since "
                "this server (which is in term %lu) recently heard from a "
@@ -1350,6 +1359,7 @@ RaftConsensus::handleRequestVote(
                leaderId, request.server_id());
         response.set_term(currentTerm);
         response.set_granted(false);
+        response.set_log_ok(logIsOk);
         return;
     }
 
@@ -1363,13 +1373,6 @@ RaftConsensus::handleRequestVote(
     // At this point, if leaderId != 0, we could tell the caller to step down.
     // However, this is just an optimization that does not affect correctness
     // or really even efficiency, so it's not worth the trouble.
-
-    // If the caller has a less complete log, we can't give it our vote.
-    uint64_t lastLogIndex = log->getLastLogIndex();
-    uint64_t lastLogTerm = getLastLogTerm();
-    bool logIsOk = (request.last_log_term() > lastLogTerm ||
-                    (request.last_log_term() == lastLogTerm &&
-                     request.last_log_index() >= lastLogIndex));
 
     if (request.term() == currentTerm) {
         if (logIsOk && votedFor == 0) {
@@ -1389,6 +1392,7 @@ RaftConsensus::handleRequestVote(
     // don't strictly need the first condition
     response.set_granted(request.term() == currentTerm &&
                          votedFor == request.server_id());
+    response.set_log_ok(logIsOk);
 }
 
 std::pair<RaftConsensus::ClientResult, uint64_t>
@@ -2143,7 +2147,7 @@ RaftConsensus::installSnapshot(std::unique_lock<Mutex>& lockGuard,
     Protocol::Raft::InstallSnapshot::Response response;
     TimePoint start = Clock::now();
     uint64_t epoch = currentEpoch;
-    bool ok = peer.callRPC(Protocol::Raft::OpCode::APPEND_SNAPSHOT_CHUNK,
+    bool ok = peer.callRPC(Protocol::Raft::OpCode::INSTALL_SNAPSHOT,
                            request, response,
                            lockGuard);
     if (!ok) {

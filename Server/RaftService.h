@@ -42,7 +42,7 @@ class RaftService : public RPC::Service {
 
     void requestVote(RPC::ServerRPC rpc);
     void appendEntries(RPC::ServerRPC rpc);
-    void appendSnapshotChunk(RPC::ServerRPC rpc);
+    void installSnapshot(RPC::ServerRPC rpc);
 
     /**
      * The LogCabin daemon's top-level objects.

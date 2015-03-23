@@ -28,7 +28,7 @@ enum OpCode {
     GET_SUPPORTED_RPC_VERSIONS = 0;
     REQUEST_VOTE = 1;
     APPEND_ENTRIES = 2;
-    APPEND_SNAPSHOT_CHUNK = 3;
+    INSTALL_SNAPSHOT = 3;
 };
 
 /**
@@ -172,6 +172,15 @@ message RequestVote {
          * otherwise.
          */
         required bool granted = 2;
+        /**
+         * Set to true if the caller's log is as up-to-date as the recipient's.
+         * This isn't presently used, but it's easy to return and might be
+         * useful later. In the Pre-Vote extension to Raft described in Section
+         * 9.6 "Preventing disruptions when a server rejoins the cluster" of
+         * Diego Ongaro's PhD dissertation, a server needs to know if its log
+         * is sufficient to get elected before actually starting an election.
+         */
+        optional bool log_ok = 3;
     }
 }
 
@@ -220,6 +229,12 @@ message AppendEntries {
          * True if new entries were added to the log.
          */
         required bool success = 2;
+        /**
+         * The recipient's last log index (after it's applied this RPC's
+         * changes to the log), which might be useful later to speed up finding
+         * where the leader and a behind follower have diverged.
+         */
+        optional uint64 last_log_index = 3;
     }
 }
 

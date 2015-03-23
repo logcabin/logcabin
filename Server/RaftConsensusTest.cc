@@ -859,7 +859,8 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntries_callerStale)
     consensus->stepDown(11);
     consensus->handleAppendEntries(request, response);
     EXPECT_EQ("term: 11 "
-              "success: false ",
+              "success: false "
+              "last_log_index: 0",
               response);
 }
 
@@ -893,7 +894,8 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntries_newLeaderAndCommitIndex)
               consensus->startElectionAt);
     EXPECT_EQ(1U, consensus->commitIndex);
     EXPECT_EQ("term: 10 "
-              "success: true ",
+              "success: true "
+              "last_log_index: 1",
               response);
 }
 
@@ -910,7 +912,8 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntries_rejectGap)
     consensus->stepDown(10);
     consensus->handleAppendEntries(request, response);
     EXPECT_EQ("term: 10 "
-              "success: false ",
+              "success: false "
+              "last_log_index: 0",
               response);
     EXPECT_EQ(0U, consensus->commitIndex);
     EXPECT_EQ(0U, consensus->log->getLastLogIndex());
@@ -930,7 +933,8 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntries_rejectPrevLogTerm)
     consensus->stepDown(10);
     consensus->handleAppendEntries(request, response);
     EXPECT_EQ("term: 10 "
-              "success: false ",
+              "success: false "
+              "last_log_index: 1",
               response);
     EXPECT_EQ(0U, consensus->commitIndex);
     EXPECT_EQ(1U, consensus->log->getLastLogIndex());
@@ -960,7 +964,8 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntries_append)
     consensus->stepDown(10);
     consensus->handleAppendEntries(request, response);
     EXPECT_EQ("term: 10 "
-              "success: true ",
+              "success: true "
+              "last_log_index: 2",
               response);
     EXPECT_EQ(1U, consensus->commitIndex);
     EXPECT_EQ(2U, consensus->log->getLastLogIndex());
@@ -1022,7 +1027,8 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntries_truncate)
 
     consensus->handleAppendEntries(request, response);
     EXPECT_EQ("term: 3 "
-              "success: true ",
+              "success: true "
+              "last_log_index: 4",
               response);
     EXPECT_EQ(3U, consensus->commitIndex);
     EXPECT_EQ(4U, consensus->log->getLastLogIndex());
@@ -1061,7 +1067,8 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntries_duplicate)
     e1->set_data("hello");
     consensus->handleAppendEntries(request, response);
     EXPECT_EQ("term: 10 "
-              "success: true ",
+              "success: true "
+              "last_log_index: 1",
               response);
     EXPECT_EQ(1U, consensus->log->getLastLogIndex());
     const Log::Entry& l1 = consensus->log->getEntry(1);
@@ -1094,7 +1101,8 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntries_appendSnapshotOk)
 
     consensus->handleAppendEntries(request, response);
     EXPECT_EQ("term: 10 "
-              "success: true ",
+              "success: true "
+              "last_log_index: 5",
               response);
     EXPECT_EQ(5U, consensus->log->getLastLogIndex());
 }
@@ -1235,7 +1243,8 @@ TEST_F(ServerRaftConsensusTest, handleRequestVote)
     EXPECT_EQ(State::LEADER, consensus->state);
     consensus->handleRequestVote(request, response);
     EXPECT_EQ("term: 1 "
-              "granted: false ",
+              "granted: false "
+              "log_ok: true",
               response);
     EXPECT_EQ(State::LEADER, consensus->state);
     EXPECT_EQ(1U, consensus->currentTerm);
@@ -1250,7 +1259,8 @@ TEST_F(ServerRaftConsensusTest, handleRequestVote)
     Clock::mockValue += milliseconds(2);
     consensus->handleRequestVote(request, response);
     EXPECT_EQ("term: 12 "
-              "granted: false ",
+              "granted: false "
+              "log_ok: false",
               response);
     EXPECT_EQ(State::FOLLOWER, consensus->state);
     // check that the election timer was not reset
@@ -1262,7 +1272,8 @@ TEST_F(ServerRaftConsensusTest, handleRequestVote)
     consensus->handleRequestVote(request, response);
     EXPECT_EQ(State::FOLLOWER, consensus->state);
     EXPECT_EQ("term: 12 "
-              "granted: true ",
+              "granted: true "
+              "log_ok: true",
               response);
     EXPECT_EQ(3U, consensus->votedFor);
 }
@@ -1279,7 +1290,8 @@ TEST_F(ServerRaftConsensusTest, handleRequestVote_termStale)
     consensus->stepDown(11);
     consensus->handleRequestVote(request, response);
     EXPECT_EQ("term: 11 "
-              "granted: false ",
+              "granted: false "
+              "log_ok: true",
               response);
     Clock::mockValue += milliseconds(100000);
     // don't hand out vote, don't reset follower timer
@@ -2223,7 +2235,7 @@ class ServerRaftConsensusPSTest : public ServerRaftConsensusPTest {
 
 TEST_F(ServerRaftConsensusPSTest, installSnapshot_rpcFailed)
 {
-    peerService->closeSession(Protocol::Raft::OpCode::APPEND_SNAPSHOT_CHUNK,
+    peerService->closeSession(Protocol::Raft::OpCode::INSTALL_SNAPSHOT,
                               request);
     // expect warning
     LogCabin::Core::Debug::setLogPolicy({
@@ -2239,7 +2251,7 @@ TEST_F(ServerRaftConsensusPSTest, installSnapshot_rpcFailed)
 TEST_F(ServerRaftConsensusPSTest, installSnapshot_termChanged)
 {
     peerService->runArbitraryCode(
-            Protocol::Raft::OpCode::APPEND_SNAPSHOT_CHUNK,
+            Protocol::Raft::OpCode::INSTALL_SNAPSHOT,
             request,
             std::make_shared<BumpTermAndReply>(*consensus, response));
     std::unique_lock<Mutex> lockGuard(consensus->mutex);
@@ -2251,7 +2263,7 @@ TEST_F(ServerRaftConsensusPSTest, installSnapshot_termChanged)
 TEST_F(ServerRaftConsensusPSTest, installSnapshot_termStale)
 {
     response.set_term(10);
-    peerService->reply(Protocol::Raft::OpCode::APPEND_SNAPSHOT_CHUNK,
+    peerService->reply(Protocol::Raft::OpCode::INSTALL_SNAPSHOT,
                        request, response);
     std::unique_lock<Mutex> lockGuard(consensus->mutex);
     consensus->installSnapshot(lockGuard, *peer);
@@ -2265,12 +2277,12 @@ TEST_F(ServerRaftConsensusPSTest, installSnapshot_ok)
     consensus->SOFT_RPC_SIZE_LIMIT = 7;
     request.set_data("hello, ");
     request.set_done(false);
-    peerService->reply(Protocol::Raft::OpCode::APPEND_SNAPSHOT_CHUNK,
+    peerService->reply(Protocol::Raft::OpCode::INSTALL_SNAPSHOT,
                        request, response);
     request.set_byte_offset(7);
     request.set_data("world!");
     request.set_done(true);
-    peerService->reply(Protocol::Raft::OpCode::APPEND_SNAPSHOT_CHUNK,
+    peerService->reply(Protocol::Raft::OpCode::INSTALL_SNAPSHOT,
                        request, response);
     std::unique_lock<Mutex> lockGuard(consensus->mutex);
     consensus->installSnapshot(lockGuard, *peer);

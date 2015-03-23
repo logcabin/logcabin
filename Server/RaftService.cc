@@ -43,8 +43,8 @@ RaftService::handleRPC(RPC::ServerRPC rpc)
         case OpCode::APPEND_ENTRIES:
             appendEntries(std::move(rpc));
             break;
-        case OpCode::APPEND_SNAPSHOT_CHUNK:
-            appendSnapshotChunk(std::move(rpc));
+        case OpCode::INSTALL_SNAPSHOT:
+            installSnapshot(std::move(rpc));
             break;
         case OpCode::REQUEST_VOTE:
             requestVote(std::move(rpc));
@@ -93,7 +93,7 @@ RaftService::appendEntries(RPC::ServerRPC rpc)
 }
 
 void
-RaftService::appendSnapshotChunk(RPC::ServerRPC rpc)
+RaftService::installSnapshot(RPC::ServerRPC rpc)
 {
     PRELUDE(InstallSnapshot);
     //VERBOSE("InstallSnapshot:\n%s",
