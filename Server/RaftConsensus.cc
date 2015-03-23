@@ -982,6 +982,7 @@ RaftConsensus::init()
     }
     // log->path = ""; // hack to disable disk
     stateChanged.notify_all();
+    printElectionState();
 }
 
 void
@@ -1165,6 +1166,7 @@ RaftConsensus::handleAppendEntries(
     if (leaderId == 0) {
         leaderId = request.server_id();
         NOTICE("All hail leader %lu for term %lu", leaderId, currentTerm);
+        printElectionState();
     } else {
         assert(leaderId == request.server_id());
     }
@@ -1288,6 +1290,7 @@ RaftConsensus::handleInstallSnapshot(
     if (leaderId == 0) {
         leaderId = request.server_id();
         NOTICE("All hail leader %lu for term %lu", leaderId, currentTerm);
+        printElectionState();
     } else {
         assert(leaderId == request.server_id());
     }
@@ -1377,6 +1380,7 @@ RaftConsensus::handleRequestVote(
             setElectionTimer();
             votedFor = request.server_id();
             updateLogMetadata();
+            printElectionState();
         }
     }
 
@@ -2191,6 +2195,7 @@ RaftConsensus::becomeLeader()
     NOTICE("Now leader for term %lu", currentTerm);
     state = State::LEADER;
     leaderId = serverId;
+    printElectionState();
     startElectionAt = TimePoint::max();
     withholdVotesUntil = TimePoint::max();
 
@@ -2436,6 +2441,29 @@ RaftConsensus::setElectionTimer()
 }
 
 void
+RaftConsensus::printElectionState() const
+{
+    const char* s = NULL;
+    switch (state) {
+        case State::FOLLOWER:
+            s = "FOLLOWER, ";
+            break;
+        case State::CANDIDATE:
+            s = "CANDIDATE,";
+            break;
+        case State::LEADER:
+            s = "LEADER,   ";
+            break;
+    }
+    NOTICE("server=%lu, term=%lu, state=%s leader=%lu, vote=%lu",
+           serverId,
+           currentTerm,
+           s,
+           leaderId,
+           votedFor);
+}
+
+void
 RaftConsensus::startNewElection()
 {
     if (configuration->id == 0) {
@@ -2462,6 +2490,7 @@ RaftConsensus::startNewElection()
     state = State::CANDIDATE;
     leaderId = 0;
     votedFor = serverId;
+    printElectionState();
     setElectionTimer();
     configuration->forEach(&Server::beginRequestVote);
     if (snapshotWriter) {
@@ -2491,8 +2520,14 @@ RaftConsensus::stepDown(uint64_t newTerm)
             snapshotWriter->discard();
             snapshotWriter.reset();
         }
+        state = State::FOLLOWER;
+        printElectionState();
+    } else {
+        if (state != State::FOLLOWER) {
+            state = State::FOLLOWER;
+            printElectionState();
+        }
     }
-    state = State::FOLLOWER;
     if (startElectionAt == TimePoint::max()) // was leader
         setElectionTimer();
     if (withholdVotesUntil == TimePoint::max()) // was leader

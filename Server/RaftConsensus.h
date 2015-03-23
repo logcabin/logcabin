@@ -1251,6 +1251,12 @@ class RaftConsensus {
     void requestVote(std::unique_lock<Mutex>& lockGuard, Peer& peer);
 
     /**
+     * Dumps serverId, currentTerm, state, leaderId, and votedFor to the debug
+     * log. This is intended to be easy to grep and parse.
+     */
+    void printElectionState() const;
+
+    /**
      * Set the timer to start a new election and notify #stateChanged.
      * The timer is set for ELECTION_TIMEOUT_MS plus some random jitter from
      * now.
