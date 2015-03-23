@@ -76,21 +76,49 @@ class OptionParser {
             usage();
             exit(1);
         }
-        while (optind < argc) {
-            servers.push_back(argv[optind]);
+        // For now, first argument must be the command "set".
+        if (std::string("set") == argv[optind]) {
             ++optind;
+            while (optind < argc) {
+                servers.push_back(argv[optind]);
+                ++optind;
+            }
+        } else {
+            std::cerr << "Invalid command: " << argv[optind] << std::endl;
+            usage();
+            exit(1);
         }
     }
 
     void usage() {
-        std::cout << "Usage: " << argv[0] << " [options] <servers>"
-                  << std::endl;
-        std::cout << "Options: " << std::endl;
-        std::cout << "  -c, --cluster <address> "
-                  << "The network address of the LogCabin cluster "
-                  << "(default: logcabin:61023)" << std::endl;
-        std::cout << "  -h, --help              "
-                  << "Print this usage information" << std::endl;
+        std::cout
+            << "Changes the membership of a LogCabin cluster."
+            << std::endl
+            << std::endl
+
+            << "Usage: " << argv[0] << " [options] set <server>..."
+            << std::endl
+            << std::endl
+
+            << "Options:"
+            << std::endl
+
+            << "  -c <addresses>, --cluster=<addresses>  "
+            << "Network addresses of the LogCabin"
+            << std::endl
+            << "                                         "
+            << "servers, including both the old and"
+            << std::endl
+            << "                                         "
+            << "the new servers, comma-separated"
+            << std::endl
+            << "                                         "
+            << "[default: logcabin:61023]"
+            << std::endl
+
+            << "  -h, --help                             "
+            << "Print this usage information"
+            << std::endl;
     }
 
     int& argc;

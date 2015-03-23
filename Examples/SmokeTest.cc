@@ -75,17 +75,39 @@ class OptionParser {
     }
 
     void usage() {
-        std::cout << "Usage: " << argv[0] << " [options]" << std::endl;
-        std::cout << "Options: " << std::endl;
-        std::cout << "  -c, --cluster <address> "
-                  << "The network address of the LogCabin cluster "
-                  << "(default: logcabin:61023)" << std::endl;
-        std::cout << "  -h, --help              "
-                  << "Print this usage information" << std::endl;
-        std::cout << "  -m, --mock              "
-                  << "Instead of connecting to a LogCabin cluster, "
-                  << "fake it with a local, in-memory implementation."
-                  << std::endl;
+        std::cout
+            << "Runs an extremely basic test against LogCabin, useful as a "
+            << "quick sanity check."
+            << std::endl
+            << std::endl
+
+            << "Usage: " << argv[0] << " [options]"
+            << std::endl
+            << std::endl
+
+            << "Options:"
+            << std::endl
+
+            << "  -c <addresses>, --cluster=<addresses>  "
+            << "Network addresses of the LogCabin"
+            << std::endl
+            << "                                         "
+            << "servers, comma-separated"
+            << std::endl
+            << "                                         "
+            << "[default: logcabin:61023]"
+            << std::endl
+
+            << "  -h, --help                     "
+            << "Print this usage information"
+            << std::endl
+
+            << "  -m, --mock                     "
+            << "Instead of connecting to a LogCabin cluster,"
+            << std::endl
+            << "                                 "
+            << "use a client-local, in-memory data structure"
+            << std::endl;
     }
 
     int& argc;

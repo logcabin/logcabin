@@ -19,6 +19,7 @@
 #include <iostream>
 
 #include <LogCabin/Client.h>
+#include "Examples/Util.h"
 #include "build/Protocol/ServerStats.pb.h"
 
 namespace {
@@ -26,6 +27,7 @@ namespace {
 using LogCabin::Client::Cluster;
 using LogCabin::Client::Result;
 using LogCabin::Client::Status;
+using LogCabin::Examples::Util::parseTime;
 
 /**
  * Parses argv for the main function.
@@ -37,7 +39,7 @@ class OptionParser {
         , argv(argv)
         , binary(false)
         , cluster("logcabin:61023")
-        , timeout(0)
+        , timeout(parseTime("0s"))
         , servers()
     {
         while (true) {
@@ -62,11 +64,8 @@ class OptionParser {
                     cluster = optarg;
                     break;
                 case 't':
-                {
-                    char* end;
-                    timeout = strtoull(optarg, &end, 10);
+                    timeout = parseTime(optarg);
                     break;
-                }
                 case 'h':
                     usage();
                     exit(0);
@@ -90,20 +89,48 @@ class OptionParser {
     }
 
     void usage() {
-        std::cout << "Usage: " << argv[0] << " [options] <servers>"
-                  << std::endl;
-        std::cout << "Options: " << std::endl;
-        std::cout << "  -b, --binary            "
-                  << "Outputs stats protobuf in binary form  "
-                  << "(default: human-readable )" << std::endl;
-        std::cout << "  -c, --cluster <address> "
-                  << "The network address of the LogCabin cluster "
-                  << "(default: logcabin:61023)" << std::endl;
-        std::cout << "  -t, --timeout           "
-                  << "Set timeout in seconds (default: 0, wait forever)"
-                  << std::endl;
-        std::cout << "  -h, --help              "
-                  << "Print this usage information" << std::endl;
+        std::cout
+            << "Fetches information, metrics, and statistics from the given "
+            << "servers. This can"
+            << std::endl
+            << "be useful in diagnosing problems."
+            << std::endl
+            << std::endl
+
+            << "Usage: " << argv[0] << " [options] <server>..."
+            << std::endl
+            << std::endl
+
+            << "Options:"
+            << std::endl
+
+            << "  -b, --binary                   "
+            << "Outputs stats ProtoBuf in binary format"
+            << std::endl
+            << "                                 "
+            << "(default is ProtoBuf text format)"
+            << std::endl
+
+            << "  -c <addresses>, --cluster=<addresses>  "
+            << "Network addresses of the LogCabin"
+            << std::endl
+            << "                                         "
+            << "servers, comma-separated"
+            << std::endl
+            << "                                         "
+            << "[default: logcabin:61023]"
+            << std::endl
+
+            << "  -h, --help                     "
+            << "Print this usage information"
+            << std::endl
+
+            << "  -t <time>, --timeout=<time>    "
+            << "Set timeout for each server"
+            << std::endl
+            << "                                 "
+            << "(0 means wait forever) [default: 0s]"
+            << std::endl;
     }
 
     int& argc;
@@ -132,7 +159,7 @@ main(int argc, char** argv)
         LogCabin::Protocol::ServerStats stats;
         Result result = cluster.getServerStats(
                             server,
-                            options.timeout * 1000000000,
+                            options.timeout,
                             stats);
         switch (result.status) {
             case Status::OK:

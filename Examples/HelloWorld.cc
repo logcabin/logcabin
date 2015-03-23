@@ -18,11 +18,13 @@
 #include <iostream>
 
 #include <LogCabin/Client.h>
+#include "Examples/Util.h"
 
 namespace {
 
 using LogCabin::Client::Cluster;
 using LogCabin::Client::Tree;
+using LogCabin::Examples::Util::parseTime;
 
 /**
  * Parses argv for the main function.
@@ -33,7 +35,7 @@ class OptionParser {
         : argc(argc)
         , argv(argv)
         , cluster("logcabin:61023")
-        , timeout(0)
+        , timeout(parseTime("0s"))
     {
         while (true) {
             static struct option longOptions[] = {
@@ -53,11 +55,8 @@ class OptionParser {
                     cluster = optarg;
                     break;
                 case 't':
-                {
-                    char* end;
-                    timeout = strtoull(optarg, &end, 10);
+                    timeout = parseTime(optarg);
                     break;
-                }
                 case 'h':
                     usage();
                     exit(0);
@@ -71,17 +70,42 @@ class OptionParser {
     }
 
     void usage() {
-        std::cout << "Usage: " << argv[0] << " [options] <servers>"
-                  << std::endl;
-        std::cout << "Options: " << std::endl;
-        std::cout << "  -c, --cluster <address> "
-                  << "The network address of the LogCabin cluster "
-                  << "(default: logcabin:61023)" << std::endl;
-        std::cout << "  -t, --timeout           "
-                  << "Set timeout in seconds (default: 0, wait forever)"
-                  << std::endl;
-        std::cout << "  -h, --help              "
-                  << "Print this usage information" << std::endl;
+        std::cout
+            << "Writes a value to LogCabin. This isn't very useful on its own "
+            << "but serves as a"
+            << std::endl
+            << "good starting point for more sophisticated LogCabin client "
+            << "programs."
+            << std::endl
+            << std::endl
+
+            << "Usage: " << argv[0] << " [options]"
+            << std::endl
+            << std::endl
+
+            << "Options:"
+            << std::endl
+
+            << "  -c <addresses>, --cluster=<addresses>  "
+            << "Network addresses of the LogCabin"
+            << std::endl
+            << "                                         "
+            << "servers, comma-separated"
+            << std::endl
+            << "                                         "
+            << "[default: logcabin:61023]"
+            << std::endl
+
+            << "  -h, --help                     "
+            << "Print this usage information"
+            << std::endl
+
+            << "  -t <time>, --timeout=<time>    "
+            << "Set timeout for individual operations"
+            << std::endl
+            << "                                 "
+            << "(0 means wait forever) [default: 0s]"
+            << std::endl;
     }
 
     int& argc;
@@ -98,7 +122,7 @@ main(int argc, char** argv)
     OptionParser options(argc, argv);
     Cluster cluster(options.cluster);
     Tree tree = cluster.getTree();
-    tree.setTimeout(options.timeout * 1000000000);
+    tree.setTimeout(options.timeout);
     tree.makeDirectoryEx("/etc");
     tree.writeEx("/etc/passwd", "ha");
     std::string contents = tree.readEx("/etc/passwd");

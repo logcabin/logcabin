@@ -31,6 +31,7 @@
 #include <unistd.h>
 
 #include <LogCabin/Client.h>
+#include "Examples/Util.h"
 
 namespace {
 
@@ -38,6 +39,7 @@ using LogCabin::Client::Cluster;
 using LogCabin::Client::Result;
 using LogCabin::Client::Status;
 using LogCabin::Client::Tree;
+using LogCabin::Examples::Util::parseTime;
 
 /**
  * Parses argv for the main function.
@@ -51,7 +53,7 @@ class OptionParser {
         , size(1024)
         , writers(1)
         , totalWrites(1000)
-        , timeout(30)
+        , timeout(parseTime("30s"))
     {
         while (true) {
             static struct option longOptions[] = {
@@ -74,7 +76,7 @@ class OptionParser {
                     cluster = optarg;
                     break;
                 case 'd':
-                    timeout = uint64_t(atol(optarg));
+                    timeout = parseTime(optarg);
                     break;
                 case 'h':
                     usage();
@@ -98,33 +100,50 @@ class OptionParser {
     }
 
     void usage() {
-        std::cout << "Usage: " << argv[0] << " [options]" << std::endl;
-        std::cout << std::endl;
-        std::cout << "Writes repeatedly to LogCabin. Stops once it reaches "
-                  << "the given number of " << std::endl;
-        std::cout << "writes or the timeout, whichever comes "
-                  << "first." << std::endl;
-        std::cout << std::endl;
-        std::cout << "Options: " << std::endl;
-        std::cout << "  -c, --cluster <address> "
-                  << "The network address of the LogCabin cluster "
-                  << std::endl;
-        std::cout << "                          "
-                  << "[default: logcabin:61023]" << std::endl;
-        std::cout << "  -h, --help              "
-                  << "Print this usage information" << std::endl;
-        std::cout << "  --size <bytes>          "
-                  << "Size of value in each write [default: 1024]"
-                  << std::endl;
-        std::cout << "  --threads <num>         "
-                  << "Number of concurrent writers [default: 1]"
-                  << std::endl;
-        std::cout << "  --timeout <seconds>     "
-                  << "Seconds after which to exit [default: 30]"
-                  << std::endl;
-        std::cout << "  --writes <num>          "
-                  << "Number of total writes [default: 1000]"
-                  << std::endl;
+        std::cout
+            << "Writes repeatedly to LogCabin. Stops once it reaches "
+            << "the given number of"
+            << std::endl
+            << "writes or the timeout, whichever comes first."
+            << std::endl
+            << std::endl
+
+            << "Usage: " << argv[0] << " [options]"
+            << std::endl
+            << std::endl
+
+            << "Options:"
+            << std::endl
+
+            << "  -c <addresses>, --cluster=<addresses>  "
+            << "Network addresses of the LogCabin"
+            << std::endl
+            << "                                         "
+            << "servers, comma-separated"
+            << std::endl
+            << "                                         "
+            << "[default: logcabin:61023]"
+            << std::endl
+
+            << "  -h, --help              "
+            << "Print this usage information"
+            << std::endl
+
+            << "  --size <bytes>          "
+            << "Size of value in each write [default: 1024]"
+            << std::endl
+
+            << "  --threads <num>         "
+            << "Number of concurrent writers [default: 1]"
+            << std::endl
+
+            << "  --timeout <time>        "
+            << "Time after which to exit [default: 30s]"
+            << std::endl
+
+            << "  --writes <num>          "
+            << "Number of total writes [default: 1000]"
+            << std::endl;
     }
 
     int& argc;
@@ -201,7 +220,7 @@ timerThreadMain(uint64_t timeout, std::atomic<bool>& exit)
     uint64_t start = timeNanos();
     while (!exit) {
         usleep(50 * 1000);
-        if ((timeNanos() - start) > timeout * 1000 * 1000 * 1000) {
+        if ((timeNanos() - start) > timeout) {
             exit = true;
         }
     }

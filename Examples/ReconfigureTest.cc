@@ -14,11 +14,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/**
- * \file
- * Changes the membership of a LogCabin cluster.
- */
-
 #include <getopt.h>
 #include <iostream>
 #include <string>
@@ -88,18 +83,42 @@ class OptionParser {
     }
 
     void usage() {
-        std::cout << "Usage: " << argv[0] << " [options]"
-                  << std::endl;
-        std::cout << "Options: " << std::endl;
-        std::cout << "  -c, --cluster <address> "
-                  << "The network address of the LogCabin cluster "
-                  << "(default: logcabin:61023)" << std::endl;
-        std::cout << "  -f, --fatal             "
-                  << "Exit on transient errors (default: false)" << std::endl;
-        std::cout << "  -s, --seed <int>        "
-                  << "Random seed (default: 1)" << std::endl;
-        std::cout << "  -h, --help              "
-                  << "Print this usage information" << std::endl;
+        std::cout
+            << "Test that repeatedly changes the cluster membership to random "
+            << "subsets of its"
+            << std::endl
+            << "initial configuration."
+            << std::endl
+            << std::endl
+
+            << "Usage: " << argv[0] << " [options]"
+            << std::endl
+            << std::endl
+
+            << "Options:"
+            << std::endl
+
+            << "  -c <addresses>, --cluster=<addresses>  "
+            << "Network addresses of the LogCabin"
+            << std::endl
+            << "                                         "
+            << "servers, comma-separated"
+            << std::endl
+            << "                                         "
+            << "[default: logcabin:61023]"
+            << std::endl
+
+            << "  -h, --help                     "
+            << "Print this usage information"
+            << std::endl
+
+            << "  -f, --fatal                    "
+            << "Exit on transient errors (continue by default)"
+            << std::endl
+
+            << "  -s <num>, --seed=<num>         "
+            << "Random seed [default: 1]"
+            << std::endl;
     }
 
     int& argc;

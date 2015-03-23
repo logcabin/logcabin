@@ -22,11 +22,13 @@
 
 #include <LogCabin/Client.h>
 #include <LogCabin/Debug.h>
+#include "Examples/Util.h"
 
 namespace {
 
 using LogCabin::Client::Cluster;
 using LogCabin::Client::Tree;
+using LogCabin::Examples::Util::parseTime;
 
 enum class Command {
     MKDIR,
@@ -52,7 +54,7 @@ class OptionParser {
         , dir()
         , path()
         , quiet(false)
-        , timeout(0)
+        , timeout(parseTime("0s"))
     {
         while (true) {
             static struct option longOptions[] = {
@@ -87,7 +89,7 @@ class OptionParser {
                     break;
                 }
                 case 't':
-                    timeout = strtoull(optarg, NULL, 10);
+                    timeout = parseTime(optarg);
                     break;
                 case 'h':
                     usage();
@@ -153,6 +155,11 @@ class OptionParser {
     }
 
     void usage() {
+        std::cout << "Run various operations on a LogCabin replicated state "
+                  << "machine."
+                  << std::endl;
+        std::cout << std::endl;
+
         std::cout << "Usage: " << argv[0] << " [options] <command> [<args>]"
                   << std::endl;
         std::cout << std::endl;
@@ -189,26 +196,43 @@ class OptionParser {
 
         std::cout << "Options:" << std::endl;
         std::cout
-            << "  -c, --cluster <address>  "
-            << "The network addresses of the LogCabin cluster"
+            << "  -c <addresses>, --cluster=<addresses>  "
+            << "Network addresses of the LogCabin"
             << std::endl
-            << "                           "
-            << "(comma-separated; default: logcabin:61023)"
+            << "                                         "
+            << "servers, comma-separated"
             << std::endl
-            << "  -d, --dir <path>         "
-            << "Set working directory (default: /)"
+            << "                                         "
+            << "[default: logcabin:61023]"
             << std::endl
-            << "  -p, --condition <path>:<value>  "
-            << "Set predicate on operation (default: none)"
+
+            << "  -d <path>, --dir=<path>        "
+            << "Set working directory [default: /]"
             << std::endl
-            << "  -q, --quiet              "
+
+            << "  -h, --help                     "
+            << "Print this usage information"
+            << std::endl
+
+            << "  -p <pred>, --condition=<pred>  "
+            << "Set predicate on the operation of the"
+            << std::endl
+            << "                                 "
+            << "form <path>:<value>, indicating that the key"
+            << std::endl
+            << "                                 "
+            << "at <path> must have the given value."
+            << std::endl
+
+            << "  -q, --quiet                    "
             << "Suppress NOTICE messages"
             << std::endl
-            << "  -t, --timeout            "
-            << "Set timeout in seconds (default: 0, wait forever)"
+
+            << "  -t <time>, --timeout=<time>    "
+            << "Set timeout for the operation"
             << std::endl
-            << "  -h, --help               "
-            << "Print this usage information"
+            << "                                 "
+            << "(0 means wait forever) [default: 0s]"
             << std::endl;
     }
 
@@ -270,10 +294,10 @@ main(int argc, char** argv)
         if (!options.quiet) {
             std::cout << "Setting timeout to "
                       << options.timeout
-                      << " seconds"
+                      << " nanoseconds"
                       << std::endl;
         }
-        tree.setTimeout(options.timeout * 1000000000);
+        tree.setTimeout(options.timeout);
     }
 
     if (!options.dir.empty()) {

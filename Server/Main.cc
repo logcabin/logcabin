@@ -99,30 +99,60 @@ class OptionParser {
     }
 
     void usage() {
-        std::cout << "Usage: " << argv[0] << " [options]" << std::endl;
-        std::cout << "Options: " << std::endl;
-        std::cout << "  -h, --help            "
-                  << "Print this usage information" << std::endl;
-        std::cout << "  --bootstrap           "
-                  << "Write a cluster configuration into the very first "
-                  << "server's log and exit. This should only be run once "
-                  << "ever in each cluster" << std::endl;
-        std::cout << "  -c, --config <file>   "
-                  << "Specify the configuration file "
-                  << "(default: logcabin.conf)" << std::endl;
-        std::cout << "  -d, --daemon          "
-                  << "Detach and run in the background (requires --log)"
-                  << std::endl;
-        std::cout << "  -l, --log <file>      "
-                  << "Write debug logs to <file> "
-                  << "(default: stderr)"
-                  << std::endl;
-        std::cout << "  -p, --pidfile <file>  "
-                  << "Write process ID to <file>"
-                  << std::endl;
-        std::cout << "  -t, --test            "
-                  << "Check the configuration file for (basic) errors and exit"
-                  << std::endl;
+        std::cout
+            << "Runs a LogCabin server."
+            << std::endl
+            << std::endl
+
+            << "Usage: " << argv[0] << " [options]"
+            << std::endl
+            << std::endl
+
+            << "Options:"
+            << std::endl
+
+            << "  --bootstrap                  "
+            << "Write a cluster configuration into the very"
+            << std::endl
+            << "                               "
+            << "first server's log and exit. This must only"
+            << std::endl
+            << "                               "
+            << "be run once on a single server in each cluster."
+            << std::endl
+
+            << "  -c <file>, --config=<file>   "
+            << "Set the path to the configuration file"
+            << std::endl
+            << "                               "
+            << "[default: logcabin.conf]"
+            << std::endl
+
+            << "  -d, --daemon                 "
+            << "Detach and run in the background"
+            << std::endl
+            << "                               "
+            << "(requires --log)"
+            << std::endl
+
+            << "  -h, --help                   "
+            << "Print this usage information"
+            << std::endl
+
+            << "  -l <file>, --log=<file>      "
+            << "Write debug logs to <file> instead of stderr"
+            << std::endl
+
+            << "  -p <file>, --pidfile=<file>  "
+            << "Write process ID to <file>"
+            << std::endl
+
+            << "  -t, --test                   "
+            << "Check the configuration file for basic errors"
+            << std::endl
+            << "                               "
+            << "and exit"
+            << std::endl;
     }
 
     int& argc;

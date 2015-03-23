@@ -54,7 +54,6 @@ class OptionParser {
             static struct option longOptions[] = {
                {"config",  required_argument, NULL, 'c'},
                {"help",  no_argument, NULL, 'h'},
-               {"id",  required_argument, NULL, 'i'},
                {0, 0, 0, 0}
             };
             int c = getopt_long(argc, argv, "c:hi:", longOptions, NULL);
@@ -86,18 +85,34 @@ class OptionParser {
     }
 
     void usage() {
-        std::cout << "Dumps out the contents of LogCabin's storage directory "
-                  << "(the log and snapshot)." << std::endl;
-        std::cout << std::endl;
-        std::cout << "Usage: " << argv[0] << " [options]" << std::endl;
-        std::cout << "Options: " << std::endl;
-        std::cout << "  -h, --help            "
-                  << "Print this usage information" << std::endl;
-         std::cout << "  -c, --config <file>   "
-                  << "Specify the configuration file "
-                  << "(default: logcabin.conf)" << std::endl;
-        std::cout << "  -i, --id <id>         "
-                  << "Set server id to <id> (required)" << std::endl;
+        std::cout
+            << "Dumps out the contents of LogCabin's storage directory "
+            << "(the log and snapshot)."
+            << std::endl
+            << "This will refuse to run while LogCabin is running, since "
+            << "it does the"
+            << std::endl
+            << "equivalent of a fsck for the log."
+            << std::endl
+            << std::endl
+
+            << "Usage: " << argv[0] << " [options]"
+            << std::endl
+            << std::endl
+
+            << "Options:"
+            << std::endl
+
+            << "  -h, --help                   "
+            << "Print this usage information"
+            << std::endl
+
+            << "  -c <file>, --config=<file>   "
+            << "Set the path to the configuration file"
+            << std::endl
+            << "                               "
+            << "[default: logcabin.conf]"
+            << std::endl;
     }
 
     int& argc;

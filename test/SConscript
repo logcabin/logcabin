@@ -27,6 +27,7 @@ def GetTestFiles(src_dirs, variant_dir):
 
 testrunner = env.Program("test",
             (["TestRunner.cc", "gtest-all.o"] +
+             object_files['Examples'] +
              object_files['Server'] +
              object_files['Storage'] +
              object_files['Client'] +
@@ -44,7 +45,10 @@ testrunner = env.Program("test",
                  "#Client",
                  "#Storage",
                  "#Server",
-             ], variant_dir='#build')),
+             ], variant_dir='#build') +
+             # Other files in Examples are named *Test.cc but aren't unit
+             # tests, so just name Examples/UtilTest.cc explicitly.
+             SrcToVariant(Glob("#Examples/UtilTest.cc"), variant_dir='#build')),
             LIBS = [ "pthread", "protobuf", "rt", "cryptopp" ],
             CPPPATH = env["CPPPATH"] + ["#gtest/include"],
             # -fno-access-control allows tests to access private members

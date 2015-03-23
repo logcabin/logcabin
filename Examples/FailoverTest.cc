@@ -20,11 +20,13 @@
 #include <sstream>
 
 #include <LogCabin/Client.h>
+#include "Examples/Util.h"
 
 namespace {
 
 using LogCabin::Client::Cluster;
 using LogCabin::Client::Tree;
+using LogCabin::Examples::Util::parseTime;
 
 /**
  * Parses argv for the main function.
@@ -35,7 +37,7 @@ class OptionParser {
         : argc(argc)
         , argv(argv)
         , cluster("logcabin:61023")
-        , timeout(10)
+        , timeout(parseTime("10s"))
     {
         while (true) {
             static struct option longOptions[] = {
@@ -55,10 +57,8 @@ class OptionParser {
                     cluster = optarg;
                     break;
                 case 't':
-                {
-                    timeout = strtoull(optarg, NULL, 10);
+                    timeout = parseTime(optarg);
                     break;
-                }
                 case 'h':
                     usage();
                     exit(0);
@@ -72,17 +72,44 @@ class OptionParser {
     }
 
     void usage() {
-        std::cout << "Usage: " << argv[0] << " [options]"
-                  << std::endl;
-        std::cout << "Options: " << std::endl;
-        std::cout << "  -c, --cluster <address> "
-                  << "The network address of the LogCabin cluster "
-                  << "(default: logcabin:61023)" << std::endl;
-        std::cout << "  -t, --timeout           "
-                  << "Set timeout in seconds (default: 10)"
-                  << std::endl;
-        std::cout << "  -h, --help              "
-                  << "Print this usage information" << std::endl;
+        std::cout
+            << "Executes a bunch of reads and writes against a LogCabin "
+            << "cluster, which are"
+            << std::endl
+            << "periodically verified. This is intended to be executed using"
+            << std::endl
+            << "scripts/failovertest.py, which kills LogCabin servers in the "
+            << "meantime."
+            << std::endl
+            << std::endl
+
+            << "Usage: " << argv[0] << " [options]"
+            << std::endl
+            << std::endl
+
+            << "Options:"
+            << std::endl
+
+            << "  -c <addresses>, --cluster=<addresses>  "
+            << "Network addresses of the LogCabin"
+            << std::endl
+            << "                                         "
+            << "servers, comma-separated"
+            << std::endl
+            << "                                         "
+            << "[default: logcabin:61023]"
+            << std::endl
+
+            << "  -h, --help                     "
+            << "Print this usage information"
+            << std::endl
+
+            << "  -t <time>, --timeout=<time>    "
+            << "Set timeout for individual read and write"
+            << std::endl
+            << "                                 "
+            << "operations [default: 10s]"
+            << std::endl;
     }
 
     int& argc;
@@ -139,7 +166,7 @@ main(int argc, char** argv)
     OptionParser options(argc, argv);
     Cluster cluster(options.cluster);
     Tree tree = cluster.getTree();
-    tree.setTimeout(options.timeout * 1000000000);
+    tree.setTimeout(options.timeout);
     tree.setWorkingDirectoryEx("/failovertest");
     tree.writeEx("0000000000000000", "0000000000000001");
     tree.writeEx("0000000000000001", "0000000000000001");

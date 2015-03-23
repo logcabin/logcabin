@@ -131,16 +131,16 @@ Now use the reconfiguration command to add the second and third servers to the
 cluster:
 
     ALLSERVERS=127.0.0.1:61023,127.0.0.1:61024,127.0.0.1:61025
-    build/Examples/Reconfigure --cluster=$ALLSERVERS 127.0.0.1:61023 127.0.0.1:61024 127.0.0.1:61025
+    build/Examples/Reconfigure --cluster=$ALLSERVERS set 127.0.0.1:61023 127.0.0.1:61024 127.0.0.1:61025
 
 This `Reconfigure` command is a special LogCabin client. It first queries each
-of the servers given in its positional command line arguments (space-delimited)
-to retrieve their server IDs and listening addresses (as set in their
-configuration files). Then, it connects to the cluster given by the `--cluster`
-option (comma-delimited) and asks the leader to set the cluster membership
-to consist of those servers. Note that the existing cluster members should be
-included in the positional arguments if they are to remain in the cluster;
-otherwise, they will be evicted from the cluster.
+of the servers given in its positional command line arguments (space-delimited
+after the command "set") to retrieve their server IDs and listening addresses
+(as set in their configuration files). Then, it connects to the cluster given
+by the `--cluster` option (comma-delimited) and asks the leader to set the
+cluster membership to consist of those servers. Note that the existing cluster
+members should be included in the positional arguments if they are to remain in
+the cluster; otherwise, they will be evicted from the cluster.
 
 If this succeeded, you should see that the first server has added the others to
 the cluster, and the second and third servers are now participating. It should

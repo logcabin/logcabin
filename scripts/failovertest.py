@@ -101,7 +101,7 @@ def main():
             launch_server(server_id)
 
         print('Growing cluster')
-        sh('build/Examples/Reconfigure %s %s %s' %
+        sh('build/Examples/Reconfigure %s %s set %s' %
            (cluster,
             reconf_opts,
             ' '.join([h[0] for h in smokehosts[:num_servers]])))
