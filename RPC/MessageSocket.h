@@ -39,16 +39,10 @@ namespace RPC {
  * Higher layers can use this to build an RPC framework, both on the client
  * side and on the server side.
  *
- * On the wire, this adds a 12-byte header on all messages. The first 8 bytes,
- * encoded as an integer in big endian, are the message ID. The next 4 bytes,
- * encoded as an integer in big endian, are the number of bytes of data
- * following the header. Following the header, the data is sent as an opaque
- * binary string.
- *
- * TODO(ongaro): There are probably two things missing from this header. First,
- * it should have some mechanism (such as a version field) for changing the
- * header format later. Second, it should have a checksum, as the
- * TCP/IP/Ethernet checksums may not be sufficient.
+ * On the wire, this adds a 16-byte header on all messages:
+ *     | 0xdaf4 | version | length | messageId |
+ * See Header for more details. Following the header, the data is sent as an
+ * opaque binary string.
  */
 class MessageSocket {
   public:
@@ -191,16 +185,25 @@ class MessageSocket {
         void toBigEndian();
 
         /**
-         * A unique message ID assigned by the sender.
+         * The value 0xdaf4 encoded in big endian.
          */
-        uint64_t messageId;
+        uint16_t fixed;
+
+        /**
+         * Currently only version 1 is defined and supported. Big endian.
+         */
+        uint16_t version;
 
         /**
          * The length in bytes of the contents of the message, not including
-         * this header.
+         * this header. Big endian.
          */
         uint32_t payloadLength;
 
+        /**
+         * A unique message ID assigned by the sender. Big endian.
+         */
+        uint64_t messageId;
     } __attribute__((packed));
 
     /**

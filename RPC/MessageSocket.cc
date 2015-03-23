@@ -107,15 +107,19 @@ MessageSocket::ReceiveSocket::handleFileEvent(int events)
 void
 MessageSocket::Header::fromBigEndian()
 {
-    messageId = be64toh(messageId);
+    fixed = be16toh(fixed);
+    version = be16toh(version);
     payloadLength = be32toh(payloadLength);
+    messageId = be64toh(messageId);
 }
 
 void
 MessageSocket::Header::toBigEndian()
 {
-    messageId = htobe64(messageId);
+    fixed = htobe16(fixed);
+    version = htobe16(version);
     payloadLength = htobe32(payloadLength);
+    messageId = htobe64(messageId);
 }
 
 ////////// MessageSocket::Inbound //////////
@@ -149,8 +153,10 @@ MessageSocket::Outbound::Outbound(MessageId messageId,
     , header()
     , message(std::move(message))
 {
-    header.messageId = messageId;
+    header.fixed = 0xdaf4;
+    header.version = 1;
     header.payloadLength = uint32_t(this->message.getLength());
+    header.messageId = messageId;
     header.toBigEndian();
 }
 
@@ -247,8 +253,20 @@ MessageSocket::readable()
                 return;
             // Transition to receiving data
             inbound.header.fromBigEndian();
+            if (inbound.header.fixed != 0xdaf4) {
+                WARNING("Disconnecting since message doesn't start with magic "
+                        "0xdaf4 (first two bytes are 0x%02x)",
+                        inbound.header.fixed);
+                disconnect();
+            }
+            if (inbound.header.version != 1) {
+                WARNING("Disconnecting since message uses version %u, but "
+                        "this code only understands version 1",
+                        inbound.header.version);
+                disconnect();
+            }
             if (inbound.header.payloadLength > maxMessageLength) {
-                WARNING("Dropping message that is too long to receive "
+                WARNING("Disconnecting since message is too long to receive "
                         "(message is %u bytes, limit is %u bytes)",
                         inbound.header.payloadLength, maxMessageLength);
                 disconnect();
