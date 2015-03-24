@@ -25,6 +25,8 @@ namespace Core {
 namespace ProtoBuf {
 
 using LogCabin::ProtoBuf::TestMessage;
+using LogCabin::ProtoBuf::MissingOld;
+using LogCabin::ProtoBuf::MissingNew;
 
 TEST(CoreProtoBufTest, equality) {
     TestMessage a;
@@ -111,6 +113,71 @@ TEST(CoreProtoBufTest, serialize) {
     m.Clear();
     EXPECT_TRUE(ProtoBuf::parse(rpc, m, 8));
     EXPECT_EQ("field_a: 3 field_b: 5", m.ShortDebugString());
+}
+
+// See https://github.com/logcabin/logcabin/issues/89:
+//
+// If we have a required enum field, an unknown value will cause the field to
+// be missing when it's parsed.
+//
+// If we have an optional enum field, an unknown value will be equal to the
+// first value listed in the enum, yet will serialize to the unknown value.
+TEST(CoreProtoBufTest, missingEnum) {
+    MissingNew mnew;
+    mnew.set_which(MissingNew::FOUR);
+
+    Core::Buffer buf;
+    ProtoBuf::serialize(mnew, buf);
+    MissingOld mold;
+    EXPECT_TRUE(ProtoBuf::parse(buf, mold));
+    EXPECT_TRUE(mnew.has_which());
+    EXPECT_EQ(MissingOld::UNKNOWN, mold.which());
+    EXPECT_EQ(90, mold.which());
+
+    buf.reset();
+    mnew.Clear();
+    ProtoBuf::serialize(mold, buf);
+    EXPECT_TRUE(ProtoBuf::parse(buf, mnew));
+    EXPECT_TRUE(mnew.has_which());
+    EXPECT_EQ(MissingNew::FOUR, mnew.which());
+}
+
+// missing optional primitives seem to work as expected
+TEST(CoreProtoBufTest, missingPrimitive) {
+    MissingNew mnew;
+    mnew.set_primitive(3);
+
+    Core::Buffer buf;
+    ProtoBuf::serialize(mnew, buf);
+    MissingOld mold;
+    EXPECT_TRUE(ProtoBuf::parse(buf, mold));
+
+    buf.reset();
+    mnew.Clear();
+    ProtoBuf::serialize(mold, buf);
+    EXPECT_TRUE(ProtoBuf::parse(buf, mnew));
+    EXPECT_TRUE(mnew.has_primitive());
+    EXPECT_EQ(3U, mnew.primitive());
+}
+
+// missing optional nested messages seem to work as expected
+TEST(CoreProtoBufTest, missingMessage) {
+    MissingNew mnew;
+    mnew.mutable_msg()->set_field_a(30);
+    mnew.mutable_msg()->set_field_b(40);
+
+    Core::Buffer buf;
+    ProtoBuf::serialize(mnew, buf);
+    MissingOld mold;
+    EXPECT_TRUE(ProtoBuf::parse(buf, mold));
+
+    buf.reset();
+    mnew.Clear();
+    ProtoBuf::serialize(mold, buf);
+    EXPECT_TRUE(ProtoBuf::parse(buf, mnew));
+    EXPECT_TRUE(mnew.has_msg());
+    EXPECT_EQ(30U, mnew.msg().field_a());
+    EXPECT_EQ(40U, mnew.msg().field_b());
 }
 
 

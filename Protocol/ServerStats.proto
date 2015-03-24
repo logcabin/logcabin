@@ -20,6 +20,7 @@ package LogCabin.Protocol;
 message ServerStats {
     message Raft {
         enum State {
+            UNKNOWN = 0;
             FOLLOWER = 1;
             CANDIDATE = 2;
             LEADER = 3;

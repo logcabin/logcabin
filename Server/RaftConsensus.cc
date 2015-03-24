@@ -939,6 +939,11 @@ RaftConsensus::init()
          index <= log->getLastLogIndex();
          ++index) {
         const Log::Entry& entry = log->getEntry(index);
+        if (entry.type() == Protocol::Raft::EntryType::UNKNOWN) {
+            PANIC("Don't understand the entry type for index %lu (term %lu) "
+                  "found on disk",
+                  index, entry.term());
+        }
         if (entry.type() == Protocol::Raft::EntryType::CONFIGURATION) {
             configurationManager->add(index, entry.configuration());
         }
@@ -1235,8 +1240,20 @@ RaftConsensus::handleAppendEntries(
         // Append this and all following entries.
         std::vector<const Protocol::Raft::Entry*> entries;
         do {
-            entries.push_back(&*it);
+            const Protocol::Raft::Entry& entry = *it;
+            if (entry.type() == Protocol::Raft::EntryType::UNKNOWN) {
+                PANIC("Leader %lu is trying to send us an unknown log entry "
+                      "type for index %lu (term %lu). It shouldn't do that, "
+                      "and there's not a good way forward. There's some hope "
+                      "that if this server reboots, it'll come back up with a "
+                      "newer version of the code that understands the entry.",
+                      index,
+                      entry.term(),
+                      leaderId);
+            }
+            entries.push_back(&entry);
             ++it;
+            ++index;
         } while (it != request.entries().end());
         append(entries);
         clusterClock.newEpoch(entries.back()->cluster_time());

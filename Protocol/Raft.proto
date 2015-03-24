@@ -83,6 +83,13 @@ message Configuration {
  */
 enum EntryType {
     /**
+     * This must be the first value in the enum and is never assigned
+     * explicitly. If new values are added, old code will see them as set
+     * and equal to this value (though they will still serialize to the
+     * correct value).
+     */
+    UNKNOWN = 0;
+    /**
      * Stores a 'Configuration', to be used internally by the consensus module.
      */
     CONFIGURATION = 1;
@@ -120,7 +127,7 @@ message Entry {
     /**
      * See EntryType.
      */
-    required EntryType type = 2;
+    optional EntryType type = 2;
     // the following are mutually exclusive, depending on 'type'
     /**
      * A Configuration to be used internally by the consensus module.

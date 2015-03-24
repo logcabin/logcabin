@@ -43,6 +43,13 @@ enum OpCode {
 message Error {
     enum Code {
         /**
+         * This must be the first value in the enum and is never assigned
+         * explicitly. If new values are added, old code will see them as set
+         * and equal to this value (though they will still serialize to the
+         * correct value).
+         */
+        UNKNOWN = 0;
+        /**
          * The server is not the current cluster leader. The client should look
          * elsewhere for the cluster leader. The server MAY provide a hint as
          * to who the leader is (see leader_hint field).
@@ -54,7 +61,7 @@ message Error {
          */
         SESSION_EXPIRED = 2;
     };
-    required Code error_code = 1;
+    optional Code error_code = 1;
     /**
      * If error_code is NOT_LEADER and this field is set, the client should try
      * the server found at this address, which is likely to be the current
@@ -202,6 +209,14 @@ message SetConfiguration {
  * For now, this should be the exact same as Client::Status and Tree::Status.
  */
 enum Status {
+    /**
+     * This must be the first value in the enum and is never assigned
+     * explicitly. If new values are added, old code will see them as set
+     * and equal to this value (though they will still serialize to the
+     * correct value).
+     */
+    UNKNOWN = 10;
+
     OK = 0;
     INVALID_ARGUMENT = 1;
     LOOKUP_ERROR = 2;
@@ -249,7 +264,7 @@ message ReadOnlyTree {
         optional Read read = 5;
     }
     message Response {
-        required Status status = 1;
+        optional Status status = 1;
         // The following are mutually exclusive.
         optional string error = 2;
         message ListDirectory {
@@ -292,7 +307,7 @@ message ReadWriteTree {
 
     }
     message Response {
-        required Status status = 1;
+        optional Status status = 1;
         // The following are mutually exclusive.
         optional string error = 2;
     }

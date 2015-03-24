@@ -47,8 +47,35 @@ Result
 treeError(const Message& response)
 {
     Result result;
-    result.status = static_cast<Status>(response.status());
     result.error = response.error();
+    switch (response.status()) {
+        case Protocol::Client::Status::OK:
+            result.status = Status::OK;
+            break;
+        case Protocol::Client::Status::INVALID_ARGUMENT:
+            result.status = Status::INVALID_ARGUMENT;
+            break;
+        case Protocol::Client::Status::LOOKUP_ERROR:
+            result.status = Status::LOOKUP_ERROR;
+            break;
+        case Protocol::Client::Status::TYPE_ERROR:
+            result.status = Status::TYPE_ERROR;
+            break;
+        case Protocol::Client::Status::CONDITION_NOT_MET:
+            result.status = Status::CONDITION_NOT_MET;
+            break;
+        case Protocol::Client::Status::TIMEOUT:
+            result.status = Status::TIMEOUT;
+            break;
+        default:
+            result.status = Status::INVALID_ARGUMENT;
+            result.error = Core::StringUtil::format(
+                "Did not understand status code in response (%u). "
+                "Original error was: %s",
+                response.status(),
+                response.error().c_str());
+            break;
+    }
     return result;
 }
 
