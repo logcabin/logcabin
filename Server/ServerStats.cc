@@ -30,7 +30,7 @@ namespace Server {
 
 ServerStats::Lock::Lock(ServerStats& wrapper)
     : wrapper(wrapper)
-    , lockGuard()
+    , lockGuard(wrapper.mutex)
 {
 }
 
