@@ -224,7 +224,7 @@ void
 ClientImpl::ExactlyOnceRPCHelper::exit()
 {
     {
-        std::unique_lock<Core::Mutex> lockGuard(mutex);
+        std::lock_guard<Core::Mutex> lockGuard(mutex);
         exiting = true;
         keepAliveCV.notify_all();
         if (keepAliveCall)
@@ -237,21 +237,21 @@ ClientImpl::ExactlyOnceRPCHelper::exit()
 Protocol::Client::ExactlyOnceRPCInfo
 ClientImpl::ExactlyOnceRPCHelper::getRPCInfo(TimePoint timeout)
 {
-    std::unique_lock<Core::Mutex> lockGuard(mutex);
-    return getRPCInfo(lockGuard, timeout);
+    std::lock_guard<Core::Mutex> lockGuard(mutex);
+    return getRPCInfo(Core::HoldingMutex(lockGuard), timeout);
 }
 
 void
 ClientImpl::ExactlyOnceRPCHelper::doneWithRPC(
         const Protocol::Client::ExactlyOnceRPCInfo& rpcInfo)
 {
-    std::unique_lock<Core::Mutex> lockGuard(mutex);
-    doneWithRPC(rpcInfo, lockGuard);
+    std::lock_guard<Core::Mutex> lockGuard(mutex);
+    doneWithRPC(rpcInfo, Core::HoldingMutex(lockGuard));
 }
 
 Protocol::Client::ExactlyOnceRPCInfo
 ClientImpl::ExactlyOnceRPCHelper::getRPCInfo(
-        std::unique_lock<Core::Mutex>& lockGuard,
+        Core::HoldingMutex holdingMutex,
         TimePoint timeout)
 {
     Protocol::Client::ExactlyOnceRPCInfo rpcInfo;
@@ -295,7 +295,7 @@ ClientImpl::ExactlyOnceRPCHelper::getRPCInfo(
 void
 ClientImpl::ExactlyOnceRPCHelper::doneWithRPC(
                     const Protocol::Client::ExactlyOnceRPCInfo& rpcInfo,
-                    std::unique_lock<Core::Mutex>& lockGuard)
+                    Core::HoldingMutex holdingMutex)
 {
     outstandingRPCNumbers.erase(rpcInfo.rpc_number());
 }
@@ -314,8 +314,9 @@ ClientImpl::ExactlyOnceRPCHelper::keepAliveThreadMain()
         }
         if (Clock::now() > nextKeepAlive) {
             Protocol::Client::ReadWriteTree::Request request;
-            *request.mutable_exactly_once() = getRPCInfo(lockGuard,
-                                                         TimePoint::max());
+            *request.mutable_exactly_once() = getRPCInfo(
+                Core::HoldingMutex(lockGuard),
+                TimePoint::max());
             setCondition(request,
                  {"keepalive",
                  "this is just a no-op to keep the client's session active; "
@@ -341,7 +342,8 @@ ClientImpl::ExactlyOnceRPCHelper::keepAliveThreadMain()
                 case LeaderRPCBase::Call::Status::TIMEOUT:
                     PANIC("Unexpected timeout for keep-alive");
             }
-            doneWithRPC(request.exactly_once(), lockGuard);
+            doneWithRPC(request.exactly_once(),
+                        Core::HoldingMutex(lockGuard));
             if (response.status() !=
                 Protocol::Client::Status::CONDITION_NOT_MET) {
                 WARNING("Keep-alive write should have failed its condition. "

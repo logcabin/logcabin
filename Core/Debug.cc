@@ -243,7 +243,7 @@ using namespace Internal; // NOLINT
 FILE*
 setLogFile(FILE* newFile)
 {
-    std::unique_lock<std::mutex> lockGuard(mutex);
+    std::lock_guard<std::mutex> lockGuard(mutex);
     FILE* old = stream;
     stream = newFile;
     return old;
@@ -252,7 +252,7 @@ setLogFile(FILE* newFile)
 std::function<void(DebugMessage)>
 setLogHandler(std::function<void(DebugMessage)> handler)
 {
-    std::unique_lock<std::mutex> lockGuard(mutex);
+    std::lock_guard<std::mutex> lockGuard(mutex);
     std::function<void(DebugMessage)> old = logHandler;
     logHandler = handler;
     return old;
@@ -262,7 +262,7 @@ void
 setLogPolicy(const std::vector<std::pair<std::string,
                                          std::string>>& newPolicy)
 {
-    std::unique_lock<std::mutex> lockGuard(mutex);
+    std::lock_guard<std::mutex> lockGuard(mutex);
     policy = newPolicy;
     isLoggingCache.clear();
 }
@@ -285,7 +285,7 @@ operator<<(std::ostream& ostream, LogLevel level)
 bool
 isLogging(LogLevel level, const char* fileName)
 {
-    std::unique_lock<std::mutex> lockGuard(mutex);
+    std::lock_guard<std::mutex> lockGuard(mutex);
     LogLevel verbosity;
     auto it = isLoggingCache.find(fileName);
     if (it == isLoggingCache.end()) {

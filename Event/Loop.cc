@@ -72,7 +72,7 @@ Loop::Lock::Lock(Event::Loop& eventLoop)
 Loop::Lock::~Lock()
 {
     eventLoop.extraMutexToSatisfyRaceDetector.unlock();
-    std::unique_lock<std::mutex> lockGuard(eventLoop.mutex);
+    std::lock_guard<std::mutex> lockGuard(eventLoop.mutex);
     --eventLoop.numLocks;
     --eventLoop.numActiveLocks;
     if (eventLoop.numActiveLocks == 0) {

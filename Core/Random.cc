@@ -68,7 +68,7 @@ class RandomState {
     }
 
     uint64_t random64() {
-        std::unique_lock<std::mutex> lockGuard(mutex);
+        std::lock_guard<std::mutex> lockGuard(mutex);
         if (!init) {
             // probably too early to call PANIC in here
             fprintf(stderr, "Looks like you hit the so-called static "

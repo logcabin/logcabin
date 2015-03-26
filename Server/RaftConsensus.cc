@@ -912,7 +912,7 @@ RaftConsensus::~RaftConsensus()
 void
 RaftConsensus::init()
 {
-    std::unique_lock<Mutex> lockGuard(mutex);
+    std::lock_guard<Mutex> lockGuard(mutex);
 #if DEBUG
     if (globals.config.read<bool>("raftDebug", false)) {
         mutex.callback = std::bind(&Invariants::checkAll, &invariants);
@@ -994,7 +994,7 @@ void
 RaftConsensus::exit()
 {
     NOTICE("Shutting down");
-    std::unique_lock<Mutex> lockGuard(mutex);
+    std::lock_guard<Mutex> lockGuard(mutex);
     exiting = true;
     if (configuration)
         configuration->forEach(&Server::exit);
@@ -1004,7 +1004,7 @@ RaftConsensus::exit()
 void
 RaftConsensus::bootstrapConfiguration()
 {
-    std::unique_lock<Mutex> lockGuard(mutex);
+    std::lock_guard<Mutex> lockGuard(mutex);
 
     if (currentTerm != 0 ||
         log->getLogStartIndex() != 1 ||
@@ -1059,7 +1059,7 @@ RaftConsensus::getLastCommitIndex() const
 std::string
 RaftConsensus::getLeaderHint() const
 {
-    std::unique_lock<Mutex> lockGuard(mutex);
+    std::lock_guard<Mutex> lockGuard(mutex);
     return configuration->lookupAddress(leaderId);
 }
 
@@ -1121,7 +1121,7 @@ RaftConsensus::getNextEntry(uint64_t lastIndex) const
 SnapshotStats::SnapshotStats
 RaftConsensus::getSnapshotStats() const
 {
-    std::unique_lock<Mutex> lockGuard(mutex);
+    std::lock_guard<Mutex> lockGuard(mutex);
 
     SnapshotStats::SnapshotStats s;
     s.set_last_snapshot_index(lastSnapshotIndex);
@@ -1138,7 +1138,7 @@ RaftConsensus::handleAppendEntries(
                     const Protocol::Raft::AppendEntries::Request& request,
                     Protocol::Raft::AppendEntries::Response& response)
 {
-    std::unique_lock<Mutex> lockGuard(mutex);
+    std::lock_guard<Mutex> lockGuard(mutex);
     assert(!exiting);
 
     // Set response to a rejection. We'll overwrite these later if we end up
@@ -1279,7 +1279,7 @@ RaftConsensus::handleInstallSnapshot(
         const Protocol::Raft::InstallSnapshot::Request& request,
         Protocol::Raft::InstallSnapshot::Response& response)
 {
-    std::unique_lock<Mutex> lockGuard(mutex);
+    std::lock_guard<Mutex> lockGuard(mutex);
     assert(!exiting);
 
     response.set_term(currentTerm);
@@ -1358,7 +1358,7 @@ RaftConsensus::handleRequestVote(
                     const Protocol::Raft::RequestVote::Request& request,
                     Protocol::Raft::RequestVote::Response& response)
 {
-    std::unique_lock<Mutex> lockGuard(mutex);
+    std::lock_guard<Mutex> lockGuard(mutex);
     assert(!exiting);
 
     // If the caller has a less complete log, we can't give it our vote.
@@ -1582,7 +1582,7 @@ RaftConsensus::setConfiguration(
 std::unique_ptr<Storage::SnapshotFile::Writer>
 RaftConsensus::beginSnapshot(uint64_t lastIncludedIndex)
 {
-    std::unique_lock<Mutex> lockGuard(mutex);
+    std::lock_guard<Mutex> lockGuard(mutex);
 
     NOTICE("Creating new snapshot through log index %lu (inclusive)",
            lastIncludedIndex);
@@ -1648,7 +1648,7 @@ RaftConsensus::snapshotDone(
         uint64_t lastIncludedIndex,
         std::unique_ptr<Storage::SnapshotFile::Writer> writer)
 {
-    std::unique_lock<Mutex> lockGuard(mutex);
+    std::lock_guard<Mutex> lockGuard(mutex);
     if (lastIncludedIndex <= lastSnapshotIndex) {
         NOTICE("Discarding snapshot through %lu since we already have one "
                "(presumably from another server) through %lu",
@@ -1697,7 +1697,7 @@ RaftConsensus::snapshotDone(
 void
 RaftConsensus::updateServerStats(Protocol::ServerStats& serverStats) const
 {
-    std::unique_lock<Mutex> lockGuard(mutex);
+    std::lock_guard<Mutex> lockGuard(mutex);
     Core::Time::SteadyTimeConverter time;
     serverStats.clear_raft();
     Protocol::ServerStats::Raft& raftStats = *serverStats.mutable_raft();
@@ -1736,7 +1736,7 @@ RaftConsensus::updateServerStats(Protocol::ServerStats& serverStats) const
 std::ostream&
 operator<<(std::ostream& os, const RaftConsensus& raft)
 {
-    std::unique_lock<Mutex> lockGuard(raft.mutex);
+    std::lock_guard<Mutex> lockGuard(raft.mutex);
     typedef RaftConsensus::State State;
     os << "server id: " << raft.serverId << std::endl;
     os << "term: " << raft.currentTerm << std::endl;

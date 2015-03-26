@@ -77,7 +77,7 @@ class ServerStats {
         /// Handle to containing class.
         ServerStats& wrapper;
         /// Locks #mutex for the lifetime of this object.
-        std::unique_lock<Core::Mutex> lockGuard;
+        std::lock_guard<Core::Mutex> lockGuard;
     };
 
   private:

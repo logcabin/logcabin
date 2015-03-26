@@ -45,7 +45,7 @@ ThreadDispatchService::~ThreadDispatchService()
 {
     // Signal the threads to exit.
     {
-        std::unique_lock<std::mutex> lockGuard(mutex);
+        std::lock_guard<std::mutex> lockGuard(mutex);
         exit = true;
         conditionVariable.notify_all();
     }
@@ -66,7 +66,7 @@ ThreadDispatchService::~ThreadDispatchService()
 void
 ThreadDispatchService::handleRPC(ServerRPC serverRPC)
 {
-    std::unique_lock<std::mutex> lockGuard(mutex);
+    std::lock_guard<std::mutex> lockGuard(mutex);
     assert(!exit);
     rpcQueue.push(std::move(serverRPC));
     if (numFreeWorkers == 0 && threads.size() < maxThreads)

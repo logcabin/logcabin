@@ -66,7 +66,7 @@ class TreeLeaderRPC : public LeaderRPCBase {
                 static_cast<PC::OpenSession::Response&>(response);
             openSessionResponse.set_client_id(1);
         } else if (opCode == OpCode::READ_ONLY_TREE) {
-            std::unique_lock<std::recursive_mutex> lockGuard(mutex);
+            std::lock_guard<std::recursive_mutex> lockGuard(mutex);
             PC::ReadOnlyTree::Request trequest;
             trequest.CopyFrom(request);
             auto& tresponse =
@@ -80,7 +80,7 @@ class TreeLeaderRPC : public LeaderRPCBase {
                     tree, trequest, tresponse);
             }
         } else if (opCode == OpCode::READ_WRITE_TREE) {
-            std::unique_lock<std::recursive_mutex> lockGuard(mutex);
+            std::lock_guard<std::recursive_mutex> lockGuard(mutex);
             PC::ReadWriteTree::Request trequest;
             trequest.CopyFrom(request);
             auto& tresponse =

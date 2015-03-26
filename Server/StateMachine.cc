@@ -82,7 +82,7 @@ bool
 StateMachine::getResponse(const PC::ExactlyOnceRPCInfo& rpcInfo,
                           PC::CommandResponse& response) const
 {
-    std::unique_lock<std::mutex> lockGuard(mutex);
+    std::lock_guard<std::mutex> lockGuard(mutex);
     auto sessionIt = sessions.find(rpcInfo.client_id());
     if (sessionIt == sessions.end()) {
         WARNING("Client %lu session expired but client still active",
@@ -107,14 +107,14 @@ void
 StateMachine::readOnlyTreeRPC(const PC::ReadOnlyTree::Request& request,
                               PC::ReadOnlyTree::Response& response) const
 {
-    std::unique_lock<std::mutex> lockGuard(mutex);
+    std::lock_guard<std::mutex> lockGuard(mutex);
     Tree::ProtoBuf::readOnlyTreeRPC(tree, request, response);
 }
 
 void
 StateMachine::updateServerStats(Protocol::ServerStats& serverStats) const
 {
-    std::unique_lock<std::mutex> lockGuard(mutex);
+    std::lock_guard<std::mutex> lockGuard(mutex);
     serverStats.clear_state_machine();
     Protocol::ServerStats::StateMachine& smStats =
         *serverStats.mutable_state_machine();
@@ -191,7 +191,7 @@ StateMachine::applyThreadMain()
     try {
         while (true) {
             RaftConsensus::Entry entry = consensus->getNextEntry(lastIndex);
-            std::unique_lock<std::mutex> lockGuard(mutex);
+            std::lock_guard<std::mutex> lockGuard(mutex);
             switch (entry.type) {
                 case RaftConsensus::Entry::SKIP:
                     break;
@@ -214,7 +214,7 @@ StateMachine::applyThreadMain()
         }
     } catch (const Core::Util::ThreadInterruptedException& e) {
         NOTICE("exiting");
-        std::unique_lock<std::mutex> lockGuard(mutex);
+        std::lock_guard<std::mutex> lockGuard(mutex);
         exiting = true;
         entriesApplied.notify_all();
         snapshotSuggested.notify_all();

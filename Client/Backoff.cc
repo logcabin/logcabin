@@ -35,7 +35,7 @@ Backoff::~Backoff()
 void
 Backoff::delayAndBegin(TimePoint timeout)
 {
-    std::unique_lock<std::mutex> lockGuard(mutex);
+    std::lock_guard<std::mutex> lockGuard(mutex);
     TimePoint now = Clock::now();
     if (now > timeout)
         return;

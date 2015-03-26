@@ -108,6 +108,30 @@ class MutexUnlock {
     std::unique_lock<Mutex>& guard;
 };
 
+/**
+ * Proof that the caller is holding some mutex.
+ * Useful as an additional (unused) argument for some private methods that want
+ * to ensure the caller is holding a lock.
+ */
+class HoldingMutex {
+  public:
+    /**
+     * Constructor from std::lock_guard.
+     */
+    template<typename Mutex>
+    explicit HoldingMutex(const std::lock_guard<Mutex>& lockGuard) {
+    }
+
+    /**
+     * Constructor from std::unique_lock. Since unique_lock might not, in fact,
+     * hold the lock, this uses a dynamic check in the form of an assert().
+     */
+    template<typename Mutex>
+    explicit HoldingMutex(const std::unique_lock<Mutex>& lockGuard) {
+        assert(lockGuard.owns_lock());
+    }
+};
+
 } // namespace LogCabin::Core
 } // namespace LogCabin
 

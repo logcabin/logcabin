@@ -159,7 +159,7 @@ OpaqueServer::~OpaqueServer()
 {
     // Stop accepting new connections.
     {
-        std::unique_lock<Core::Mutex> lock(boundListenersMutex);
+        std::lock_guard<Core::Mutex> lock(boundListenersMutex);
         boundListeners.clear();
     }
 
@@ -224,7 +224,7 @@ OpaqueServer::bind(const Address& listenAddress)
               strerror(errno));
     }
 
-    std::unique_lock<Core::Mutex> lock(boundListenersMutex);
+    std::lock_guard<Core::Mutex> lock(boundListenersMutex);
     boundListeners.emplace_back(*this, fd);
     return "";
 }

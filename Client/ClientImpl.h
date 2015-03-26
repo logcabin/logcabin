@@ -232,13 +232,13 @@ class ClientImpl {
          * Internal version of getRPCInfo() to avoid deadlock with self.
          */
         Protocol::Client::ExactlyOnceRPCInfo getRPCInfo(
-            std::unique_lock<Core::Mutex>& lockGuard,
+            Core::HoldingMutex holdingMutex,
             TimePoint timeout);
         /**
          * Internal version of doneWithRPC() to avoid deadlock with self.
          */
         void doneWithRPC(const Protocol::Client::ExactlyOnceRPCInfo&,
-                         std::unique_lock<Core::Mutex>& lockGuard);
+                         Core::HoldingMutex holdingMutex);
         /**
          * Main function for keep-alive thread. Periodically makes
          * requests to the cluster to keep the client's session active.

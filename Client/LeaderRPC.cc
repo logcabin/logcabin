@@ -203,7 +203,7 @@ LeaderRPC::makeCall()
 std::shared_ptr<RPC::ClientSession>
 LeaderRPC::getSession(TimePoint timeout)
 {
-    std::unique_lock<std::mutex> lockGuard(mutex);
+    std::lock_guard<std::mutex> lockGuard(mutex);
     if (leaderSession)
         return leaderSession;
 
@@ -235,7 +235,7 @@ LeaderRPC::getSession(TimePoint timeout)
 void
 LeaderRPC::reportFailure(std::shared_ptr<RPC::ClientSession> cachedSession)
 {
-    std::unique_lock<std::mutex> lockGuard(mutex);
+    std::lock_guard<std::mutex> lockGuard(mutex);
     if (cachedSession == leaderSession)
         leaderSession.reset();
 }
@@ -244,7 +244,7 @@ void
 LeaderRPC::reportRedirect(std::shared_ptr<RPC::ClientSession> cachedSession,
                           const std::string& host)
 {
-    std::unique_lock<std::mutex> lockGuard(mutex);
+    std::lock_guard<std::mutex> lockGuard(mutex);
     if (cachedSession == leaderSession) {
         leaderSession.reset();
         leaderHint = host;

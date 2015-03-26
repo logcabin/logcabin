@@ -234,7 +234,7 @@ Tree::operator=(const Tree& other)
     // Hold one lock at a time to avoid deadlock and handle self-assignment.
     std::shared_ptr<const TreeDetails> otherTreeDetails =
                                             other.getTreeDetails();
-    std::unique_lock<std::mutex> lockGuard(mutex);
+    std::lock_guard<std::mutex> lockGuard(mutex);
     treeDetails = otherTreeDetails;
     return *this;
 }
@@ -249,7 +249,7 @@ Tree::setWorkingDirectory(const std::string& newWorkingDirectory)
 
     ClientImpl::TimePoint timeout = absTimeout(treeDetails->timeoutNanos);
 
-    std::unique_lock<std::mutex> lockGuard(mutex);
+    std::lock_guard<std::mutex> lockGuard(mutex);
     std::string realPath;
     Result result = treeDetails->clientImpl->canonicalize(
                                 newWorkingDirectory,
@@ -292,7 +292,7 @@ Tree::setCondition(const std::string& path, const std::string& value)
     // way if it doesn't, future calls on this Tree will result in errors
     // instead of operating on the prior condition.
 
-    std::unique_lock<std::mutex> lockGuard(mutex);
+    std::lock_guard<std::mutex> lockGuard(mutex);
     std::string realPath;
     Result result = treeDetails->clientImpl->canonicalize(
                                 path,
@@ -339,7 +339,7 @@ Tree::getTimeout() const
 void
 Tree::setTimeout(uint64_t nanoseconds)
 {
-    std::unique_lock<std::mutex> lockGuard(mutex);
+    std::lock_guard<std::mutex> lockGuard(mutex);
     std::shared_ptr<TreeDetails> newTreeDetails(new TreeDetails(*treeDetails));
     newTreeDetails->timeoutNanos = nanoseconds;
     treeDetails = newTreeDetails;
@@ -459,7 +459,7 @@ std::shared_ptr<const TreeDetails>
 Tree::getTreeDetails() const
 {
     std::shared_ptr<const TreeDetails> ret;
-    std::unique_lock<std::mutex> lockGuard(mutex);
+    std::lock_guard<std::mutex> lockGuard(mutex);
     ret = treeDetails;
     return ret;
 }

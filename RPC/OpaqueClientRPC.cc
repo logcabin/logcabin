@@ -49,7 +49,7 @@ OpaqueClientRPC::~OpaqueClientRPC()
 OpaqueClientRPC&
 OpaqueClientRPC::operator=(OpaqueClientRPC&& other)
 {
-    std::unique_lock<std::mutex> mutexGuard(mutex);
+    std::lock_guard<std::mutex> mutexGuard(mutex);
     session = std::move(other.session);
     responseToken = std::move(other.responseToken);
     status = std::move(other.status);
@@ -61,7 +61,7 @@ OpaqueClientRPC::operator=(OpaqueClientRPC&& other)
 void
 OpaqueClientRPC::cancel()
 {
-    std::unique_lock<std::mutex> mutexGuard(mutex);
+    std::lock_guard<std::mutex> mutexGuard(mutex);
     if (status != Status::NOT_READY)
         return;
     if (session)
@@ -75,7 +75,7 @@ OpaqueClientRPC::cancel()
 std::string
 OpaqueClientRPC::getErrorMessage() const
 {
-    std::unique_lock<std::mutex> mutexGuard(mutex);
+    std::lock_guard<std::mutex> mutexGuard(mutex);
     const_cast<OpaqueClientRPC*>(this)->update();
     return errorMessage;
 }
@@ -83,7 +83,7 @@ OpaqueClientRPC::getErrorMessage() const
 OpaqueClientRPC::Status
 OpaqueClientRPC::getStatus() const
 {
-    std::unique_lock<std::mutex> mutexGuard(mutex);
+    std::lock_guard<std::mutex> mutexGuard(mutex);
     const_cast<OpaqueClientRPC*>(this)->update();
     return status;
 }
@@ -91,7 +91,7 @@ OpaqueClientRPC::getStatus() const
 Core::Buffer*
 OpaqueClientRPC::peekReply()
 {
-    std::unique_lock<std::mutex> mutexGuard(mutex);
+    std::lock_guard<std::mutex> mutexGuard(mutex);
     update();
     if (status == Status::OK)
         return &reply;

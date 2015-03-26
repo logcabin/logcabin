@@ -94,7 +94,7 @@ SegmentedLog::PreparedSegments::~PreparedSegments()
 void
 SegmentedLog::PreparedSegments::exit()
 {
-    std::unique_lock<Core::Mutex> lockGuard(mutex);
+    std::lock_guard<Core::Mutex> lockGuard(mutex);
     exiting = true;
     consumed.notify_all();
     produced.notify_all();
@@ -103,7 +103,7 @@ SegmentedLog::PreparedSegments::exit()
 void
 SegmentedLog::PreparedSegments::foundFile(uint64_t fileId)
 {
-    std::unique_lock<Core::Mutex> lockGuard(mutex);
+    std::lock_guard<Core::Mutex> lockGuard(mutex);
     if (filenameCounter < fileId)
         filenameCounter = fileId;
 }
@@ -111,7 +111,7 @@ SegmentedLog::PreparedSegments::foundFile(uint64_t fileId)
 std::deque<SegmentedLog::PreparedSegments::OpenSegment>
 SegmentedLog::PreparedSegments::releaseAll()
 {
-    std::unique_lock<Core::Mutex> lockGuard(mutex);
+    std::lock_guard<Core::Mutex> lockGuard(mutex);
     std::deque<OpenSegment> ret;
     std::swap(openSegments, ret);
     return ret;
@@ -120,7 +120,7 @@ SegmentedLog::PreparedSegments::releaseAll()
 void
 SegmentedLog::PreparedSegments::submitOpenSegment(OpenSegment segment)
 {
-    std::unique_lock<Core::Mutex> lockGuard(mutex);
+    std::lock_guard<Core::Mutex> lockGuard(mutex);
     openSegments.push_back(std::move(segment));
     produced.notify_one();
 }

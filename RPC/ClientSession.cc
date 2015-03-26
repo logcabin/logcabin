@@ -82,7 +82,7 @@ ClientSession::MessageSocketHandler::handleReceivedMessage(
         MessageId messageId,
         Core::Buffer message)
 {
-    std::unique_lock<std::mutex> mutexGuard(session.mutex);
+    std::lock_guard<std::mutex> mutexGuard(session.mutex);
 
     if (messageId == Protocol::Common::PING_MESSAGE_ID) {
         if (session.numActiveRPCs > 0 && session.activePing) {
@@ -137,7 +137,7 @@ ClientSession::MessageSocketHandler::handleDisconnect()
 {
     VERBOSE("Disconnected from server %s",
             session.address.toString().c_str());
-    std::unique_lock<std::mutex> mutexGuard(session.mutex);
+    std::lock_guard<std::mutex> mutexGuard(session.mutex);
     if (session.errorMessage.empty()) {
         // Fail all current and future RPCs.
         session.errorMessage = ("Disconnected from server " +
@@ -173,7 +173,7 @@ ClientSession::Timer::Timer(ClientSession& session)
 void
 ClientSession::Timer::handleTimerEvent()
 {
-    std::unique_lock<std::mutex> mutexGuard(session.mutex);
+    std::lock_guard<std::mutex> mutexGuard(session.mutex);
 
     // Handle "spurious" wake-ups.
     if (!session.messageSocket ||
@@ -360,7 +360,7 @@ ClientSession::sendRequest(Core::Buffer request)
 {
     MessageSocket::MessageId messageId;
     {
-        std::unique_lock<std::mutex> mutexGuard(mutex);
+        std::lock_guard<std::mutex> mutexGuard(mutex);
         messageId = nextMessageId;
         ++nextMessageId;
         responses[messageId] = new Response();
@@ -385,7 +385,7 @@ ClientSession::sendRequest(Core::Buffer request)
 std::string
 ClientSession::getErrorMessage() const
 {
-    std::unique_lock<std::mutex> mutexGuard(mutex);
+    std::lock_guard<std::mutex> mutexGuard(mutex);
     return errorMessage;
 }
 
@@ -414,7 +414,7 @@ ClientSession::cancel(OpaqueClientRPC& rpc)
     //    the Response's status as CANCELED, and wait() will delete it later.
     // 2. If there's no thread currently blocked in wait(), the Response is
     //    deleted entirely.
-    std::unique_lock<std::mutex> mutexGuard(mutex);
+    std::lock_guard<std::mutex> mutexGuard(mutex);
     auto it = responses.find(rpc.responseToken);
     if (it == responses.end())
         return;
@@ -442,7 +442,7 @@ ClientSession::update(OpaqueClientRPC& rpc)
     // we return from this method. It must be the first line in this method.
     std::shared_ptr<ClientSession> selfGuard(self.lock());
 
-    std::unique_lock<std::mutex> mutexGuard(mutex);
+    std::lock_guard<std::mutex> mutexGuard(mutex);
     auto it = responses.find(rpc.responseToken);
     if (it == responses.end()) {
         // RPC was cancelled, fields set already

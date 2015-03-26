@@ -52,7 +52,7 @@ File::Monitor::~Monitor()
 void
 File::Monitor::disableForever()
 {
-    std::unique_lock<std::mutex> mutexGuard(mutex);
+    std::lock_guard<std::mutex> mutexGuard(mutex);
     if (file == NULL)
         return;
     Event::Loop::Lock lock(eventLoop);
@@ -67,7 +67,7 @@ File::Monitor::disableForever()
 void
 File::Monitor::setEvents(int fileEvents)
 {
-    std::unique_lock<std::mutex> mutexGuard(mutex);
+    std::lock_guard<std::mutex> mutexGuard(mutex);
     if (file == NULL)
         return;
     struct epoll_event event;

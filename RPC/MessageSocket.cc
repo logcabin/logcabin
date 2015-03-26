@@ -395,7 +395,7 @@ MessageSocket::writable()
         if (outbound.bytesSent != (sizeof(Header) +
                                    outbound.message.getLength())) {
             sendSocketMonitor.setEvents(EPOLLOUT|EPOLLONESHOT);
-            std::unique_lock<Core::Mutex> lockGuard(outboundQueueMutex);
+            std::lock_guard<Core::Mutex> lockGuard(outboundQueueMutex);
             outboundQueue.emplace_front(std::move(outbound));
             return;
         }

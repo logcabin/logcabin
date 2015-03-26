@@ -44,7 +44,7 @@ Server::RPCHandler::handleRPC(OpaqueServerRPC opaqueRPC)
     }
     std::shared_ptr<Service> service;
     {
-        std::unique_lock<std::mutex> lockGuard(server.mutex);
+        std::lock_guard<std::mutex> lockGuard(server.mutex);
         auto it = server.services.find(rpc.getService());
         if (it != server.services.end())
             service = it->second;
@@ -80,7 +80,7 @@ Server::registerService(uint16_t serviceId,
                         std::shared_ptr<Service> service,
                         uint32_t maxThreads)
 {
-    std::unique_lock<std::mutex> lockGuard(mutex);
+    std::lock_guard<std::mutex> lockGuard(mutex);
     services[serviceId] =
         std::make_shared<ThreadDispatchService>(service, 0, maxThreads);
 }
