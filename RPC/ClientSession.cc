@@ -226,7 +226,7 @@ ClientSession::ClientSession(Event::Loop& eventLoop,
     , messageSocketHandler(*this)
     , timer(*this)
     , mutex()
-    , nextMessageId(1) // 0 is reserved for PING_MESSAGE_ID
+    , nextMessageId(0)
     , responses()
     , errorMessage()
     , numActiveRPCs(0)
@@ -234,9 +234,6 @@ ClientSession::ClientSession(Event::Loop& eventLoop,
     , messageSocket()
     , timerMonitor(eventLoop, timer)
 {
-    static_assert(1 > Protocol::Common::PING_MESSAGE_ID,
-                  "PING_MESSAGE_ID changed?");
-
     // Be careful not to pass a sockaddr of length 0 to conect(). Although it
     // should return -1 EINVAL, on some systems (e.g., RHEL6) it instead
     // returns OK but leaves the socket unconnected! See

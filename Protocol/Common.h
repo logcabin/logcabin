@@ -31,10 +31,41 @@ namespace Common {
 enum { DEFAULT_PORT = 61023 };
 
 /**
- * A MessageSocket::MessageID reserved for ping messages that are  used to
- * check the server's liveness. No real RPC will ever be assigned this ID.
+ * Reserved MessageSocket::MessageID values.
+ * No application-level RPCs will ever be assigned these IDs.
  */
-enum { PING_MESSAGE_ID = 0 };
+enum {
+    /**
+     * Messages that are used to check the server's liveness.
+     */
+    PING_MESSAGE_ID = ~0UL,
+    /**
+     * Messages used to check which versions of the MessageSocket framing
+     * protocol the server supports.
+     */
+    VERSION_MESSAGE_ID = ~0UL - 1,
+};
+
+/**
+ * Defines request and response types for messages sent using ID VERSION_MESSAGE_ID,
+ * used to check which versions of the MessageSocket framing protocol the
+ * server supports.
+ */
+namespace VersionMessage {
+struct Request {
+    // empty
+} __attribute__((packed));
+
+struct Response {
+    /**
+     * The largest version of the MessageSocket framing protocol that the
+     * server understands. Requests with larger versions will cause the server
+     * to close the connection. Big endian.
+     */
+    uint16_t maxVersionSupported;
+} __attribute__((packed));
+
+} // namespace VersionMessage
 
 /**
  * The maximum number of bytes per RPC request or response, including these

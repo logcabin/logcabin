@@ -47,17 +47,38 @@ OpaqueServer::MessageSocketHandler::handleReceivedMessage(
 {
     if (server == NULL)
         return;
-    if (messageId == Protocol::Common::PING_MESSAGE_ID) { // ping request
-        std::shared_ptr<SocketWithHandler> socketRef = self.lock();
-        if (socketRef) { // expect so, since we're receiving messages
-            VERBOSE("Responding to ping");
-            socketRef->monitor.sendMessage(Protocol::Common::PING_MESSAGE_ID,
-                                           Core::Buffer());
+    switch (messageId) {
+        case Protocol::Common::PING_MESSAGE_ID: {
+            std::shared_ptr<SocketWithHandler> socketRef = self.lock();
+            if (socketRef) { // expect so, since we're receiving messages
+                VERBOSE("Responding to ping");
+                socketRef->monitor.sendMessage(messageId,
+                                               Core::Buffer());
+            }
+            break;
         }
-    } else { // normal RPC request
-        VERBOSE("Handling RPC");
-        OpaqueServerRPC rpc(self, messageId, std::move(message));
-        server->rpcHandler.handleRPC(std::move(rpc));
+        case Protocol::Common::VERSION_MESSAGE_ID: {
+            std::shared_ptr<SocketWithHandler> socketRef = self.lock();
+            if (socketRef) { // expect so, since we're receiving messages
+                VERBOSE("Responding to version request "
+                        "(this server supports max version %u)",
+                        MessageSocket::MAX_VERSION_SUPPORTED);
+                using Protocol::Common::VersionMessage::Response;
+                Response* response = new Response();
+                response->maxVersionSupported =
+                    htobe16(MessageSocket::MAX_VERSION_SUPPORTED);
+                socketRef->monitor.sendMessage(
+                    messageId,
+                    Core::Buffer(response, sizeof(*response),
+                                 Core::Buffer::deleteObjectFn<Response*>));
+            }
+            break;
+        }
+        default: { // normal RPC request
+            VERBOSE("Handling RPC");
+            OpaqueServerRPC rpc(self, messageId, std::move(message));
+            server->rpcHandler.handleRPC(std::move(rpc));
+        }
     }
 }
 

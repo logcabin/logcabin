@@ -29,6 +29,7 @@
 #include "Core/Debug.h"
 #include "Event/Loop.h"
 #include "Event/Timer.h"
+#include "Protocol/Common.h"
 #include "RPC/ClientSession.h"
 #include "include/LogCabin/Debug.h"
 
@@ -116,12 +117,14 @@ TEST_F(RPCClientSessionTest, handleReceivedMessage) {
 
 TEST_F(RPCClientSessionTest, handleReceivedMessage_ping) {
     // spurious
-    session->messageSocket->handler.handleReceivedMessage(0, Core::Buffer());
+    session->messageSocket->handler.handleReceivedMessage(
+        Protocol::Common::PING_MESSAGE_ID, Core::Buffer());
 
     // ping requested
     session->numActiveRPCs = 1;
     session->activePing = true;
-    session->messageSocket->handler.handleReceivedMessage(0, Core::Buffer());
+    session->messageSocket->handler.handleReceivedMessage(
+        Protocol::Common::PING_MESSAGE_ID, Core::Buffer());
     session->numActiveRPCs = 0;
     EXPECT_FALSE(session->activePing);
     EXPECT_TRUE(session->timer.isScheduled());
@@ -249,17 +252,17 @@ TEST_F(RPCClientSessionTest, destructor) {
 }
 
 TEST_F(RPCClientSessionTest, sendRequest) {
-    EXPECT_EQ(1U, session->nextMessageId);
+    EXPECT_EQ(0U, session->nextMessageId);
     session->activePing = true;
     OpaqueClientRPC rpc = session->sendRequest(buf("hi"));
     EXPECT_EQ(1U, session->numActiveRPCs);
     EXPECT_FALSE(session->activePing);
     EXPECT_TRUE(session->timer.isScheduled());
     EXPECT_EQ(session, rpc.session);
-    EXPECT_EQ(1U, rpc.responseToken);
+    EXPECT_EQ(0U, rpc.responseToken);
     EXPECT_EQ(OpaqueClientRPC::Status::NOT_READY, rpc.getStatus());
-    EXPECT_EQ(2U, session->nextMessageId);
-    auto it = session->responses.find(1);
+    EXPECT_EQ(1U, session->nextMessageId);
+    auto it = session->responses.find(0);
     ASSERT_TRUE(it != session->responses.end());
     ClientSession::Response& response = *it->second;
     EXPECT_EQ(ClientSession::Response::WAITING,
@@ -314,7 +317,7 @@ TEST_F(RPCClientSessionTest, updateNotReady) {
 
 TEST_F(RPCClientSessionTest, updateReady) {
     OpaqueClientRPC rpc = session->sendRequest(buf("hi"));
-    auto it = session->responses.find(1);
+    auto it = session->responses.find(0);
     ASSERT_TRUE(it != session->responses.end());
     ClientSession::Response& response = *it->second;
     response.status = ClientSession::Response::HAS_REPLY;
@@ -353,7 +356,7 @@ TEST_F(RPCClientSessionTest, waitCanceled) {
 TEST_F(RPCClientSessionTest, waitCanceledWhileWaiting) {
     OpaqueClientRPC rpc = session->sendRequest(buf("hi"));
     {
-        ClientSession::Response& response = *session->responses.at(1);
+        ClientSession::Response& response = *session->responses.at(0);
         response.ready.callback = std::bind(&OpaqueClientRPC::cancel, &rpc);
         rpc.waitForReply(TimePoint::max());
     }
@@ -364,7 +367,7 @@ TEST_F(RPCClientSessionTest, waitCanceledWhileWaiting) {
 
 TEST_F(RPCClientSessionTest, waitReady) {
     OpaqueClientRPC rpc = session->sendRequest(buf("hi"));
-    auto it = session->responses.find(1);
+    auto it = session->responses.find(0);
     ASSERT_TRUE(it != session->responses.end());
     ClientSession::Response& response = *it->second;
     response.status = ClientSession::Response::HAS_REPLY;
@@ -407,7 +410,7 @@ TEST_F(RPCClientSessionTest, waitTimeout_futureThenOk) {
                      std::chrono::milliseconds(2));
     EXPECT_EQ(OpaqueClientRPC::Status::NOT_READY, rpc.getStatus());
 
-    auto it = session->responses.find(1);
+    auto it = session->responses.find(0);
     ASSERT_TRUE(it != session->responses.end());
     ClientSession::Response& response = *it->second;
     response.status = ClientSession::Response::HAS_REPLY;

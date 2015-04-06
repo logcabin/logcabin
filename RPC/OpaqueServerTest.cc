@@ -85,10 +85,30 @@ TEST_F(RPCOpaqueServerTest, MessageSocketHandler_handleReceivedMessage_ping) {
     auto socket = OpaqueServer::SocketWithHandler::make(&server, fd1);
     server.sockets.insert(socket);
     fd1 = -1;
-    socket->handler.handleReceivedMessage(0, Core::Buffer());
+    socket->handler.handleReceivedMessage(
+        Protocol::Common::PING_MESSAGE_ID, Core::Buffer());
     ASSERT_FALSE(rpcHandler.lastRPC);
     EXPECT_EQ(1U, socket->monitor.outboundQueue.size());
+    Core::Buffer& buf = socket->monitor.outboundQueue.at(0).message;
+    EXPECT_EQ(0U, buf.getLength());
 }
+
+TEST_F(RPCOpaqueServerTest,
+       MessageSocketHandler_handleReceivedMessage_version) {
+    auto socket = OpaqueServer::SocketWithHandler::make(&server, fd1);
+    server.sockets.insert(socket);
+    fd1 = -1;
+    socket->handler.handleReceivedMessage(
+        Protocol::Common::VERSION_MESSAGE_ID, Core::Buffer());
+    ASSERT_FALSE(rpcHandler.lastRPC);
+    EXPECT_EQ(1U, socket->monitor.outboundQueue.size());
+    Core::Buffer& buf = socket->monitor.outboundQueue.at(0).message;
+    using Protocol::Common::VersionMessage::Response;
+    EXPECT_EQ(sizeof(Response), buf.getLength());
+    Response* response = static_cast<Response*>(buf.getData());
+    EXPECT_EQ(1U, be16toh(response->maxVersionSupported));
+}
+
 
 TEST_F(RPCOpaqueServerTest, MessageSocketHandler_handleDisconnect) {
     auto socket = OpaqueServer::SocketWithHandler::make(&server, fd1);

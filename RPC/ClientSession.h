@@ -284,9 +284,8 @@ class ClientSession {
     mutable std::mutex mutex;
 
     /**
-     * The message ID to assign to the next RPC. These start at 1 and
-     * increment from there; the value 0 is reserved for ping messages to check
-     * server liveness.
+     * The message ID to assign to the next RPC. These start at 0 and
+     * increment from there.
      */
     MessageSocket::MessageId nextMessageId;
 
