@@ -1,5 +1,5 @@
 /* Copyright (c) 2012-2014 Stanford University
- * Copyright (c) 2014 Diego Ongaro
+ * Copyright (c) 2014-2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -343,6 +343,23 @@ ClientSession::makeSession(Event::Loop& eventLoop,
     return session;
 }
 
+std::shared_ptr<ClientSession>
+ClientSession::makeErrorSession(Event::Loop& eventLoop,
+                                const std::string& errorMessage)
+{
+    Core::Config config;
+    std::shared_ptr<ClientSession> session(
+        new ClientSession(eventLoop,
+                          Address(),
+                          0,
+                          TimePoint::min(),
+                          config));
+    session->self = session;
+    session->errorMessage = errorMessage;
+    return session;
+}
+
+
 
 ClientSession::~ClientSession()
 {
@@ -397,6 +414,8 @@ ClientSession::toString() const
         return "Closed session: " + error;
     }
 }
+
+////////// ClientSession private methods //////////
 
 void
 ClientSession::cancel(OpaqueClientRPC& rpc)

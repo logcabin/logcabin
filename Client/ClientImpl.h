@@ -22,6 +22,7 @@
 #include "include/LogCabin/Client.h"
 #include "Client/Backoff.h"
 #include "Client/LeaderRPC.h"
+#include "Client/SessionManager.h"
 #include "Core/ConditionVariable.h"
 #include "Core/Config.h"
 #include "Core/Mutex.h"
@@ -163,6 +164,19 @@ class ClientImpl {
      * The Event::Loop used to drive the underlying RPC mechanism.
      */
     Event::Loop eventLoop;
+
+    /**
+     * A unique ID for the cluster that this client may connect to. This is
+     * initialized to a value from the options map passed to the
+     * Client::Cluster constructor. If it's not set then, it may be set later
+     * as a result of learning a UUID from some server.
+     */
+    SessionManager::ClusterUUID clusterUUID;
+
+    /**
+     * Used to create new sessions.
+     */
+    SessionManager sessionManager;
 
     /**
      * Used to rate-limit the creation of ClientSession objects (TCP

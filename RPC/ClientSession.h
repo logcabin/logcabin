@@ -1,5 +1,5 @@
 /* Copyright (c) 2012-2014 Stanford University
- * Copyright (c) 2014 Diego Ongaro
+ * Copyright (c) 2014-2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -92,6 +92,20 @@ class ClientSession {
                 uint32_t maxMessageLength,
                 TimePoint timeout,
                 const Core::Config& config);
+
+    /**
+     * Return a ClientSession object that's already in an error state. This can
+     * be useful for delaying errors until an RPC is waited on.
+     * \param eventLoop
+     *      Ignored but usually readily available to callers and needed to
+     *      satisfy type requirements.
+     * \param errorMessage
+     *      Description of the error, as will be returned by getErrorMessage()
+     *      later.
+     */
+    static std::shared_ptr<ClientSession>
+    makeErrorSession(Event::Loop& eventLoop,
+                     const std::string& errorMessage);
 
     /**
      * Destructor.

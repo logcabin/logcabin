@@ -20,6 +20,7 @@
 #include <mutex>
 
 #include "build/Protocol/Client.pb.h"
+#include "Client/SessionManager.h"
 #include "RPC/Address.h"
 #include "RPC/ClientRPC.h"
 
@@ -219,15 +220,18 @@ class LeaderRPC : public LeaderRPCBase {
      *      current cluster leader.
      * \param eventLoop
      *      Used to invoke RPCs.
+     * \param clusterUUID
+     *      Keeps track of the unique ID for this cluster, if known.
      * \param sessionCreationBackoff
      *      Used to rate-limit new TCP connections.
-     * \param config
-     *      Settings for the client library. This object keeps a reference.
+     * \param sessionManager
+     *      Used to create new sessions.
      */
     LeaderRPC(const RPC::Address& hosts,
               Event::Loop& eventLoop,
+              SessionManager::ClusterUUID& clusterUUID,
               Backoff& sessionCreationBackoff,
-              const Core::Config& config);
+              SessionManager& sessionManager);
 
     /// Destructor.
     ~LeaderRPC();
@@ -309,15 +313,20 @@ class LeaderRPC : public LeaderRPCBase {
     Event::Loop& eventLoop;
 
     /**
+     * Keeps track of the unique ID for this cluster, if known.
+     */
+    SessionManager::ClusterUUID& clusterUUID;
+
+    /**
      * Used to rate-limit the creation of ClientSession objects (TCP
      * connections).
      */
     Backoff& sessionCreationBackoff;
 
     /**
-     * Settings for client library.
+     * Used to create new sessions.
      */
-    const Core::Config& config;
+    SessionManager& sessionManager;
 
     /**
      * Protects all of the following member variables in this class.

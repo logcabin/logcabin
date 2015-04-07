@@ -28,6 +28,7 @@ import "build/Protocol/ServerStats.proto";
 enum OpCode {
     // Keep these numbers dense.
     GET_SUPPORTED_RPC_VERSIONS = 0;
+    VERIFY_RECIPIENT = 8;
     OPEN_SESSION = 1;
     GET_CONFIGURATION = 2;
     SET_CONFIGURATION = 3;
@@ -107,6 +108,42 @@ message GetSupportedRPCVersions {
          * The maximum RPC protocol version this cluster will accept.
          */
         required uint32 max_version = 2;
+    }
+}
+
+/**
+ * VerifyRecipient RPC: Make sure we're talking to the intended recipient (to
+ * avoid disastrous confusion). This is called automatically by
+ * Client::SessionManager when creating new sessions.
+ */
+message VerifyRecipient {
+    message Request {
+        /**
+         * The cluster UUID that the recipient must match, if any.
+         */
+        optional string cluster_uuid = 1;
+        /**
+         * The server ID of the recipient, if any.
+         */
+        optional uint64 server_id = 2;
+    }
+    message Response {
+        /**
+         * The recipient's cluster UUID.
+         */
+        optional string cluster_uuid = 1;
+        /**
+         * The recipient's server ID.
+         */
+        optional uint64 server_id = 2;
+        /**
+         * Set to true if everything matched successfully.
+         */
+        optional bool ok = 3;
+        /**
+         * If there was an error, a message describing why.
+         */
+        optional string error = 4;
     }
 }
 

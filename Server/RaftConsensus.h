@@ -30,6 +30,7 @@
 #include "build/Protocol/Raft.pb.h"
 #include "build/Protocol/ServerStats.pb.h"
 #include "build/Server/SnapshotStats.pb.h"
+#include "Client/SessionManager.h"
 #include "Core/Mutex.h"
 #include "Core/ConditionVariable.h"
 #include "Core/Time.h"
@@ -1356,6 +1357,11 @@ class RaftConsensus {
      * Where the files for the log and snapshots are stored.
      */
     Storage::Layout storageLayout;
+
+    /**
+     * Used to create new sessions.
+     */
+    Client::SessionManager sessionManager;
 
     /**
      * This class behaves mostly like a monitor. This protects all the state in

@@ -128,6 +128,7 @@ daemon = env.Program("build/LogCabin",
              object_files['Server'] +
              object_files['Storage'] +
              object_files['Tree'] +
+             object_files['Client'] +
              object_files['Protocol'] +
              object_files['RPC'] +
              object_files['Event'] +

@@ -156,11 +156,13 @@ LeaderRPC::Call::wait(google::protobuf::Message& response,
 
 LeaderRPC::LeaderRPC(const RPC::Address& hosts,
                      Event::Loop& eventLoop,
+                     SessionManager::ClusterUUID& clusterUUID,
                      Backoff& sessionCreationBackoff,
-                     const Core::Config& config)
+                     SessionManager& sessionManager)
     : eventLoop(eventLoop)
+    , clusterUUID(clusterUUID)
     , sessionCreationBackoff(sessionCreationBackoff)
-    , config(config)
+    , sessionManager(sessionManager)
     , mutex()
     , hosts(hosts)
     , leaderHint()
@@ -222,13 +224,8 @@ LeaderRPC::getSession(TimePoint timeout)
         leaderHint.clear();
     }
     NOTICE("Connecting to: %s", address.toString().c_str());
-    leaderSession = RPC::ClientSession::makeSession(
-                        eventLoop,
-                        address,
-                        Protocol::Common::MAX_MESSAGE_LENGTH,
-                        timeout,
-                        config);
-
+    leaderSession = sessionManager.createSession(
+        address, timeout, &clusterUUID);
     return leaderSession;
 }
 

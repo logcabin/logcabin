@@ -54,6 +54,9 @@ ClientService::handleRPC(RPC::ServerRPC rpc)
         case OpCode::GET_SUPPORTED_RPC_VERSIONS:
             getSupportedRPCVersions(std::move(rpc));
             break;
+        case OpCode::VERIFY_RECIPIENT:
+            verifyRecipient(std::move(rpc));
+            break;
         case OpCode::GET_CONFIGURATION:
             getConfiguration(std::move(rpc));
             break;
@@ -267,7 +270,51 @@ ClientService::readWriteTreeRPC(RPC::ServerRPC rpc)
     rpc.reply(commandResponse.tree());
 }
 
+void
+ClientService::verifyRecipient(RPC::ServerRPC rpc)
+{
+    PRELUDE(VerifyRecipient);
 
+    std::string clusterUUID = globals.clusterUUID.getOrDefault();
+    uint64_t serverId = globals.serverId;
+
+    if (!clusterUUID.empty())
+        response.set_cluster_uuid(clusterUUID);
+    response.set_server_id(serverId);
+
+    typedef Protocol::Client::VerifyRecipient::Response Response;
+
+    if (request.has_cluster_uuid() &&
+        !request.cluster_uuid().empty() &&
+        !clusterUUID.empty() &&
+        clusterUUID != request.cluster_uuid()) {
+        response.set_ok(false);
+        response.set_error(Core::StringUtil::format(
+           "Mismatched cluster UUIDs: request intended for %s, "
+           "but this server is in %s",
+           request.cluster_uuid().c_str(),
+           clusterUUID.c_str()));
+    } else if (request.has_server_id() &&
+               serverId != request.server_id()) {
+        response.set_ok(false);
+        response.set_error(Core::StringUtil::format(
+           "Mismatched server IDs: request intended for %lu, "
+           "but this server is %lu",
+           request.server_id(),
+           serverId));
+    } else {
+        response.set_ok(true);
+        if (clusterUUID.empty() &&
+            request.has_cluster_uuid() &&
+            !request.cluster_uuid().empty()) {
+            NOTICE("Adopting cluster UUID %s",
+                   request.cluster_uuid().c_str());
+            globals.clusterUUID.set(request.cluster_uuid());
+            response.set_cluster_uuid(request.cluster_uuid());
+        }
+    }
+    rpc.reply(response);
+}
 
 } // namespace LogCabin::Server
 } // namespace LogCabin

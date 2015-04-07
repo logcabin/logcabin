@@ -304,12 +304,12 @@ Peer::getSession(std::unique_lock<Mutex>& lockGuard)
         Core::MutexUnlock<Mutex> unlockGuard(lockGuard);
         RPC::Address target(addresses, Protocol::Common::DEFAULT_PORT);
         target.refresh(RPC::Address::TimePoint::max());
-        session = RPC::ClientSession::makeSession(
-            eventLoop,
+        Client::SessionManager::ServerId peerId(serverId);
+        session = consensus.sessionManager.createSession(
             target,
-            Protocol::Common::MAX_MESSAGE_LENGTH,
             RPC::ClientSession::TimePoint::max(),
-            consensus.globals.config);
+            &consensus.globals.clusterUUID,
+            &peerId);
     }
     return session;
 }
@@ -851,6 +851,8 @@ RaftConsensus::RaftConsensus(Globals& globals)
     , serverAddresses()
     , globals(globals)
     , storageLayout()
+    , sessionManager(globals.eventLoop,
+                     globals.config)
     , mutex()
     , stateChanged()
     , exiting(false)
@@ -2025,7 +2027,6 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
     // Build up request
     Protocol::Raft::AppendEntries::Request request;
     request.set_server_id(serverId);
-    request.set_recipient_id(peer.serverId);
     request.set_term(currentTerm);
     request.set_prev_log_term(prevLogTerm);
     request.set_prev_log_index(prevLogIndex);
@@ -2134,7 +2135,6 @@ RaftConsensus::installSnapshot(std::unique_lock<Mutex>& lockGuard,
     // Build up request
     Protocol::Raft::InstallSnapshot::Request request;
     request.set_server_id(serverId);
-    request.set_recipient_id(peer.serverId);
     request.set_term(currentTerm);
 
     // Open the latest snapshot if we haven't already. Stash a copy of the
@@ -2403,7 +2403,6 @@ RaftConsensus::requestVote(std::unique_lock<Mutex>& lockGuard, Peer& peer)
 {
     Protocol::Raft::RequestVote::Request request;
     request.set_server_id(serverId);
-    request.set_recipient_id(peer.serverId);
     request.set_term(currentTerm);
     request.set_last_log_term(getLastLogTerm());
     request.set_last_log_index(log->getLastLogIndex());

@@ -537,6 +537,7 @@ class ServerRaftConsensusPTest : public ServerRaftConsensusTest {
         , peerServer()
         , eventLoopThread()
     {
+        consensus->sessionManager.skipVerify = true;
         peerService = std::make_shared<RPC::ServiceMock>();
         peerServer.reset(new RPC::Server(globals.eventLoop,
                                      Protocol::Common::MAX_MESSAGE_LENGTH));
@@ -1801,7 +1802,6 @@ TEST_F(ServerRaftConsensusPTest, peerThreadMain)
     // first requestVote RPC succeeds
     Protocol::Raft::RequestVote::Request vrequest;
     vrequest.set_server_id(1);
-    vrequest.set_recipient_id(2);
     vrequest.set_term(6);
     vrequest.set_last_log_term(5);
     vrequest.set_last_log_index(1);
@@ -1814,7 +1814,6 @@ TEST_F(ServerRaftConsensusPTest, peerThreadMain)
     // first appendEntries sends heartbeat (accept it)
     Protocol::Raft::AppendEntries::Request arequest;
     arequest.set_server_id(1);
-    arequest.set_recipient_id(2);
     arequest.set_term(6);
     arequest.set_prev_log_term(6);
     arequest.set_prev_log_index(2);
@@ -2056,7 +2055,6 @@ class ServerRaftConsensusPATest : public ServerRaftConsensusPTest {
         peer->forceHeartbeat = false;
 
         request.set_server_id(1);
-        request.set_recipient_id(2);
         request.set_term(6);
         request.set_prev_log_term(0);
         request.set_prev_log_index(0);
@@ -2218,7 +2216,6 @@ class ServerRaftConsensusPSTest : public ServerRaftConsensusPTest {
         consensus->lastSnapshotIndex = 2;
 
         request.set_server_id(1);
-        request.set_recipient_id(2);
         request.set_term(5);
         request.set_last_snapshot_index(2);
         request.set_byte_offset(0);
@@ -2522,7 +2519,6 @@ TEST_F(ServerRaftConsensusPTest, requestVote_rpcFailed)
 
     Protocol::Raft::RequestVote::Request request;
     request.set_server_id(1);
-    request.set_recipient_id(2);
     request.set_term(6);
     request.set_last_log_term(5);
     request.set_last_log_index(1);
@@ -2548,7 +2544,6 @@ TEST_F(ServerRaftConsensusPTest, requestVote_ignoreResult)
 
     Protocol::Raft::RequestVote::Request request;
     request.set_server_id(1);
-    request.set_recipient_id(2);
     request.set_term(5);
     request.set_last_log_term(5);
     request.set_last_log_index(1);
@@ -2583,7 +2578,6 @@ TEST_F(ServerRaftConsensusPTest, requestVote_termStale)
 
     Protocol::Raft::RequestVote::Request request;
     request.set_server_id(1);
-    request.set_recipient_id(2);
     request.set_term(7);
     request.set_last_log_term(6);
     request.set_last_log_index(3);
@@ -2637,7 +2631,6 @@ TEST_F(ServerRaftConsensusPTest, requestVote_termOkAsLeader)
     // 1. Get response from peer2 but don't get its vote.
     Protocol::Raft::RequestVote::Request request;
     request.set_server_id(1);
-    request.set_recipient_id(2);
     request.set_term(6);
     request.set_last_log_term(2);
     request.set_last_log_index(4);
@@ -2654,7 +2647,6 @@ TEST_F(ServerRaftConsensusPTest, requestVote_termOkAsLeader)
     EXPECT_EQ(State::CANDIDATE, consensus->state);
 
     // 2. Get vote from peer3, still a candidate
-    request.set_recipient_id(3);
     response.set_granted(true);
     peerService->reply(Protocol::Raft::OpCode::REQUEST_VOTE,
                        request, response);
@@ -2664,7 +2656,6 @@ TEST_F(ServerRaftConsensusPTest, requestVote_termOkAsLeader)
     EXPECT_EQ(State::CANDIDATE, consensus->state);
 
     // 3. Get vote from peer4, become leader
-    request.set_recipient_id(4);
     peerService->reply(Protocol::Raft::OpCode::REQUEST_VOTE,
                        request, response);
     consensus->requestVote(lockGuard, peer4);

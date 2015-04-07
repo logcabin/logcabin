@@ -151,10 +151,6 @@ message RequestVote {
          */
         required uint64 server_id = 1;
         /**
-         * ID of the intended callee.
-         */
-        required uint64 recipient_id = 5;
-        /**
          * Caller's term.
          */
         required uint64 term = 2;
@@ -200,10 +196,6 @@ message AppendEntries {
          * ID of leader (caller), so the follower can redirect clients.
          */
         required uint64 server_id = 1;
-        /**
-         * ID of the intended callee.
-         */
-        required uint64 recipient_id = 7;
         /**
          * Caller's term.
          */
@@ -254,10 +246,6 @@ message InstallSnapshot {
          * ID of leader (caller), so the follower can redirect clients.
          */
         required uint64 server_id = 1;
-        /**
-         * ID of the intended callee.
-         */
-        required uint64 recipient_id = 2;
         /**
          * Caller's term.
          */

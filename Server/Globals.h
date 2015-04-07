@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -15,6 +16,7 @@
 
 #include <memory>
 
+#include "Client/SessionManager.h"
 #include "Core/Config.h"
 #include "Core/Mutex.h"
 #include "Event/Loop.h"
@@ -138,6 +140,18 @@ class Globals {
      * diagnostics.
      */
     Server::ServerStats serverStats;
+
+    /**
+     * A unique ID for the cluster that this server may connect to. This is
+     * initialized to a value from the config file. If it's not set then, it
+     * may be set later as a result of learning a UUID from some other server.
+     */
+    Client::SessionManager::ClusterUUID clusterUUID;
+
+    /**
+     * Unique ID for this server. Set from config file.
+     */
+    uint64_t serverId;
 
     /**
      * Consensus module.

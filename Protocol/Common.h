@@ -21,6 +21,8 @@
 #ifndef LOGCABIN_PROTOCOL_COMMON_H
 #define LOGCABIN_PROTOCOL_COMMON_H
 
+#include <cstdint>
+
 namespace LogCabin {
 namespace Protocol {
 namespace Common {

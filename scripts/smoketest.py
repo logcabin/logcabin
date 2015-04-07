@@ -37,6 +37,7 @@ from __future__ import print_function, division
 from common import sh, captureSh, Sandbox, smokehosts
 from docopt import docopt
 import os
+import random
 import subprocess
 import time
 
@@ -53,6 +54,8 @@ def main():
     server_ids = range(1, num_servers + 1)
     cluster = "--cluster=%s" % ','.join([h[0] for h in
                                         smokehosts[:num_servers]])
+    alphabet = [chr(ord('a') + i) for i in range(26)]
+    cluster_uuid = ''.join([random.choice(alphabet) for i in range(8)])
     with Sandbox() as sandbox:
         sh('rm -rf smoketeststorage/')
         sh('rm -f debug/*')
@@ -68,6 +71,7 @@ def main():
                     pass
                 f.write('serverId = %d\n' % server_id)
                 f.write('listenAddresses = %s\n' % host[0])
+                f.write('clusterUUID = %s\n' % cluster_uuid)
 
 
         print('Initializing first server\'s log')

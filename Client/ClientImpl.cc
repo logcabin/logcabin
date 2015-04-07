@@ -362,6 +362,8 @@ ClientImpl::ExactlyOnceRPCHelper::keepAliveThreadMain()
 ClientImpl::ClientImpl(const std::map<std::string, std::string>& options)
     : config(options)
     , eventLoop()
+    , clusterUUID()
+    , sessionManager(eventLoop, config)
     , sessionCreationBackoff(5,                   // 5 new connections per
                              100UL * 1000 * 1000) // 100 ms
     , hosts()
@@ -375,6 +377,9 @@ ClientImpl::ClientImpl(const std::map<std::string, std::string>& options)
            "%s"
            "# end config",
            Core::StringUtil::toString(config).c_str());
+    std::string uuid = config.read("clusterUUID", std::string(""));
+    if (!uuid.empty())
+        clusterUUID.set(uuid);
 }
 
 ClientImpl::~ClientImpl()
@@ -400,8 +405,9 @@ ClientImpl::initDerived()
         leaderRPC.reset(new LeaderRPC(
             RPC::Address(hosts, Protocol::Common::DEFAULT_PORT),
             eventLoop,
+            clusterUUID,
             sessionCreationBackoff,
-            config));
+            sessionManager));
     }
     if (rpcProtocolVersion == ~0U)
         rpcProtocolVersion = negotiateRPCVersion();
@@ -482,12 +488,7 @@ ClientImpl::getServerInfo(const std::string& host,
         address.refresh(timeout);
 
         std::shared_ptr<RPC::ClientSession> session =
-            RPC::ClientSession::makeSession(
-                            eventLoop,
-                            address,
-                            Protocol::Common::MAX_MESSAGE_LENGTH,
-                            timeout,
-                            config);
+            sessionManager.createSession(address, timeout, &clusterUUID);
 
         Protocol::Client::GetServerInfo::Request request;
         RPC::ClientRPC rpc(session,
@@ -545,12 +546,7 @@ ClientImpl::getServerStats(const std::string& host,
         address.refresh(timeout);
 
         std::shared_ptr<RPC::ClientSession> session =
-            RPC::ClientSession::makeSession(
-                            eventLoop,
-                            address,
-                            Protocol::Common::MAX_MESSAGE_LENGTH,
-                            timeout,
-                            config);
+            sessionManager.createSession(address, timeout, &clusterUUID);
 
         Protocol::Client::GetServerStats::Request request;
         RPC::ClientRPC rpc(session,

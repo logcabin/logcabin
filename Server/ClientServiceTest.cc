@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -115,6 +116,47 @@ TEST_F(ServerClientServiceTest, getSupportedRPCVersions) {
     call(OpCode::GET_SUPPORTED_RPC_VERSIONS, request, response);
     EXPECT_EQ("min_version: 1"
               "max_version: 1", response);
+}
+
+TEST_F(ServerClientServiceTest, verifyRecipient) {
+    init();
+    globals->clusterUUID.clear();
+    Protocol::Client::VerifyRecipient::Request request;
+    Protocol::Client::VerifyRecipient::Response response;
+
+    call(OpCode::VERIFY_RECIPIENT, request, response);
+    EXPECT_EQ("server_id: 1 "
+              "ok: true ",
+              response);
+
+    request.set_cluster_uuid("myfirstcluster");
+    request.set_server_id(1);
+    call(OpCode::VERIFY_RECIPIENT, request, response);
+    EXPECT_EQ("cluster_uuid: 'myfirstcluster' "
+              "server_id: 1 "
+              "ok: true ",
+              response);
+
+    request.set_cluster_uuid("mysecondcluster");
+    call(OpCode::VERIFY_RECIPIENT, request, response);
+    EXPECT_TRUE(Core::StringUtil::startsWith(response.error(),
+                                             "Mismatched cluster UUIDs"));
+    response.clear_error();
+    EXPECT_EQ("cluster_uuid: 'myfirstcluster' "
+              "server_id: 1 "
+              "ok: false ",
+              response);
+
+    request.set_cluster_uuid("myfirstcluster");
+    request.set_server_id(2);
+    call(OpCode::VERIFY_RECIPIENT, request, response);
+    EXPECT_TRUE(Core::StringUtil::startsWith(response.error(),
+                                             "Mismatched server IDs"));
+    response.clear_error();
+    EXPECT_EQ("cluster_uuid: 'myfirstcluster' "
+              "server_id: 1 "
+              "ok: false ",
+              response);
 }
 
 } // namespace LogCabin::Server::<anonymous>

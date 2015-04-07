@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -56,6 +57,8 @@ Globals::Globals()
     , sigTermHandler(eventLoop, SIGTERM)
     , sigTermMonitor(eventLoop, sigTermHandler)
     , serverStats(*this)
+    , clusterUUID()
+    , serverId(~0UL)
     , raft()
     , stateMachine()
     , raftService()
@@ -74,7 +77,10 @@ Globals::~Globals()
 void
 Globals::init()
 {
-    uint64_t serverId = config.read<uint64_t>("serverId");
+    std::string uuid = config.read("clusterUUID", std::string(""));
+    if (!uuid.empty())
+        clusterUUID.set(uuid);
+    serverId = config.read<uint64_t>("serverId");
     Core::Debug::processName = Core::StringUtil::format("%lu", serverId);
     {
         ServerStats::Lock serverStatsLock(serverStats);

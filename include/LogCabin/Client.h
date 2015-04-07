@@ -581,6 +581,7 @@ class Cluster {
     /**
      * Settings for the client library. These are all optional.
      * Currently supported options:
+     * - clusterUUID (see sample.conf)
      * - tcpHeartbeatTimeoutMilliseconds (see sample.conf)
      * - tcpConnectTimeoutMilliseconds (see sample.conf)
      */

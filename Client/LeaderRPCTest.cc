@@ -43,11 +43,14 @@ class ClientLeaderRPCTest : public ::testing::Test {
         , server()
         , eventLoopThread()
         , config()
+        , clusterUUID()
+        , sessionManager(eventLoop, config)
         , leaderRPC()
         , request()
         , response()
         , expResponse()
     {
+        sessionManager.skipVerify = true;
         service = std::make_shared<RPC::ServiceMock>();
         server.reset(new RPC::Server(eventLoop,
                                      Protocol::Common::MAX_MESSAGE_LENGTH));
@@ -58,8 +61,9 @@ class ClientLeaderRPCTest : public ::testing::Test {
                                 service, 1);
         leaderRPC.reset(new LeaderRPC(address,
                                       eventLoop,
+                                      clusterUUID,
                                       sessionCreationBackoff,
-                                      config));
+                                      sessionManager));
 
 
         request.mutable_read()->set_path("foo");
@@ -84,6 +88,8 @@ class ClientLeaderRPCTest : public ::testing::Test {
     std::unique_ptr<RPC::Server> server;
     std::thread eventLoopThread;
     Core::Config config;
+    SessionManager::ClusterUUID clusterUUID;
+    SessionManager sessionManager;
     std::unique_ptr<LeaderRPC> leaderRPC;
     Protocol::Client::ReadOnlyTree::Request request;
     Protocol::Client::ReadOnlyTree::Response response;

@@ -1,5 +1,5 @@
 /* Copyright (c) 2012-2014 Stanford University
- * Copyright (c) 2014 Diego Ongaro
+ * Copyright (c) 2014-2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -245,6 +245,19 @@ TEST_F(RPCClientSessionTest, constructor_timeout_TimingSensitive) {
 
 TEST_F(RPCClientSessionTest, makeSession) {
     EXPECT_EQ(session.get(), session->self.lock().get());
+}
+
+TEST_F(RPCClientSessionTest, makeErrorSession) {
+    std::shared_ptr<ClientSession> esession =
+        ClientSession::makeErrorSession(eventLoop, "my error msg");
+    EXPECT_EQ("my error msg", esession->getErrorMessage());
+    OpaqueClientRPC rpc = esession->sendRequest(buf("hi"));
+    rpc.update();
+    EXPECT_EQ(OpaqueClientRPC::Status::ERROR, rpc.getStatus());
+    EXPECT_FALSE(rpc.session);
+    EXPECT_EQ("", str(rpc.reply));
+    EXPECT_EQ("my error msg", rpc.errorMessage);
+    EXPECT_EQ(0U, esession->responses.size());
 }
 
 TEST_F(RPCClientSessionTest, destructor) {
