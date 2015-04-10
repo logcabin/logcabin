@@ -81,6 +81,11 @@ class LeaderRPCBase {
          * The given timeout elapsed before the RPC completed.
          */
         TIMEOUT,
+        /**
+         * The server rejected the request, probably because it doesn't
+         * support the opcode, or maybe the request arguments were invalid.
+         */
+        INVALID_REQUEST,
     };
 
     /**
@@ -140,6 +145,11 @@ class LeaderRPCBase {
              * The given timeout elapsed before the RPC completed.
              */
             TIMEOUT,
+            /**
+             * The server rejected the request, probably because it doesn't
+             * support the opcode, or maybe the request arguments were invalid.
+             */
+            INVALID_REQUEST,
         };
 
         /**

@@ -108,6 +108,11 @@ SessionManager::createSession(const RPC::Address& address,
                   error.error_code());
         case RPCStatus::RPC_CANCELED:
             PANIC("RPC canceled unexpectedly");
+        case RPCStatus::INVALID_SERVICE:
+            PANIC("The server isn't running the ClientService");
+        case RPCStatus::INVALID_REQUEST:
+            PANIC("The server's ClientService doesn't support the "
+                  "VerifyRecipient RPC or claims the request is malformed");
     }
     return RPC::ClientSession::makeErrorSession(
         eventLoop,

@@ -95,20 +95,16 @@ TEST_F(RPCServerTest, handleRPC_normal) {
 
 TEST_F(RPCServerTest, handleRPC_badHeader) {
     server.registerService(1, service1, 1);
-    deinit();
     ClientRPC rpc;
     rpc.opaqueRPC = session->sendRequest(Core::Buffer());
-    EXPECT_DEATH({ childDeathInit();
-                   rpc.waitForReply(NULL, NULL, TimePoint::max());
-                 }, "request.*invalid");
+    EXPECT_EQ(ClientRPC::Status::INVALID_REQUEST,
+              rpc.waitForReply(NULL, NULL, TimePoint::max()));
 }
 
 TEST_F(RPCServerTest, handleRPC_badService) {
-    deinit();
     ClientRPC rpc(session, 1, 1, 0, request);
-    EXPECT_DEATH({ childDeathInit();
-                   rpc.waitForReply(NULL, NULL, TimePoint::max());
-                 }, "not running.*service");
+    EXPECT_EQ(ClientRPC::Status::INVALID_SERVICE,
+              rpc.waitForReply(NULL, NULL, TimePoint::max()));
 }
 
 // constructor: nothing to test
