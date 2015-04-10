@@ -63,12 +63,8 @@ class ClientClusterTest : public ::testing::Test {
         Client::ClientImpl* client =
             dynamic_cast<Client::ClientImpl*>(cluster->clientImpl.get());
         mockRPC = new Client::LeaderRPCMock();
-        mockRPC->expect(OpCode::GET_SUPPORTED_RPC_VERSIONS,
-            fromString<Protocol::Client::GetSupportedRPCVersions::Response>(
-                        "min_version: 1, max_version: 1"));
         client->leaderRPC = std::unique_ptr<Client::LeaderRPCBase>(mockRPC);
         cluster->clientImpl->init("127.0.0.1:0");
-        mockRPC->popRequest();
 
         client->exactlyOnceRPCHelper.client = NULL;
     }

@@ -27,7 +27,6 @@ import "build/Protocol/ServerStats.proto";
  */
 enum OpCode {
     // Keep these numbers dense.
-    GET_SUPPORTED_RPC_VERSIONS = 0;
     VERIFY_RECIPIENT = 8;
     OPEN_SESSION = 1;
     GET_CONFIGURATION = 2;
@@ -90,25 +89,6 @@ message ExactlyOnceRPCInfo {
      * A strictly increasing sequence number for the RPC.
      */
     required uint64 rpc_number = 3;
-}
-
-/**
- * GetSupportedRPCVersions RPC: Find out the range of RPC protocol versions the
- * cluster supports. This should be the first RPC sent by the client.
- */
-message GetSupportedRPCVersions {
-    message Request {
-    }
-    message Response {
-        /**
-         * The minimum RPC protocol version this cluster will accept.
-         */
-        required uint32 min_version = 1;
-        /**
-         * The maximum RPC protocol version this cluster will accept.
-         */
-        required uint32 max_version = 2;
-    }
 }
 
 /**

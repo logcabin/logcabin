@@ -149,13 +149,6 @@ class ClientImpl {
   protected:
 
     /**
-     * Asks the cluster leader for the range of supported RPC protocol
-     * versions, and select the best one. This is used to make sure the client
-     * and server are speaking the same version of the RPC protocol.
-     */
-    uint32_t negotiateRPCVersion();
-
-    /**
      * Options/settings.
      */
     const Core::Config config;
@@ -193,12 +186,6 @@ class ClientImpl {
      * Used to send RPCs to the leader of the LogCabin cluster.
      */
     std::unique_ptr<LeaderRPCBase> leaderRPC;
-
-    /**
-     * The version of the RPC protocol to use when speaking to the cluster
-     * leader. (This is the result of negotiateRPCVersion().)
-     */
-    uint32_t rpcProtocolVersion;
 
     /**
      * This class helps with providing exactly-once semantics for read-write

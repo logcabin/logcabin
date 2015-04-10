@@ -100,8 +100,8 @@ class ServerClientServiceTest : public ::testing::Test {
 
 TEST_F(ServerClientServiceTest, handleRPCBadOpcode) {
     init();
-    Protocol::Client::GetSupportedRPCVersions::Request request;
-    Protocol::Client::GetSupportedRPCVersions::Response response;
+    Protocol::Client::GetServerInfo::Request request;
+    Protocol::Client::GetServerInfo::Response response;
     int bad = 255;
     OpCode unassigned = static_cast<OpCode>(bad);
     LogCabin::Core::Debug::setLogPolicy({ // expect warning
@@ -117,15 +117,6 @@ TEST_F(ServerClientServiceTest, handleRPCBadOpcode) {
 }
 
 ////////// Tests for individual RPCs //////////
-
-TEST_F(ServerClientServiceTest, getSupportedRPCVersions) {
-    init();
-    Protocol::Client::GetSupportedRPCVersions::Request request;
-    Protocol::Client::GetSupportedRPCVersions::Response response;
-    call(OpCode::GET_SUPPORTED_RPC_VERSIONS, request, response);
-    EXPECT_EQ("min_version: 1"
-              "max_version: 1", response);
-}
 
 TEST_F(ServerClientServiceTest, verifyRecipient) {
     init();
