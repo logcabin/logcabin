@@ -151,7 +151,6 @@ class ClientClientImplTest : public ::testing::Test {
         : client()
     {
         client.sessionManager.skipVerify = true;
-        client.rpcProtocolVersion = 1;
         client.init("127.0.0.1");
     }
 

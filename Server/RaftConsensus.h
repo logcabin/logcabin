@@ -267,6 +267,26 @@ class Peer : public Server {
     void scheduleHeartbeat();
 
     /**
+     * Returned by callRPC().
+     */
+    enum class CallStatus {
+        /**
+         * The RPC succeeded and the response was filled in.
+         */
+        OK,
+        /**
+         * No reply was received from the server. Maybe the connection was
+         * dropped; maybe the RPC was canceled.
+         */
+        FAILED,
+        /**
+         * The server does not support this RPC or didn't like the arguments
+         * given.
+         */
+        INVALID_REQUEST,
+    };
+
+    /**
      * Execute a remote procedure call on the server's RaftService. As this
      * operation might take a while, it should be called without RaftConsensus
      * lock.
@@ -275,15 +295,14 @@ class Peer : public Server {
      * \param[in] request
      *      The request that was received from the other server.
      * \param[out] response
-     *      Where the reply should be placed.
+     *      Where the reply should be placed, if status is OK.
      * \param[in] lockGuard
      *      The Raft lock, which is released internally to allow for I/O
      *      concurrency.
      * \return
-     *      True if the RPC succeeded and the response was filled in; false
-     *      otherwise.
+     *      See CallStatus.
      */
-    bool
+    CallStatus
     callRPC(Protocol::Raft::OpCode opCode,
             const google::protobuf::Message& request,
             google::protobuf::Message& response,

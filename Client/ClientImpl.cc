@@ -148,6 +148,13 @@ treeCall(LeaderRPCBase& leaderRPC,
             VERBOSE("Timeout elapsed on %s call",
                     Protocol::Client::OpCode_Name(opCode).c_str());
             break;
+        case LeaderRPC::Status::INVALID_REQUEST:
+            // This is the server saying the request is invalid, not the
+            // replicated state machine.
+            PANIC("The server's ClientService doesn't support the "
+                  "ReadOnlyTree RPC or claims the request is malformed. "
+                  "Request is: %s",
+                  Core::ProtoBuf::dumpString(request).c_str());
     }
 }
 
@@ -189,6 +196,13 @@ treeCall(LeaderRPCBase& leaderRPC,
             VERBOSE("Timeout elapsed on %s call",
                     Protocol::Client::OpCode_Name(opCode).c_str());
             break;
+        case LeaderRPC::Status::INVALID_REQUEST:
+            // This is the server saying the request is invalid, not the
+            // replicated state machine.
+            PANIC("The server's ClientService doesn't support the "
+                  "ReadWriteTree RPC or claims the request is malformed. "
+                  "Request is: %s",
+                  Core::ProtoBuf::dumpString(request).c_str());
     }
 }
 
@@ -273,6 +287,11 @@ ClientImpl::ExactlyOnceRPCHelper::getRPCInfo(
             case LeaderRPC::Status::TIMEOUT:
                 rpcInfo.set_client_id(0);
                 return rpcInfo;
+            case LeaderRPC::Status::INVALID_REQUEST:
+                // This is the server saying the request is invalid, not the
+                // replicated state machine.
+                PANIC("The server's ClientService doesn't support the "
+                      "OpenSession RPC or claims the request is malformed");
         }
         clientId = response.client_id();
         assert(clientId > 0);
@@ -341,6 +360,9 @@ ClientImpl::ExactlyOnceRPCHelper::keepAliveThreadMain()
                     continue; // retry outer loop
                 case LeaderRPCBase::Call::Status::TIMEOUT:
                     PANIC("Unexpected timeout for keep-alive");
+                case LeaderRPCBase::Call::Status::INVALID_REQUEST:
+                    PANIC("The server rejected our keep-alive request (Tree "
+                          "write with unmet condition) as invalid");
             }
             doneWithRPC(request.exactly_once(),
                         Core::HoldingMutex(lockGuard));
@@ -368,7 +390,6 @@ ClientImpl::ClientImpl(const std::map<std::string, std::string>& options)
                              100UL * 1000 * 1000) // 100 ms
     , hosts()
     , leaderRPC()             // set in init()
-    , rpcProtocolVersion(~0U) // set in init()
     , exactlyOnceRPCHelper(this)
     , eventLoopThread()
 {
@@ -409,8 +430,6 @@ ClientImpl::initDerived()
             sessionCreationBackoff,
             sessionManager));
     }
-    if (rpcProtocolVersion == ~0U)
-        rpcProtocolVersion = negotiateRPCVersion();
 }
 
 std::pair<uint64_t, Configuration>
@@ -522,6 +541,11 @@ ClientImpl::getServerInfo(const std::string& host,
                       error.error_code());
             case RPCStatus::RPC_CANCELED:
                 PANIC("RPC canceled unexpectedly");
+            case RPCStatus::INVALID_SERVICE:
+                PANIC("The server isn't running the ClientService");
+            case RPCStatus::INVALID_REQUEST:
+                PANIC("The server's ClientService doesn't support the "
+                      "GetServerInfo RPC or claims the request is malformed");
         }
         if (timeout < Clock::now())
             return timeoutResult;
@@ -579,6 +603,11 @@ ClientImpl::getServerStats(const std::string& host,
                       error.error_code());
             case RPCStatus::RPC_CANCELED:
                 PANIC("RPC canceled unexpectedly");
+            case RPCStatus::INVALID_SERVICE:
+                PANIC("The server isn't running the ClientService");
+            case RPCStatus::INVALID_REQUEST:
+                PANIC("The server's ClientService doesn't support the "
+                      "GetServerStats RPC or claims the request is malformed");
         }
         if (timeout < Clock::now())
             return timeoutResult;
@@ -790,40 +819,6 @@ ClientImpl::removeFile(const std::string& path,
         return treeError(response);
     return Result();
 }
-
-uint32_t
-ClientImpl::negotiateRPCVersion()
-{
-    // Doesn't seem reasonable for this to block forever: defer until first
-    // RPC, and use the timeout from that? See
-    // https://github.com/logcabin/logcabin/issues/76
-
-    Protocol::Client::GetSupportedRPCVersions::Request request;
-    Protocol::Client::GetSupportedRPCVersions::Response response;
-    leaderRPC->call(OpCode::GET_SUPPORTED_RPC_VERSIONS,
-                    request, response, TimePoint::max());
-    uint32_t serverMin = response.min_version();
-    uint32_t serverMax = response.max_version();
-    if (MAX_RPC_PROTOCOL_VERSION < serverMin) {
-        PANIC("This client is too old to talk to your LogCabin cluster. "
-              "You'll need to update your LogCabin client library. The "
-              "server supports down to version %u, but this library only "
-              "supports up to version %u.",
-              serverMin, MAX_RPC_PROTOCOL_VERSION);
-
-    } else if (MIN_RPC_PROTOCOL_VERSION > serverMax) {
-        PANIC("This client is too new to talk to your LogCabin cluster. "
-              "You'll need to upgrade your LogCabin cluster or downgrade "
-              "your LogCabin client library. The server supports up to "
-              "version %u, but this library only supports down to version %u.",
-              serverMax, MIN_RPC_PROTOCOL_VERSION);
-    } else {
-        // There exists a protocol version both the client and server speak.
-        // The preferred one is the maximum one they both support.
-        return std::min(MAX_RPC_PROTOCOL_VERSION, serverMax);
-    }
-}
-
 
 } // namespace LogCabin::Client
 } // namespace LogCabin

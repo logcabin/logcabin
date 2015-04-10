@@ -38,6 +38,9 @@ operator<<(std::ostream& os, const LeaderRPCBase::Status& status)
         case LeaderRPCBase::Status::TIMEOUT:
             os << "Status::TIMEOUT";
             break;
+        case LeaderRPCBase::Status::INVALID_REQUEST:
+            os << "Status::INVALID_REQUEST";
+            break;
     }
     return os;
 }
@@ -54,6 +57,9 @@ operator<<(std::ostream& os, const LeaderRPCBase::Call::Status& status)
             break;
         case LeaderRPCBase::Call::Status::TIMEOUT:
             os << "Status::TIMEOUT";
+            break;
+        case LeaderRPCBase::Call::Status::INVALID_REQUEST:
+            os << "Status::INVALID_REQUEST";
             break;
     }
     return os;
@@ -144,6 +150,10 @@ LeaderRPC::Call::wait(google::protobuf::Message& response,
             break;
         case RPCStatus::TIMEOUT:
             return Call::Status::TIMEOUT;
+        case RPCStatus::INVALID_SERVICE:
+            PANIC("The server isn't running the ClientService");
+        case RPCStatus::INVALID_REQUEST:
+            return Call::Status::INVALID_REQUEST;
     }
     if (timeout < Clock::now())
         return Call::Status::TIMEOUT;
@@ -192,6 +202,8 @@ LeaderRPC::call(OpCode opCode,
                 return Status::TIMEOUT;
             case Call::Status::RETRY:
                 break;
+            case Call::Status::INVALID_REQUEST:
+                return Status::INVALID_REQUEST;
         }
     }
 }

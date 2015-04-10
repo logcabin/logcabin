@@ -51,9 +51,6 @@ ClientService::handleRPC(RPC::ServerRPC rpc)
         case OpCode::GET_SERVER_STATS:
             getServerStats(std::move(rpc));
             break;
-        case OpCode::GET_SUPPORTED_RPC_VERSIONS:
-            getSupportedRPCVersions(std::move(rpc));
-            break;
         case OpCode::VERIFY_RECIPIENT:
             verifyRecipient(std::move(rpc));
             break;
@@ -116,15 +113,6 @@ ClientService::getServerStats(RPC::ServerRPC rpc)
 {
     PRELUDE(GetServerStats);
     *response.mutable_server_stats() = globals.serverStats.getCurrent();
-    rpc.reply(response);
-}
-
-void
-ClientService::getSupportedRPCVersions(RPC::ServerRPC rpc)
-{
-    PRELUDE(GetSupportedRPCVersions);
-    response.set_min_version(1);
-    response.set_max_version(1);
     rpc.reply(response);
 }
 

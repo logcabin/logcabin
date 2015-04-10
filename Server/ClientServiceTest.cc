@@ -18,6 +18,7 @@
 #include <thread>
 
 #include "build/Protocol/Client.pb.h"
+#include "include/LogCabin/Debug.h"
 #include "Core/Buffer.h"
 #include "Core/ProtoBuf.h"
 #include "Protocol/Common.h"
@@ -98,25 +99,24 @@ class ServerClientServiceTest : public ::testing::Test {
 };
 
 TEST_F(ServerClientServiceTest, handleRPCBadOpcode) {
-    Protocol::Client::GetSupportedRPCVersions::Request request;
-    Protocol::Client::GetSupportedRPCVersions::Response response;
+    init();
+    Protocol::Client::GetServerInfo::Request request;
+    Protocol::Client::GetServerInfo::Response response;
     int bad = 255;
     OpCode unassigned = static_cast<OpCode>(bad);
-    EXPECT_DEATH({init();
-                  call(unassigned, request, response);},
-                 "request.*invalid");
+    LogCabin::Core::Debug::setLogPolicy({ // expect warning
+        {"Server/ClientService.cc", "ERROR"},
+        {"", "WARNING"},
+    });
+    RPC::ClientRPC rpc(session,
+                       Protocol::Common::ServiceId::CLIENT_SERVICE,
+                       1, unassigned, request);
+    EXPECT_EQ(Status::INVALID_REQUEST, rpc.waitForReply(&response, NULL,
+                                                        TimePoint::max()))
+        << rpc.getErrorMessage();
 }
 
 ////////// Tests for individual RPCs //////////
-
-TEST_F(ServerClientServiceTest, getSupportedRPCVersions) {
-    init();
-    Protocol::Client::GetSupportedRPCVersions::Request request;
-    Protocol::Client::GetSupportedRPCVersions::Response response;
-    call(OpCode::GET_SUPPORTED_RPC_VERSIONS, request, response);
-    EXPECT_EQ("min_version: 1"
-              "max_version: 1", response);
-}
 
 TEST_F(ServerClientServiceTest, verifyRecipient) {
     init();

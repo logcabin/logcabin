@@ -175,21 +175,14 @@ ClientRPC::waitForReply(google::protobuf::Message* response,
             }
             return Status::SERVICE_SPECIFIC_ERROR;
 
-        // The server does not have the requested service.
+        // The server is not running the requested service.
         case ProtocolStatus::INVALID_SERVICE:
-            PANIC("The server is not running the requested service (tried "
-                  "service %u, opcode %u)",
-                  service, opCode);
+            return Status::INVALID_SERVICE;
 
-        // The server disliked our request. This shouldn't happen because
-        // the higher layers of software were supposed to negotiate an RPC
-        // protocol version.
+        // The server disliked our request, probably because it doesn't support
+        // the opcode, or maybe the request arguments were invalid.
         case ProtocolStatus::INVALID_REQUEST:
-            PANIC("The server found the request to service %u, opcode %u to "
-                  "be invalid. This indicates a bug in the client or server "
-                  "in negotiating which RPCs the client may legally send to "
-                  "the server.",
-                  service, opCode);
+            return Status::INVALID_REQUEST;
 
         default:
             // The server shouldn't reply back with status codes we don't
@@ -225,8 +218,12 @@ operator<<(::std::ostream& os, ClientRPC::Status status)
             return os << "RPC_CANCELED";
         case Status::TIMEOUT:
             return os << "TIMEOUT";
+        case Status::INVALID_SERVICE:
+            return os << "INVALID_SERVICE";
+        case Status::INVALID_REQUEST:
+            return os << "INVALID_REQUEST";
         default:
-            return os << "(INVALID VALUE)";
+            return os << "(INVALID STATUS VALUE)";
     }
 }
 

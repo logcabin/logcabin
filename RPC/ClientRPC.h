@@ -135,6 +135,15 @@ class ClientRPC {
          * unknown whether or not the server executed the RPC (yet).
          */
         TIMEOUT,
+        /**
+         * The server is not running the requested service.
+         */
+        INVALID_SERVICE,
+        /**
+         * The server rejected the request, probably because it doesn't support
+         * the opcode, or maybe the request arguments were invalid.
+         */
+        INVALID_REQUEST,
     };
 
     /**

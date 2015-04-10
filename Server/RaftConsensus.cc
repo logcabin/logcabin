@@ -243,7 +243,7 @@ Peer::scheduleHeartbeat()
     nextHeartbeatTime = Clock::now();
 }
 
-bool
+Peer::CallStatus
 Peer::callRPC(Protocol::Raft::OpCode opCode,
               const google::protobuf::Message& request,
               google::protobuf::Message& response,
@@ -264,7 +264,7 @@ Peer::callRPC(Protocol::Raft::OpCode opCode,
                         rpcFailuresSinceLastWarning);
                 rpcFailuresSinceLastWarning = 0;
             }
-            return true;
+            return CallStatus::OK;
         case RPCStatus::SERVICE_SPECIFIC_ERROR:
             PANIC("unexpected service-specific error");
         case RPCStatus::TIMEOUT:
@@ -279,9 +279,13 @@ Peer::callRPC(Protocol::Raft::OpCode opCode,
                         rpcFailuresSinceLastWarning,
                         rpc.getErrorMessage().c_str());
             }
-            return false;
+            return CallStatus::FAILED;
         case RPCStatus::RPC_CANCELED:
-            return false;
+            return CallStatus::FAILED;
+        case RPCStatus::INVALID_SERVICE:
+            PANIC("The server isn't running the RaftService");
+        case RPCStatus::INVALID_REQUEST:
+            return CallStatus::INVALID_REQUEST;
     }
     PANIC("Unexpected RPC status");
 }
@@ -2060,13 +2064,20 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
     Protocol::Raft::AppendEntries::Response response;
     TimePoint start = Clock::now();
     uint64_t epoch = currentEpoch;
-    bool ok = peer.callRPC(Protocol::Raft::OpCode::APPEND_ENTRIES,
-                           request, response,
-                           lockGuard);
-    if (!ok) {
-        peer.backoffUntil = start +
-            std::chrono::milliseconds(RPC_FAILURE_BACKOFF_MS);
-        return;
+    Peer::CallStatus status = peer.callRPC(
+                Protocol::Raft::OpCode::APPEND_ENTRIES,
+                request, response,
+                lockGuard);
+    switch (status) {
+        case Peer::CallStatus::OK:
+            break;
+        case Peer::CallStatus::FAILED:
+            peer.backoffUntil = start +
+                std::chrono::milliseconds(RPC_FAILURE_BACKOFF_MS);
+            return;
+        case Peer::CallStatus::INVALID_REQUEST:
+            PANIC("The server's RaftService doesn't support the AppendEntries "
+                  "RPC or claims the request is malformed");
     }
 
     // Process response
@@ -2164,13 +2175,20 @@ RaftConsensus::installSnapshot(std::unique_lock<Mutex>& lockGuard,
     Protocol::Raft::InstallSnapshot::Response response;
     TimePoint start = Clock::now();
     uint64_t epoch = currentEpoch;
-    bool ok = peer.callRPC(Protocol::Raft::OpCode::INSTALL_SNAPSHOT,
-                           request, response,
-                           lockGuard);
-    if (!ok) {
-        peer.backoffUntil = start +
-            std::chrono::milliseconds(RPC_FAILURE_BACKOFF_MS);
-        return;
+    Peer::CallStatus status = peer.callRPC(
+                Protocol::Raft::OpCode::INSTALL_SNAPSHOT,
+                request, response,
+                lockGuard);
+    switch (status) {
+        case Peer::CallStatus::OK:
+            break;
+        case Peer::CallStatus::FAILED:
+            peer.backoffUntil = start +
+                std::chrono::milliseconds(RPC_FAILURE_BACKOFF_MS);
+            return;
+        case Peer::CallStatus::INVALID_REQUEST:
+            PANIC("The server's RaftService doesn't support the "
+                  "InstallSnapshot RPC or claims the request is malformed");
     }
 
     // Process response
@@ -2411,13 +2429,21 @@ RaftConsensus::requestVote(std::unique_lock<Mutex>& lockGuard, Peer& peer)
     VERBOSE("requestVote start");
     TimePoint start = Clock::now();
     uint64_t epoch = currentEpoch;
-    bool ok = peer.callRPC(Protocol::Raft::OpCode::REQUEST_VOTE,
-                           request, response, lockGuard);
+    Peer::CallStatus status = peer.callRPC(
+                Protocol::Raft::OpCode::REQUEST_VOTE,
+                request, response,
+                lockGuard);
     VERBOSE("requestVote done");
-    if (!ok) {
-        peer.backoffUntil = start +
-            std::chrono::milliseconds(RPC_FAILURE_BACKOFF_MS);
-        return;
+    switch (status) {
+        case Peer::CallStatus::OK:
+            break;
+        case Peer::CallStatus::FAILED:
+            peer.backoffUntil = start +
+                std::chrono::milliseconds(RPC_FAILURE_BACKOFF_MS);
+            return;
+        case Peer::CallStatus::INVALID_REQUEST:
+            PANIC("The server's RaftService doesn't support the RequestVote "
+                  "RPC or claims the request is malformed");
     }
 
     if (currentTerm != request.term() || state != State::CANDIDATE ||
