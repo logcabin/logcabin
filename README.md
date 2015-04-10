@@ -1,3 +1,5 @@
+[![logo](logo/500px.png?raw=true)](logo/logo.svg)
+
 Overview
 ========
 
