@@ -24,6 +24,7 @@
 #include <fcntl.h>
 #include <limits>
 #include <mutex>
+#include <pthread.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -36,6 +37,9 @@ namespace Random {
 
 namespace {
 
+// forward declaration
+void resetRandomState();
+
 /**
  * Keeps state needed by the random number generator, protected by a mutex.
  */
@@ -47,6 +51,21 @@ class RandomState {
         , statebuf()
         , randbuf()
     {
+        reset();
+        int err = pthread_atfork(NULL, NULL, resetRandomState);
+        if (err != 0) {
+            // too early to call ERROR in here
+            fprintf(stderr, "Failed to set up pthread_atfork() handler to "
+                    "reset random number generator seed in child processes. "
+                    "As a result, child processes will generate the same "
+                    "sequence of random values as the parent they were forked "
+                    "from. Error: %s\n",
+                    strerror(err));
+        }
+    }
+
+    void reset() {
+        std::lock_guard<std::mutex> lockGuard(mutex);
         int fd = open("/dev/urandom", O_RDONLY);
         if (fd < 0) {
             // too early to call PANIC in here
@@ -117,6 +136,15 @@ class RandomState {
      */
     random_data randbuf;
 } randomState;
+
+/**
+ * Called in child after fork() to reset random seed.
+ */
+void
+resetRandomState()
+{
+    randomState.reset();
+}
 
 /**
  * Fill a variable of type T with some random bytes.
