@@ -1,4 +1,5 @@
 /* Copyright (c) 2013-2014 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -43,6 +44,7 @@ class ServerStateMachineTest : public ::testing::Test {
       : globals()
       , consensus()
       , stateMachine()
+      , timeMocker()
     {
         RaftConsensusInternal::startThreads = false;
         consensus.reset(new RaftConsensus(globals));
@@ -84,6 +86,7 @@ class ServerStateMachineTest : public ::testing::Test {
     Globals globals;
     std::shared_ptr<RaftConsensus> consensus;
     std::unique_ptr<StateMachine> stateMachine;
+    Core::Time::SteadyClock::Mocker timeMocker;
 };
 
 TEST_F(ServerStateMachineTest, getResponse)
@@ -316,6 +319,90 @@ TEST_F(ServerStateMachineTest, expireSessions)
     EXPECT_EQ((std::vector<uint64_t>{2U, 4U}),
               Core::STLUtil::sorted(
                   Core::STLUtil::getKeys(stateMachine->sessions)));
+}
+
+struct SnapshotWatchdogThreadMainHelper {
+    explicit SnapshotWatchdogThreadMainHelper(StateMachine& stateMachine)
+        : count(0)
+        , stateMachine(stateMachine)
+    {
+    }
+    void operator()() {
+        if (count == 0) {
+            // no snapshot, do nothing
+        } else if (count == 1) {
+            // no snapshot still
+            // start a snapshot
+            errno = 0;
+            pid_t pid = fork();
+            ASSERT_NE(pid, -1) << strerror(errno); // error
+            if (pid == 0) { // child
+                while (true)
+                    usleep(5000);
+            }
+            // parent continues here
+            stateMachine.childPid = pid;
+            stateMachine.writer.reset(
+                new Storage::SnapshotFile::Writer(
+                    stateMachine.consensus->storageLayout));
+            stateMachine.numSnapshotsAttempted = 1;
+        } else if (count == 2) {
+            // should be tracking now
+            Core::Time::SteadyClock::mockValue +=
+                std::chrono::seconds(8);
+        } else if (count == 3) {
+            // spurious wakeup
+            // make some progress
+            *stateMachine.writer->sharedBytesWritten.value += 1;
+            Core::Time::SteadyClock::mockValue +=
+                std::chrono::seconds(3);
+        } else if (count == 4) {
+            // check passed
+            // now don't make progress
+            Core::Time::SteadyClock::mockValue +=
+                std::chrono::seconds(11);
+            int status = 0;
+            EXPECT_EQ(0, // still running
+                      waitpid(stateMachine.childPid, &status, WNOHANG))
+                << status << strerror(errno);
+            Core::Debug::setLogPolicy({
+                {"Server/StateMachine.cc", "SILENT"},
+                {"", "WARNING"},
+            });
+        } else if (count == 5) {
+            Core::Debug::setLogPolicy({
+                {"", "WARNING"},
+            });
+            // child should be receiving SIGHUP
+            int status = 0;
+            EXPECT_EQ(stateMachine.childPid,
+                      waitpid(stateMachine.childPid, &status, 0))
+                << strerror(errno);
+            EXPECT_TRUE(WIFSIGNALED(status));
+            EXPECT_EQ(SIGHUP, WTERMSIG(status));
+            stateMachine.childPid = 0;
+            stateMachine.writer->discard();
+            stateMachine.writer.reset();
+            stateMachine.numSnapshotsFailed = 1;
+        } else if (count == 6) {
+            // no more child process
+            stateMachine.exiting = true;
+        }
+        ++count;
+
+    }
+    uint64_t count;
+    StateMachine& stateMachine;
+};
+
+TEST_F(ServerStateMachineTest, snapshotWatchdogThreadMain)
+{
+    Core::Time::SteadyClock::mockValue =
+        Core::Time::SteadyClock::time_point();
+    SnapshotWatchdogThreadMainHelper helper(*stateMachine);
+    stateMachine->snapshotStarted.callback = std::ref(helper);
+    stateMachine->snapshotWatchdogThreadMain();
+    EXPECT_EQ(7U, helper.count);
 }
 
 // loadSessionSnapshot tested along with dumpSessionSnapshot above

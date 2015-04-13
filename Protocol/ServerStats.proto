@@ -85,6 +85,8 @@ message ServerStats {
         optional bool snapshotting = 1;
         optional uint64 last_applied = 2;
         optional uint64 num_sessions = 3;
+        optional uint64 num_snapshots_attempted = 4;
+        optional uint64 num_snapshots_failed = 5;
     };
 
     /**

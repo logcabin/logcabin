@@ -230,9 +230,11 @@ TEST_F(StorageSnapshotFileTest, writer_forking)
         EXPECT_EQ(4U, writer.getBytesWritten());
         pid_t pid = fork();
         ASSERT_LE(0, pid);
+        uint64_t start = *writer.sharedBytesWritten.value;
         if (pid == 0) { // child
             d = 127;
             writer.writeRaw(&d, sizeof(d));
+            EXPECT_LT(start, *writer.sharedBytesWritten.value);
             writer.flushToOS();
             EXPECT_EQ(8U, writer.getBytesWritten());
             _exit(0);
@@ -242,6 +244,7 @@ TEST_F(StorageSnapshotFileTest, writer_forking)
             EXPECT_LE(0, pid);
             EXPECT_TRUE(WIFEXITED(status));
             EXPECT_EQ(0, WEXITSTATUS(status));
+            EXPECT_LT(start, *writer.sharedBytesWritten.value);
             writer.seekToEnd();
             EXPECT_EQ(8U, writer.getBytesWritten());
             d = 998;
@@ -272,6 +275,21 @@ TEST_F(StorageSnapshotFileTest, getBytesWritten)
     EXPECT_LT(4U, writer.getBytesWritten());
     writer.discard();
 }
+
+TEST_F(StorageSnapshotFileTest, sharedBytesWritten)
+{
+    Writer writer(layout);
+    EXPECT_EQ(0U, *writer.sharedBytesWritten.value);
+    *writer.sharedBytesWritten.value = 1000;
+    uint32_t d = 0xdeadbeef;
+    writer.writeRaw(&d, sizeof(d));
+    EXPECT_EQ(1004U, *writer.sharedBytesWritten.value);
+    writer.writeMessage(m1);
+    EXPECT_LT(1004U, *writer.sharedBytesWritten.value);
+    writer.discard();
+
+}
+
 
 // writeMessage tested with readMessage above
 

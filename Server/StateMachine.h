@@ -1,4 +1,5 @@
 /* Copyright (c) 2012-2014 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -112,6 +113,12 @@ class StateMachine {
     void expireSessions(uint64_t clusterTime);
 
     /**
+     * If there is a current snapshot process, send it a SIGHUP and return
+     * immediately.
+     */
+    void killSnapshotProcess(Core::HoldingMutex holdingMutex);
+
+    /**
      * Read the #sessions table from a snapshot file.
      */
     void loadSessionSnapshot(Core::ProtoBuf::InputStream& stream);
@@ -129,12 +136,24 @@ class StateMachine {
     void snapshotThreadMain();
 
     /**
+     * Main function for thread that checks the progress of the child process.
+     */
+    void snapshotWatchdogThreadMain();
+
+    /**
      * Called by snapshotThreadMain to actually take the snapshot.
      */
     void takeSnapshot(uint64_t lastIncludedIndex,
                       std::unique_lock<std::mutex>& lockGuard);
 
     std::shared_ptr<RaftConsensus> consensus;
+
+    /**
+     * Used for testing the snapshot watchdog thread. The probability that a
+     * snapshotting process will deadlock on purpose before starting, as a
+     * percentage.
+     */
+    uint64_t snapshotBlockPercentage;
 
     /**
      * Size in bytes of smallest log to snapshot.
@@ -146,6 +165,13 @@ class StateMachine {
      * snapshot.
      */
     uint64_t snapshotRatio;
+
+    /**
+     * After this much time has elapsed without any progress, the snapshot
+     * watchdog thread will kill the snapshotting process. A special value of 0
+     * disables the watchdog entirely.
+     */
+    std::chrono::nanoseconds snapshotWatchdogInterval;
 
     /**
      * The time interval after which to remove an inactive client session, in
@@ -174,6 +200,14 @@ class StateMachine {
     mutable Core::ConditionVariable snapshotSuggested;
 
     /**
+     * Notified when a snapshot process is forked.
+     * Also notified upon exiting.
+     * This is used so that the watchdog thread knows to begin checking the
+     * progress of the child process.
+     */
+    mutable Core::ConditionVariable snapshotStarted;
+
+    /**
      * applyThread sets this to true to signal that the server is shutting
      * down.
      */
@@ -194,6 +228,19 @@ class StateMachine {
      * 'mutex'.
      */
     uint64_t lastIndex;
+
+    /**
+     * The number of times a snapshot has been started.
+     * In addition to being a useful stat, the watchdog thread uses this to
+     * know whether it's been watching the same snapshot or whether a new one
+     * has been started.
+     */
+    uint64_t numSnapshotsAttempted;
+
+    /**
+     * The number of times a snapshot child process has failed to exit cleanly.
+     */
+    uint64_t numSnapshotsFailed;
 
     /**
      * Tracks state for a particular client.
@@ -237,6 +284,13 @@ class StateMachine {
     Tree::Tree tree;
 
     /**
+     * The file that the snapshot is being written into. Also used by to track
+     * the progress of the child process for the watchdog thread.
+     * This is non-empty if and only if childPid > 0.
+     */
+    std::unique_ptr<Storage::SnapshotFile::Writer> writer;
+
+    /**
      * Repeatedly calls into the consensus module to get commands to process
      * and applies them.
      */
@@ -246,6 +300,15 @@ class StateMachine {
      * Takes snapshots with the help of a child process.
      */
     std::thread snapshotThread;
+
+    /**
+     * Watches the child process to make sure it's writing to #writer, and
+     * kills it otherwise. This is to detect any possible deadlock that might
+     * occur if a thread in the parent at the time of the fork held a lock that
+     * the child process then tried to access.
+     * See https://github.com/logcabin/logcabin/issues/121 for more rationale.
+     */
+    std::thread snapshotWatchdogThread;
 };
 
 } // namespace LogCabin::Server

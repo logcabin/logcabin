@@ -14,6 +14,12 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#if __GNUC__ >= 4 && __GNUC_MINOR__ >= 5
+#include <atomic>
+#else
+#include <cstdatomic>
+#endif
+
 #include <google/protobuf/message.h>
 #include <memory>
 #include <stdexcept>
@@ -77,6 +83,20 @@ class Reader : public Core::ProtoBuf::InputStream {
 class Writer : public Core::ProtoBuf::OutputStream {
   public:
     /**
+     * Allocates an object that is shared across processes. Uses a shared,
+     * anonymous mmap region internally.
+     */
+    template<typename T>
+    struct SharedMMap {
+        SharedMMap();
+        ~SharedMMap();
+        T* value; // pointer does not change after construction
+        // SharedMMap is not copyable
+        SharedMMap(const SharedMMap& other) = delete;
+        SharedMMap& operator=(const SharedMMap& other) = delete;
+    };
+
+    /**
      * Constructor.
      * \param storageLayout
      *      The directories in which to create the snapshot (in a file called
@@ -131,6 +151,7 @@ class Writer : public Core::ProtoBuf::OutputStream {
     void writeMessage(const google::protobuf::Message& message);
     // See Core::ProtoBuf::OutputStream.
     void writeRaw(const void* data, uint64_t length);
+
   private:
     /// A handle to the directory containing the snapshot. Used for renameat on
     /// close.
@@ -141,6 +162,14 @@ class Writer : public Core::ProtoBuf::OutputStream {
     Storage::FilesystemUtil::File file;
     /// The number of bytes accumulated in the file so far.
     uint64_t bytesWritten;
+  public:
+    /**
+     * This value is incremented every time bytes are written to the Writer
+     * from any process holding this Writer. Used by Server/StateMachine to
+     * implement a watchdog that checks progress of a snapshotting process.
+     */
+    SharedMMap<std::atomic<uint64_t>> sharedBytesWritten;
+
 };
 
 } // namespace LogCabin::Storage::SnapshotFile

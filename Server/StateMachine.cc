@@ -1,4 +1,5 @@
 /* Copyright (c) 2012-2014 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -21,6 +22,8 @@
 #include "Core/Debug.h"
 #include "Core/Mutex.h"
 #include "Core/ProtoBuf.h"
+#include "Core/Random.h"
+#include "Core/Time.h"
 #include "Core/ThreadId.h"
 #include "Core/Util.h"
 #include "Server/RaftConsensus.h"
@@ -33,6 +36,11 @@ namespace Server {
 
 namespace PC = LogCabin::Protocol::Client;
 
+/// Clock used by watchdog timer thread.
+typedef Core::Time::SteadyClock Clock;
+/// Point in time of Clock.
+typedef Clock::time_point TimePoint;
+
 // for testing purposes
 bool stateMachineSuppressThreads = false;
 uint32_t stateMachineChildSleepMs = 0;
@@ -40,8 +48,16 @@ uint32_t stateMachineChildSleepMs = 0;
 StateMachine::StateMachine(std::shared_ptr<RaftConsensus> consensus,
                            Core::Config& config)
     : consensus(consensus)
-    , snapshotMinLogSize(config.read<uint64_t>("snapshotMinLogSize", 1024))
-    , snapshotRatio(config.read<uint64_t>("snapshotRatio", 10))
+      // This configuration option isn't advertised as part of the public API:
+      // it's only useful for testing.
+    , snapshotBlockPercentage(
+            config.read<uint64_t>("snapshotBlockPercentage", 0))
+    , snapshotMinLogSize(
+            config.read<uint64_t>("snapshotMinLogSize", 1024))
+    , snapshotRatio(
+            config.read<uint64_t>("snapshotRatio", 10))
+    , snapshotWatchdogInterval(std::chrono::milliseconds(
+            config.read<uint64_t>("snapshotWatchdogMilliseconds", 10000)))
       // TODO(ongaro): This should be configurable, but it must be the same for
       // every server, so it's dangerous to put it in the config file. Need to
       // use the Raft log to agree on this value. Also need to inform clients
@@ -52,17 +68,24 @@ StateMachine::StateMachine(std::shared_ptr<RaftConsensus> consensus,
     , mutex()
     , entriesApplied()
     , snapshotSuggested()
+    , snapshotStarted()
     , exiting(false)
     , childPid(0)
     , lastIndex(0)
+    , numSnapshotsAttempted(0)
+    , numSnapshotsFailed(0)
     , sessions()
     , tree()
+    , writer()
     , applyThread()
     , snapshotThread()
+    , snapshotWatchdogThread()
 {
     if (!stateMachineSuppressThreads) {
         applyThread = std::thread(&StateMachine::applyThreadMain, this);
         snapshotThread = std::thread(&StateMachine::snapshotThreadMain, this);
+        snapshotWatchdogThread = std::thread(
+                &StateMachine::snapshotWatchdogThreadMain, this);
     }
 }
 
@@ -75,6 +98,8 @@ StateMachine::~StateMachine()
         applyThread.join();
     if (snapshotThread.joinable())
         snapshotThread.join();
+    if (snapshotWatchdogThread.joinable())
+        snapshotWatchdogThread.join();
     NOTICE("Joined with threads");
 }
 
@@ -121,6 +146,8 @@ StateMachine::updateServerStats(Protocol::ServerStats& serverStats) const
     smStats.set_snapshotting(childPid != 0);
     smStats.set_last_applied(lastIndex);
     smStats.set_num_sessions(sessions.size());
+    smStats.set_num_snapshots_attempted(numSnapshotsAttempted);
+    smStats.set_num_snapshots_failed(numSnapshotsFailed);
 }
 
 void
@@ -218,13 +245,8 @@ StateMachine::applyThreadMain()
         exiting = true;
         entriesApplied.notify_all();
         snapshotSuggested.notify_all();
-        if (childPid != 0) {
-            int r = kill(childPid, SIGHUP);
-            if (r != 0) {
-                WARNING("Could not send SIGHUP to child process: %s",
-                        strerror(errno));
-            }
-        }
+        snapshotStarted.notify_all();
+        killSnapshotProcess(Core::HoldingMutex(lockGuard));
     }
 }
 
@@ -287,6 +309,16 @@ StateMachine::expireSessions(uint64_t clusterTime)
     }
 }
 
+void StateMachine::killSnapshotProcess(Core::HoldingMutex holdingMutex)
+{
+    if (childPid != 0) {
+        int r = kill(childPid, SIGHUP);
+        if (r != 0) {
+            WARNING("Could not send SIGHUP to child process: %s",
+                    strerror(errno));
+        }
+    }
+}
 
 void
 StateMachine::loadSessionSnapshot(Core::ProtoBuf::InputStream& stream)
@@ -359,23 +391,103 @@ StateMachine::snapshotThreadMain()
 }
 
 void
+StateMachine::snapshotWatchdogThreadMain()
+{
+    Core::ThreadId::setName("SnapshotStateMachineWatchdog");
+    using Core::StringUtil::toString;
+
+    // The snapshot process that this thread is currently tracking, based on
+    // numSnapshotsAttempted. If set to ~0UL, this thread is not currently
+    // tracking a snapshot process.
+    uint64_t tracking = ~0UL;
+    // The value of writer->sharedBytesWritten at the "start" time.
+    uint64_t startProgress = 0;
+    // The time at the "start" time.
+    TimePoint startTime = TimePoint::min();
+    // Special value for infinite interval.
+    const std::chrono::nanoseconds zero = std::chrono::nanoseconds::zero();
+
+    while (!exiting) {
+        std::unique_lock<std::mutex> lockGuard(mutex);
+        TimePoint waitUntil = TimePoint::max();
+        TimePoint now = Clock::now();
+
+        if (childPid > 0) { // there is some child process
+            uint64_t currentProgress = *writer->sharedBytesWritten.value;
+            if (tracking == numSnapshotsAttempted) { // tracking current child
+                if (snapshotWatchdogInterval != zero &&
+                    now >= startTime + snapshotWatchdogInterval) { // check
+                    if (currentProgress == startProgress) {
+                        ERROR("Snapshot process (counter %lu, pid %u) made no "
+                              "progress for %s. Killing it. If this happens "
+                              "at all often, you should file a bug to "
+                              "understand the root cause.",
+                              numSnapshotsAttempted,
+                              childPid,
+                              toString(snapshotWatchdogInterval).c_str());
+                        killSnapshotProcess(Core::HoldingMutex(lockGuard));
+                        // Don't kill for another interval,
+                        // hopefully child will be reaped by then.
+                    }
+                    startProgress = currentProgress;
+                    startTime = now;
+                } else {
+                    // woke up too early, nothing to do
+                }
+            } else { // not yet tracking this child
+                VERBOSE("Beginning to track snapshot process "
+                        "(counter %lu, pid %u)",
+                        numSnapshotsAttempted,
+                        childPid);
+                tracking = numSnapshotsAttempted;
+                startProgress = currentProgress;
+                startTime = now;
+            }
+            if (snapshotWatchdogInterval != zero)
+                waitUntil = startTime + snapshotWatchdogInterval;
+        } else { // no child process
+            if (tracking != ~0UL) {
+                VERBOSE("Snapshot ended: no longer tracking (counter %lu)",
+                        tracking);
+                tracking = ~0UL;
+            }
+        }
+        snapshotStarted.wait_until(lockGuard, waitUntil);
+    }
+}
+
+
+void
 StateMachine::takeSnapshot(uint64_t lastIncludedIndex,
                            std::unique_lock<std::mutex>& lockGuard)
 {
     // Open a snapshot file, then fork a child to write a consistent view of
     // the state machine to the snapshot file while this process continues
     // accepting requests.
-    std::unique_ptr<Storage::SnapshotFile::Writer> writer =
-        consensus->beginSnapshot(lastIncludedIndex);
+    writer = consensus->beginSnapshot(lastIncludedIndex);
     // Flush the outstanding changes to the snapshot now so that they
     // aren't somehow double-flushed later.
     writer->flushToOS();
+
+    ++numSnapshotsAttempted;
+    snapshotStarted.notify_all();
+
     pid_t pid = fork();
     if (pid == -1) { // error
         PANIC("Couldn't fork: %s", strerror(errno));
     } else if (pid == 0) { // child
         Core::Debug::processName += "-child";
         usleep(stateMachineChildSleepMs * 1000); // for testing purposes
+        if (snapshotBlockPercentage > 0) { // for testing purposes
+            if (Core::Random::randomRange(0, 100) < snapshotBlockPercentage) {
+                WARNING("Purposely deadlocking child (probability is %lu%%)",
+                        snapshotBlockPercentage);
+                std::mutex mutex;
+                mutex.lock();
+                mutex.lock(); // intentional deadlock
+            }
+        }
+
         dumpSessionSnapshot(*writer);
         tree.dumpSnapshot(*writer);
         // Flush the changes to the snapshot file before exiting.
@@ -402,11 +514,19 @@ StateMachine::takeSnapshot(uint64_t lastIncludedIndex,
         } else if (exiting &&
                    WIFSIGNALED(status) && WTERMSIG(status) == SIGHUP) {
             writer->discard();
+            writer.reset();
             NOTICE("Child exited from SIGHUP since this process is "
                    "exiting");
         } else {
             writer->discard();
-            PANIC("Snapshot creation failed with status %d", status);
+            writer.reset();
+            ++numSnapshotsFailed;
+            ERROR("Snapshot creation failed with status %d. This server will "
+                  "try again, but something might be terribly wrong. "
+                  "%lu of %lu snapshots have failed in total.",
+                  status,
+                  numSnapshotsFailed,
+                  numSnapshotsAttempted);
         }
     }
 }

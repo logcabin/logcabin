@@ -14,9 +14,10 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #include "Core/Debug.h"
@@ -133,11 +134,37 @@ Reader::readRaw(void* data, uint64_t length)
     return r;
 }
 
+template<typename T>
+Writer::SharedMMap<T>::SharedMMap()
+    : value(NULL)
+{
+    void* addr = mmap(NULL,
+                      sizeof(*value),
+                      PROT_READ|PROT_WRITE,
+                      MAP_SHARED|MAP_ANONYMOUS,
+                      -1, 0);
+    if (addr == MAP_FAILED) {
+        PANIC("Could not mmap anonymous shared page: %s",
+              strerror(errno));
+    }
+    value = new(addr) T();
+}
+
+template<typename T>
+Writer::SharedMMap<T>::~SharedMMap()
+{
+    if (munmap(value, sizeof(*value)) != 0) {
+        PANIC("Failed to munmap shared anonymous page: %s",
+              strerror(errno));
+    }
+}
+
 Writer::Writer(const Storage::Layout& storageLayout)
     : parentDir(FilesystemUtil::dup(storageLayout.snapshotDir))
     , stagingName()
     , file()
     , bytesWritten(0)
+    , sharedBytesWritten()
 {
     struct timespec now =
         Core::Time::makeTimeSpec(Core::Time::SystemClock::now());
@@ -215,6 +242,7 @@ Writer::writeMessage(const google::protobuf::Message& message)
               strerror(errno));
     }
     bytesWritten += r;
+    *sharedBytesWritten.value += r;
 }
 
 void
@@ -227,6 +255,7 @@ Writer::writeRaw(const void* data, uint64_t length)
               strerror(errno));
     }
     bytesWritten += r;
+    *sharedBytesWritten.value += r;
 }
 
 } // namespace LogCabin::Storage::SnapshotFile
