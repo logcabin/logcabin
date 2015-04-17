@@ -80,6 +80,10 @@ namespace Storage {
  * segments that are before the new log start index. For example, if a
  * segment has entries 10 through 20 and the prefix of the log is truncated to
  * start at entry 15, that entire segment will be retained.
+ *
+ * Each segment file starts with a segment header, which currently contains
+ * just a one-byte version number for the format of that segment. The current
+ * format (version 1) is just a concatenation of serialized entry records.
  */
 class SegmentedLog : public Log {
 
@@ -332,7 +336,8 @@ class SegmentedLog : public Log {
          */
         uint64_t endIndex;
         /**
-         * Size in bytes of the valid entries stored in the file.
+         * Size in bytes of the valid entries stored in the file plus
+         * the version number at the start of the file.
          */
         uint64_t bytes;
         /**
@@ -346,6 +351,15 @@ class SegmentedLog : public Log {
 
     };
 
+    /**
+     * This goes at the start of every segment.
+     */
+    struct SegmentHeader {
+        /**
+         * Always set to 1 for now.
+         */
+        uint8_t version;
+    } __attribute__((packed));
 
     ////////// initialization helper functions //////////
 

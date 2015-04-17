@@ -55,11 +55,7 @@ class StorageSegmentedLogTest : public ::testing::Test {
 
         sampleEntry.set_term(40);
         sampleEntry.set_data("foo");
-
-        closedSegment.isOpen = false;
-
-        sampleEntry.set_term(40);
-        sampleEntry.set_data("foo");
+        sampleEntry.set_cluster_time(1);
 
         closedSegment.isOpen = false;
         closedSegment.startIndex = 3;
@@ -172,6 +168,13 @@ class StorageSegmentedLogTest : public ::testing::Test {
         } while (size > 5);
     }
 
+    void writeSegmentHeader(FS::File& file, uint8_t version = 1) {
+        SegmentedLog::SegmentHeader header;
+        header.version = version;
+        EXPECT_LE(0, FS::write(file.fd, &header, sizeof(header)))
+            << strerror(errno);
+    }
+
     Core::Config config;
     Storage::Layout layout;
     std::unique_ptr<SegmentedLog> log;
@@ -247,12 +250,24 @@ TEST_F(StorageSegmentedLogTest, getLastLogIndex_blackbox)
 
 TEST_F(StorageSegmentedLogTest, getSizeBytes_blackbox)
 {
-    EXPECT_EQ(0U, log->getSizeBytes());
+    const uint64_t SLOP = 100;
+    const uint64_t DATALEN = 1000;
+    config.set<uint64_t>("storageSegmentBytes", DATALEN * 2);
+    construct();
+    EXPECT_GT(SLOP, log->getSizeBytes());
+    sampleEntry.set_index(2);
+    sampleEntry.set_data(std::string(DATALEN, 'c'));
     log->append({&sampleEntry});
-    uint64_t s = log->getSizeBytes();
-    EXPECT_LT(0U, s);
+    EXPECT_LE(DATALEN, log->getSizeBytes());
+    EXPECT_GT(DATALEN + 2 * SLOP, log->getSizeBytes());
+    sampleEntry.set_index(3);
     log->append({&sampleEntry});
-    EXPECT_EQ(2 * s, log->getSizeBytes());
+    EXPECT_LE(DATALEN * 2, log->getSizeBytes());
+    EXPECT_GT(DATALEN * 2 + 3 * SLOP, log->getSizeBytes());
+    sampleEntry.set_index(4);
+    log->append({&sampleEntry});
+    EXPECT_LE(DATALEN * 3, log->getSizeBytes());
+    EXPECT_GT(DATALEN * 3 + 4 * SLOP, log->getSizeBytes());
     sync();
 }
 
@@ -399,8 +414,11 @@ TEST_F(StorageSegmentedLogTest, constructor_segmentsByStartIndex)
     sync();
     FS::File logDir = FS::dup(log->dir);
     log.reset();
-    FS::openFile(logDir, "open-1", O_CREAT);
-    FS::openFile(logDir, "open-2", O_CREAT);
+    FS::File file;
+    file = FS::openFile(logDir, "open-1", O_CREAT|O_WRONLY);
+    writeSegmentHeader(file);
+    file = FS::openFile(logDir, "open-2", O_CREAT|O_WRONLY);
+    writeSegmentHeader(file);
     construct();
     EXPECT_EQ(2U, log->segmentsByStartIndex.size());
     EXPECT_EQ("00000000000000000003-00000000000000000004",
@@ -464,13 +482,16 @@ TEST_F(StorageSegmentedLogTest, constructor_nodup_differentStartIndex)
             FS::openFile(logDir,
                          "00000000000000000006-00000000000000000006",
                          O_CREAT|O_RDWR);
-        // copy the second half of the file, corresponding to exactly the bytes
-        // for entry 6.
+        // copy exactly the bytes for entry 6
+        uint64_t len = (contents.getFileLength() -
+                        sizeof(SegmentedLog::SegmentHeader)) / 2;
+        uint64_t start = sizeof(SegmentedLog::SegmentHeader) + len;
+        writeSegmentHeader(newFile);
         EXPECT_LT(0, FS::write(newFile.fd,
-                               contents.get(contents.getFileLength() / 2,
-                                            contents.getFileLength() / 2),
-                               contents.getFileLength() / 2));
+                               contents.get(start, len),
+                               len));
     }
+    // regex follows, filename is 0000...6-0000...6
     EXPECT_DEATH(construct(),
                  "Segment 0+6-0+6 contains duplicate entries 6 to 6");
 }
@@ -486,28 +507,29 @@ TEST_F(StorageSegmentedLogTest, append_rollover)
 {
     log->truncatePrefix(3);
     std::vector<const Log::Entry*> entries;
-    for (uint64_t i = 3; i <= 17; ++i)
+    for (uint64_t i = 3; i <= 19; ++i)
         entries.push_back(&sampleEntry);
-    EXPECT_EQ((std::pair<uint64_t, uint64_t>{3, 17}),
+    EXPECT_EQ((std::pair<uint64_t, uint64_t>{3, 19}),
               log->append(entries));
-    EXPECT_EQ((std::vector<uint64_t> { 3, 12 }),
+    EXPECT_EQ((std::vector<uint64_t> { 3, 17 }),
               Core::STLUtil::getKeys(log->segmentsByStartIndex))
         << "This test may fail when record sizes change.";
-    EXPECT_EQ(0U, log->segmentsByStartIndex.at(12).entries.at(0).offset);
-    EXPECT_EQ(17U, log->currentSync->lastIndex);
+    EXPECT_EQ(sizeof(SegmentedLog::SegmentHeader),
+              log->segmentsByStartIndex.at(17).entries.at(0).offset);
+    EXPECT_EQ(19U, log->currentSync->lastIndex);
     sync();
     FS::File logDir = FS::dup(log->dir);
     log.reset();
     EXPECT_EQ((std::vector<std::string> {
-                    "00000000000000000003-00000000000000000011",
-                    "00000000000000000012-00000000000000000017",
+                    "00000000000000000003-00000000000000000016",
+                    "00000000000000000017-00000000000000000019",
                     "metadata1",
                     "metadata2",
                }),
               sorted(FS::ls(logDir)));
     EXPECT_GE(1024U, getSize(FS::openFile(
                                 logDir,
-                                "00000000000000000003-00000000000000000011",
+                                "00000000000000000003-00000000000000000016",
                                 O_RDONLY)));
     construct(); // extra sanity checks
 }
@@ -530,7 +552,8 @@ TEST_F(StorageSegmentedLogTest, append_largerThanMaxSegmentSize)
     });
     EXPECT_EQ((std::vector<uint64_t> { 1, 2, 4, 5 }),
               Core::STLUtil::getKeys(log->segmentsByStartIndex));
-    EXPECT_EQ(0U, log->segmentsByStartIndex.at(4).entries.at(0).offset);
+    EXPECT_EQ(sizeof(SegmentedLog::SegmentHeader),
+              log->segmentsByStartIndex.at(4).entries.at(0).offset);
     EXPECT_EQ(5U, log->currentSync->lastIndex);
     sync();
     FS::File logDir = FS::dup(log->dir);
@@ -649,7 +672,8 @@ TEST_F(StorageSegmentedLogTest, truncateSuffix_openSegment_partial)
     EXPECT_EQ(3U, log->segmentsByStartIndex.at(3).endIndex);
     EXPECT_EQ(0U, log->segmentsByStartIndex.at(4).entries.size());
     EXPECT_EQ(3U, log->segmentsByStartIndex.at(4).endIndex);
-    EXPECT_EQ(0U, log->segmentsByStartIndex.at(4).bytes);
+    EXPECT_EQ(sizeof(SegmentedLog::SegmentHeader),
+              log->segmentsByStartIndex.at(4).bytes);
     EXPECT_EQ(3U, log->getLastLogIndex());
     FS::File logDir = FS::dup(log->dir);
     log.reset();
@@ -679,7 +703,8 @@ TEST_F(StorageSegmentedLogTest, truncateSuffix_openSegment_full)
     EXPECT_EQ(4U, log->segmentsByStartIndex.at(3).endIndex);
     EXPECT_EQ(0U, log->segmentsByStartIndex.at(5).entries.size());
     EXPECT_EQ(4U, log->segmentsByStartIndex.at(5).endIndex);
-    EXPECT_EQ(0U, log->segmentsByStartIndex.at(5).bytes);
+    EXPECT_EQ(sizeof(SegmentedLog::SegmentHeader),
+              log->segmentsByStartIndex.at(5).bytes);
     FS::File logDir = FS::dup(log->dir);
     log.reset();
     EXPECT_EQ((std::vector<std::string> {
@@ -711,7 +736,8 @@ TEST_F(StorageSegmentedLogTest, truncateSuffix_closedSegments)
     EXPECT_EQ(3U, log->segmentsByStartIndex.at(3).endIndex);
     EXPECT_EQ(0U, log->segmentsByStartIndex.at(4).entries.size());
     EXPECT_EQ(3U, log->segmentsByStartIndex.at(4).endIndex);
-    EXPECT_EQ(0U, log->segmentsByStartIndex.at(4).bytes);
+    EXPECT_EQ(sizeof(SegmentedLog::SegmentHeader),
+              log->segmentsByStartIndex.at(4).bytes);
     FS::File logDir = FS::dup(log->dir);
     log.reset();
     EXPECT_EQ((std::vector<std::string> {
@@ -808,9 +834,31 @@ TEST_F(StorageSegmentedLogTest, readMetadata_unknownFormatVersion)
                  "only understands version 1");
 }
 
+TEST_F(StorageSegmentedLogTest, loadClosedSegment_missingVersion)
+{
+    FS::File file = FS::openFile(log->dir,
+                                 closedSegment.filename,
+                                 O_CREAT|O_WRONLY);
+    EXPECT_DEATH(log->loadClosedSegment(closedSegment, 5000),
+                 "completely empty");
+}
+
+TEST_F(StorageSegmentedLogTest, loadClosedSegment_unknownVersion)
+{
+    FS::File file = FS::openFile(log->dir,
+                                 closedSegment.filename,
+                                 O_CREAT|O_WRONLY);
+    writeSegmentHeader(file, /*version=*/2);
+    EXPECT_DEATH(log->loadClosedSegment(closedSegment, 5000),
+                 "version.*was 2, but this code can only read version 1");
+}
+
 TEST_F(StorageSegmentedLogTest, loadClosedSegment_removeUnneeded)
 {
-    FS::openFile(log->dir, closedSegment.filename, O_CREAT);
+    FS::File file = FS::openFile(log->dir,
+                                 closedSegment.filename,
+                                 O_CREAT|O_WRONLY);
+    writeSegmentHeader(file);
     EXPECT_FALSE(log->loadClosedSegment(closedSegment, 5000));
     EXPECT_EQ(-1, FS::tryOpenFile(log->dir, closedSegment.filename,
                                   O_RDONLY).fd);
@@ -818,7 +866,10 @@ TEST_F(StorageSegmentedLogTest, loadClosedSegment_removeUnneeded)
 
 TEST_F(StorageSegmentedLogTest, loadClosedSegment_missingEntries)
 {
-    FS::openFile(log->dir, closedSegment.filename, O_CREAT);
+    FS::File file = FS::openFile(log->dir,
+                                 closedSegment.filename,
+                                 O_CREAT|O_WRONLY);
+    writeSegmentHeader(file);
     EXPECT_DEATH(log->loadClosedSegment(closedSegment, 1),
                  "File too short");
 }
@@ -828,6 +879,7 @@ TEST_F(StorageSegmentedLogTest, loadClosedSegment_corrupt)
     FS::File file = FS::openFile(log->dir,
                                  closedSegment.filename,
                                  O_CREAT|O_WRONLY);
+    writeSegmentHeader(file);
     FS::write(file.fd, "CRC32: haha, just kidding", 27);
     EXPECT_DEATH(log->loadClosedSegment(closedSegment, 1),
                  "corrupt");
@@ -856,7 +908,8 @@ TEST_F(StorageSegmentedLogTest, loadClosedSegment_extraBytes)
     LogCabin::Core::Debug::setLogPolicy({
         {"", "WARNING"}
     });
-    EXPECT_EQ(oldSize / 2, FS::getSize(file));
+    EXPECT_EQ(oldSize - (oldSize - sizeof(SegmentedLog::SegmentHeader)) / 2,
+              FS::getSize(file));
     construct(); // additional sanity checks
 }
 
@@ -881,9 +934,34 @@ TEST_F(StorageSegmentedLogTest, loadOpenSegment_empty)
     FS::File file = FS::openFile(log->dir,
                                  openSegment.filename,
                                  O_CREAT|O_WRONLY);
+    LogCabin::Core::Debug::setLogPolicy({ // expect warnings
+        {"Storage/SegmentedLog", "ERROR"}
+    });
+    EXPECT_FALSE(log->loadOpenSegment(openSegment, 1));
+    LogCabin::Core::Debug::setLogPolicy({
+        {"", "WARNING"}
+    });
+    EXPECT_EQ(-1, FS::tryOpenFile(log->dir, openSegment.filename,
+                                  O_RDONLY).fd);
+
+    file = FS::openFile(log->dir,
+                        openSegment.filename,
+                        O_CREAT|O_WRONLY);
+    writeSegmentHeader(file);
+    // no warning this time
     EXPECT_FALSE(log->loadOpenSegment(openSegment, 1));
     EXPECT_EQ(-1, FS::tryOpenFile(log->dir, openSegment.filename,
                                   O_RDONLY).fd);
+}
+
+TEST_F(StorageSegmentedLogTest, loadOpenSegment_unknownVersion)
+{
+    FS::File file = FS::openFile(log->dir,
+                                 openSegment.filename,
+                                 O_CREAT|O_WRONLY);
+    writeSegmentHeader(file, /*version=*/2);
+    EXPECT_DEATH(log->loadOpenSegment(openSegment, 1),
+                 "version.*was 2, but this code can only read version 1");
 }
 
 TEST_F(StorageSegmentedLogTest, loadOpenSegment_removeUnneeded)
@@ -909,7 +987,11 @@ TEST_F(StorageSegmentedLogTest, loadOpenSegment_corruptDelete)
     std::string oldName = "00000000000000000003-00000000000000000004";
     FS::rename(log->dir, oldName,
                log->dir, openSegment.filename);
-    FS::write(FS::openFile(log->dir, openSegment.filename, O_RDWR).fd, "x", 1);
+    FS::File file = FS::openFile(log->dir, openSegment.filename, O_RDWR);
+    EXPECT_LE(0, lseek(file.fd, sizeof(SegmentedLog::SegmentHeader), SEEK_SET))
+        << strerror(errno);
+    EXPECT_LE(0, FS::write(file.fd, "x", 1))
+        << strerror(errno);
     LogCabin::Core::Debug::setLogPolicy({ // expect warnings
         {"Storage/SegmentedLog", "ERROR"}
     });
@@ -1015,7 +1097,8 @@ TEST_F(StorageSegmentedLogTest, prepareNewSegment)
     EXPECT_EQ(log->MAX_SEGMENT_SIZE,
               FS::getSize(ret.second));
     FS::FileContents contents(ret.second);
-    for (uint64_t i = 0; i < contents.getFileLength(); ++i)
+    EXPECT_EQ(1U, *contents.get<uint8_t>(0, 1)); // header
+    for (uint64_t i = 1; i < contents.getFileLength(); ++i)
         EXPECT_EQ(0U, *contents.get<uint8_t>(i, 1));
 }
 
