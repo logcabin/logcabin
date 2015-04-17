@@ -146,10 +146,10 @@ TEST_F(RPCOpaqueServerTest, BoundListener_handleFileEvent) {
 }
 
 TEST_F(RPCOpaqueServerTest, bind_good) {
-    Address address2("127.0.0.1", 61022);
+    Address address2("127.0.0.1", 5253);
     address2.refresh(Address::TimePoint::max());
     EXPECT_EQ("", server.bind(address2));
-    Address address3("127.0.0.1", 61024);
+    Address address3("127.0.0.1", 5255);
     address3.refresh(Address::TimePoint::max());
     EXPECT_EQ("", server.bind(address3));
     EXPECT_EQ(3U, server.boundListeners.size());

@@ -48,7 +48,7 @@ class OptionParser {
     OptionParser(int& argc, char**& argv)
         : argc(argc)
         , argv(argv)
-        , cluster("logcabin:61023")
+        , cluster("logcabin:5254")
         , command()
         , condition()
         , dir()
@@ -203,7 +203,7 @@ class OptionParser {
             << "servers, comma-separated"
             << std::endl
             << "                                         "
-            << "[default: logcabin:61023]"
+            << "[default: logcabin:5254]"
             << std::endl
 
             << "  -d <path>, --dir=<path>        "

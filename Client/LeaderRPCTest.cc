@@ -132,10 +132,10 @@ TEST_F(ClientLeaderRPCTest, Call_start_timeout) {
     RPC::ClientSession::connectFn = std::ref(c);
     call.start(OpCode::READ_ONLY_TREE, request, TimePoint::min());
     EXPECT_EQ("Closed session: Failed to connect socket to 127.0.0.1 "
-              "(resolved to 127.0.0.1:61023): timeout expired",
+              "(resolved to 127.0.0.1:5254): timeout expired",
               call.cachedSession->toString());
     EXPECT_EQ("Failed to connect socket to 127.0.0.1 "
-              "(resolved to 127.0.0.1:61023): timeout expired",
+              "(resolved to 127.0.0.1:5254): timeout expired",
               call.rpc.getErrorMessage());
     EXPECT_EQ(LeaderRPCBase::Call::Status::TIMEOUT,
               call.wait(response, TimePoint::min()));

@@ -77,9 +77,12 @@ Running a real cluster
 This section shows you how to run the `HelloWorld` example program against a
 three-server LogCabin cluster. We'll run all the servers on localhost for now:
 
- - Server 1 will listen on 127.0.0.1:61023 (LogCabin's default port)
- - Server 2 will listen on 127.0.0.1:61024
- - Server 3 will listen on 127.0.0.1:61025
+ - Server 1 will listen on 127.0.0.1:5254
+ - Server 2 will listen on 127.0.0.1:5255
+ - Server 3 will listen on 127.0.0.1:5256
+
+Port 5254 is LogCabin's default port and is reserved by IANA for LogCabin. The
+other two belong to others and are hopefully not in use on your network.
 
 We'll first need to create three configuration files. You can base yours off of
 sample.conf, or the following will work for now:
@@ -87,17 +90,17 @@ sample.conf, or the following will work for now:
 File `logcabin-1.conf`:
 
     serverId = 1
-    listenAddresses = 127.0.0.1:61023
+    listenAddresses = 127.0.0.1:5254
 
 File `logcabin-2.conf`:
 
     serverId = 2
-    listenAddresses = 127.0.0.1:61024
+    listenAddresses = 127.0.0.1:5255
 
 File `logcabin-3.conf`:
 
     serverId = 3
-    listenAddresses = 127.0.0.1:61025
+    listenAddresses = 127.0.0.1:5256
 
 Now you're almost ready to start the servers. First, initialize one of the
 server's logs with a cluster membership configuration that contains just
@@ -132,8 +135,8 @@ keep you from doing anything stupid):
 Now use the reconfiguration command to add the second and third servers to the
 cluster:
 
-    ALLSERVERS=127.0.0.1:61023,127.0.0.1:61024,127.0.0.1:61025
-    build/Examples/Reconfigure --cluster=$ALLSERVERS set 127.0.0.1:61023 127.0.0.1:61024 127.0.0.1:61025
+    ALLSERVERS=127.0.0.1:5254,127.0.0.1:5255,127.0.0.1:5256
+    build/Examples/Reconfigure --cluster=$ALLSERVERS set 127.0.0.1:5254 127.0.0.1:5255 127.0.0.1:5256
 
 This `Reconfigure` command is a special LogCabin client. It first queries each
 of the servers given in its positional command line arguments (space-delimited
@@ -150,20 +153,20 @@ have output something like:
 
     Current configuration:
     Configuration 1:
-    - 1: 127.0.0.1:61023
+    - 1: 127.0.0.1:5254
 
     Attempting to change cluster membership to the following:
-    1: 127.0.0.1:61023 (given as 127.0.0.1:61023)
-    2: 127.0.0.1:61024 (given as 127.0.0.1:61024)
-    3: 127.0.0.1:61025 (given as 127.0.0.1:61025)
+    1: 127.0.0.1:5254 (given as 127.0.0.1:5254)
+    2: 127.0.0.1:5255 (given as 127.0.0.1:5255)
+    3: 127.0.0.1:5256 (given as 127.0.0.1:5256)
 
     Membership change result: OK
 
     Current configuration:
     Configuration 4:
-    - 1: 127.0.0.1:61023
-    - 2: 127.0.0.1:61024
-    - 3: 127.0.0.1:61025
+    - 1: 127.0.0.1:5254
+    - 2: 127.0.0.1:5255
+    - 3: 127.0.0.1:5256
 
 Finally, you can run a LogCabin client to exercise the cluster:
 

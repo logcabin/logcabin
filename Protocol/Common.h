@@ -29,8 +29,9 @@ namespace Common {
 
 /**
  * The default TCP port on which LogCabin servers serve RPCs.
+ * TCP port 5254 is reserved by IANA for LogCabin as of April 2015.
  */
-enum { DEFAULT_PORT = 61023 };
+enum { DEFAULT_PORT = 5254 };
 
 /**
  * Reserved MessageSocket::MessageID values.

@@ -58,7 +58,7 @@ class ServerStateMachineTest : public ::testing::Test {
         *entry.mutable_configuration() =
             Core::ProtoBuf::fromString<Protocol::Raft::Configuration>(
                 "prev_configuration {"
-                "    servers { server_id: 1, addresses: '127.0.0.1:61023' }"
+                "    servers { server_id: 1, addresses: '127.0.0.1:5254' }"
                 "}");
         consensus->init();
         consensus->append({&entry});

@@ -151,7 +151,7 @@ TEST_F(RPCClientServerTest, timeout) {
     Event::Loop::Lock blockPings(serverEventLoop);
     RPC::OpaqueClientRPC rpc2 = clientSession->sendRequest(Core::Buffer());
     rpc2.waitForReply(TimePoint::max());
-    EXPECT_EQ("Server 127.0.0.1 (resolved to 127.0.0.1:61023) timed out",
+    EXPECT_EQ("Server 127.0.0.1 (resolved to 127.0.0.1:5254) timed out",
               rpc2.getErrorMessage());
 
 }

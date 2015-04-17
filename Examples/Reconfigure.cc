@@ -41,7 +41,7 @@ class OptionParser {
     OptionParser(int& argc, char**& argv)
         : argc(argc)
         , argv(argv)
-        , cluster("logcabin:61023")
+        , cluster("logcabin:5254")
         , servers()
     {
         while (true) {
@@ -113,7 +113,7 @@ class OptionParser {
             << "the new servers, comma-separated"
             << std::endl
             << "                                         "
-            << "[default: logcabin:61023]"
+            << "[default: logcabin:5254]"
             << std::endl
 
             << "  -h, --help                             "

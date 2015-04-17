@@ -80,13 +80,13 @@ TEST(ServerGlobalsTest, initBindToAll) {
     Globals globals;
     globals.config.set("storageModule", "Memory");
     globals.config.set("uuid", "my-fake-uuid-123");
-    globals.config.set("listenAddresses", "127.0.0.1:61023,127.0.0.1:61024");
+    globals.config.set("listenAddresses", "127.0.0.1:5254,127.0.0.1:5255");
     globals.config.set("serverId", "1");
     globals.config.set("use-temporary-storage", "true");
     globals.init();
     Event::Loop eventLoop;
     RPC::Server server(eventLoop, 1);
-    RPC::Address address("127.0.0.1", 61024);
+    RPC::Address address("127.0.0.1", 5255);
     address.refresh(RPC::Address::TimePoint::max());
     std::string e = server.bind(address);
     EXPECT_NE(e.npos, e.find("in use")) << e;

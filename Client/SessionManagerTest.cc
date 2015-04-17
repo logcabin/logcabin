@@ -92,7 +92,7 @@ TEST_F(ClientSessionManagerTest, createSession_verifyRPCFailed)
         address,
         TimePoint::max());
     EXPECT_EQ("Verifying recipient with 127.0.0.1 "
-              "(resolved to 127.0.0.1:61023) failed "
+              "(resolved to 127.0.0.1:5254) failed "
               "(after connecting over TCP)",
               session->getErrorMessage());
 }
@@ -137,7 +137,7 @@ TEST_F(ClientSessionManagerTest, createSession_verifyBad)
         &clusterUUID,
         &serverId);
     EXPECT_EQ("Verifying recipient with 127.0.0.1 "
-              "(resolved to 127.0.0.1:61023) failed "
+              "(resolved to 127.0.0.1:5254) failed "
               "(after connecting over TCP)",
               session->getErrorMessage());
     EXPECT_EQ("foo", clusterUUID.getOrDefault());

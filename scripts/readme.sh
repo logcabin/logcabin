@@ -9,19 +9,19 @@ tmpdir=$(mktemp -d)
 
 cat >logcabin-1.conf << EOF
 serverId = 1
-listenAddresses = 127.0.0.1:61023
+listenAddresses = 127.0.0.1:5254
 storagePath=$tmpdir
 EOF
 
 cat >logcabin-2.conf << EOF
 serverId = 2
-listenAddresses = 127.0.0.1:61024
+listenAddresses = 127.0.0.1:5255
 storagePath=$tmpdir
 EOF
 
 cat >logcabin-3.conf << EOF
 serverId = 3
-listenAddresses = 127.0.0.1:61025
+listenAddresses = 127.0.0.1:5256
 storagePath=$tmpdir
 EOF
 
@@ -36,8 +36,8 @@ pid2=$!
 build/LogCabin --config logcabin-3.conf --log debug/3 &
 pid3=$!
 
-ALLSERVERS=127.0.0.1:61023,127.0.0.1:61024,127.0.0.1:61025
-build/Examples/Reconfigure --cluster=$ALLSERVERS set 127.0.0.1:61023 127.0.0.1:61024 127.0.0.1:61025
+ALLSERVERS=127.0.0.1:5254,127.0.0.1:5255,127.0.0.1:5256
+build/Examples/Reconfigure --cluster=$ALLSERVERS set 127.0.0.1:5254 127.0.0.1:5255 127.0.0.1:5256
 
 build/Examples/HelloWorld --cluster=$ALLSERVERS
 
