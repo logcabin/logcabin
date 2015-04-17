@@ -1602,6 +1602,10 @@ RaftConsensus::beginSnapshot(uint64_t lastIncludedIndex)
               "%lu is last committed entry)", lastIncludedIndex, commitIndex);
     }
 
+    // Format version of snapshot file is 1.
+    uint8_t version = 1;
+    writer->writeRaw(&version, sizeof(version));
+
     // set header fields
     SnapshotMetadata::Header header;
     header.set_last_included_index(lastIncludedIndex);
@@ -2315,11 +2319,25 @@ RaftConsensus::readSnapshot()
         }
     }
     if (reader) {
+        // Check that this snapshot uses format version 1
+        uint8_t version = 0;
+        uint64_t bytesRead = reader->readRaw(&version, sizeof(version));
+        if (bytesRead < 1) {
+            PANIC("Found completely empty snapshot file (it doesn't even "
+                  "have a version field)");
+        } else {
+            if (version != 1) {
+                PANIC("Snapshot format version read was %u, but this code can "
+                      "only read version 1",
+                      version);
+            }
+        }
+
         // load header contents
         SnapshotMetadata::Header header;
         std::string error = reader->readMessage(header);
         if (!error.empty()) {
-            PANIC("couldn't read snapshot: %s", error.c_str());
+            PANIC("Couldn't read snapshot header: %s", error.c_str());
         }
         if (header.last_included_index() < lastSnapshotIndex) {
             PANIC("Trying to load a snapshot that is more stale than one this "
