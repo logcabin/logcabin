@@ -226,10 +226,9 @@ StateMachine::applyThreadMain()
                     apply(entry);
                     break;
                 case RaftConsensus::Entry::SNAPSHOT:
-                    NOTICE("Loading snapshot through entry %lu into "
-                           "state machine", entry.index);
-                    loadSessionSnapshot(*entry.snapshotReader);
-                    tree.loadSnapshot(*entry.snapshotReader);
+                    NOTICE("Loading snapshot through entry %lu into state "
+                           "machine", entry.index);
+                    loadSnapshot(*entry.snapshotReader);
                     NOTICE("Done loading snapshot");
                     break;
             }
@@ -343,6 +342,24 @@ StateMachine::loadSessionSnapshot(Core::ProtoBuf::InputStream& stream)
             session.responses.insert({it2->rpc_number(), it2->response()});
         }
     }
+}
+
+void
+StateMachine::loadSnapshot(Core::ProtoBuf::InputStream& stream)
+{
+    // Check that this snapshot uses format version 1
+    uint8_t version = 0;
+    uint64_t bytesRead = stream.readRaw(&version, sizeof(version));
+    if (bytesRead < 1) {
+        PANIC("Snapshot contents are empty (no version field)");
+    }
+    if (version != 1) {
+        PANIC("Snapshot contents format version read was %u, but this "
+              "code can only read version 1",
+              version);
+    }
+    loadSessionSnapshot(stream);
+    tree.loadSnapshot(stream);
 }
 
 bool
@@ -488,8 +505,14 @@ StateMachine::takeSnapshot(uint64_t lastIncludedIndex,
             }
         }
 
+        // Format version of snapshot contents is 1.
+        uint8_t version = 1;
+        writer->writeRaw(&version, sizeof(version));
+        // StateMachine state comes next
         dumpSessionSnapshot(*writer);
+        // Then the Tree itself (this one is potentially large)
         tree.dumpSnapshot(*writer);
+
         // Flush the changes to the snapshot file before exiting.
         writer->flushToOS();
         _exit(0);

@@ -124,6 +124,12 @@ class StateMachine {
     void loadSessionSnapshot(Core::ProtoBuf::InputStream& stream);
 
     /**
+     * Read all of the state machine state from a snapshot file
+     * (including version, sessions, and tree).
+     */
+    void loadSnapshot(Core::ProtoBuf::InputStream& stream);
+
+    /**
      * Return true if it is time to create a new snapshot.
      * This is called by applyThread as an optimization to avoid waking up
      * snapshotThread upon applying every single entry.

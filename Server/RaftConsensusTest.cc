@@ -2469,6 +2469,27 @@ TEST_F(ServerRaftConsensusTest, readSnapshot_incompleteLogPrefix)
                  "corrupt disk state");
 }
 
+TEST_F(ServerRaftConsensusTest, readSnapshot_emptyFile)
+{
+    init();
+    Storage::SnapshotFile::Writer writer(consensus->storageLayout);
+    writer.save();
+    EXPECT_DEATH({ consensus->readSnapshot(); },
+                 "completely empty");
+}
+
+TEST_F(ServerRaftConsensusTest, readSnapshot_unknownVersion)
+{
+    init();
+    Storage::SnapshotFile::Writer writer(consensus->storageLayout);
+    uint8_t version = 2;
+    writer.writeRaw(&version, sizeof(version));
+    writer.save();
+    EXPECT_DEATH({ consensus->readSnapshot(); },
+                 "Snapshot format version read was 2, but this code can only "
+                 "read version 1");
+}
+
 TEST_F(ServerRaftConsensusTest, replicateEntry_notLeader)
 {
     init();

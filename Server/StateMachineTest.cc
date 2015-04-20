@@ -321,6 +321,37 @@ TEST_F(ServerStateMachineTest, expireSessions)
                   Core::STLUtil::getKeys(stateMachine->sessions)));
 }
 
+
+// loadSessionSnapshot tested along with dumpSessionSnapshot above
+
+// loadSnapshot normal path tested along with takeSnapshot below
+
+TEST_F(ServerStateMachineTest, loadSnapshot_empty)
+{
+    std::unique_ptr<Storage::SnapshotFile::Writer> writer =
+        consensus->beginSnapshot(1);
+    writer->save();
+    consensus->readSnapshot();
+    EXPECT_DEATH(stateMachine->loadSnapshot(*consensus->snapshotReader),
+                 "no version field");
+}
+
+TEST_F(ServerStateMachineTest, loadSnapshot_unknownVersion)
+{
+    std::unique_ptr<Storage::SnapshotFile::Writer> writer =
+        consensus->beginSnapshot(1);
+    uint8_t version = 2;
+    writer->writeRaw(&version, sizeof(version));
+    stateMachine->dumpSessionSnapshot(*writer);
+    stateMachine->tree.dumpSnapshot(*writer);
+    writer->save();
+    consensus->readSnapshot();
+    EXPECT_DEATH(stateMachine->loadSnapshot(*consensus->snapshotReader),
+                 "Snapshot contents format version read was 2, but this code "
+                 "can only read version 1");
+}
+
+
 struct SnapshotWatchdogThreadMainHelper {
     explicit SnapshotWatchdogThreadMainHelper(StateMachine& stateMachine)
         : count(0)
@@ -405,8 +436,6 @@ TEST_F(ServerStateMachineTest, snapshotWatchdogThreadMain)
     EXPECT_EQ(7U, helper.count);
 }
 
-// loadSessionSnapshot tested along with dumpSessionSnapshot above
-
 TEST_F(ServerStateMachineTest, takeSnapshot)
 {
     EXPECT_EQ(0U, consensus->lastSnapshotIndex);
@@ -421,8 +450,7 @@ TEST_F(ServerStateMachineTest, takeSnapshot)
     EXPECT_EQ(1U, consensus->lastSnapshotIndex);
     consensus->discardUnneededEntries();
     consensus->readSnapshot();
-    stateMachine->loadSessionSnapshot(*consensus->snapshotReader);
-    stateMachine->tree.loadSnapshot(*consensus->snapshotReader);
+    stateMachine->loadSnapshot(*consensus->snapshotReader);
     std::vector<std::string> children;
     stateMachine->tree.listDirectory("/", children);
     EXPECT_EQ((std::vector<std::string>{"foo/"}), children);
