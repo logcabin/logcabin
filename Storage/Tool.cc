@@ -224,6 +224,18 @@ main(int argc, char** argv)
             }
         }
 
+        { // Read the state machine's running version
+            uint16_t version = 0;
+            uint64_t bytesRead = reader->readRaw(&version, sizeof(version));
+            if (bytesRead < 1) {
+                PANIC("Snapshot file too short (no state machine version "
+                      "field)");
+            } else {
+                version = be16toh(version);
+                NOTICE("State machine running version %u", version);
+            }
+        }
+
         { // read StateMachine sessions from stream
             Server::SessionsProto::Sessions sessions;
             std::string error = reader->readMessage(sessions);

@@ -197,6 +197,36 @@ TEST_F(ServerStateMachineTest, apply_openSession)
     EXPECT_EQ(0U, session.responses.size());
 }
 
+TEST_F(ServerStateMachineTest, apply_advanceVersion)
+{
+    Protocol::Client::Command command =
+        Core::ProtoBuf::fromString<Protocol::Client::Command>(
+            "advance_version: { "
+            "  requested_version: 1 "
+            "}");
+    RaftConsensus::Entry entry;
+    entry.index = 6;
+    entry.type = RaftConsensus::Entry::DATA;
+    entry.clusterTime = 2;
+
+    entry.command = serialize(command);
+    stateMachine->apply(entry);
+    stateMachine->apply(entry);
+    stateMachine->apply(entry); // should silently succeed
+
+    command = Core::ProtoBuf::fromString<Protocol::Client::Command>(
+            "advance_version: { "
+            "  requested_version: 1 "
+            "}");
+    entry.command = serialize(command);
+    Core::Debug::setLogPolicy({
+        {"Server/StateMachine.cc", "ERROR"},
+        {"", "WARNING"},
+    });
+    stateMachine->apply(entry); // expect warning
+    EXPECT_EQ(1U, stateMachine->versionInfo.running);
+}
+
 // This tries to test the use of kill() to stop a snapshotting child and exit
 // quickly.
 TEST_F(ServerStateMachineTest, applyThreadMain_exiting_TimingSensitive)
@@ -333,17 +363,15 @@ TEST_F(ServerStateMachineTest, loadSnapshot_empty)
     writer->save();
     consensus->readSnapshot();
     EXPECT_DEATH(stateMachine->loadSnapshot(*consensus->snapshotReader),
-                 "no version field");
+                 "no format version field");
 }
 
-TEST_F(ServerStateMachineTest, loadSnapshot_unknownVersion)
+TEST_F(ServerStateMachineTest, loadSnapshot_unknownFormatVersion)
 {
     std::unique_ptr<Storage::SnapshotFile::Writer> writer =
         consensus->beginSnapshot(1);
-    uint8_t version = 2;
-    writer->writeRaw(&version, sizeof(version));
-    stateMachine->dumpSessionSnapshot(*writer);
-    stateMachine->tree.dumpSnapshot(*writer);
+    uint8_t formatVersion = 2;
+    writer->writeRaw(&formatVersion, sizeof(formatVersion));
     writer->save();
     consensus->readSnapshot();
     EXPECT_DEATH(stateMachine->loadSnapshot(*consensus->snapshotReader),
@@ -351,6 +379,20 @@ TEST_F(ServerStateMachineTest, loadSnapshot_unknownVersion)
                  "can only read version 1");
 }
 
+TEST_F(ServerStateMachineTest, loadSnapshot_unknownRunningVersion)
+{
+    std::unique_ptr<Storage::SnapshotFile::Writer> writer =
+        consensus->beginSnapshot(1);
+    uint8_t formatVersion = 1;
+    writer->writeRaw(&formatVersion, sizeof(formatVersion));
+    uint16_t runningVersion = htobe16(2);
+    writer->writeRaw(&runningVersion, sizeof(runningVersion));
+    writer->save();
+    consensus->readSnapshot();
+    EXPECT_DEATH(stateMachine->loadSnapshot(*consensus->snapshotReader),
+                 "Snapshot state machine version read was 2, but this code "
+                 "only supports 1 through 1");
+}
 
 struct SnapshotWatchdogThreadMainHelper {
     explicit SnapshotWatchdogThreadMainHelper(StateMachine& stateMachine)

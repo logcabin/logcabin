@@ -39,6 +39,28 @@ class RaftConsensus;
  */
 class StateMachine {
   public:
+    /**
+     * Used to evolve state machine over time.
+     */
+    struct VersionInfo {
+        /**
+         * This state machine can behave like all versions between
+         * minSupported and maxSupported, inclusive.
+         */
+        uint16_t minSupported;
+        /**
+         * This state machine can behave like all versions between
+         * minSupported and maxSupported, inclusive.
+         */
+        uint16_t maxSupported;
+        /**
+         * This state machine is currently behaving like this version.
+         * Falls between minSupported and maxSupported, inclusive.
+         */
+        uint16_t running;
+    };
+
+
     StateMachine(std::shared_ptr<RaftConsensus> consensus,
                  Core::Config& config);
     ~StateMachine();
@@ -58,6 +80,11 @@ class StateMachine {
      */
     bool getResponse(const Protocol::Client::ExactlyOnceRPCInfo& rpcInfo,
                      Protocol::Client::CommandResponse& response) const;
+
+    /**
+     * See VersionInfo.
+     */
+    VersionInfo getVersionInfo() const;
 
     /**
      * Called by ClientService to execute read-only operations on the Tree.
@@ -249,6 +276,34 @@ class StateMachine {
     uint64_t numSnapshotsFailed;
 
     /**
+     * The number of times a log entry was processed to advance the state
+     * machine's running version, but the state machine was already at that
+     * version.
+     */
+    uint64_t numRedundantAdvanceVersionEntries;
+
+    /**
+     * The number of times a log entry was processed to advance the state
+     * machine's running version, but the state machine was already at a larger
+     * version.
+     */
+    uint64_t numRejectedAdvanceVersionEntries;
+
+    /**
+     * The number of times a log entry was processed to successfully advance
+     * the state machine's running version, where the state machine was
+     * previously at a smaller version.
+     */
+    uint64_t numSuccessfulAdvanceVersionEntries;
+
+    /**
+     * The number of times any log entry to advance the state machine's running
+     * version was processed. Should be the sum of redundant, rejected, and
+     * successful counts.
+     */
+    uint64_t numTotalAdvanceVersionEntries;
+
+    /**
      * Tracks state for a particular client.
      * Used to prevent duplicate processing of duplicate RPCs.
      */
@@ -288,6 +343,11 @@ class StateMachine {
      * readWriteTreeRPC.
      */
     Tree::Tree tree;
+
+    /**
+     * Used to evolve state machine over time.
+     */
+    VersionInfo versionInfo;
 
     /**
      * The file that the snapshot is being written into. Also used by to track

@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -461,6 +462,7 @@ class ServerRaftConsensusTest : public ::testing::Test {
         globals.config.set("rpcFailureBackoffMilliseconds", 3000);
         globals.config.set("use-temporary-storage", "true");
         globals.config.set("raftDebug", "true");
+        globals.config.set("stateMachineUpdaterBackoffMilliseconds", 0);
 
         startThreads = false;
         consensus.reset(new RaftConsensus(globals));
@@ -861,12 +863,14 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntries_callerStale)
     consensus->handleAppendEntries(request, response);
     EXPECT_EQ("term: 11 "
               "success: false "
-              "last_log_index: 0",
+              "last_log_index: 0"
+              "server_capabilities: {}",
               response);
 }
 
 // this tests the callee stale and leaderId == 0 branches, setElectionTimer(),
-// and heartbeat
+// and heartbeat.
+// It also makes sure the state machine capabilities are set.
 TEST_F(ServerRaftConsensusTest, handleAppendEntries_newLeaderAndCommitIndex)
 {
     init();
@@ -884,6 +888,7 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntries_newLeaderAndCommitIndex)
     EXPECT_EQ(9U, consensus->currentTerm);
     EXPECT_EQ(0U, consensus->commitIndex);
     Clock::mockValue += milliseconds(10000);
+    consensus->setSupportedStateMachineVersions(10, 20);
     consensus->handleAppendEntries(request, response);
     EXPECT_EQ(3U, consensus->leaderId);
     EXPECT_EQ(State::FOLLOWER, consensus->state);
@@ -896,7 +901,11 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntries_newLeaderAndCommitIndex)
     EXPECT_EQ(1U, consensus->commitIndex);
     EXPECT_EQ("term: 10 "
               "success: true "
-              "last_log_index: 1",
+              "last_log_index: 1"
+              "server_capabilities: { "
+              "  min_supported_state_machine_version: 10 "
+              "  max_supported_state_machine_version: 20 "
+              "}",
               response);
 }
 
@@ -914,7 +923,8 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntries_rejectGap)
     consensus->handleAppendEntries(request, response);
     EXPECT_EQ("term: 10 "
               "success: false "
-              "last_log_index: 0",
+              "last_log_index: 0"
+              "server_capabilities: {}",
               response);
     EXPECT_EQ(0U, consensus->commitIndex);
     EXPECT_EQ(0U, consensus->log->getLastLogIndex());
@@ -935,7 +945,8 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntries_rejectPrevLogTerm)
     consensus->handleAppendEntries(request, response);
     EXPECT_EQ("term: 10 "
               "success: false "
-              "last_log_index: 1",
+              "last_log_index: 1"
+              "server_capabilities: {}",
               response);
     EXPECT_EQ(0U, consensus->commitIndex);
     EXPECT_EQ(1U, consensus->log->getLastLogIndex());
@@ -966,7 +977,8 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntries_append)
     consensus->handleAppendEntries(request, response);
     EXPECT_EQ("term: 10 "
               "success: true "
-              "last_log_index: 2",
+              "last_log_index: 2"
+              "server_capabilities: {}",
               response);
     EXPECT_EQ(1U, consensus->commitIndex);
     EXPECT_EQ(2U, consensus->log->getLastLogIndex());
@@ -1029,7 +1041,8 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntries_truncate)
     consensus->handleAppendEntries(request, response);
     EXPECT_EQ("term: 3 "
               "success: true "
-              "last_log_index: 4",
+              "last_log_index: 4"
+              "server_capabilities: {}",
               response);
     EXPECT_EQ(3U, consensus->commitIndex);
     EXPECT_EQ(4U, consensus->log->getLastLogIndex());
@@ -1069,7 +1082,8 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntries_duplicate)
     consensus->handleAppendEntries(request, response);
     EXPECT_EQ("term: 10 "
               "success: true "
-              "last_log_index: 1",
+              "last_log_index: 1"
+              "server_capabilities: {}",
               response);
     EXPECT_EQ(1U, consensus->log->getLastLogIndex());
     const Log::Entry& l1 = consensus->log->getEntry(1);
@@ -1103,7 +1117,8 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntries_appendSnapshotOk)
     consensus->handleAppendEntries(request, response);
     EXPECT_EQ("term: 10 "
               "success: true "
-              "last_log_index: 5",
+              "last_log_index: 5"
+              "server_capabilities: {}",
               response);
     EXPECT_EQ(5U, consensus->log->getLastLogIndex());
 }
@@ -1501,6 +1516,38 @@ TEST_F(ServerRaftConsensusTest, setConfiguration_replicateOkNontrivial)
     EXPECT_EQ(4U, consensus->log->getLastLogIndex());
 }
 
+TEST_F(ServerRaftConsensusTest, setSupportedStateMachineVersions)
+{
+    init();
+    auto& s = *consensus->configuration->localServer;
+    EXPECT_FALSE(s.haveStateMachineSupportedVersions);
+    consensus->stateChanged.notificationCount = 0;
+
+    consensus->setSupportedStateMachineVersions(10, 20);
+    EXPECT_TRUE(s.haveStateMachineSupportedVersions);
+    EXPECT_EQ(10U, s.minStateMachineVersion);
+    EXPECT_EQ(20U, s.maxStateMachineVersion);
+    EXPECT_EQ(1U, consensus->stateChanged.notificationCount);
+
+    consensus->setSupportedStateMachineVersions(10, 20);
+    EXPECT_TRUE(s.haveStateMachineSupportedVersions);
+    EXPECT_EQ(10U, s.minStateMachineVersion);
+    EXPECT_EQ(20U, s.maxStateMachineVersion);
+    EXPECT_EQ(1U, consensus->stateChanged.notificationCount);
+
+    consensus->setSupportedStateMachineVersions(10, 21);
+    EXPECT_TRUE(s.haveStateMachineSupportedVersions);
+    EXPECT_EQ(10U, s.minStateMachineVersion);
+    EXPECT_EQ(21U, s.maxStateMachineVersion);
+    EXPECT_EQ(2U, consensus->stateChanged.notificationCount);
+
+    consensus->setSupportedStateMachineVersions(11, 21);
+    EXPECT_TRUE(s.haveStateMachineSupportedVersions);
+    EXPECT_EQ(11U, s.minStateMachineVersion);
+    EXPECT_EQ(21U, s.maxStateMachineVersion);
+    EXPECT_EQ(3U, consensus->stateChanged.notificationCount);
+}
+
 TEST_F(ServerRaftConsensusTest, beginSnapshot)
 {
     // Log:
@@ -1593,6 +1640,114 @@ TEST_F(ServerRaftConsensusTest, snapshotDone)
     EXPECT_EQ(2U, consensus->lastSnapshotTerm);
     EXPECT_EQ(80U, consensus->lastSnapshotClusterTime);
     EXPECT_EQ(1U, consensus->configuration->id);
+}
+
+class StateMachineUpdaterThreadMainHelper {
+    StateMachineUpdaterThreadMainHelper(
+            RaftConsensus& consensus,
+            Peer& peer)
+        : consensus(consensus)
+        , iter(1)
+        , peer(peer)
+    {
+    }
+    void operator()() {
+        NOTICE("iter: %lu", iter);
+        // not leader: go to sleep
+        if (iter == 1) {
+            consensus.startNewElection();
+            consensus.becomeLeader();
+        // leader but missing info from peer: go to sleep
+        } else if (iter == 2) {
+            EXPECT_EQ(RaftConsensus::State::LEADER, consensus.state);
+            peer.haveStateMachineSupportedVersions = true;
+            peer.minStateMachineVersion = 4;
+            peer.maxStateMachineVersion = 9;
+            LogCabin::Core::Debug::setLogPolicy({
+                {"", "SILENT"}
+            });
+        // leader and all info but servers don't overlap: go to sleep
+        } else if (iter == 3) {
+            LogCabin::Core::Debug::setLogPolicy({
+                {"", "WARNING"}
+            });
+            consensus.setSupportedStateMachineVersions(1, 4);
+            EXPECT_EQ(2U, consensus.log->getLastLogIndex());
+        // leader and all info and servers overlap on new version: append
+        // entry. the next wait is in replicateEntry
+        } else if (iter == 4) {
+            std::string commandString = consensus.log->getEntry(3).data();
+            Core::Buffer commandBuffer(
+                const_cast<char*>(commandString.data()),
+                commandString.length(),
+                NULL);
+            Protocol::Client::Command command;
+            EXPECT_TRUE(Core::ProtoBuf::parse(commandBuffer, command));
+            EXPECT_EQ("advance_version { "
+                      "  requested_version: 4 "
+                      "}", command);
+            consensus.stepDown(7);
+            LogCabin::Core::Debug::setLogPolicy({
+                {"", "ERROR"}
+            });
+        // replicateEntry failed because lost leadership: issue warning
+        } else if (iter == 5) {
+            LogCabin::Core::Debug::setLogPolicy({
+                {"", "WARNING"}
+            });
+            EXPECT_EQ(3U, consensus.log->getLastLogIndex());
+            consensus.startNewElection();
+            consensus.becomeLeader();
+        // leader and all info and servers overlap on new version: append
+        // another entry for v4. the next wait is in replicateEntry
+        } else if (iter == 6) {
+            std::string commandString = consensus.log->getEntry(5).data();
+            Core::Buffer commandBuffer(
+                const_cast<char*>(commandString.data()),
+                commandString.length(),
+                NULL);
+            Protocol::Client::Command command;
+            EXPECT_TRUE(Core::ProtoBuf::parse(commandBuffer, command));
+            EXPECT_EQ("advance_version { "
+                      "  requested_version: 4 "
+                      "}", command);
+            peer.lastAgreeIndex = 5;
+            consensus.commitIndex = 5;
+            consensus.stateChanged.notify_all(); // to satisfy RaftInvariants
+        // leader and all info and servers overlap on current version: go to
+        // sleep
+        } else if (iter == 7) {
+            EXPECT_EQ(5U, consensus.log->getLastLogIndex());
+            consensus.exit();
+        }
+        ++iter;
+    }
+    RaftConsensus& consensus;
+    uint64_t iter;
+    Peer& peer;
+};
+
+TEST_F(ServerRaftConsensusTest, stateMachineUpdaterThreadMain)
+{
+    // Log:
+    // 1,t5: cfg { server 1:5254, server 2:5255 }
+    // After iter1:
+    // 2,t6: no op
+    // After iter3:
+    // 3,t6: data { advance state machine to version 4 }
+    // After iter5:
+    // 4,t7: no op
+    // 5,t7: data { advance state machine to version 4 }
+    init();
+    consensus->stepDown(5);
+    *entry5.mutable_configuration() = desc(d3);
+    consensus->append({&entry5});
+    consensus->setSupportedStateMachineVersions(1, 3);
+    std::shared_ptr<Peer> peer = getPeerRef(2);
+    StateMachineUpdaterThreadMainHelper helper(*consensus, *peer);
+    consensus->stateChanged.callback = std::ref(helper);
+    consensus->stateMachineUpdaterThreadMain();
+    EXPECT_EQ(8U, helper.iter);
 }
 
 class BumpTermSync : public Log::Sync {
@@ -2167,6 +2322,20 @@ TEST_F(ServerRaftConsensusPATest, appendEntries_ok)
               peer->nextHeartbeatTime);
 
     // TODO(ongaro): test catchup code
+}
+
+TEST_F(ServerRaftConsensusPATest, appendEntries_serverCapabilities)
+{
+    auto& cap = *response.mutable_server_capabilities();
+    cap.set_min_supported_state_machine_version(10);
+    cap.set_max_supported_state_machine_version(20);
+    peerService->reply(Protocol::Raft::OpCode::APPEND_ENTRIES,
+                       request, response);
+    std::unique_lock<Mutex> lockGuard(consensus->mutex);
+    consensus->appendEntries(lockGuard, *peer);
+    EXPECT_TRUE(peer->haveStateMachineSupportedVersions);
+    EXPECT_EQ(10U, peer->minStateMachineVersion);
+    EXPECT_EQ(20U, peer->maxStateMachineVersion);
 }
 
 // test that installSnapshot gets called

@@ -361,7 +361,21 @@ message GetServerStats {
     }
 }
 
-
+/**
+ * State machine command to change behavior to the given version, if and only
+ * if the requested_version is greater than the state machine's current
+ * version. This is currently only used internally by the Raft servers. It is
+ * not currently sent by the client library, rather it is appended by the Raft
+ * leader automatically as needed.
+ */
+message AdvanceStateMachineVersion {
+    message Request {
+        required uint32 requested_version = 1;
+    }
+    // No corresponding Response format is needed currently. The request is
+    // assumed to succeed if it's committed and its requested_version is higher
+    // than any previous such version.
+}
 
 /**
  * This is what the state machine takes in from the replicated log.
@@ -370,6 +384,7 @@ message Command {
     // The following are mutually exclusive.
     optional OpenSession.Request open_session = 4;
     optional ReadWriteTree.Request tree = 5;
+    optional AdvanceStateMachineVersion.Request advance_version = 6;
 }
 
 /**

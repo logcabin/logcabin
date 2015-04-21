@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <fcntl.h>
+#include <limits>
 #include <string.h>
 #include <sys/file.h>
 #include <sys/stat.h>
@@ -37,7 +38,6 @@
 #include "RPC/ServerRPC.h"
 #include "Server/RaftConsensus.h"
 #include "Server/Globals.h"
-#include "Server/StateMachine.h"
 #include "Storage/LogFactory.h"
 
 namespace LogCabin {
@@ -54,6 +54,9 @@ bool startThreads = true;
 Server::Server(uint64_t serverId)
     : serverId(serverId)
     , addresses()
+    , haveStateMachineSupportedVersions(false)
+    , minStateMachineVersion(std::numeric_limits<uint16_t>::max())
+    , maxStateMachineVersion(0)
     , gcFlag(false)
 {
 }
@@ -850,6 +853,10 @@ RaftConsensus::RaftConsensus(Globals& globals)
     , RPC_FAILURE_BACKOFF_MS(globals.config.read<uint64_t>(
         "rpcFailureBackoffMilliseconds",
         ELECTION_TIMEOUT_MS / 2))
+    , STATE_MACHINE_UPDATER_BACKOFF(std::chrono::milliseconds(
+        globals.config.read<uint64_t>(
+            "stateMachineUpdaterBackoffMilliseconds",
+            10000)))
     , SOFT_RPC_SIZE_LIMIT(Protocol::Common::MAX_MESSAGE_LENGTH - 1024)
     , serverId(0)
     , serverAddresses()
@@ -883,6 +890,7 @@ RaftConsensus::RaftConsensus(Globals& globals)
     , withholdVotesUntil(TimePoint::min())
     , leaderDiskThread()
     , timerThread()
+    , stateMachineUpdaterThread()
     , stepDownThread()
     , invariants(*this)
 {
@@ -896,6 +904,8 @@ RaftConsensus::~RaftConsensus()
         leaderDiskThread.join();
     if (timerThread.joinable())
         timerThread.join();
+    if (stateMachineUpdaterThread.joinable())
+        stateMachineUpdaterThread.join();
     if (stepDownThread.joinable())
         stepDownThread.join();
     NOTICE("Joined with disk and timer threads");
@@ -984,12 +994,19 @@ RaftConsensus::init()
 
     stepDown(currentTerm);
     if (startThreads) {
-        leaderDiskThread = std::thread(&RaftConsensus::leaderDiskThreadMain,
-                                       this);
-        timerThread = std::thread(&RaftConsensus::timerThreadMain,
-                                      this);
-        stepDownThread = std::thread(&RaftConsensus::stepDownThreadMain,
-                                     this);
+        leaderDiskThread = std::thread(
+            &RaftConsensus::leaderDiskThreadMain, this);
+        timerThread = std::thread(
+            &RaftConsensus::timerThreadMain, this);
+        if (globals.config.read<bool>("disableStateMachineUpdates", false)) {
+            NOTICE("Not starting state machine updater thread (state machine "
+                   "updates are disabled in config)");
+        } else {
+            stateMachineUpdaterThread = std::thread(
+                &RaftConsensus::stateMachineUpdaterThreadMain, this);
+        }
+        stepDownThread = std::thread(
+            &RaftConsensus::stepDownThreadMain, this);
     }
     // log->path = ""; // hack to disable disk
     stateChanged.notify_all();
@@ -1152,6 +1169,18 @@ RaftConsensus::handleAppendEntries(
     response.set_term(currentTerm);
     response.set_success(false);
     response.set_last_log_index(log->getLastLogIndex());
+
+    // Piggy-back server capabilities.
+    {
+        auto& cap = *response.mutable_server_capabilities();
+        auto& s = *configuration->localServer;
+        if (s.haveStateMachineSupportedVersions) {
+            cap.set_min_supported_state_machine_version(
+                    s.minStateMachineVersion);
+            cap.set_max_supported_state_machine_version(
+                    s.maxStateMachineVersion);
+        }
+    }
 
     // If the caller's term is stale, just return our term to it.
     if (request.term() < currentTerm) {
@@ -1585,6 +1614,23 @@ RaftConsensus::setConfiguration(
     }
 }
 
+void
+RaftConsensus::setSupportedStateMachineVersions(uint16_t minSupported,
+                                                uint16_t maxSupported)
+{
+    std::lock_guard<Mutex> lockGuard(mutex);
+    auto& s = *configuration->localServer;
+    if (!s.haveStateMachineSupportedVersions ||
+        s.minStateMachineVersion != minSupported ||
+        s.maxStateMachineVersion != maxSupported) {
+
+        s.haveStateMachineSupportedVersions = true;
+        s.minStateMachineVersion = minSupported;
+        s.maxStateMachineVersion = maxSupported;
+        stateChanged.notify_all();
+    }
+}
+
 std::unique_ptr<Storage::SnapshotFile::Writer>
 RaftConsensus::beginSnapshot(uint64_t lastIncludedIndex)
 {
@@ -1778,6 +1824,115 @@ operator<<(std::ostream& os, const RaftConsensus& raft)
 
 
 //// RaftConsensus private methods that MUST acquire the lock
+
+namespace {
+struct StateMachineVersionIntersection {
+    StateMachineVersionIntersection()
+        : missingCount(0)
+        , allCount(0)
+        , minVersion(0)
+        , maxVersion(std::numeric_limits<uint16_t>::max()) {
+    }
+    void operator()(Server& server) {
+        ++allCount;
+        if (server.haveStateMachineSupportedVersions) {
+            minVersion = std::max(server.minStateMachineVersion,
+                                  minVersion);
+            maxVersion = std::min(server.maxStateMachineVersion,
+                                  maxVersion);
+        } else {
+            ++missingCount;
+        }
+    }
+    uint64_t missingCount;
+    uint64_t allCount;
+    uint16_t minVersion;
+    uint16_t maxVersion;
+};
+} // anonymous namespace
+
+void
+RaftConsensus::stateMachineUpdaterThreadMain()
+{
+    // This implementation might create many spurious entries, since this
+    // process will append a state machine version if it hasn't appended that
+    // same version before during this boot. That should be fine for most use
+    // cases. If the state machine's num_redundant_advance_version_entries
+    // server stat gets to be large, this may need to be revisited.
+    std::unique_lock<Mutex> lockGuard(mutex);
+    Core::ThreadId::setName("StateMachineUpdater");
+    uint64_t lastVersionCommitted = 0;
+    TimePoint backoffUntil = TimePoint::min();
+    while (!exiting) {
+        TimePoint now = Clock::now();
+        if (backoffUntil <= now && state == State::LEADER) {
+            StateMachineVersionIntersection s;
+            configuration->forEach(std::ref(s));
+            if (s.missingCount == 0) {
+                if (s.minVersion > s.maxVersion) {
+                    ERROR("The state machines on the %lu servers do not "
+                          "currently support a common version "
+                          "(max of mins=%u, min of maxes=%u). Will wait to "
+                          "change the state machine version for at least "
+                          "another backoff period",
+                          s.allCount,
+                          s.minVersion,
+                          s.maxVersion);
+                    backoffUntil = now + STATE_MACHINE_UPDATER_BACKOFF;
+                } else { // s.maxVersion is the one we want
+                    if (s.maxVersion > lastVersionCommitted) {
+                        NOTICE("Appending log entry to advance state machine "
+                               "version to %u (it may be set to %u already, "
+                               "but it's hard to check that and not much "
+                               "overhead to just do it again)",
+                               s.maxVersion,
+                               s.maxVersion);
+                        Log::Entry entry;
+                        entry.set_term(currentTerm);
+                        entry.set_type(Protocol::Raft::EntryType::DATA);
+                        entry.set_cluster_time(clusterClock.leaderStamp());
+                        Protocol::Client::Command command;
+                        command.mutable_advance_version()->
+                            set_requested_version(s.maxVersion);
+                        Core::Buffer cmdBuf;
+                        Core::ProtoBuf::serialize(command, cmdBuf);
+                        entry.set_data(cmdBuf.getData(), cmdBuf.getLength());
+
+                        std::pair<ClientResult, uint64_t> result =
+                            replicateEntry(entry, lockGuard);
+                        if (result.first == ClientResult::SUCCESS) {
+                            lastVersionCommitted = s.maxVersion;
+                        } else {
+                            using Core::StringUtil::toString;
+                            WARNING("Failed to commit entry to advance state "
+                                    "machine version to version %u (%s). "
+                                    "Will retry later after backoff period",
+                                    s.maxVersion,
+                                    toString(result.first).c_str());
+                            backoffUntil = now + STATE_MACHINE_UPDATER_BACKOFF;
+                        }
+                        continue;
+                    } else {
+                        // We're in good shape, go back to sleep.
+                    }
+                }
+            } else { // missing info from at least one server
+                // Do nothing until we have info from everyone else
+                // (stateChanged will be notified). The backoff is here just to
+                // avoid spamming the NOTICE message.
+                NOTICE("Waiting to receive state machine supported version "
+                       "information from all peers (missing %lu of %lu)",
+                       s.missingCount, s.allCount);
+                backoffUntil = now + STATE_MACHINE_UPDATER_BACKOFF;
+            }
+        }
+        if (backoffUntil <= now)
+            stateChanged.wait(lockGuard);
+        else
+            stateChanged.wait_until(lockGuard, backoffUntil);
+    }
+    NOTICE("Exiting");
+}
 
 void
 RaftConsensus::leaderDiskThreadMain()
@@ -2139,6 +2294,18 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
         } else {
             if (peer.nextIndex > 1)
                 --peer.nextIndex;
+        }
+    }
+    if (response.has_server_capabilities()) {
+        auto& cap = response.server_capabilities();
+        if (cap.has_min_supported_state_machine_version() &&
+            cap.has_max_supported_state_machine_version()) {
+            peer.haveStateMachineSupportedVersions = true;
+            peer.minStateMachineVersion = Core::Util::downCast<uint16_t>(
+                cap.min_supported_state_machine_version());
+            peer.maxStateMachineVersion = Core::Util::downCast<uint16_t>(
+                cap.max_supported_state_machine_version());
+            stateChanged.notify_all();
         }
     }
 }

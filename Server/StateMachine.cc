@@ -74,13 +74,23 @@ StateMachine::StateMachine(std::shared_ptr<RaftConsensus> consensus,
     , lastIndex(0)
     , numSnapshotsAttempted(0)
     , numSnapshotsFailed(0)
+    , numRedundantAdvanceVersionEntries(0)
+    , numRejectedAdvanceVersionEntries(0)
+    , numSuccessfulAdvanceVersionEntries(0)
+    , numTotalAdvanceVersionEntries(0)
     , sessions()
     , tree()
+    , versionInfo()
     , writer()
     , applyThread()
     , snapshotThread()
     , snapshotWatchdogThread()
 {
+    versionInfo.minSupported = 1;
+    versionInfo.maxSupported = 1;
+    versionInfo.running = 1;
+    consensus->setSupportedStateMachineVersions(versionInfo.minSupported,
+                                                versionInfo.maxSupported);
     if (!stateMachineSuppressThreads) {
         applyThread = std::thread(&StateMachine::applyThreadMain, this);
         snapshotThread = std::thread(&StateMachine::snapshotThreadMain, this);
@@ -128,6 +138,17 @@ StateMachine::getResponse(const PC::ExactlyOnceRPCInfo& rpcInfo,
     return true;
 }
 
+StateMachine::VersionInfo
+StateMachine::getVersionInfo() const
+{
+    VersionInfo v;
+    {
+        std::lock_guard<std::mutex> lockGuard(mutex);
+        v = versionInfo;
+    }
+    return v;
+}
+
 void
 StateMachine::readOnlyTreeRPC(const PC::ReadOnlyTree::Request& request,
                               PC::ReadOnlyTree::Response& response) const
@@ -148,6 +169,17 @@ StateMachine::updateServerStats(Protocol::ServerStats& serverStats) const
     smStats.set_num_sessions(sessions.size());
     smStats.set_num_snapshots_attempted(numSnapshotsAttempted);
     smStats.set_num_snapshots_failed(numSnapshotsFailed);
+    smStats.set_num_redundant_advance_version_entries(
+        numRedundantAdvanceVersionEntries);
+    smStats.set_num_rejected_advance_version_entries(
+        numRejectedAdvanceVersionEntries);
+    smStats.set_num_successful_advance_version_entries(
+        numSuccessfulAdvanceVersionEntries);
+    smStats.set_num_total_advance_version_entries(
+        numTotalAdvanceVersionEntries);
+    smStats.set_min_supported_version(versionInfo.minSupported);
+    smStats.set_max_supported_version(versionInfo.maxSupported);
+    smStats.set_running_version(versionInfo.running);
 }
 
 void
@@ -198,6 +230,35 @@ StateMachine::apply(const RaftConsensus::Entry& entry)
     } else if (command.has_open_session()) {
         uint64_t clientId = entry.index;
         session = &sessions.insert({clientId, {}}).first->second;
+    } else if (command.has_advance_version()) {
+        uint32_t requested = command.advance_version().requested_version();
+        if (requested < versionInfo.running) {
+            WARNING("Rejecting downgrade of state machine version "
+                    "(running version %u but command at log index %lu wants "
+                    "to switch to version %u)",
+                    versionInfo.running,
+                    entry.index,
+                    requested);
+            ++numRejectedAdvanceVersionEntries;
+        } else if (requested > versionInfo.running) {
+            if (requested > versionInfo.maxSupported) {
+                PANIC("Cannot upgrade state machine to version %u (from %u) "
+                      "because this code only supports up to version %u",
+                      requested,
+                      versionInfo.running,
+                      versionInfo.maxSupported);
+            } else {
+                // someday, maybe we'll get here
+                // versionInfo.running = requested;
+                PANIC("state machine version > 1 not supported");
+            }
+            ++numSuccessfulAdvanceVersionEntries;
+        } else { // requested == versionInfo.running
+            // nothing to do
+            // If this stat is high, see note in RaftConsensus.cc.
+            ++numRedundantAdvanceVersionEntries;
+        }
+        ++numTotalAdvanceVersionEntries;
     } else {
         PANIC("unknown command at %lu: %s",
               entry.index,
@@ -348,16 +409,35 @@ void
 StateMachine::loadSnapshot(Core::ProtoBuf::InputStream& stream)
 {
     // Check that this snapshot uses format version 1
-    uint8_t version = 0;
-    uint64_t bytesRead = stream.readRaw(&version, sizeof(version));
-    if (bytesRead < 1) {
-        PANIC("Snapshot contents are empty (no version field)");
+    uint8_t formatVersion = 0;
+    uint64_t bytesRead = stream.readRaw(&formatVersion, sizeof(formatVersion));
+    if (bytesRead < sizeof(formatVersion)) {
+        PANIC("Snapshot contents are empty (no format version field)");
     }
-    if (version != 1) {
+    if (formatVersion != 1) {
         PANIC("Snapshot contents format version read was %u, but this "
               "code can only read version 1",
-              version);
+              formatVersion);
     }
+
+    // The version of the state machine behavior.
+    uint16_t runningVersion;
+    bytesRead = stream.readRaw(&runningVersion, sizeof(runningVersion));
+    if (bytesRead < sizeof(runningVersion)) {
+        PANIC("Snapshot is too short (no state machine version field)");
+    }
+    runningVersion = be16toh(runningVersion);
+    if (runningVersion < versionInfo.minSupported ||
+        runningVersion > versionInfo.maxSupported) {
+        PANIC("Snapshot state machine version read was %u, but this "
+              "code only supports %u through %u (inclusive)",
+              runningVersion,
+              versionInfo.minSupported,
+              versionInfo.maxSupported);
+    }
+    versionInfo.running = runningVersion;
+
+    // Load the sessions and the tree.
     loadSessionSnapshot(stream);
     tree.loadSnapshot(stream);
 }
@@ -506,8 +586,14 @@ StateMachine::takeSnapshot(uint64_t lastIncludedIndex,
         }
 
         // Format version of snapshot contents is 1.
-        uint8_t version = 1;
-        writer->writeRaw(&version, sizeof(version));
+        uint8_t formatVersion = 1;
+        writer->writeRaw(&formatVersion, sizeof(formatVersion));
+
+        // The version defining the state machine code (this may affect how the
+        // snapshot is interpreted).
+        uint16_t runningVersion = htobe16(versionInfo.running);
+        writer->writeRaw(&runningVersion, sizeof(runningVersion));
+
         // StateMachine state comes next
         dumpSessionSnapshot(*writer);
         // Then the Tree itself (this one is potentially large)
