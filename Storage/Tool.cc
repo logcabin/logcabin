@@ -180,6 +180,22 @@ main(int argc, char** argv)
         NOTICE("%s", e.what());
     }
     if (reader) {
+
+        { // Check that this snapshot uses format version 1
+            uint8_t version = 0;
+            uint64_t bytesRead = reader->readRaw(&version, sizeof(version));
+            if (bytesRead < 1) {
+                PANIC("Found completely empty snapshot file (it doesn't even "
+                      "have a version field)");
+            } else {
+                if (version != 1) {
+                    PANIC("Snapshot format version read was %u, but this code "
+                          "can only read version 1",
+                          version);
+                }
+            }
+        }
+
         { // read header protobuf from stream
             Server::SnapshotMetadata::Header header;
             std::string error = reader->readMessage(header);
@@ -190,6 +206,22 @@ main(int argc, char** argv)
             NOTICE("Snapshot header start");
             std::cout << Core::ProtoBuf::dumpString(header) << std::endl;
             NOTICE("Snapshot header end");
+        }
+
+        { // Check that the state machine part of the snapshot uses format
+          // version 1
+            uint8_t version = 0;
+            uint64_t bytesRead = reader->readRaw(&version, sizeof(version));
+            if (bytesRead < 1) {
+                PANIC("Snapshot file too short (no state machine version "
+                      "field)");
+            } else {
+                if (version != 1) {
+                    PANIC("State machine format version in snapshot read was "
+                          "%u, but this code can only read version 1",
+                          version);
+                }
+            }
         }
 
         { // read StateMachine sessions from stream

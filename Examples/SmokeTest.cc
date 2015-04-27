@@ -131,7 +131,13 @@ main(int argc, char** argv)
     tree.writeEx("/etc/passwd", "ha");
     std::string contents = tree.readEx("/etc/passwd");
     assert(contents == "ha");
-    tree.removeDirectoryEx("/etc");
 
+    // need to write a kilobyte for snapshot to be taken under default settings
+    std::string laughter;
+    for (int i = 0; i < 512; ++i)
+        laughter += "ha";
+    tree.writeEx("/etc/lol", laughter);
+
+    tree.removeDirectoryEx("/etc");
     return 0;
 }
