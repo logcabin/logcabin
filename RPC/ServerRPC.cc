@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -106,6 +107,24 @@ ServerRPC::getRequest(google::protobuf::Message& request)
         rejectInvalidRequest();
         return false;
     }
+    return true;
+}
+
+bool
+ServerRPC::getRequest(Core::Buffer& buffer) const
+{
+    if (!active)
+        return false;
+    uint64_t bytes = opaqueRPC.request.getLength();
+    assert(bytes >= sizeof(RequestHeaderVersion1));
+    bytes -= sizeof(RequestHeaderVersion1);
+    buffer.setData(new char[bytes],
+                   bytes,
+                   Core::Buffer::deleteArrayFn<char>);
+    memcpy(buffer.getData(),
+           (static_cast<const char*>(opaqueRPC.request.getData()) +
+            sizeof(RequestHeaderVersion1)),
+           bytes);
     return true;
 }
 

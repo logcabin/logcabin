@@ -163,11 +163,8 @@ void
 ClientService::stateMachineCommand(RPC::ServerRPC rpc)
 {
     PRELUDE(StateMachineCommand);
-    // TODO(ongaro): It's pretty silly to re-serialize the message that was
-    // just parsed. It'd be better to copy the serialized bytes from the RPC
-    // buffer or even better to use the RPC buffer directly.
     Core::Buffer cmdBuffer;
-    Core::ProtoBuf::serialize(request, cmdBuffer);
+    rpc.getRequest(cmdBuffer);
     std::pair<Result, uint64_t> result = globals.raft->replicate(cmdBuffer);
     if (result.first == Result::RETRY || result.first == Result::NOT_LEADER) {
         Protocol::Client::Error error;

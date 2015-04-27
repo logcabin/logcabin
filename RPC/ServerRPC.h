@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -108,6 +109,17 @@ class ServerRPC {
      *      discard this ServerRPC object.
      */
     bool getRequest(google::protobuf::Message& request);
+
+    /**
+     * Copy the request out of the RPC.
+     * \param[out] buffer
+     *      An empty buffer that the request will be copied into.
+     * \return
+     *      True if 'request' contains a valid RPC request which needs to be
+     *      handled; false otherwise. If this returns false, the caller should
+     *      discard this ServerRPC object.
+     */
+    bool getRequest(Core::Buffer& buffer) const;
 
     /**
      * Send a normal response back to the client.

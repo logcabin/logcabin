@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -44,20 +45,22 @@ class RPCServerRPCTest : public ::testing::Test {
     }
 
     void
-    makeRequest(uint8_t version,
-                uint16_t service,
-                uint8_t serviceSpecificErrorVersion,
-                uint16_t opCode,
-                const google::protobuf::Message* payload)
+    serializeRequestPayload(const google::protobuf::Message& payload)
     {
-        if (payload == NULL) {
+        Core::ProtoBuf::serialize(payload, request,
+                                  sizeof(RequestHeaderVersion1));
+    }
+
+    void fillRequestHeader(uint8_t version,
+                           uint16_t service,
+                           uint8_t serviceSpecificErrorVersion,
+                           uint16_t opCode)
+    {
+        if (request.getLength() == 0) {
             request.setData(
-                new RequestHeaderVersion1(),
-                sizeof(RequestHeaderVersion1),
-                Core::Buffer::deleteObjectFn<RequestHeaderVersion1*>);
-        } else {
-            Core::ProtoBuf::serialize(*payload, request,
-                                      sizeof(RequestHeaderVersion1));
+                    new RequestHeaderVersion1(),
+                    sizeof(RequestHeaderVersion1),
+                    Core::Buffer::deleteObjectFn<RequestHeaderVersion1*>);
         }
         RequestHeaderVersion1& header =
             *static_cast<RequestHeaderVersion1*>(request.getData());
@@ -101,13 +104,13 @@ TEST_F(RPCServerRPCTest, constructor_tooShort) {
 }
 
 TEST_F(RPCServerRPCTest, constructor_badVersion) {
-    makeRequest(2, 0, 0, 0, NULL);
+    fillRequestHeader(2, 0, 0, 0);
     call();
     EXPECT_EQ(Status::INVALID_VERSION, getStatus());
 }
 
 TEST_F(RPCServerRPCTest, constructor_normal) {
-    makeRequest(1, 2, 3, 4, NULL);
+    fillRequestHeader(1, 2, 3, 4);
     call();
     EXPECT_EQ(2U, serverRPC.getService());
     EXPECT_EQ(3U, serverRPC.getServiceSpecificErrorVersion());
@@ -122,7 +125,8 @@ TEST_F(RPCServerRPCTest, constructor_normal) {
 // move assignment: nothing to test
 
 TEST_F(RPCServerRPCTest, getRequest_normal) {
-    makeRequest(1, 2, 3, 4, &payload);
+    serializeRequestPayload(payload);
+    fillRequestHeader(1, 2, 3, 4);
     call();
     LogCabin::ProtoBuf::TestMessage actual;
     EXPECT_TRUE(serverRPC.getRequest(actual));
@@ -132,16 +136,19 @@ TEST_F(RPCServerRPCTest, getRequest_normal) {
 }
 
 TEST_F(RPCServerRPCTest, getRequest_inactive) {
-    makeRequest(1, 2, 3, 4, &payload);
+    serializeRequestPayload(payload);
+    fillRequestHeader(1, 2, 3, 4);
     call();
     serverRPC.rejectInvalidRequest();
     LogCabin::ProtoBuf::TestMessage actual;
+    Core::Buffer buffer;
     EXPECT_FALSE(serverRPC.getRequest(actual));
+    EXPECT_FALSE(serverRPC.getRequest(buffer));
     EXPECT_FALSE(serverRPC.needsReply());
 }
 
 TEST_F(RPCServerRPCTest, getRequest_invalid) {
-    makeRequest(1, 2, 3, 4, NULL);
+    fillRequestHeader(1, 2, 3, 4);
     call();
     LogCabin::ProtoBuf::TestMessage actual;
     LogCabin::Core::Debug::setLogPolicy({{"", "ERROR"}});
@@ -150,8 +157,24 @@ TEST_F(RPCServerRPCTest, getRequest_invalid) {
     EXPECT_FALSE(serverRPC.needsReply());
 }
 
+TEST_F(RPCServerRPCTest, getRequest_buffer) {
+    char* b = new char[sizeof(RequestHeaderVersion1) + 1];
+    b[sizeof(RequestHeaderVersion1)] = 'x';
+    request.setData(
+            b,
+            sizeof(RequestHeaderVersion1) + 1,
+            Core::Buffer::deleteArrayFn<char>);
+    fillRequestHeader(1, 2, 3, 4);
+    call();
+    Core::Buffer actual;
+    EXPECT_TRUE(serverRPC.getRequest(actual));
+    EXPECT_EQ(1U, actual.getLength());
+    EXPECT_EQ('x', *static_cast<const char*>(actual.getData()));
+    serverRPC.rejectInvalidRequest();
+}
+
 TEST_F(RPCServerRPCTest, reply) {
-    makeRequest(1, 2, 3, 4, NULL);
+    fillRequestHeader(1, 2, 3, 4);
     call();
     serverRPC.reply(payload);
     EXPECT_EQ(Status::OK, getStatus());
@@ -164,7 +187,7 @@ TEST_F(RPCServerRPCTest, reply) {
 }
 
 TEST_F(RPCServerRPCTest, returnError) {
-    makeRequest(1, 2, 3, 4, NULL);
+    fillRequestHeader(1, 2, 3, 4);
     call();
     serverRPC.returnError(payload);
     EXPECT_EQ(Status::SERVICE_SPECIFIC_ERROR, getStatus());
@@ -177,7 +200,7 @@ TEST_F(RPCServerRPCTest, returnError) {
 }
 
 TEST_F(RPCServerRPCTest, rejectInvalidService) {
-    makeRequest(1, 2, 3, 4, NULL);
+    fillRequestHeader(1, 2, 3, 4);
     call();
     serverRPC.rejectInvalidService();
     EXPECT_EQ(Status::INVALID_SERVICE, getStatus());
@@ -185,7 +208,7 @@ TEST_F(RPCServerRPCTest, rejectInvalidService) {
 }
 
 TEST_F(RPCServerRPCTest, rejectInvalidRequest) {
-    makeRequest(1, 2, 3, 4, NULL);
+    fillRequestHeader(1, 2, 3, 4);
     call();
     serverRPC.rejectInvalidService();
     EXPECT_EQ(Status::INVALID_SERVICE, getStatus());
@@ -193,7 +216,7 @@ TEST_F(RPCServerRPCTest, rejectInvalidRequest) {
 }
 
 TEST_F(RPCServerRPCTest, closeSession) {
-    makeRequest(1, 2, 3, 4, NULL);
+    fillRequestHeader(1, 2, 3, 4);
     call();
     serverRPC.closeSession();
     EXPECT_FALSE(serverRPC.needsReply());
