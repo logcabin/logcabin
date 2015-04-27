@@ -224,7 +224,7 @@ TEST_F(ServerStateMachineTest, apply_advanceVersion)
         {"", "WARNING"},
     });
     stateMachine->apply(entry); // expect warning
-    EXPECT_EQ(1U, stateMachine->versionInfo.running);
+    EXPECT_EQ(1U, stateMachine->getVersion(10000));
 }
 
 // This tries to test the use of kill() to stop a snapshotting child and exit
@@ -254,7 +254,7 @@ TEST_F(ServerStateMachineTest, applyThreadMain_exiting_TimingSensitive)
     EXPECT_EQ(0U, consensus->lastSnapshotIndex);
 }
 
-TEST_F(ServerStateMachineTest, dumpSessionSnapshot)
+TEST_F(ServerStateMachineTest, serializeSessions)
 {
     Protocol::Client::CommandResponse r1;
     r1.mutable_tree()->set_status(Protocol::Client::Status::LOOKUP_ERROR);
@@ -279,19 +279,14 @@ TEST_F(ServerStateMachineTest, dumpSessionSnapshot)
     s3.firstOutstandingRPC = 6;
     stateMachine->sessions.insert({91, s3});
 
-    {
-        Storage::SnapshotFile::Writer writer(consensus->storageLayout);
-        stateMachine->dumpSessionSnapshot(writer);
-        writer.save();
-    }
+    SnapshotStateMachine::Header header;
+    stateMachine->serializeSessions(header);
 
     stateMachine->sessions.at(80).responses.at(10) = r1;
     stateMachine->sessions.at(80).firstOutstandingRPC = 10;
 
-    {
-        Storage::SnapshotFile::Reader reader(consensus->storageLayout);
-        stateMachine->loadSessionSnapshot(reader);
-    }
+    stateMachine->loadSessions(header);
+
     EXPECT_EQ((std::vector<std::uint64_t>{4, 80, 91}),
               Core::STLUtil::sorted(
                 Core::STLUtil::getKeys(stateMachine->sessions)));
@@ -315,6 +310,24 @@ TEST_F(ServerStateMachineTest, dumpSessionSnapshot)
               Core::STLUtil::sorted(
                 Core::STLUtil::getKeys(
                     stateMachine->sessions.at(91).responses)));
+}
+
+TEST_F(ServerStateMachineTest, serializeVersionHistory)
+{
+    // since MAX_SUPPORTED_VERSION is 1, these values all have to be 1 for now
+    stateMachine->versionHistory[1] = 1;
+    stateMachine->versionHistory[3] = 1;
+    SnapshotStateMachine::Header header;
+    stateMachine->serializeVersionHistory(header);
+    stateMachine->versionHistory.erase(3);
+    stateMachine->versionHistory[5] = 1;
+    stateMachine->loadVersionHistory(header);
+    EXPECT_EQ((std::map<uint64_t, uint16_t> {
+                   {0, 1},
+                   {1, 1},
+                   {3, 1},
+               }),
+              stateMachine->versionHistory);
 }
 
 TEST_F(ServerStateMachineTest, expireResponses)
@@ -351,8 +364,27 @@ TEST_F(ServerStateMachineTest, expireSessions)
                   Core::STLUtil::getKeys(stateMachine->sessions)));
 }
 
+TEST_F(ServerStateMachineTest, getVersion)
+{
+    EXPECT_EQ(1U, stateMachine->getVersion(0));
+    EXPECT_EQ(1U, stateMachine->getVersion(1));
+    EXPECT_EQ(1U, stateMachine->getVersion(10));
 
-// loadSessionSnapshot tested along with dumpSessionSnapshot above
+    stateMachine->versionHistory[2] = 50;
+    stateMachine->versionHistory[3] = 60;
+    stateMachine->versionHistory[6] = 90;
+
+    EXPECT_EQ(1U, stateMachine->getVersion(0));
+    EXPECT_EQ(1U, stateMachine->getVersion(1));
+    EXPECT_EQ(50U, stateMachine->getVersion(2));
+    EXPECT_EQ(60U, stateMachine->getVersion(3));
+    EXPECT_EQ(60U, stateMachine->getVersion(4));
+    EXPECT_EQ(60U, stateMachine->getVersion(5));
+    EXPECT_EQ(90U, stateMachine->getVersion(6));
+    EXPECT_EQ(90U, stateMachine->getVersion(7));
+}
+
+// loadSessions tested along with serializeSessions above
 
 // loadSnapshot normal path tested along with takeSnapshot below
 
@@ -379,20 +411,19 @@ TEST_F(ServerStateMachineTest, loadSnapshot_unknownFormatVersion)
                  "can only read version 1");
 }
 
-TEST_F(ServerStateMachineTest, loadSnapshot_unknownRunningVersion)
+// loadVersionHistory normal path tested along with serializeVersionHistory
+// above
+
+TEST_F(ServerStateMachineTest, loadVersionHistory_unknownVersion)
 {
-    std::unique_ptr<Storage::SnapshotFile::Writer> writer =
-        consensus->beginSnapshot(1);
-    uint8_t formatVersion = 1;
-    writer->writeRaw(&formatVersion, sizeof(formatVersion));
-    uint16_t runningVersion = htobe16(2);
-    writer->writeRaw(&runningVersion, sizeof(runningVersion));
-    writer->save();
-    consensus->readSnapshot();
-    EXPECT_DEATH(stateMachine->loadSnapshot(*consensus->snapshotReader),
-                 "Snapshot state machine version read was 2, but this code "
-                 "only supports 1 through 1");
+    stateMachine->versionHistory.insert({1, 2});
+    SnapshotStateMachine::Header header;
+    stateMachine->serializeVersionHistory(header);
+    EXPECT_DEATH(stateMachine->loadVersionHistory(header),
+                 "State machine version read from snapshot was 2, but this "
+                 "code only supports 1 through 1");
 }
+
 
 struct SnapshotWatchdogThreadMainHelper {
     explicit SnapshotWatchdogThreadMainHelper(StateMachine& stateMachine)

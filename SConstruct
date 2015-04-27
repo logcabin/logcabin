@@ -140,7 +140,7 @@ storageTool = env.Program("build/Storage/Tool",
             (["build/Storage/Tool.cc"] +
              [ # these proto files should maybe move into Protocol
                 "build/Server/SnapshotMetadata.pb.o",
-                "build/Server/Sessions.pb.o",
+                "build/Server/SnapshotStateMachine.pb.o",
              ] +
              object_files['Storage'] +
              object_files['Tree'] +

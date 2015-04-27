@@ -20,6 +20,7 @@
 #include <unordered_map>
 
 #include "build/Protocol/Client.pb.h"
+#include "build/Server/SnapshotStateMachine.pb.h"
 #include "Core/ConditionVariable.h"
 #include "Core/Config.h"
 #include "Tree/Tree.h"
@@ -39,25 +40,17 @@ class RaftConsensus;
  */
 class StateMachine {
   public:
-    /**
-     * Used to evolve state machine over time.
-     */
-    struct VersionInfo {
+    enum {
         /**
-         * This state machine can behave like all versions between
-         * minSupported and maxSupported, inclusive.
+         * This state machine code can behave like all versions between
+         * MIN_SUPPORTED_VERSION and MAX_SUPPORTED_VERSION, inclusive.
          */
-        uint16_t minSupported;
+        MIN_SUPPORTED_VERSION = 1,
         /**
-         * This state machine can behave like all versions between
-         * minSupported and maxSupported, inclusive.
+         * This state machine code can behave like all versions between
+         * MIN_SUPPORTED_VERSION and MAX_SUPPORTED_VERSION, inclusive.
          */
-        uint16_t maxSupported;
-        /**
-         * This state machine is currently behaving like this version.
-         * Falls between minSupported and maxSupported, inclusive.
-         */
-        uint16_t running;
+        MAX_SUPPORTED_VERSION = 1,
     };
 
 
@@ -80,11 +73,6 @@ class StateMachine {
      */
     bool getResponse(const Protocol::Client::ExactlyOnceRPCInfo& rpcInfo,
                      Protocol::Client::CommandResponse& response) const;
-
-    /**
-     * See VersionInfo.
-     */
-    VersionInfo getVersionInfo() const;
 
     /**
      * Called by ClientService to execute read-only operations on the Tree.
@@ -118,9 +106,10 @@ class StateMachine {
     void applyThreadMain();
 
     /**
-     * Write the #sessions table to a snapshot file.
+     * Return the #sessions table as a protobuf message for writing into a
+     * snapshot.
      */
-    void dumpSessionSnapshot(Core::ProtoBuf::OutputStream& stream) const;
+    void serializeSessions(SnapshotStateMachine::Header& header) const;
 
     /**
      * Update the session and clean up unnecessary responses.
@@ -140,21 +129,39 @@ class StateMachine {
     void expireSessions(uint64_t clusterTime);
 
     /**
+     * Return the version of the state machine behavior as of the given log
+     * index. Note that this is based on versionHistory internally, so if
+     * you're changing that variable at the given index, update it first.
+     */
+    uint16_t getVersion(uint64_t logIndex) const;
+
+    /**
      * If there is a current snapshot process, send it a SIGHUP and return
      * immediately.
      */
     void killSnapshotProcess(Core::HoldingMutex holdingMutex);
 
     /**
-     * Read the #sessions table from a snapshot file.
+     * Restore the #sessions table from a snapshot.
      */
-    void loadSessionSnapshot(Core::ProtoBuf::InputStream& stream);
+    void loadSessions(const SnapshotStateMachine::Header& header);
 
     /**
      * Read all of the state machine state from a snapshot file
      * (including version, sessions, and tree).
      */
     void loadSnapshot(Core::ProtoBuf::InputStream& stream);
+
+    /**
+     * Restore the #versionHistory table from a snapshot.
+     */
+    void loadVersionHistory(const SnapshotStateMachine::Header& header);
+
+    /**
+     * Return the #versionHistory table as a protobuf message for writing into
+     * a snapshot.
+     */
+    void serializeVersionHistory(SnapshotStateMachine::Header& header) const;
 
     /**
      * Return true if it is time to create a new snapshot.
@@ -345,9 +352,18 @@ class StateMachine {
     Tree::Tree tree;
 
     /**
+     * The log position when the state machine was updated to each new version.
+     * First component: log index. Second component: version number.
      * Used to evolve state machine over time.
+     *
+     * This is used by getResponse() to determine the running version at a
+     * given log index (to determine whether a command would have been
+     * applied), and it's used elsewhere to determine the state machine's
+     * current running version.
+     *
+     * Invariant: the pair (index 0, version 1) is always present.
      */
-    VersionInfo versionInfo;
+    std::map<uint64_t, uint16_t> versionHistory;
 
     /**
      * The file that the snapshot is being written into. Also used by to track

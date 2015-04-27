@@ -18,7 +18,6 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-#include "build/Server/Sessions.pb.h"
 #include "Core/Debug.h"
 #include "Core/Mutex.h"
 #include "Core/ProtoBuf.h"
@@ -80,17 +79,15 @@ StateMachine::StateMachine(std::shared_ptr<RaftConsensus> consensus,
     , numTotalAdvanceVersionEntries(0)
     , sessions()
     , tree()
-    , versionInfo()
+    , versionHistory()
     , writer()
     , applyThread()
     , snapshotThread()
     , snapshotWatchdogThread()
 {
-    versionInfo.minSupported = 1;
-    versionInfo.maxSupported = 1;
-    versionInfo.running = 1;
-    consensus->setSupportedStateMachineVersions(versionInfo.minSupported,
-                                                versionInfo.maxSupported);
+    versionHistory.insert({0, 1});
+    consensus->setSupportedStateMachineVersions(MIN_SUPPORTED_VERSION,
+                                                MAX_SUPPORTED_VERSION);
     if (!stateMachineSuppressThreads) {
         applyThread = std::thread(&StateMachine::applyThreadMain, this);
         snapshotThread = std::thread(&StateMachine::snapshotThreadMain, this);
@@ -138,17 +135,6 @@ StateMachine::getResponse(const PC::ExactlyOnceRPCInfo& rpcInfo,
     return true;
 }
 
-StateMachine::VersionInfo
-StateMachine::getVersionInfo() const
-{
-    VersionInfo v;
-    {
-        std::lock_guard<std::mutex> lockGuard(mutex);
-        v = versionInfo;
-    }
-    return v;
-}
-
 void
 StateMachine::readOnlyTreeRPC(const PC::ReadOnlyTree::Request& request,
                               PC::ReadOnlyTree::Response& response) const
@@ -177,9 +163,9 @@ StateMachine::updateServerStats(Protocol::ServerStats& serverStats) const
         numSuccessfulAdvanceVersionEntries);
     smStats.set_num_total_advance_version_entries(
         numTotalAdvanceVersionEntries);
-    smStats.set_min_supported_version(versionInfo.minSupported);
-    smStats.set_max_supported_version(versionInfo.maxSupported);
-    smStats.set_running_version(versionInfo.running);
+    smStats.set_min_supported_version(MIN_SUPPORTED_VERSION);
+    smStats.set_max_supported_version(MAX_SUPPORTED_VERSION);
+    smStats.set_running_version(getVersion(lastIndex));
 }
 
 void
@@ -231,29 +217,31 @@ StateMachine::apply(const RaftConsensus::Entry& entry)
         uint64_t clientId = entry.index;
         session = &sessions.insert({clientId, {}}).first->second;
     } else if (command.has_advance_version()) {
-        uint32_t requested = command.advance_version().requested_version();
-        if (requested < versionInfo.running) {
+        uint16_t requested = Core::Util::downCast<uint16_t>(
+                command.advance_version(). requested_version());
+        uint16_t running = getVersion(entry.index - 1);
+        if (requested < running) {
             WARNING("Rejecting downgrade of state machine version "
                     "(running version %u but command at log index %lu wants "
                     "to switch to version %u)",
-                    versionInfo.running,
+                    running,
                     entry.index,
                     requested);
             ++numRejectedAdvanceVersionEntries;
-        } else if (requested > versionInfo.running) {
-            if (requested > versionInfo.maxSupported) {
+        } else if (requested > running) {
+            if (requested > MAX_SUPPORTED_VERSION) {
                 PANIC("Cannot upgrade state machine to version %u (from %u) "
                       "because this code only supports up to version %u",
                       requested,
-                      versionInfo.running,
-                      versionInfo.maxSupported);
+                      running,
+                      MAX_SUPPORTED_VERSION);
             } else {
                 // someday, maybe we'll get here
-                // versionInfo.running = requested;
+                // versionHistory.insert(...)
                 PANIC("state machine version > 1 not supported");
             }
             ++numSuccessfulAdvanceVersionEntries;
-        } else { // requested == versionInfo.running
+        } else { // requested == running
             // nothing to do
             // If this stat is high, see note in RaftConsensus.cc.
             ++numRedundantAdvanceVersionEntries;
@@ -311,26 +299,22 @@ StateMachine::applyThreadMain()
 }
 
 void
-StateMachine::dumpSessionSnapshot(Core::ProtoBuf::OutputStream& stream) const
+StateMachine::serializeSessions(SnapshotStateMachine::Header& header) const
 {
-    // dump into protobuf
-    SessionsProto::Sessions sessionsProto;
     for (auto it = sessions.begin(); it != sessions.end(); ++it) {
-        SessionsProto::Session& session = *sessionsProto.add_session();
+        SnapshotStateMachine::Session& session = *header.add_session();
         session.set_client_id(it->first);
         session.set_last_modified(it->second.lastModified);
         session.set_first_outstanding_rpc(it->second.firstOutstandingRPC);
         for (auto it2 = it->second.responses.begin();
              it2 != it->second.responses.end();
              ++it2) {
-            SessionsProto::Response& response = *session.add_rpc_response();
+            SnapshotStateMachine::Response& response =
+                *session.add_rpc_response();
             response.set_rpc_number(it2->first);
             *response.mutable_response() = it2->second;
         }
     }
-
-    // write protobuf to stream
-    stream.writeMessage(sessionsProto);
 }
 
 void
@@ -369,7 +353,16 @@ StateMachine::expireSessions(uint64_t clusterTime)
     }
 }
 
-void StateMachine::killSnapshotProcess(Core::HoldingMutex holdingMutex)
+uint16_t
+StateMachine::getVersion(uint64_t logIndex) const
+{
+    auto it = versionHistory.upper_bound(logIndex);
+    --it;
+    return it->second;
+}
+
+void
+StateMachine::killSnapshotProcess(Core::HoldingMutex holdingMutex)
 {
     if (childPid != 0) {
         int r = kill(childPid, SIGHUP);
@@ -381,17 +374,11 @@ void StateMachine::killSnapshotProcess(Core::HoldingMutex holdingMutex)
 }
 
 void
-StateMachine::loadSessionSnapshot(Core::ProtoBuf::InputStream& stream)
+StateMachine::loadSessions(const SnapshotStateMachine::Header& header)
 {
-    SessionsProto::Sessions sessionsProto;
-    std::string error = stream.readMessage(sessionsProto);
-    if (!error.empty()) {
-        PANIC("couldn't read snapshot: %s", error.c_str());
-    }
-
     sessions.clear();
-    for (auto it = sessionsProto.session().begin();
-         it != sessionsProto.session().end();
+    for (auto it = header.session().begin();
+         it != header.session().end();
          ++it) {
         Session& session = sessions.insert({it->client_id(), {}})
                                                         .first->second;
@@ -420,26 +407,58 @@ StateMachine::loadSnapshot(Core::ProtoBuf::InputStream& stream)
               formatVersion);
     }
 
-    // The version of the state machine behavior.
-    uint16_t runningVersion;
-    bytesRead = stream.readRaw(&runningVersion, sizeof(runningVersion));
-    if (bytesRead < sizeof(runningVersion)) {
-        PANIC("Snapshot is too short (no state machine version field)");
+    // Load snapshot header
+    {
+        SnapshotStateMachine::Header header;
+        std::string error = stream.readMessage(header);
+        if (!error.empty()) {
+            PANIC("Couldn't read state machine header from snapshot: %s",
+                  error.c_str());
+        }
+        loadVersionHistory(header);
+        loadSessions(header);
     }
-    runningVersion = be16toh(runningVersion);
-    if (runningVersion < versionInfo.minSupported ||
-        runningVersion > versionInfo.maxSupported) {
-        PANIC("Snapshot state machine version read was %u, but this "
-              "code only supports %u through %u (inclusive)",
-              runningVersion,
-              versionInfo.minSupported,
-              versionInfo.maxSupported);
-    }
-    versionInfo.running = runningVersion;
 
-    // Load the sessions and the tree.
-    loadSessionSnapshot(stream);
+    // Load the tree's state
     tree.loadSnapshot(stream);
+}
+
+void
+StateMachine::loadVersionHistory(const SnapshotStateMachine::Header& header)
+{
+    versionHistory.clear();
+    versionHistory.insert({0, 1});
+    for (auto it = header.version_update().begin();
+         it != header.version_update().end();
+         ++it) {
+        versionHistory.insert({it->log_index(),
+                               Core::Util::downCast<uint16_t>(it->version())});
+    }
+
+    // The version of the current state machine behavior.
+    uint16_t running = versionHistory.rbegin()->second;
+    if (running < MIN_SUPPORTED_VERSION ||
+        running > MAX_SUPPORTED_VERSION) {
+        PANIC("State machine version read from snapshot was %u, but this "
+              "code only supports %u through %u (inclusive)",
+              running,
+              MIN_SUPPORTED_VERSION,
+              MAX_SUPPORTED_VERSION);
+    }
+}
+
+void
+StateMachine::serializeVersionHistory(
+        SnapshotStateMachine::Header& header) const
+{
+    for (auto it = versionHistory.begin();
+         it != versionHistory.end();
+         ++it) {
+        SnapshotStateMachine::VersionUpdate& update =
+            *header.add_version_update();
+        update.set_log_index(it->first);
+        update.set_version(it->second);
+    }
 }
 
 bool
@@ -588,14 +607,13 @@ StateMachine::takeSnapshot(uint64_t lastIncludedIndex,
         // Format version of snapshot contents is 1.
         uint8_t formatVersion = 1;
         writer->writeRaw(&formatVersion, sizeof(formatVersion));
-
-        // The version defining the state machine code (this may affect how the
-        // snapshot is interpreted).
-        uint16_t runningVersion = htobe16(versionInfo.running);
-        writer->writeRaw(&runningVersion, sizeof(runningVersion));
-
         // StateMachine state comes next
-        dumpSessionSnapshot(*writer);
+        {
+            SnapshotStateMachine::Header header;
+            serializeVersionHistory(header);
+            serializeSessions(header);
+            writer->writeMessage(header);
+        }
         // Then the Tree itself (this one is potentially large)
         tree.dumpSnapshot(*writer);
 
