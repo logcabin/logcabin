@@ -26,13 +26,11 @@ import "build/Protocol/ServerStats.proto";
  * Identifies which RPC is being executed.
  */
 enum OpCode {
-    // Keep these numbers dense.
-    VERIFY_RECIPIENT = 8;
-    OPEN_SESSION = 1;
-    GET_CONFIGURATION = 2;
-    SET_CONFIGURATION = 3;
-    READ_ONLY_TREE = 4;
-    READ_WRITE_TREE = 5;
+    STATE_MACHINE_QUERY = 1;
+    STATE_MACHINE_COMMAND = 2;
+    VERIFY_RECIPIENT = 3;
+    GET_CONFIGURATION = 4;
+    SET_CONFIGURATION = 5;
     GET_SERVER_STATS = 6;
     GET_SERVER_INFO = 7;
 };
@@ -55,11 +53,6 @@ message Error {
          * to who the leader is (see leader_hint field).
          */
         NOT_LEADER = 1;
-        /**
-         * This session is no longer valid. Its state has been discarded on the
-         * server. The client should treat this as a fatal error.
-         */
-        SESSION_EXPIRED = 2;
     };
     optional Code error_code = 1;
     /**
@@ -128,8 +121,8 @@ message VerifyRecipient {
 }
 
 /**
- * OpenSession RPC: Open a new session with the cluster. Sessions are necessary
- * for some RPCs to provide exactly-once semantics.
+ * OpenSession state machine command: Open a new session with the cluster.
+ * Sessions are necessary for some RPCs to provide exactly-once semantics.
  */
 message OpenSession {
     message Request {
@@ -244,6 +237,11 @@ enum Status {
      * over the network.
      */
     TIMEOUT = 5;
+    /**
+     * This session is no longer valid. Its state has been discarded on the
+     * server. The client should treat this as a fatal error.
+     */
+    SESSION_EXPIRED = 6;
 };
 
 /**
@@ -265,7 +263,8 @@ message TreeCondition {
 };
 
 /**
- * Read-only Tree RPC: An RPC to query the hierarchical key-value store.
+ * Read-only Tree state machine query: retrieves information from the
+ * hierarchical key-value store.
  */
 message ReadOnlyTree {
     message Request {
@@ -296,7 +295,8 @@ message ReadOnlyTree {
 }
 
 /**
- * Read-write Tree RPC: An RPC that may modify the hierarchical key-value store.
+ * Read-write Tree state machine command: modifies the hierarchical key-value
+ * store and retrieves information from it.
  */
 message ReadWriteTree {
     message Request {
@@ -361,22 +361,74 @@ message GetServerStats {
     }
 }
 
-
-
 /**
- * This is what the state machine takes in from the replicated log.
+ * AdvanceStateMachineVersion state machine command: changes state machine
+ * behavior to the given version, if and only if the requested_version is
+ * greater than the state machine's current version. This is currently only
+ * used internally by the Raft servers. It is not currently sent by the client
+ * library, rather it is appended by the Raft leader automatically as needed.
  */
-message Command {
-    // The following are mutually exclusive.
-    optional OpenSession.Request open_session = 4;
-    optional ReadWriteTree.Request tree = 5;
+message AdvanceStateMachineVersion {
+    message Request {
+        required uint32 requested_version = 1;
+    }
+    message Response {
+        /**
+         * The version of the state machine behavior that the replicated state
+         * machine is running after applying this command (this will be at
+         * least the requested version, but may be higher if the state machine
+         * was already running a higher version).
+         */
+        required uint32 running_version = 1;
+    }
 }
 
 /**
- * This is what the state machine outputs.
+ * StateMachineCommand RPC from clients that is processed by the replicated
+ * state machine.
  */
-message CommandResponse {
-    // The following are mutually exclusive.
-    optional OpenSession.Response open_session = 4;
-    optional ReadWriteTree.Response tree = 5;
+message StateMachineCommand {
+    /**
+     * This is what the state machine takes in from the replicated log.
+     * These are read-write: they may modify the state machine state.
+     */
+    message Request {
+        // The following are mutually exclusive.
+        optional OpenSession.Request open_session = 1;
+        optional ReadWriteTree.Request tree = 2;
+        optional AdvanceStateMachineVersion.Request advance_version = 3;
+    }
+    /**
+     * This is what the state machine outputs for read-write commands from the log.
+     */
+    message Response {
+        // The following are mutually exclusive.
+        optional OpenSession.Response open_session = 1;
+        optional ReadWriteTree.Response tree = 2;
+        optional AdvanceStateMachineVersion.Response advance_version = 3;
+    }
+}
+
+/**
+ * StateMachineQuery RPC from clients that is processed by the replicated state
+ * machine.
+ */
+message StateMachineQuery {
+    /**
+     * These are read-only queries that (in the current implementation) are not
+     * written to the replicated log (but behave as if they were from the
+     * client's perspective). These are read-only: they may not modify the
+     * state machine state.
+     */
+    message Request {
+        // The following are mutually exclusive.
+        optional ReadOnlyTree.Request tree = 1;
+    }
+    /**
+     * This is what the state machine outputs for read-only queries.
+     */
+    message Response {
+        // The following are mutually exclusive.
+        optional ReadOnlyTree.Response tree = 1;
+    }
 }

@@ -10,6 +10,6 @@ src = [
     "StateMachine.cc",
 ]
 object_files['Server'] = (env.StaticObject(src) +
-                          env.Protobuf("Sessions.proto") +
                           env.Protobuf("SnapshotMetadata.proto") +
+                          env.Protobuf("SnapshotStateMachine.proto") +
                           env.Protobuf("SnapshotStats.proto"))

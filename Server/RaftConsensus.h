@@ -198,6 +198,22 @@ class Server {
     std::string addresses;
 
     /**
+     * If true, minStateMachineVersion and maxStateMachineVersion are set
+     * (although they may be stale).
+     */
+    bool haveStateMachineSupportedVersions;
+    /**
+     * If haveStateMachineSupportedVersions is true, the smallest version of
+     * the state machine commands/behavior that the server can support.
+     */
+    uint16_t minStateMachineVersion;
+    /**
+     * If haveStateMachineSupportedVersions is true, the largest version of
+     * the state machine commands/behavior that the server can support.
+     */
+    uint16_t maxStateMachineVersion;
+
+    /**
      * Used internally by Configuration for garbage collection.
      */
     bool gcFlag;
@@ -931,9 +947,25 @@ class RaftConsensus {
     };
 
     enum class ClientResult {
+        /**
+         * Request completed successfully.
+         */
         SUCCESS,
+        /**
+         * Returned by setConfiguration() if the configuration could not be
+         * set because the previous configuration was unsuitable or because the
+         * new servers could not be caught up.
+         */
         FAIL,
+        /**
+         * Returned by getConfiguration() if the configuration is not stable or
+         * is not committed. The client should wait and retry later.
+         */
         RETRY,
+        /**
+         * Cannot process the request because this server is not leader or
+         * temporarily lost its leadership.
+         */
         NOT_LEADER,
     };
 
@@ -1060,6 +1092,21 @@ class RaftConsensus {
             Protocol::Client::SetConfiguration::Response& response);
 
     /**
+     * Register which versions of client commands/behavior the local state
+     * machine supports. Invoked just once on boot (though calling this
+     * multiple times is safe). This information is used to support upgrades to
+     * the running replicated state machine version, and it is transmitted to
+     * other servers as needed. See #stateMachineUpdaterThreadMain.
+     * \param minSupported
+     *      The smallest version the local state machine can support.
+     * \param maxSupported
+     *      The largest version the local state machine can support.
+     */
+    void
+    setSupportedStateMachineVersions(uint16_t minSupported,
+                                     uint16_t maxSupported);
+
+    /**
      * Start taking a snapshot. Called by the state machine when it wants to
      * take a snapshot.
      * \param lastIncludedIndex
@@ -1152,6 +1199,12 @@ class RaftConsensus {
      * One thread for each remote server calls this method (see Peer::thread).
      */
     void peerThreadMain(std::shared_ptr<Peer> peer);
+
+    /**
+     * Append advance state machine version entries to the log as leader once
+     * all servers can support a new state machine version.
+     */
+    void stateMachineUpdaterThreadMain();
 
     /**
      * Return to follower state when, as leader, this server is not able to
@@ -1346,6 +1399,16 @@ class RaftConsensus {
      * another one, so as to not overwhelm the network with retries.
      */
     const uint64_t RPC_FAILURE_BACKOFF_MS;
+
+    /**
+     * How long the state machine updater thread should sleep if:
+     * - The servers do not currently support a common version, or
+     * - This server has not yet received version information from all other
+     *   servers, or
+     * - An advance state machine entry failed to commit (probably due to lost
+     *   leadership).
+     */
+    const std::chrono::milliseconds STATE_MACHINE_UPDATER_BACKOFF;
 
     /**
      * Prefer to keep RPC requests under this size.
@@ -1592,6 +1655,12 @@ class RaftConsensus {
      * after periods of inactivity.
      */
     std::thread timerThread;
+
+    /**
+     * The thread that executes stateMachineUpdaterThreadMain() to append
+     * advance state machine version entries to the log on leaders.
+     */
+    std::thread stateMachineUpdaterThread;
 
     /**
      * The thread that executes stepDownThreadMain() to return to the follower

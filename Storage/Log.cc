@@ -68,7 +68,7 @@ operator<<(std::ostream& os, const Log& log)
             std::string data = e.data();
             Core::Buffer buffer(const_cast<char*>(data.data()),
                                 data.length(), NULL);
-            Protocol::Client::Command command;
+            Protocol::Client::StateMachineCommand::Request command;
             if (!Core::ProtoBuf::parse(buffer, command)) {
                 WARNING("Could not parse protobuf in log entry %lu", i);
                 os << Core::ProtoBuf::dumpString(e);

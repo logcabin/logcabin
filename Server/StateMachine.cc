@@ -18,12 +18,10 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-#include "build/Server/Sessions.pb.h"
 #include "Core/Debug.h"
 #include "Core/Mutex.h"
 #include "Core/ProtoBuf.h"
 #include "Core/Random.h"
-#include "Core/Time.h"
 #include "Core/ThreadId.h"
 #include "Core/Util.h"
 #include "Server/RaftConsensus.h"
@@ -36,10 +34,6 @@ namespace Server {
 
 namespace PC = LogCabin::Protocol::Client;
 
-/// Clock used by watchdog timer thread.
-typedef Core::Time::SteadyClock Clock;
-/// Point in time of Clock.
-typedef Clock::time_point TimePoint;
 
 // for testing purposes
 bool stateMachineSuppressThreads = false;
@@ -65,6 +59,9 @@ StateMachine::StateMachine(std::shared_ptr<RaftConsensus> consensus,
       // appropriate intervals. For now, servers time out after about an hour,
       // and clients send keep-alives every minute.
     , sessionTimeoutNanos(1000UL * 1000 * 1000 * 60 * 60)
+    , unknownRequestMessageBackoff(std::chrono::milliseconds(
+            config.read<uint64_t>("stateMachineUnknownRequestMessage"
+                                  "BackoffMilliseconds", 10000)))
     , mutex()
     , entriesApplied()
     , snapshotSuggested()
@@ -72,15 +69,25 @@ StateMachine::StateMachine(std::shared_ptr<RaftConsensus> consensus,
     , exiting(false)
     , childPid(0)
     , lastIndex(0)
+    , lastUnknownRequestMessage(TimePoint::min())
+    , numUnknownRequestsSinceLastMessage(0)
     , numSnapshotsAttempted(0)
     , numSnapshotsFailed(0)
+    , numRedundantAdvanceVersionEntries(0)
+    , numRejectedAdvanceVersionEntries(0)
+    , numSuccessfulAdvanceVersionEntries(0)
+    , numTotalAdvanceVersionEntries(0)
     , sessions()
     , tree()
+    , versionHistory()
     , writer()
     , applyThread()
     , snapshotThread()
     , snapshotWatchdogThread()
 {
+    versionHistory.insert({0, 1});
+    consensus->setSupportedStateMachineVersions(MIN_SUPPORTED_VERSION,
+                                                MAX_SUPPORTED_VERSION);
     if (!stateMachineSuppressThreads) {
         applyThread = std::thread(&StateMachine::applyThreadMain, this);
         snapshotThread = std::thread(&StateMachine::snapshotThreadMain, this);
@@ -104,36 +111,18 @@ StateMachine::~StateMachine()
 }
 
 bool
-StateMachine::getResponse(const PC::ExactlyOnceRPCInfo& rpcInfo,
-                          PC::CommandResponse& response) const
+StateMachine::query(const Query::Request& request,
+                    Query::Response& response) const
 {
     std::lock_guard<std::mutex> lockGuard(mutex);
-    auto sessionIt = sessions.find(rpcInfo.client_id());
-    if (sessionIt == sessions.end()) {
-        WARNING("Client %lu session expired but client still active",
-                rpcInfo.client_id());
-        return false;
+    if (request.has_tree()) {
+        Tree::ProtoBuf::readOnlyTreeRPC(tree,
+                                        request.tree(),
+                                        *response.mutable_tree());
+        return true;
     }
-    const Session& session = sessionIt->second;
-    auto responseIt = session.responses.find(rpcInfo.rpc_number());
-    if (responseIt == session.responses.end()) {
-        // The response for this RPC has already been removed: the client is
-        // not waiting for it. This request is just a duplicate that is safe to
-        // drop.
-        WARNING("Client %lu asking for discarded response to RPC %lu",
-                rpcInfo.client_id(), rpcInfo.rpc_number());
-        return false;
-    }
-    response = responseIt->second;
-    return true;
-}
-
-void
-StateMachine::readOnlyTreeRPC(const PC::ReadOnlyTree::Request& request,
-                              PC::ReadOnlyTree::Response& response) const
-{
-    std::lock_guard<std::mutex> lockGuard(mutex);
-    Tree::ProtoBuf::readOnlyTreeRPC(tree, request, response);
+    warnUnknownRequest(request);
+    return false;
 }
 
 void
@@ -148,6 +137,17 @@ StateMachine::updateServerStats(Protocol::ServerStats& serverStats) const
     smStats.set_num_sessions(sessions.size());
     smStats.set_num_snapshots_attempted(numSnapshotsAttempted);
     smStats.set_num_snapshots_failed(numSnapshotsFailed);
+    smStats.set_num_redundant_advance_version_entries(
+        numRedundantAdvanceVersionEntries);
+    smStats.set_num_rejected_advance_version_entries(
+        numRejectedAdvanceVersionEntries);
+    smStats.set_num_successful_advance_version_entries(
+        numSuccessfulAdvanceVersionEntries);
+    smStats.set_num_total_advance_version_entries(
+        numTotalAdvanceVersionEntries);
+    smStats.set_min_supported_version(MIN_SUPPORTED_VERSION);
+    smStats.set_max_supported_version(MAX_SUPPORTED_VERSION);
+    smStats.set_running_version(getVersion(lastIndex));
 }
 
 void
@@ -158,18 +158,68 @@ StateMachine::wait(uint64_t index) const
         entriesApplied.wait(lockGuard);
 }
 
+bool
+StateMachine::waitForResponse(uint64_t logIndex,
+                              const Command::Request& command,
+                              Command::Response& response) const
+{
+    std::unique_lock<std::mutex> lockGuard(mutex);
+    while (lastIndex < logIndex)
+        entriesApplied.wait(lockGuard);
+
+    // Need to check whether we understood the request at the time it
+    // was applied using getVersion(logIndex), then reply and return true/false
+    // based on that. Existing commands have been around since version 1, so we
+    // skip this check for now.
+
+    if (command.has_tree()) {
+        const PC::ExactlyOnceRPCInfo& rpcInfo = command.tree().exactly_once();
+        auto sessionIt = sessions.find(rpcInfo.client_id());
+        if (sessionIt == sessions.end()) {
+            WARNING("Client %lu session expired but client still active",
+                    rpcInfo.client_id());
+            response.mutable_tree()->
+                set_status(PC::Status::SESSION_EXPIRED);
+            return true;
+        }
+        const Session& session = sessionIt->second;
+        auto responseIt = session.responses.find(rpcInfo.rpc_number());
+        if (responseIt == session.responses.end()) {
+            // The response for this RPC has already been removed: the client
+            // is not waiting for it. This request is just a duplicate that is
+            // safe to drop.
+            WARNING("Client %lu asking for discarded response to RPC %lu",
+                    rpcInfo.client_id(), rpcInfo.rpc_number());
+            response.mutable_tree()->
+                set_status(PC::Status::SESSION_EXPIRED);
+            return true;
+        }
+        response = responseIt->second;
+        return true;
+    } else if (command.has_open_session()) {
+        response.mutable_open_session()->
+            set_client_id(logIndex);
+        return true;
+    } else if (command.has_advance_version()) {
+        response.mutable_advance_version()->
+            set_running_version(getVersion(logIndex));
+        return true;
+    }
+    // don't warnUnknownRequest here, since we already did so in apply()
+    return false;
+}
+
 
 ////////// StateMachine private methods //////////
 
 void
 StateMachine::apply(const RaftConsensus::Entry& entry)
 {
-    PC::Command command;
+    Command::Request command;
     if (!Core::ProtoBuf::parse(entry.command, command)) {
         PANIC("Failed to parse protobuf for entry %lu",
               entry.index);
     }
-    Session* session = NULL;
     if (command.has_tree()) {
         PC::ExactlyOnceRPCInfo rpcInfo = command.tree().exactly_once();
         auto it = sessions.find(rpcInfo.client_id());
@@ -177,12 +227,12 @@ StateMachine::apply(const RaftConsensus::Entry& entry)
             // session does not exist
         } else {
             // session exists
-            session = &it->second;
-            expireResponses(*session, rpcInfo.first_outstanding_rpc());
-            if (rpcInfo.rpc_number() < session->firstOutstandingRPC) {
+            Session& session = it->second;
+            expireResponses(session, rpcInfo.first_outstanding_rpc());
+            if (rpcInfo.rpc_number() < session.firstOutstandingRPC) {
                 // response already discarded, do not re-apply
             } else {
-                auto inserted = session->responses.insert(
+                auto inserted = session.responses.insert(
                                                 {rpcInfo.rpc_number(), {}});
                 if (inserted.second) {
                     // response not found, apply and save it
@@ -190,6 +240,7 @@ StateMachine::apply(const RaftConsensus::Entry& entry)
                         tree,
                         command.tree(),
                         *inserted.first->second.mutable_tree());
+                    session.lastModified = entry.clusterTime;
                 } else {
                     // response exists, do not re-apply
                 }
@@ -197,17 +248,44 @@ StateMachine::apply(const RaftConsensus::Entry& entry)
         }
     } else if (command.has_open_session()) {
         uint64_t clientId = entry.index;
-        session = &sessions.insert({clientId, {}}).first->second;
-    } else {
-        PANIC("unknown command at %lu: %s",
-              entry.index,
-              Core::ProtoBuf::dumpString(command).c_str());
-    }
-
-    // update based on entry.clusterTime
-    if (session != NULL) {
-        session->lastModified = entry.clusterTime;
-        session = NULL; // pointer invalidated by expireSessions()
+        Session& session = sessions.insert({clientId, {}}).first->second;
+        session.lastModified = entry.clusterTime;
+    } else if (command.has_advance_version()) {
+        uint16_t requested = Core::Util::downCast<uint16_t>(
+                command.advance_version(). requested_version());
+        uint16_t running = getVersion(entry.index - 1);
+        if (requested < running) {
+            WARNING("Rejecting downgrade of state machine version "
+                    "(running version %u but command at log index %lu wants "
+                    "to switch to version %u)",
+                    running,
+                    entry.index,
+                    requested);
+            ++numRejectedAdvanceVersionEntries;
+        } else if (requested > running) {
+            if (requested > MAX_SUPPORTED_VERSION) {
+                PANIC("Cannot upgrade state machine to version %u (from %u) "
+                      "because this code only supports up to version %u",
+                      requested,
+                      running,
+                      MAX_SUPPORTED_VERSION);
+            } else {
+                // someday, maybe we'll get here
+                // versionHistory.insert(...)
+                PANIC("state machine version > 1 not supported");
+            }
+            ++numSuccessfulAdvanceVersionEntries;
+        } else { // requested == running
+            // nothing to do
+            // If this stat is high, see note in RaftConsensus.cc.
+            ++numRedundantAdvanceVersionEntries;
+        }
+        ++numTotalAdvanceVersionEntries;
+    } else { // unknown command
+        // This could be because the state machine hasn't been upgraded yet to
+        // handle the command. These are (deterministically) ignored by all
+        // state machines running the current version.
+        warnUnknownRequest(command);
     }
 }
 
@@ -250,26 +328,22 @@ StateMachine::applyThreadMain()
 }
 
 void
-StateMachine::dumpSessionSnapshot(Core::ProtoBuf::OutputStream& stream) const
+StateMachine::serializeSessions(SnapshotStateMachine::Header& header) const
 {
-    // dump into protobuf
-    SessionsProto::Sessions sessionsProto;
     for (auto it = sessions.begin(); it != sessions.end(); ++it) {
-        SessionsProto::Session& session = *sessionsProto.add_session();
+        SnapshotStateMachine::Session& session = *header.add_session();
         session.set_client_id(it->first);
         session.set_last_modified(it->second.lastModified);
         session.set_first_outstanding_rpc(it->second.firstOutstandingRPC);
         for (auto it2 = it->second.responses.begin();
              it2 != it->second.responses.end();
              ++it2) {
-            SessionsProto::Response& response = *session.add_rpc_response();
+            SnapshotStateMachine::Response& response =
+                *session.add_rpc_response();
             response.set_rpc_number(it2->first);
             *response.mutable_response() = it2->second;
         }
     }
-
-    // write protobuf to stream
-    stream.writeMessage(sessionsProto);
 }
 
 void
@@ -308,7 +382,16 @@ StateMachine::expireSessions(uint64_t clusterTime)
     }
 }
 
-void StateMachine::killSnapshotProcess(Core::HoldingMutex holdingMutex)
+uint16_t
+StateMachine::getVersion(uint64_t logIndex) const
+{
+    auto it = versionHistory.upper_bound(logIndex);
+    --it;
+    return it->second;
+}
+
+void
+StateMachine::killSnapshotProcess(Core::HoldingMutex holdingMutex)
 {
     if (childPid != 0) {
         int r = kill(childPid, SIGHUP);
@@ -320,17 +403,11 @@ void StateMachine::killSnapshotProcess(Core::HoldingMutex holdingMutex)
 }
 
 void
-StateMachine::loadSessionSnapshot(Core::ProtoBuf::InputStream& stream)
+StateMachine::loadSessions(const SnapshotStateMachine::Header& header)
 {
-    SessionsProto::Sessions sessionsProto;
-    std::string error = stream.readMessage(sessionsProto);
-    if (!error.empty()) {
-        PANIC("couldn't read snapshot: %s", error.c_str());
-    }
-
     sessions.clear();
-    for (auto it = sessionsProto.session().begin();
-         it != sessionsProto.session().end();
+    for (auto it = header.session().begin();
+         it != header.session().end();
          ++it) {
         Session& session = sessions.insert({it->client_id(), {}})
                                                         .first->second;
@@ -348,18 +425,69 @@ void
 StateMachine::loadSnapshot(Core::ProtoBuf::InputStream& stream)
 {
     // Check that this snapshot uses format version 1
-    uint8_t version = 0;
-    uint64_t bytesRead = stream.readRaw(&version, sizeof(version));
-    if (bytesRead < 1) {
-        PANIC("Snapshot contents are empty (no version field)");
+    uint8_t formatVersion = 0;
+    uint64_t bytesRead = stream.readRaw(&formatVersion, sizeof(formatVersion));
+    if (bytesRead < sizeof(formatVersion)) {
+        PANIC("Snapshot contents are empty (no format version field)");
     }
-    if (version != 1) {
+    if (formatVersion != 1) {
         PANIC("Snapshot contents format version read was %u, but this "
               "code can only read version 1",
-              version);
+              formatVersion);
     }
-    loadSessionSnapshot(stream);
+
+    // Load snapshot header
+    {
+        SnapshotStateMachine::Header header;
+        std::string error = stream.readMessage(header);
+        if (!error.empty()) {
+            PANIC("Couldn't read state machine header from snapshot: %s",
+                  error.c_str());
+        }
+        loadVersionHistory(header);
+        loadSessions(header);
+    }
+
+    // Load the tree's state
     tree.loadSnapshot(stream);
+}
+
+void
+StateMachine::loadVersionHistory(const SnapshotStateMachine::Header& header)
+{
+    versionHistory.clear();
+    versionHistory.insert({0, 1});
+    for (auto it = header.version_update().begin();
+         it != header.version_update().end();
+         ++it) {
+        versionHistory.insert({it->log_index(),
+                               Core::Util::downCast<uint16_t>(it->version())});
+    }
+
+    // The version of the current state machine behavior.
+    uint16_t running = versionHistory.rbegin()->second;
+    if (running < MIN_SUPPORTED_VERSION ||
+        running > MAX_SUPPORTED_VERSION) {
+        PANIC("State machine version read from snapshot was %u, but this "
+              "code only supports %u through %u (inclusive)",
+              running,
+              MIN_SUPPORTED_VERSION,
+              MAX_SUPPORTED_VERSION);
+    }
+}
+
+void
+StateMachine::serializeVersionHistory(
+        SnapshotStateMachine::Header& header) const
+{
+    for (auto it = versionHistory.begin();
+         it != versionHistory.end();
+         ++it) {
+        SnapshotStateMachine::VersionUpdate& update =
+            *header.add_version_update();
+        update.set_log_index(it->first);
+        update.set_version(it->second);
+    }
 }
 
 bool
@@ -506,10 +634,15 @@ StateMachine::takeSnapshot(uint64_t lastIncludedIndex,
         }
 
         // Format version of snapshot contents is 1.
-        uint8_t version = 1;
-        writer->writeRaw(&version, sizeof(version));
+        uint8_t formatVersion = 1;
+        writer->writeRaw(&formatVersion, sizeof(formatVersion));
         // StateMachine state comes next
-        dumpSessionSnapshot(*writer);
+        {
+            SnapshotStateMachine::Header header;
+            serializeVersionHistory(header);
+            serializeSessions(header);
+            writer->writeMessage(header);
+        }
         // Then the Tree itself (this one is potentially large)
         tree.dumpSnapshot(*writer);
 
@@ -553,6 +686,33 @@ StateMachine::takeSnapshot(uint64_t lastIncludedIndex,
         }
     }
 }
+
+void
+StateMachine::warnUnknownRequest(
+        const google::protobuf::Message& request) const
+{
+    TimePoint now = Clock::now();
+    if (lastUnknownRequestMessage + unknownRequestMessageBackoff < now) {
+        lastUnknownRequestMessage = now;
+        if (numUnknownRequestsSinceLastMessage > 0) {
+            WARNING("This version of the state machine (%u) does not "
+                    "understand the given request (and %lu similar warnings "
+                    "were suppressed since the last message): %s",
+                    getVersion(~0UL),
+                    numUnknownRequestsSinceLastMessage,
+                    Core::ProtoBuf::dumpString(request).c_str());
+        } else {
+            WARNING("This version of the state machine (%u) does not "
+                    "understand the given request: %s",
+                    getVersion(~0UL),
+                    Core::ProtoBuf::dumpString(request).c_str());
+        }
+        numUnknownRequestsSinceLastMessage = 0;
+    } else {
+        ++numUnknownRequestsSinceLastMessage;
+    }
+}
+
 
 } // namespace LogCabin::Server
 } // namespace LogCabin

@@ -87,6 +87,13 @@ message ServerStats {
         optional uint64 num_sessions = 3;
         optional uint64 num_snapshots_attempted = 4;
         optional uint64 num_snapshots_failed = 5;
+        optional uint64 num_redundant_advance_version_entries = 6;
+        optional uint64 num_rejected_advance_version_entries = 7;
+        optional uint64 num_successful_advance_version_entries = 8;
+        optional uint64 num_total_advance_version_entries = 9;
+        optional uint32 min_supported_version = 10;
+        optional uint32 max_supported_version = 11;
+        optional uint32 running_version = 12;
     };
 
     /**

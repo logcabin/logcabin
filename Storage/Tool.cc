@@ -23,7 +23,7 @@
 #include <string>
 
 #include "build/Server/SnapshotMetadata.pb.h"
-#include "build/Server/Sessions.pb.h"
+#include "build/Server/SnapshotStateMachine.pb.h"
 #include "Core/Config.h"
 #include "Core/Debug.h"
 #include "Core/ProtoBuf.h"
@@ -224,16 +224,17 @@ main(int argc, char** argv)
             }
         }
 
-        { // read StateMachine sessions from stream
-            Server::SessionsProto::Sessions sessions;
-            std::string error = reader->readMessage(sessions);
+        { // Load snapshot header
+            Server::SnapshotStateMachine::Header header;
+            std::string error = reader->readMessage(header);
             if (!error.empty()) {
-                PANIC("couldn't read snapshot sessions: %s",
+                PANIC("Couldn't read state machine header from snapshot: %s",
                       error.c_str());
             }
-            NOTICE("Snapshot sessions start");
-            std::cout << Core::ProtoBuf::dumpString(sessions) << std::endl;
-            NOTICE("Snapshot sessions end");
+            NOTICE("Snapshot state machine header start");
+            std::cout << Core::ProtoBuf::dumpString(header) << std::endl;
+            NOTICE("Snapshot state machine header end");
+
         }
 
         { // read Tree from stream

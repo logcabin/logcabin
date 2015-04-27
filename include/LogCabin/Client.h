@@ -41,10 +41,10 @@ namespace Debug {
 namespace Protocol {
 class ServerStats;
 namespace Client {
-class ReadOnlyTree_Request;
-class ReadOnlyTree_Response;
-class ReadWriteTree_Request;
-class ReadWriteTree_Response;
+class StateMachineQuery_Request;
+class StateMachineQuery_Response;
+class StateMachineCommand_Request;
+class StateMachineCommand_Response;
 } // namespace LogCabin::Protocol::Client
 } // namespace LogCabin::Protocol
 
@@ -529,7 +529,8 @@ class TestingCallbacks {
     virtual ~TestingCallbacks();
 
     /**
-     * Handle a read-only Tree RPC, such as Tree::read or Tree::listDirectory.
+     * Handle a read-only state machine query, such as Tree::read or
+     * Tree::listDirectory.
      * The default implementation just returns false.
      * \param[in,out] request
      *      Protocol buffer containing request details. You can modify this and
@@ -541,12 +542,13 @@ class TestingCallbacks {
      * \return
      *      True if handled, false to query the in-memory data structure.
      */
-    virtual bool readOnlyTreeRPC(
-        Protocol::Client::ReadOnlyTree_Request& request,
-        Protocol::Client::ReadOnlyTree_Response& response);
+    virtual bool stateMachineQuery(
+        Protocol::Client::StateMachineQuery_Request& request,
+        Protocol::Client::StateMachineQuery_Response& response);
 
     /**
-     * Handle a read-write Tree RPC, such as Tree::read or Tree::listDirectory.
+     * Handle a read-write state machine command, such as Tree::read or
+     * Tree::listDirectory.
      * The default implementation just returns false.
      * \param[in,out] request
      *      Protocol buffer containing request details. You can modify this and
@@ -558,9 +560,9 @@ class TestingCallbacks {
      * \return
      *      True if handled, false to query the in-memory data structure.
      */
-    virtual bool readWriteTreeRPC(
-        Protocol::Client::ReadWriteTree_Request& request,
-        Protocol::Client::ReadWriteTree_Response& response);
+    virtual bool stateMachineCommand(
+        Protocol::Client::StateMachineCommand_Request& request,
+        Protocol::Client::StateMachineCommand_Response& response);
 };
 
 
