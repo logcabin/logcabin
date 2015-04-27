@@ -22,7 +22,6 @@
 #include "Core/Mutex.h"
 #include "Core/ProtoBuf.h"
 #include "Core/Random.h"
-#include "Core/Time.h"
 #include "Core/ThreadId.h"
 #include "Core/Util.h"
 #include "Server/RaftConsensus.h"
@@ -35,10 +34,6 @@ namespace Server {
 
 namespace PC = LogCabin::Protocol::Client;
 
-/// Clock used by watchdog timer thread.
-typedef Core::Time::SteadyClock Clock;
-/// Point in time of Clock.
-typedef Clock::time_point TimePoint;
 
 // for testing purposes
 bool stateMachineSuppressThreads = false;
@@ -64,6 +59,9 @@ StateMachine::StateMachine(std::shared_ptr<RaftConsensus> consensus,
       // appropriate intervals. For now, servers time out after about an hour,
       // and clients send keep-alives every minute.
     , sessionTimeoutNanos(1000UL * 1000 * 1000 * 60 * 60)
+    , unknownRequestMessageBackoff(std::chrono::milliseconds(
+            config.read<uint64_t>("stateMachineUnknownRequestMessage"
+                                  "BackoffMilliseconds", 10000)))
     , mutex()
     , entriesApplied()
     , snapshotSuggested()
@@ -71,6 +69,8 @@ StateMachine::StateMachine(std::shared_ptr<RaftConsensus> consensus,
     , exiting(false)
     , childPid(0)
     , lastIndex(0)
+    , lastUnknownRequestMessage(TimePoint::min())
+    , numUnknownRequestsSinceLastMessage(0)
     , numSnapshotsAttempted(0)
     , numSnapshotsFailed(0)
     , numRedundantAdvanceVersionEntries(0)
@@ -111,36 +111,18 @@ StateMachine::~StateMachine()
 }
 
 bool
-StateMachine::getResponse(const PC::ExactlyOnceRPCInfo& rpcInfo,
-                          PC::CommandResponse& response) const
+StateMachine::query(const Query::Request& request,
+                    Query::Response& response) const
 {
     std::lock_guard<std::mutex> lockGuard(mutex);
-    auto sessionIt = sessions.find(rpcInfo.client_id());
-    if (sessionIt == sessions.end()) {
-        WARNING("Client %lu session expired but client still active",
-                rpcInfo.client_id());
-        return false;
+    if (request.has_tree()) {
+        Tree::ProtoBuf::readOnlyTreeRPC(tree,
+                                        request.tree(),
+                                        *response.mutable_tree());
+        return true;
     }
-    const Session& session = sessionIt->second;
-    auto responseIt = session.responses.find(rpcInfo.rpc_number());
-    if (responseIt == session.responses.end()) {
-        // The response for this RPC has already been removed: the client is
-        // not waiting for it. This request is just a duplicate that is safe to
-        // drop.
-        WARNING("Client %lu asking for discarded response to RPC %lu",
-                rpcInfo.client_id(), rpcInfo.rpc_number());
-        return false;
-    }
-    response = responseIt->second;
-    return true;
-}
-
-void
-StateMachine::readOnlyTreeRPC(const PC::ReadOnlyTree::Request& request,
-                              PC::ReadOnlyTree::Response& response) const
-{
-    std::lock_guard<std::mutex> lockGuard(mutex);
-    Tree::ProtoBuf::readOnlyTreeRPC(tree, request, response);
+    warnUnknownRequest(request);
+    return false;
 }
 
 void
@@ -176,18 +158,68 @@ StateMachine::wait(uint64_t index) const
         entriesApplied.wait(lockGuard);
 }
 
+bool
+StateMachine::waitForResponse(uint64_t logIndex,
+                              const Command::Request& command,
+                              Command::Response& response) const
+{
+    std::unique_lock<std::mutex> lockGuard(mutex);
+    while (lastIndex < logIndex)
+        entriesApplied.wait(lockGuard);
+
+    // Need to check whether we understood the request at the time it
+    // was applied using getVersion(logIndex), then reply and return true/false
+    // based on that. Existing commands have been around since version 1, so we
+    // skip this check for now.
+
+    if (command.has_tree()) {
+        const PC::ExactlyOnceRPCInfo& rpcInfo = command.tree().exactly_once();
+        auto sessionIt = sessions.find(rpcInfo.client_id());
+        if (sessionIt == sessions.end()) {
+            WARNING("Client %lu session expired but client still active",
+                    rpcInfo.client_id());
+            response.mutable_tree()->
+                set_status(PC::Status::SESSION_EXPIRED);
+            return true;
+        }
+        const Session& session = sessionIt->second;
+        auto responseIt = session.responses.find(rpcInfo.rpc_number());
+        if (responseIt == session.responses.end()) {
+            // The response for this RPC has already been removed: the client
+            // is not waiting for it. This request is just a duplicate that is
+            // safe to drop.
+            WARNING("Client %lu asking for discarded response to RPC %lu",
+                    rpcInfo.client_id(), rpcInfo.rpc_number());
+            response.mutable_tree()->
+                set_status(PC::Status::SESSION_EXPIRED);
+            return true;
+        }
+        response = responseIt->second;
+        return true;
+    } else if (command.has_open_session()) {
+        response.mutable_open_session()->
+            set_client_id(logIndex);
+        return true;
+    } else if (command.has_advance_version()) {
+        response.mutable_advance_version()->
+            set_running_version(getVersion(logIndex));
+        return true;
+    }
+    // don't warnUnknownRequest here, since we already did so in apply()
+    return false;
+}
+
 
 ////////// StateMachine private methods //////////
 
 void
 StateMachine::apply(const RaftConsensus::Entry& entry)
 {
-    PC::Command command;
+    Command::Request command;
     if (!Core::ProtoBuf::parse(entry.command, command)) {
         PANIC("Failed to parse protobuf for entry %lu",
               entry.index);
     }
-    Session* session = NULL;
     if (command.has_tree()) {
         PC::ExactlyOnceRPCInfo rpcInfo = command.tree().exactly_once();
         auto it = sessions.find(rpcInfo.client_id());
@@ -195,12 +227,12 @@ StateMachine::apply(const RaftConsensus::Entry& entry)
             // session does not exist
         } else {
             // session exists
-            session = &it->second;
-            expireResponses(*session, rpcInfo.first_outstanding_rpc());
-            if (rpcInfo.rpc_number() < session->firstOutstandingRPC) {
+            Session& session = it->second;
+            expireResponses(session, rpcInfo.first_outstanding_rpc());
+            if (rpcInfo.rpc_number() < session.firstOutstandingRPC) {
                 // response already discarded, do not re-apply
             } else {
-                auto inserted = session->responses.insert(
+                auto inserted = session.responses.insert(
                                                 {rpcInfo.rpc_number(), {}});
                 if (inserted.second) {
                     // response not found, apply and save it
@@ -208,6 +240,7 @@ StateMachine::apply(const RaftConsensus::Entry& entry)
                         tree,
                         command.tree(),
                         *inserted.first->second.mutable_tree());
+                    session.lastModified = entry.clusterTime;
                 } else {
                     // response exists, do not re-apply
                 }
@@ -215,7 +248,8 @@ StateMachine::apply(const RaftConsensus::Entry& entry)
         }
     } else if (command.has_open_session()) {
         uint64_t clientId = entry.index;
-        session = &sessions.insert({clientId, {}}).first->second;
+        Session& session = sessions.insert({clientId, {}}).first->second;
+        session.lastModified = entry.clusterTime;
     } else if (command.has_advance_version()) {
         uint16_t requested = Core::Util::downCast<uint16_t>(
                 command.advance_version(). requested_version());
@@ -247,16 +281,11 @@ StateMachine::apply(const RaftConsensus::Entry& entry)
             ++numRedundantAdvanceVersionEntries;
         }
         ++numTotalAdvanceVersionEntries;
-    } else {
-        PANIC("unknown command at %lu: %s",
-              entry.index,
-              Core::ProtoBuf::dumpString(command).c_str());
-    }
-
-    // update based on entry.clusterTime
-    if (session != NULL) {
-        session->lastModified = entry.clusterTime;
-        session = NULL; // pointer invalidated by expireSessions()
+    } else { // unknown command
+        // This could be because the state machine hasn't been upgraded yet to
+        // handle the command. These are (deterministically) ignored by all
+        // state machines running the current version.
+        warnUnknownRequest(command);
     }
 }
 
@@ -657,6 +686,33 @@ StateMachine::takeSnapshot(uint64_t lastIncludedIndex,
         }
     }
 }
+
+void
+StateMachine::warnUnknownRequest(
+        const google::protobuf::Message& request) const
+{
+    TimePoint now = Clock::now();
+    if (lastUnknownRequestMessage + unknownRequestMessageBackoff < now) {
+        lastUnknownRequestMessage = now;
+        if (numUnknownRequestsSinceLastMessage > 0) {
+            WARNING("This version of the state machine (%u) does not "
+                    "understand the given request (and %lu similar warnings "
+                    "were suppressed since the last message): %s",
+                    getVersion(~0UL),
+                    numUnknownRequestsSinceLastMessage,
+                    Core::ProtoBuf::dumpString(request).c_str());
+        } else {
+            WARNING("This version of the state machine (%u) does not "
+                    "understand the given request: %s",
+                    getVersion(~0UL),
+                    Core::ProtoBuf::dumpString(request).c_str());
+        }
+        numUnknownRequestsSinceLastMessage = 0;
+    } else {
+        ++numUnknownRequestsSinceLastMessage;
+    }
+}
+
 
 } // namespace LogCabin::Server
 } // namespace LogCabin

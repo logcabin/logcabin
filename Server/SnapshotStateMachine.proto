@@ -54,7 +54,7 @@ message Session {
  */
 message Response {
     required uint64 rpc_number = 1;
-    required Protocol.Client.CommandResponse response = 2;
+    required Protocol.Client.StateMachineCommand.Response response = 2;
 }
 
 message Header {

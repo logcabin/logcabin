@@ -1,4 +1,5 @@
 /* Copyright (c) 2012 Stanford University
+ * Copyright (c) 2014-2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -55,6 +56,24 @@ class MyCallbacks : public Client::TestingCallbacks {
     MyCallbacks()
         : tree()
     {
+    }
+    bool stateMachineCommand(
+        Protocol::Client::StateMachineCommand_Request& request,
+        Protocol::Client::StateMachineCommand_Response& response) {
+        if (request.has_tree()) {
+            return readWriteTreeRPC(*request.mutable_tree(),
+                                    *response.mutable_tree());
+        }
+        return false;
+    }
+    bool stateMachineQuery(
+        Protocol::Client::StateMachineQuery_Request& request,
+        Protocol::Client::StateMachineQuery_Response& response) {
+        if (request.has_tree()) {
+            return readOnlyTreeRPC(*request.mutable_tree(),
+                                   *response.mutable_tree());
+        }
+        return false;
     }
 
     bool readOnlyTreeRPC(

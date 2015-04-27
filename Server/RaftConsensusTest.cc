@@ -1681,7 +1681,7 @@ class StateMachineUpdaterThreadMainHelper {
                 const_cast<char*>(commandString.data()),
                 commandString.length(),
                 NULL);
-            Protocol::Client::Command command;
+            Protocol::Client::StateMachineCommand::Request command;
             EXPECT_TRUE(Core::ProtoBuf::parse(commandBuffer, command));
             EXPECT_EQ("advance_version { "
                       "  requested_version: 4 "
@@ -1706,7 +1706,7 @@ class StateMachineUpdaterThreadMainHelper {
                 const_cast<char*>(commandString.data()),
                 commandString.length(),
                 NULL);
-            Protocol::Client::Command command;
+            Protocol::Client::StateMachineCommand::Request command;
             EXPECT_TRUE(Core::ProtoBuf::parse(commandBuffer, command));
             EXPECT_EQ("advance_version { "
                       "  requested_version: 4 "

@@ -1891,7 +1891,7 @@ RaftConsensus::stateMachineUpdaterThreadMain()
                         entry.set_term(currentTerm);
                         entry.set_type(Protocol::Raft::EntryType::DATA);
                         entry.set_cluster_time(clusterClock.leaderStamp());
-                        Protocol::Client::Command command;
+                        Protocol::Client::StateMachineCommand::Request command;
                         command.mutable_advance_version()->
                             set_requested_version(s.maxVersion);
                         Core::Buffer cmdBuf;

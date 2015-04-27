@@ -23,6 +23,7 @@
 #include "build/Server/SnapshotStateMachine.pb.h"
 #include "Core/ConditionVariable.h"
 #include "Core/Config.h"
+#include "Core/Time.h"
 #include "Tree/Tree.h"
 
 #ifndef LOGCABIN_SERVER_STATEMACHINE_H
@@ -40,6 +41,9 @@ class RaftConsensus;
  */
 class StateMachine {
   public:
+    typedef Protocol::Client::StateMachineCommand Command;
+    typedef Protocol::Client::StateMachineQuery Query;
+
     enum {
         /**
          * This state machine code can behave like all versions between
@@ -59,27 +63,13 @@ class StateMachine {
     ~StateMachine();
 
     /**
-     * Called by ClientService to get a response for a read-write operation on
-     * the Tree.
+     * Called by ClientService to execute read-only queries on the state
+     * machine.
      * \warning
      *      Be sure to wait() first!
-     * \param rpcInfo
-     *      Identifies client session, etc.
-     * \param[out] response
-     *      If the return value is true, the response will be filled in here.
-     *      Otherwise, this will be unmodified.
-     * \return
-     *      True if successful; false if the session expired.
      */
-    bool getResponse(const Protocol::Client::ExactlyOnceRPCInfo& rpcInfo,
-                     Protocol::Client::CommandResponse& response) const;
-
-    /**
-     * Called by ClientService to execute read-only operations on the Tree.
-     */
-    void readOnlyTreeRPC(
-                const Protocol::Client::ReadOnlyTree_Request& request,
-                Protocol::Client::ReadOnlyTree_Response& response) const;
+    bool query(const Query::Request& request,
+               Query::Response& response) const;
 
     /**
      * Add information about the state machine state to the given structure.
@@ -91,9 +81,29 @@ class StateMachine {
      */
     void wait(uint64_t index) const;
 
+    /**
+     * Called by ClientService to get a response for a read-write command on
+     * the state machine.
+     * \param logIndex
+     *      The index in the log where the command was committed.
+     * \param command
+     *      The request.
+     * \param[out] response
+     *      If the return value is true, the response will be filled in here.
+     *      Otherwise, this will be unmodified.
+     */
+    bool waitForResponse(uint64_t logIndex,
+                         const Command::Request& command,
+                         Command::Response& response) const;
+
   private:
     // forward declaration
     struct Session;
+
+    /// Clock used by watchdog timer thread.
+    typedef Core::Time::SteadyClock Clock;
+    /// Point in time of Clock.
+    typedef Clock::time_point TimePoint;
 
     /**
      * Invoked once per committed entry from the Raft log.
@@ -186,6 +196,17 @@ class StateMachine {
     void takeSnapshot(uint64_t lastIncludedIndex,
                       std::unique_lock<std::mutex>& lockGuard);
 
+    /**
+     * Called to log a debug message if appropriate when the state machine
+     * encounters a query or command that is not understood by the current
+     * running version.
+     */
+    void warnUnknownRequest(const google::protobuf::Message& request) const;
+
+    /**
+     * Consensus module from which this state machine pulls commands and
+     * snapshots.
+     */
     std::shared_ptr<RaftConsensus> consensus;
 
     /**
@@ -218,6 +239,14 @@ class StateMachine {
      * nanoseconds of cluster time.
      */
     uint64_t sessionTimeoutNanos;
+
+    /**
+     * The state machine logs messages when it receives a command or query that
+     * is not understood in the current running version. This controls the
+     * minimum interval between such messages to prevent spamming the debug
+     * log.
+     */
+    std::chrono::milliseconds unknownRequestMessageBackoff;
 
     /**
      * Protects against concurrent access for all members of this class (except
@@ -268,6 +297,18 @@ class StateMachine {
      * 'mutex'.
      */
     uint64_t lastIndex;
+
+    /**
+     * The time when warnUnknownRequest() last printed a debug message. Used to
+     * prevent spamming the debug log.
+     */
+    mutable TimePoint lastUnknownRequestMessage;
+
+    /**
+     * The number of debug messages suppressed by warnUnknownRequest() since
+     * lastUnknownRequestMessage. Used to prevent spamming the debug log.
+     */
+    mutable uint64_t numUnknownRequestsSinceLastMessage;
 
     /**
      * The number of times a snapshot has been started.
@@ -336,7 +377,8 @@ class StateMachine {
          * Responses for RPCs numbered less that firstOutstandingRPC are
          * discarded from this map.
          */
-        std::unordered_map<uint64_t, Protocol::Client::CommandResponse>
+        std::unordered_map<uint64_t,
+                           Protocol::Client::StateMachineCommand::Response>
             responses;
     };
 

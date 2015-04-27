@@ -1,5 +1,5 @@
 /* Copyright (c) 2012 Stanford University
- * Copyright (c) 2014 Diego Ongaro
+ * Copyright (c) 2014-2015 Diego Ongaro
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -61,44 +61,47 @@ class TreeLeaderRPC : public LeaderRPCBase {
               const google::protobuf::Message& request,
               google::protobuf::Message& response,
               TimePoint timeout) {
-        if (opCode == OpCode::OPEN_SESSION) {
-            PC::OpenSession::Response& openSessionResponse =
-                static_cast<PC::OpenSession::Response&>(response);
-            openSessionResponse.set_client_id(1);
-        } else if (opCode == OpCode::READ_ONLY_TREE) {
-            std::lock_guard<std::recursive_mutex> lockGuard(mutex);
-            PC::ReadOnlyTree::Request trequest;
-            trequest.CopyFrom(request);
-            auto& tresponse =
-                static_cast<PC::ReadOnlyTree::Response&>(response);
+        std::lock_guard<std::recursive_mutex> lockGuard(mutex);
+        if (opCode == OpCode::STATE_MACHINE_QUERY) {
+            PC::StateMachineQuery::Request qrequest;
+            qrequest.CopyFrom(request);
+            auto& qresponse =
+                static_cast<PC::StateMachineQuery::Response&>(response);
             auto callbacks = std::make_shared<TestingCallbacks>();
             // set to noop for recursive calls, then restore
             CallbackSwap s(mockClientImpl.callbacks, callbacks);
-            if (!callbacks->readOnlyTreeRPC(trequest, tresponse)) {
-                tresponse.Clear();
+            if (callbacks->stateMachineQuery(qrequest, qresponse))
+                return Status::OK;
+            qresponse.Clear();
+            if (qrequest.has_tree()) {
                 LogCabin::Tree::ProtoBuf::readOnlyTreeRPC(
-                    tree, trequest, tresponse);
+                    tree, qrequest.tree(), *qresponse.mutable_tree());
+                return Status::OK;
             }
-        } else if (opCode == OpCode::READ_WRITE_TREE) {
-            std::lock_guard<std::recursive_mutex> lockGuard(mutex);
-            PC::ReadWriteTree::Request trequest;
-            trequest.CopyFrom(request);
-            auto& tresponse =
-                static_cast<PC::ReadWriteTree::Response&>(response);
+        } else if (opCode == OpCode::STATE_MACHINE_COMMAND) {
+            PC::StateMachineCommand::Request crequest;
+            crequest.CopyFrom(request);
+            auto& cresponse =
+                static_cast<PC::StateMachineCommand::Response&>(response);
             auto callbacks = std::make_shared<TestingCallbacks>();
             // set to noop for recursive calls, then restore
             CallbackSwap s(mockClientImpl.callbacks, callbacks);
-            if (!callbacks->readWriteTreeRPC(trequest, tresponse)) {
-                tresponse.Clear();
+            if (callbacks->stateMachineCommand(crequest, cresponse))
+                return Status::OK;
+            cresponse.Clear();
+            if (crequest.has_tree()) {
                 LogCabin::Tree::ProtoBuf::readWriteTreeRPC(
-                    tree, trequest, tresponse);
+                    tree, crequest.tree(), *cresponse.mutable_tree());
+                return Status::OK;
+            } else if (crequest.has_open_session()) {
+                cresponse.mutable_open_session()->
+                    set_client_id(1);
+                return Status::OK;
             }
-        } else {
-            PANIC("Unexpected request: %d %s",
-                  opCode,
-                  Core::ProtoBuf::dumpString(request).c_str());
         }
-        return Status::OK;
+        PANIC("Unexpected request: %d %s",
+              opCode,
+              Core::ProtoBuf::dumpString(request).c_str());
     }
 
     class Call : public LeaderRPCBase::Call {

@@ -947,9 +947,25 @@ class RaftConsensus {
     };
 
     enum class ClientResult {
+        /**
+         * Request completed successfully.
+         */
         SUCCESS,
+        /**
+         * Returned by setConfiguration() if the configuration could not be
+         * set because the previous configuration was unsuitable or because the
+         * new servers could not be caught up.
+         */
         FAIL,
+        /**
+         * Returned by getConfiguration() if the configuration is not stable or
+         * is not committed. The client should wait and retry later.
+         */
         RETRY,
+        /**
+         * Cannot process the request because this server is not leader or
+         * temporarily lost its leadership.
+         */
         NOT_LEADER,
     };
 

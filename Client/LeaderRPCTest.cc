@@ -66,9 +66,9 @@ class ClientLeaderRPCTest : public ::testing::Test {
                                       sessionManager));
 
 
-        request.mutable_read()->set_path("foo");
-        expResponse.set_status(Protocol::Client::Status::OK);
-        expResponse.mutable_read()->set_contents("bar");
+        request.mutable_tree()->mutable_read()->set_path("foo");
+        expResponse.mutable_tree()->set_status(Protocol::Client::Status::OK);
+        expResponse.mutable_tree()->mutable_read()->set_contents("bar");
     }
     ~ClientLeaderRPCTest()
     {
@@ -91,9 +91,9 @@ class ClientLeaderRPCTest : public ::testing::Test {
     SessionManager::ClusterUUID clusterUUID;
     SessionManager sessionManager;
     std::unique_ptr<LeaderRPC> leaderRPC;
-    Protocol::Client::ReadOnlyTree::Request request;
-    Protocol::Client::ReadOnlyTree::Response response;
-    Protocol::Client::ReadOnlyTree::Response expResponse;
+    Protocol::Client::StateMachineQuery::Request request;
+    Protocol::Client::StateMachineQuery::Response response;
+    Protocol::Client::StateMachineQuery::Response expResponse;
 };
 
 // copied from RPC/ClientSessionTest.cc
@@ -130,7 +130,7 @@ TEST_F(ClientLeaderRPCTest, Call_start_timeout) {
     LeaderRPC::Call call(*leaderRPC);
     ConnectInProgress c;
     RPC::ClientSession::connectFn = std::ref(c);
-    call.start(OpCode::READ_ONLY_TREE, request, TimePoint::min());
+    call.start(OpCode::STATE_MACHINE_QUERY, request, TimePoint::min());
     EXPECT_EQ("Closed session: Failed to connect socket to 127.0.0.1 "
               "(resolved to 127.0.0.1:5254): timeout expired",
               call.cachedSession->toString());
@@ -144,9 +144,9 @@ TEST_F(ClientLeaderRPCTest, Call_start_timeout) {
 
 TEST_F(ClientLeaderRPCTest, CallOK) {
     init();
-    service->reply(OpCode::READ_ONLY_TREE, request, expResponse);
+    service->reply(OpCode::STATE_MACHINE_QUERY, request, expResponse);
     std::unique_ptr<LeaderRPCBase::Call> call = leaderRPC->makeCall();
-    call->start(OpCode::READ_ONLY_TREE, request, TimePoint::max());
+    call->start(OpCode::STATE_MACHINE_QUERY, request, TimePoint::max());
     EXPECT_EQ(LeaderRPCBase::Call::Status::OK,
               call->wait(response, TimePoint::max()));
     EXPECT_EQ(expResponse, response);
@@ -157,7 +157,7 @@ TEST_F(ClientLeaderRPCTest, CallOK) {
 TEST_F(ClientLeaderRPCTest, CallCanceled) {
     init();
     std::unique_ptr<LeaderRPCBase::Call> call = leaderRPC->makeCall();
-    call->start(OpCode::READ_ONLY_TREE, request, TimePoint::max());
+    call->start(OpCode::STATE_MACHINE_QUERY, request, TimePoint::max());
     call->cancel();
 
     EXPECT_EQ(LeaderRPCBase::Call::Status::RETRY,
@@ -173,15 +173,15 @@ TEST_F(ClientLeaderRPCTest, CallCanceled) {
 
 TEST_F(ClientLeaderRPCTest, CallRPCFailed) {
     init();
-    service->closeSession(OpCode::READ_ONLY_TREE, request);
-    service->reply(OpCode::READ_ONLY_TREE, request, expResponse);
+    service->closeSession(OpCode::STATE_MACHINE_QUERY, request);
+    service->reply(OpCode::STATE_MACHINE_QUERY, request, expResponse);
     std::unique_ptr<LeaderRPCBase::Call> call = leaderRPC->makeCall();
-    call->start(OpCode::READ_ONLY_TREE, request, TimePoint::max());
+    call->start(OpCode::STATE_MACHINE_QUERY, request, TimePoint::max());
     EXPECT_EQ(LeaderRPCBase::Call::Status::RETRY,
               call->wait(response, TimePoint::max()));
     EXPECT_FALSE(leaderRPC->leaderSession.get());
     EXPECT_EQ("", leaderRPC->leaderHint);
-    call->start(OpCode::READ_ONLY_TREE, request, TimePoint::max());
+    call->start(OpCode::STATE_MACHINE_QUERY, request, TimePoint::max());
     EXPECT_EQ(LeaderRPCBase::Call::Status::OK,
               call->wait(response, TimePoint::max()));
     EXPECT_EQ(expResponse, response);
@@ -195,40 +195,40 @@ TEST_F(ClientLeaderRPCTest, Call_wait_notLeader) {
     error.set_error_code(Protocol::Client::Error::NOT_LEADER);
 
     // 1. no hint
-    service->serviceSpecificError(OpCode::READ_ONLY_TREE, request, error);
+    service->serviceSpecificError(OpCode::STATE_MACHINE_QUERY, request, error);
 
     // 2. bad hint (wrong port)
     error.set_leader_hint("127.0.0.1:0");
-    service->serviceSpecificError(OpCode::READ_ONLY_TREE, request, error);
+    service->serviceSpecificError(OpCode::STATE_MACHINE_QUERY, request, error);
 
     // 3. ok, fine, let it through
-    service->reply(OpCode::READ_ONLY_TREE, request, expResponse);
+    service->reply(OpCode::STATE_MACHINE_QUERY, request, expResponse);
 
     std::unique_ptr<LeaderRPCBase::Call> call = leaderRPC->makeCall();
 
     // 1. no hint
-    call->start(OpCode::READ_ONLY_TREE, request, TimePoint::max());
+    call->start(OpCode::STATE_MACHINE_QUERY, request, TimePoint::max());
     EXPECT_EQ(LeaderRPCBase::Call::Status::RETRY,
               call->wait(response, TimePoint::max()));
     EXPECT_FALSE(leaderRPC->leaderSession.get());
     EXPECT_EQ("", leaderRPC->leaderHint);
 
     // 2. hint
-    call->start(OpCode::READ_ONLY_TREE, request, TimePoint::max());
+    call->start(OpCode::STATE_MACHINE_QUERY, request, TimePoint::max());
     EXPECT_EQ(LeaderRPCBase::Call::Status::RETRY,
               call->wait(response, TimePoint::max()));
     EXPECT_FALSE(leaderRPC->leaderSession.get());
     EXPECT_EQ("127.0.0.1:0", leaderRPC->leaderHint);
 
     // 3. try bad hint (wrong port)
-    call->start(OpCode::READ_ONLY_TREE, request, TimePoint::max());
+    call->start(OpCode::STATE_MACHINE_QUERY, request, TimePoint::max());
     EXPECT_EQ(LeaderRPCBase::Call::Status::RETRY,
               call->wait(response, TimePoint::max()));
     EXPECT_FALSE(leaderRPC->leaderSession.get());
     EXPECT_EQ("", leaderRPC->leaderHint);
 
     // 4. finally works
-    call->start(OpCode::READ_ONLY_TREE, request, TimePoint::max());
+    call->start(OpCode::STATE_MACHINE_QUERY, request, TimePoint::max());
     EXPECT_EQ(LeaderRPCBase::Call::Status::OK,
               call->wait(response, TimePoint::max()));
     EXPECT_TRUE(leaderRPC->leaderSession.get());
@@ -238,42 +238,26 @@ TEST_F(ClientLeaderRPCTest, Call_wait_notLeader) {
 
 TEST_F(ClientLeaderRPCTest, Call_wait_timeout) {
     std::unique_ptr<LeaderRPCBase::Call> call = leaderRPC->makeCall();
-    call->start(OpCode::READ_ONLY_TREE, request, TimePoint::max());
+    call->start(OpCode::STATE_MACHINE_QUERY, request, TimePoint::max());
     EXPECT_EQ(LeaderRPCBase::Call::Status::TIMEOUT,
               call->wait(response, TimePoint::min()));
 }
-
-
-TEST_F(ClientLeaderRPCTest, Call_wait_sessionExpired) {
-    Protocol::Client::Error error;
-    error.set_error_code(Protocol::Client::Error::SESSION_EXPIRED);
-
-    EXPECT_DEATH({
-            init();
-            service->serviceSpecificError(OpCode::READ_ONLY_TREE,
-                                          request, error);
-            leaderRPC->call(OpCode::READ_ONLY_TREE, request, response,
-                            TimePoint::max());
-        },
-        "Session expired");
-}
-
 
 // constructor and destructor tested adequately in tests for call()
 
 TEST_F(ClientLeaderRPCTest, callOK) {
     init();
-    service->reply(OpCode::READ_ONLY_TREE, request, expResponse);
-    leaderRPC->call(OpCode::READ_ONLY_TREE, request, response,
+    service->reply(OpCode::STATE_MACHINE_QUERY, request, expResponse);
+    leaderRPC->call(OpCode::STATE_MACHINE_QUERY, request, response,
                     TimePoint::max());
     EXPECT_EQ(expResponse, response);
 }
 
 TEST_F(ClientLeaderRPCTest, callRPCFailed) {
     init();
-    service->closeSession(OpCode::READ_ONLY_TREE, request);
-    service->reply(OpCode::READ_ONLY_TREE, request, expResponse);
-    leaderRPC->call(OpCode::READ_ONLY_TREE, request, response,
+    service->closeSession(OpCode::STATE_MACHINE_QUERY, request);
+    service->reply(OpCode::STATE_MACHINE_QUERY, request, expResponse);
+    leaderRPC->call(OpCode::STATE_MACHINE_QUERY, request, response,
                     TimePoint::max());
     EXPECT_EQ(expResponse, response);
 }

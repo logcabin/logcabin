@@ -77,7 +77,7 @@ class ServerStateMachineTest : public ::testing::Test {
 
 
     Core::Buffer
-    serialize(const Protocol::Client::Command& command) {
+    serialize(const StateMachine::Command::Request& command) {
         Core::Buffer out;
         Core::ProtoBuf::serialize(command, out);
         return out;
@@ -89,27 +89,132 @@ class ServerStateMachineTest : public ::testing::Test {
     Core::Time::SteadyClock::Mocker timeMocker;
 };
 
-TEST_F(ServerStateMachineTest, getResponse)
+TEST_F(ServerStateMachineTest, query_tree)
+{
+    StateMachine::Query::Request request;
+    StateMachine::Query::Response response;
+    auto& read = *request.mutable_tree()->mutable_read();
+    read.set_path("/foo");
+    EXPECT_TRUE(stateMachine->query(request, response));
+    EXPECT_EQ(Protocol::Client::Status::LOOKUP_ERROR,
+              response.tree().status());
+}
+
+TEST_F(ServerStateMachineTest, query_unknown)
+{
+    StateMachine::Query::Request request;
+    StateMachine::Query::Response response;
+    Core::Debug::setLogPolicy({{"", "ERROR"}});
+    EXPECT_FALSE(stateMachine->query(request, response));
+    EXPECT_FALSE(stateMachine->query(request, response));
+}
+
+struct WaitHelper {
+    explicit WaitHelper(StateMachine& stateMachine)
+        : stateMachine(stateMachine)
+        , iter(0)
+    {
+    }
+    void operator()() {
+        ++iter;
+        if (iter == 1) {
+            EXPECT_EQ(0U, stateMachine.lastIndex);
+            stateMachine.lastIndex = 2;
+        } else if (iter == 2) {
+            EXPECT_EQ(2U, stateMachine.lastIndex);
+            stateMachine.lastIndex = 3;
+        }
+    }
+    StateMachine& stateMachine;
+    uint64_t iter;
+};
+
+TEST_F(ServerStateMachineTest, wait)
+{
+    WaitHelper helper(*stateMachine);
+    stateMachine->entriesApplied.callback = std::ref(helper);
+    stateMachine->wait(3);
+    EXPECT_EQ(2U, helper.iter);
+}
+
+TEST_F(ServerStateMachineTest, waitForResponse_wait)
+{
+    StateMachine::Command::Request request;
+    request.mutable_open_session();
+    StateMachine::Command::Response response;
+    WaitHelper helper(*stateMachine);
+    stateMachine->entriesApplied.callback = std::ref(helper);
+    EXPECT_TRUE(stateMachine->waitForResponse(3, request, response));
+    EXPECT_EQ(2U, helper.iter);
+}
+
+TEST_F(ServerStateMachineTest, waitForResponse_tree)
 {
     Core::Debug::setLogPolicy({{"Server/StateMachine.cc", "ERROR"}});
     stateMachine->sessions.insert({1, {}});
     StateMachine::Session& session = stateMachine->sessions.at(1);
-    Protocol::Client::CommandResponse r1;
-    Protocol::Client::CommandResponse r2;
+    StateMachine::Command::Response r1;
+    StateMachine::Command::Response r2;
     r1.mutable_tree()->set_status(Protocol::Client::Status::LOOKUP_ERROR);
     session.responses.insert({1, r1});
-    Protocol::Client::ExactlyOnceRPCInfo rpcInfo;
-    rpcInfo.set_client_id(2);
-    rpcInfo.set_rpc_number(1);
-    EXPECT_FALSE(stateMachine->getResponse(rpcInfo, r2));
-    rpcInfo.set_client_id(1);
-    rpcInfo.set_rpc_number(2);
-    EXPECT_FALSE(stateMachine->getResponse(rpcInfo, r2));
+
+    StateMachine::Command::Request request;
+    auto& exactlyOnce = *request.mutable_tree()->mutable_exactly_once();
+    exactlyOnce.set_client_id(2);
+    exactlyOnce.set_rpc_number(1);
+    EXPECT_TRUE(stateMachine->waitForResponse(0, request, r2));
+    EXPECT_EQ("tree { "
+              "  status: SESSION_EXPIRED "
+              "}", r2);
+
+    exactlyOnce.set_client_id(1);
+    exactlyOnce.set_rpc_number(2);
+    EXPECT_TRUE(stateMachine->waitForResponse(0, request, r2));
+    EXPECT_EQ("tree { "
+              "  status: SESSION_EXPIRED "
+              "}", r2);
+
     Core::Debug::setLogPolicy({{"", "WARNING"}});
-    rpcInfo.set_client_id(1);
-    rpcInfo.set_rpc_number(1);
-    EXPECT_TRUE(stateMachine->getResponse(rpcInfo, r2));
+    exactlyOnce.set_client_id(1);
+    exactlyOnce.set_rpc_number(1);
+    EXPECT_TRUE(stateMachine->waitForResponse(0, request, r2));
     EXPECT_EQ(r1, r2);
+}
+
+TEST_F(ServerStateMachineTest, waitForResponse_openSession)
+{
+    StateMachine::Command::Request request;
+    request.mutable_open_session();
+    StateMachine::Command::Response response;
+    stateMachine->lastIndex = 3;
+    EXPECT_TRUE(stateMachine->waitForResponse(3, request, response));
+    EXPECT_EQ("open_session { "
+              "  client_id: 3 "
+              "}",
+              response);
+}
+
+TEST_F(ServerStateMachineTest, waitForResponse_advanceVersion)
+{
+    StateMachine::Command::Request request;
+    request.mutable_advance_version()->
+        set_requested_version(90);
+    StateMachine::Command::Response response;
+    stateMachine->lastIndex = 3;
+    EXPECT_TRUE(stateMachine->waitForResponse(3, request, response));
+    EXPECT_EQ("advance_version { "
+              "  running_version: 1 "
+              "}",
+              response);
+}
+
+TEST_F(ServerStateMachineTest, waitForResponse_unknown)
+{
+    StateMachine::Command::Request request; // empty
+    StateMachine::Command::Response response;
+    stateMachine->lastIndex = 3;
+    EXPECT_FALSE(stateMachine->waitForResponse(3, request, response));
+    EXPECT_EQ("", response);
 }
 
 TEST_F(ServerStateMachineTest, apply_tree)
@@ -119,8 +224,8 @@ TEST_F(ServerStateMachineTest, apply_tree)
     entry.index = 6;
     entry.type = RaftConsensus::Entry::DATA;
     entry.clusterTime = 2;
-    Protocol::Client::Command command =
-        Core::ProtoBuf::fromString<Protocol::Client::Command>(
+    StateMachine::Command::Request command =
+        Core::ProtoBuf::fromString<StateMachine::Command::Request>(
             "tree: { "
             " exactly_once: { "
             "  client_id: 39 "
@@ -177,8 +282,8 @@ TEST_F(ServerStateMachineTest, apply_openSession)
 {
     stateMachine->sessionTimeoutNanos = 1;
     stateMachine->sessions.insert({1, {}});
-    Protocol::Client::Command command =
-        Core::ProtoBuf::fromString<Protocol::Client::Command>(
+    StateMachine::Command::Request command =
+        Core::ProtoBuf::fromString<StateMachine::Command::Request>(
             "open_session: {}");
     RaftConsensus::Entry entry;
     entry.index = 6;
@@ -199,8 +304,8 @@ TEST_F(ServerStateMachineTest, apply_openSession)
 
 TEST_F(ServerStateMachineTest, apply_advanceVersion)
 {
-    Protocol::Client::Command command =
-        Core::ProtoBuf::fromString<Protocol::Client::Command>(
+    StateMachine::Command::Request command =
+        Core::ProtoBuf::fromString<StateMachine::Command::Request>(
             "advance_version: { "
             "  requested_version: 1 "
             "}");
@@ -214,7 +319,7 @@ TEST_F(ServerStateMachineTest, apply_advanceVersion)
     stateMachine->apply(entry);
     stateMachine->apply(entry); // should silently succeed
 
-    command = Core::ProtoBuf::fromString<Protocol::Client::Command>(
+    command = Core::ProtoBuf::fromString<StateMachine::Command::Request>(
             "advance_version: { "
             "  requested_version: 1 "
             "}");
@@ -225,6 +330,24 @@ TEST_F(ServerStateMachineTest, apply_advanceVersion)
     });
     stateMachine->apply(entry); // expect warning
     EXPECT_EQ(1U, stateMachine->getVersion(10000));
+}
+
+TEST_F(ServerStateMachineTest, apply_unknown)
+{
+    StateMachine::Command::Request command =
+        Core::ProtoBuf::fromString<StateMachine::Command::Request>("");
+    RaftConsensus::Entry entry;
+    entry.index = 6;
+    entry.type = RaftConsensus::Entry::DATA;
+    entry.clusterTime = 2;
+    entry.command = serialize(command);
+    // should be no-op, definitely shouldn't panic, expect warning
+    Core::Debug::setLogPolicy({
+        {"Server/StateMachine.cc", "ERROR"},
+        {"", "WARNING"},
+    });
+    stateMachine->apply(entry);
+    stateMachine->apply(entry);
 }
 
 // This tries to test the use of kill() to stop a snapshotting child and exit
@@ -256,11 +379,11 @@ TEST_F(ServerStateMachineTest, applyThreadMain_exiting_TimingSensitive)
 
 TEST_F(ServerStateMachineTest, serializeSessions)
 {
-    Protocol::Client::CommandResponse r1;
+    StateMachine::Command::Response r1;
     r1.mutable_tree()->set_status(Protocol::Client::Status::LOOKUP_ERROR);
 
-    Protocol::Client::CommandResponse r2;
-    r1.mutable_tree()->set_status(Protocol::Client::Status::TYPE_ERROR);
+    StateMachine::Command::Response r2;
+    r2.mutable_tree()->set_status(Protocol::Client::Status::TYPE_ERROR);
 
     StateMachine::Session s1;
     s1.lastModified = 6;

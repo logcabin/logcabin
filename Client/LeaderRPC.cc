@@ -129,8 +129,6 @@ LeaderRPC::Call::wait(google::protobuf::Message& response,
                         leaderRPC.reportFailure(cachedSession);
                     }
                     break;
-                case Protocol::Client::Error::SESSION_EXPIRED:
-                    PANIC("Session expired");
                 default:
                     // Hmm, we don't know what this server is trying to tell
                     // us, but something is wrong. The server shouldn't reply

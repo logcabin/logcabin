@@ -475,17 +475,17 @@ TestingCallbacks::~TestingCallbacks()
 }
 
 bool
-TestingCallbacks::readOnlyTreeRPC(
-    Protocol::Client::ReadOnlyTree_Request& request,
-    Protocol::Client::ReadOnlyTree_Response& response)
+TestingCallbacks::stateMachineQuery(
+    Protocol::Client::StateMachineQuery_Request& request,
+    Protocol::Client::StateMachineQuery_Response& response)
 {
     return false;
 }
 
 bool
-TestingCallbacks::readWriteTreeRPC(
-    Protocol::Client::ReadWriteTree_Request& request,
-    Protocol::Client::ReadWriteTree_Response& response)
+TestingCallbacks::stateMachineCommand(
+    Protocol::Client::StateMachineCommand_Request& request,
+    Protocol::Client::StateMachineCommand_Response& response)
 {
     return false;
 }
