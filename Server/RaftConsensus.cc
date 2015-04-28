@@ -846,7 +846,7 @@ RaftConsensus::Entry::~Entry()
 
 RaftConsensus::RaftConsensus(Globals& globals)
     : ELECTION_TIMEOUT_MS(globals.config.read<uint64_t>(
-        "electionTimeoutMilliseconds", 150))
+        "electionTimeoutMilliseconds", 500))
     , HEARTBEAT_PERIOD_MS(globals.config.read<uint64_t>(
         "heartbeatPeriodMilliseconds",
         ELECTION_TIMEOUT_MS / 2))

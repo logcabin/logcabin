@@ -253,10 +253,10 @@ class ClientSession {
     std::weak_ptr<ClientSession> self;
 
     /**
-     * The number of milliseconds to wait until the client gets suspicious
+     * The number of nanoseconds to wait until the client gets suspicious
      * about the server not responding. After this amount of time elapses, the
      * client will send a ping to the server. If no response is received within
-     * another PING_TIMEOUT_MS milliseconds, the session is closed.
+     * another PING_TIMEOUT_NS milliseconds, the session is closed.
      *
      * TODO(ongaro): How should this value be chosen?
      * Ideally, you probably want this to be set to something like the 99-th
@@ -264,7 +264,7 @@ class ClientSession {
      *
      * TODO(ongaro): How does this interact with TCP?
      */
-    const uint64_t PING_TIMEOUT_MS;
+    const uint64_t PING_TIMEOUT_NS;
 
     /**
      * The event loop that is used for non-blocking I/O.

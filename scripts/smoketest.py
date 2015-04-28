@@ -64,14 +64,15 @@ def main():
         for server_id in server_ids:
             host = smokehosts[server_id - 1]
             with open('smoketest-%d.conf' % server_id, 'w') as f:
-                try:
-                    f.write(open('smoketest.conf').read())
-                    f.write('\n\n')
-                except:
-                    pass
                 f.write('serverId = %d\n' % server_id)
                 f.write('listenAddresses = %s\n' % host[0])
                 f.write('clusterUUID = %s\n' % cluster_uuid)
+                f.write('snapshotMinLogSize = 1024')
+                f.write('\n\n')
+                try:
+                    f.write(open('smoketest.conf').read())
+                except:
+                    pass
 
 
         print('Initializing first server\'s log')

@@ -47,9 +47,9 @@ StateMachine::StateMachine(std::shared_ptr<RaftConsensus> consensus,
     , snapshotBlockPercentage(
             config.read<uint64_t>("snapshotBlockPercentage", 0))
     , snapshotMinLogSize(
-            config.read<uint64_t>("snapshotMinLogSize", 1024))
+            config.read<uint64_t>("snapshotMinLogSize", 64UL * 1024 * 1024))
     , snapshotRatio(
-            config.read<uint64_t>("snapshotRatio", 10))
+            config.read<uint64_t>("snapshotRatio", 4))
     , snapshotWatchdogInterval(std::chrono::milliseconds(
             config.read<uint64_t>("snapshotWatchdogMilliseconds", 10000)))
       // TODO(ongaro): This should be configurable, but it must be the same for

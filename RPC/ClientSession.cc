@@ -87,9 +87,9 @@ ClientSession::MessageSocketHandler::handleReceivedMessage(
     if (messageId == Protocol::Common::PING_MESSAGE_ID) {
         if (session.numActiveRPCs > 0 && session.activePing) {
             // The server has shown that it is alive for now.
-            // Let's get suspicious again in another PING_TIMEOUT_MS.
+            // Let's get suspicious again in another PING_TIMEOUT_NS.
             session.activePing = false;
-            session.timer.schedule(session.PING_TIMEOUT_MS * 1000 * 1000);
+            session.timer.schedule(session.PING_TIMEOUT_NS);
         } else {
             VERBOSE("Received an unexpected ping response. This can happen "
                     "for a number of reasons and is no cause for alarm. For "
@@ -124,7 +124,7 @@ ClientSession::MessageSocketHandler::handleReceivedMessage(
     if (session.numActiveRPCs == 0)
         session.timer.deschedule();
     else
-        session.timer.schedule(session.PING_TIMEOUT_MS * 1000 * 1000);
+        session.timer.schedule(session.PING_TIMEOUT_NS);
 
     // Fill in the response
     response.status = Response::HAS_REPLY;
@@ -188,7 +188,7 @@ ClientSession::Timer::handleTimerEvent()
         session.activePing = true;
         session.messageSocket->sendMessage(Protocol::Common::PING_MESSAGE_ID,
                                            Core::Buffer());
-        schedule(session.PING_TIMEOUT_MS * 1000 * 1000);
+        schedule(session.PING_TIMEOUT_NS);
     } else {
         VERBOSE("ClientSession to %s timed out.",
                 session.address.toString().c_str());
@@ -219,8 +219,8 @@ ClientSession::ClientSession(Event::Loop& eventLoop,
                              TimePoint timeout,
                              const Core::Config& config)
     : self() // makeSession will fill this in shortly
-    , PING_TIMEOUT_MS(config.read<uint64_t>(
-        "tcpHeartbeatTimeoutMilliseconds", 200) / 2)
+    , PING_TIMEOUT_NS(config.read<uint64_t>(
+        "tcpHeartbeatTimeoutMilliseconds", 500) * 1000 * 1000)
     , eventLoop(eventLoop)
     , address(address)
     , messageSocketHandler(*this)
@@ -383,7 +383,7 @@ ClientSession::sendRequest(Core::Buffer request)
         if (numActiveRPCs == 1) {
             // activePing's value was undefined while numActiveRPCs = 0
             activePing = false;
-            timer.schedule(PING_TIMEOUT_MS * 1000 * 1000);
+            timer.schedule(PING_TIMEOUT_NS);
         }
     }
     // Release the mutex before sending so that receives can be processed
