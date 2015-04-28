@@ -36,6 +36,7 @@ consist of the following:
 - config file format and options: defined by `sample.conf`
 - client-to-server network protocol: compatibility
 - server-to-server network protocol: compatibility
+- replicated state machine behavior: compatibility
 - storage layout on disk: compatibility
 - snapshot format on disk: compatibility
 - log format on disk of `Segmented` storage module: compatibility
@@ -49,16 +50,26 @@ publicly, but interoperability with different versions of the code is
 maintained. Interoperability with third-party implementations is not
 guaranteed, as there is no explicit protocol specification.
 
-Network protocols indicating "compatibility" provide forwards and backwards
-compatibility: older code and newer code must be able to interoperate within a
-MAJOR release. This is desirable in the network protocols to allow
-non-disruptive rolling upgrades.
+- Network protocols indicating "compatibility" provide forwards and backwards
+  compatibility: older code and newer code must be able to interoperate within
+  a MAJOR release. This is desirable in the network protocols to allow
+  non-disruptive rolling upgrades.
 
-Disk formats indicating "compatibility" provide backwards compatibility: newer
-code must be able to accept formats produced by older code within a MAJOR
-release. However, older code may not be able to accept disk formats produced by
-newer code. This reflects the expectation that servers will be upgraded
-monotonically from older to newer versions but never back.
+- Disk formats indicating "compatibility" provide backwards compatibility:
+  newer code must be able to accept formats produced by older code within a
+  MAJOR release. However, older code may not be able to accept disk formats
+  produced by newer code. This reflects the expectation that servers will be
+  upgraded monotonically from older to newer versions but never back.
+
+- The replicated state machine (which contains the core Tree data structure
+  that clients interact with, among other things) provides backwards
+  compatibility for a limited window of time. LogCabin will only update the
+  externally visible behavior of its replicated state machine when all
+  currently known servers support the new version. At that point, servers
+  running the old version of the code may not be able to participate in the
+  cluster (they will most likely PANIC repeatedly until their code is
+  upgraded).
+
 
 The following are specifically excluded from the public API and are not subject
 to semantic versioning (they may be added to the public API in future
