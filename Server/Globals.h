@@ -77,6 +77,22 @@ class Globals {
     void init();
 
     /**
+     * Leave the signals blocked when this object is destroyed.
+     * This is used in Server/Main.cc for the long-running daemon; it's not
+     * used in unit tests.
+     *
+     * This was added to work around a specific problem: when running the
+     * servers under valgrind through cluster.py, the servers would receive
+     * SIGTERM, start to shut down, then the instant the SIGTERM signal was
+     * unmasked, the server would appear to exit with a 0 status, yet it
+     * wouldn't finish the shutdown process. I couldn't reproduce this outside
+     * of cluster.py. As there's no reason to unblock the signals before
+     * exiting the daemon, this seems like the safer bet for now.
+     * -Diego 2015-04-29
+     */
+    void leaveSignalsBlocked();
+
+    /**
      * Run the event loop until SIGINT, SIGTERM, or someone calls
      * Event::Loop::exit().
      */

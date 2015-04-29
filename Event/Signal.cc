@@ -50,6 +50,7 @@ createSignalFd(int signalNumber)
 
 Signal::Blocker::Blocker(int signalNumber)
     : signalNumber(signalNumber)
+    , shouldLeaveBlocked(false)
 {
     // Block signal
     sigset_t mask;
@@ -64,15 +65,23 @@ Signal::Blocker::Blocker(int signalNumber)
 
 Signal::Blocker::~Blocker()
 {
-    // Unblock signal
-    sigset_t mask;
-    sigemptyset(&mask);
-    sigaddset(&mask, signalNumber);
-    int r = pthread_sigmask(SIG_UNBLOCK, &mask, NULL);
-    if (r != 0) {
-        PANIC("Could not unblock signal %d: %s",
-              signalNumber, strerror(r));
+    if (!shouldLeaveBlocked) {
+        // Unblock signal
+        sigset_t mask;
+        sigemptyset(&mask);
+        sigaddset(&mask, signalNumber);
+        int r = pthread_sigmask(SIG_UNBLOCK, &mask, NULL);
+        if (r != 0) {
+            PANIC("Could not unblock signal %d: %s",
+                  signalNumber, strerror(r));
+        }
     }
+}
+
+void
+Signal::Blocker::leaveBlocked()
+{
+    shouldLeaveBlocked = true;
 }
 
 //// class Signal::Monitor ////

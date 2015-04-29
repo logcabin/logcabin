@@ -47,7 +47,11 @@ class Signal : private Event::File {
         explicit Blocker(int signalNumber);
         /// Destructor. Unmasks asynchronous signal delivery for signalNumber.
         ~Blocker();
+        /// Leave the signal blocked when this object is destroyed.
+        void leaveBlocked();
         const int signalNumber;
+      private:
+        bool shouldLeaveBlocked;
     };
 
     /**

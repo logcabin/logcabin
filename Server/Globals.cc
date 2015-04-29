@@ -69,9 +69,6 @@ Globals::Globals()
 
 Globals::~Globals()
 {
-    // LogManager assumes it and its logs have no active users when it is
-    // destroyed. Currently, the only user is clientService, and this is
-    // guaranteed by clientService's destructor.
 }
 
 void
@@ -146,6 +143,14 @@ Globals::init()
     }
 
     serverStats.enable();
+}
+
+void
+Globals::leaveSignalsBlocked()
+{
+    sigIntBlocker.leaveBlocked();
+    sigTermBlocker.leaveBlocked();
+    sigUsr1Blocker.leaveBlocked();
 }
 
 void

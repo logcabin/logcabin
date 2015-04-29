@@ -323,6 +323,7 @@ main(int argc, char** argv)
             globals.raft->bootstrapConfiguration();
             NOTICE("Done bootstrapping configuration. Exiting.");
         } else {
+            globals.leaveSignalsBlocked();
             globals.run();
         }
     }
