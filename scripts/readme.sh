@@ -25,6 +25,8 @@ listenAddresses = 127.0.0.1:5256
 storagePath=$tmpdir
 EOF
 
+mkdir -p debug
+
 build/LogCabin --config logcabin-1.conf --bootstrap
 
 build/LogCabin --config logcabin-1.conf --log debug/1 &
