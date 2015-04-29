@@ -8,15 +8,10 @@ various executables. These components are all released together under a single
 version number, and the release notes below describe which components have
 actually changed.
 
+Release Process
+===============
 
-Release Procedure
-=================
-
-- Run through tests
-- Update the RPM version number in `SConstruct`
-- Update this document
-- Tag the git commit as vMAJOR.MINOR.PATCH
-
+See [RELEASE-PROCESS.md](RELEASE-PROCESS.md).
 
 Version 0.0.1 (In Development)
 ==============================
