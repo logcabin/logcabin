@@ -236,9 +236,7 @@ rpms=RPMPackager.package(env,
     'LogCabin is a distributed system that provides a small amount of\n'
     'highly replicated, consistent storage. It is a reliable place for\n'
     'other distributed systems to store their core metadata and\n'
-    'is helpful in solving cluster management issues. Although its key\n'
-    'functionality is in place, LogCabin is not yet recommended\n'
-    'for actual use.',
+    'is helpful in solving cluster management issues.',
 )
 
 # Rename .rpm files into build/
