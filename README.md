@@ -170,6 +170,11 @@ have output something like:
     - 2: 127.0.0.1:5255
     - 3: 127.0.0.1:5256
 
+Note: If you're sharing a single magnetic disk under heavy load for all the
+servers, the cluster may have trouble maintaining a leader. See
+[issue 57](https://github.com/logcabin/logcabin/issues/57) for more details on
+symptoms and a workaround.
+
 Finally, you can run a LogCabin client to exercise the cluster:
 
     build/Examples/HelloWorld --cluster=$ALLSERVERS
