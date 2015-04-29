@@ -1,27 +1,26 @@
 Versioning
 ==========
 
-LogCabin uses [SemVer](http://semver.org) (>= 2.0.0, < 3.0.0) for its version
-numbers. Its "public API" consists of many components, including its network
-and disk formats, its client library, and the command line arguments for
-various executables. These components are all released together under a single
-version number, and the release notes below describe which components have
-actually changed.
+LogCabin uses [SemVer](http://semver.org) for its version numbers. Its "public
+API" consists of many components, including its network and disk formats, its
+client library, and the command line arguments for various executables. These
+components are all released together under a single version number, and the
+release notes below describe which components have actually changed.
 
 Release Process
 ===============
 
 See [RELEASE-PROCESS.md](RELEASE-PROCESS.md).
 
-Version 0.0.1 (In Development)
-==============================
+Version 1.0.0 (2015-04-29)
+==========================
 
-LogCabin has not had any releases yet, but we are working towards one: see
-issue #99 (versioning). Version 0.0.1-alpha.0 is the current version number
-where one is needed (it's the lowest number we could come up with).
+This is the first stable release of LogCabin. We encourage others to try this
+release out, and we believe it to be ready for production use. As it is the
+very first release, users are advised to check back frequently in case serious
+bugs are found.
 
-In the first stable release, the public API with respect to versioning will
-consist of the following:
+The public API with respect to versioning consists of the following:
 
 - `include/LogCabin/Client.h`: API
 - `include/LogCabin/Debug.h`: API
