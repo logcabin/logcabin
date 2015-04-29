@@ -218,8 +218,6 @@ ClientService::verifyRecipient(RPC::ServerRPC rpc)
         response.set_cluster_uuid(clusterUUID);
     response.set_server_id(serverId);
 
-    typedef Protocol::Client::VerifyRecipient::Response Response;
-
     if (request.has_cluster_uuid() &&
         !request.cluster_uuid().empty() &&
         !clusterUUID.empty() &&

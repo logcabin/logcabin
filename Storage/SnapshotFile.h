@@ -14,17 +14,12 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#if __GNUC__ >= 4 && __GNUC_MINOR__ >= 5
-#include <atomic>
-#else
-#include <cstdatomic>
-#endif
-
 #include <google/protobuf/message.h>
 #include <memory>
 #include <stdexcept>
 #include <string>
 
+#include "Core/CompatAtomic.h"
 #include "Core/ProtoBuf.h"
 #include "Storage/FilesystemUtil.h"
 

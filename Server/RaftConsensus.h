@@ -14,11 +14,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#if __GNUC__ >= 4 && __GNUC_MINOR__ >= 5
-#include <atomic>
-#else
-#include <cstdatomic>
-#endif
 #include <chrono>
 #include <deque>
 #include <functional>
@@ -31,8 +26,9 @@
 #include "build/Protocol/ServerStats.pb.h"
 #include "build/Server/SnapshotStats.pb.h"
 #include "Client/SessionManager.h"
-#include "Core/Mutex.h"
+#include "Core/CompatAtomic.h"
 #include "Core/ConditionVariable.h"
+#include "Core/Mutex.h"
 #include "Core/Time.h"
 #include "RPC/ClientRPC.h"
 #include "Storage/Layout.h"

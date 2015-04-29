@@ -29,7 +29,7 @@ Pre-requisites:
 - Linux x86-64 (v2.6.32 and up should work)
 - git (v1.7 is known to work)
 - scons (v2.0 and v2.3 are known to work)
-- g++ (v4.4 and up should work)
+- g++ (v4.4 through v4.9 are known to work)
 - protobuf (v2.6.x suggested, v2.5.x should work, v2.3.x is not supported)
 - crypto++ (v5.6.1 is known to work)
 - doxygen (optional; v1.8.8 is known to work)

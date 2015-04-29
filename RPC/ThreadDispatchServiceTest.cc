@@ -13,14 +13,10 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#if __GNUC__ >= 4 && __GNUC_MINOR__ >= 5
-#include <atomic>
-#else
-#include <cstdatomic>
-#endif
 #include <gtest/gtest.h>
 #include <unistd.h>
 
+#include "Core/CompatAtomic.h"
 #include "RPC/ThreadDispatchService.h"
 
 namespace LogCabin {

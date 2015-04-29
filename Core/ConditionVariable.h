@@ -14,15 +14,10 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#if __GNUC__ >= 4 && __GNUC_MINOR__ >= 5
-#include <atomic>
-#else
-#include <cstdatomic>
-#endif
-
 #include <functional>
 #include <pthread.h>
 
+#include "Core/CompatAtomic.h"
 #include "Core/Mutex.h"
 #include "Core/Time.h"
 
