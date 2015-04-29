@@ -19,9 +19,11 @@
  */
 
 #include <cassert>
+#include <cstdlib>
 #include <getopt.h>
 #include <iostream>
 
+#include <google/protobuf/stubs/common.h>
 #include <LogCabin/Client.h>
 
 namespace {
@@ -121,6 +123,7 @@ class OptionParser {
 int
 main(int argc, char** argv)
 {
+    atexit(google::protobuf::ShutdownProtobufLibrary);
     OptionParser options(argc, argv);
     Cluster cluster = (options.mock
         ? Cluster(std::make_shared<LogCabin::Client::TestingCallbacks>())
