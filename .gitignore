@@ -1,6 +1,7 @@
 *.pyc
 /.sconsign.dblite
 /Local.sc
+/Local.sc.bck
 /build
 /debug
 /docs/doxygen/
