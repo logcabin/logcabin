@@ -12,6 +12,11 @@ Release Process
 
 See [RELEASE-PROCESS.md](RELEASE-PROCESS.md).
 
+Version 1.0.1-alpha.0 (In Development)
+======================================
+
+Nothing noteworthy yet.
+
 Version 1.0.0 (2015-04-29)
 ==========================
 

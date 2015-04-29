@@ -214,10 +214,10 @@ skip_stripping_binaries_commands = [
     '%global debug_package %{nil}',
 ]
 
-VERSION = '1.0.0'
+VERSION = '1.0.1-alpha.0'
 # https://fedoraproject.org/wiki/Packaging:NamingGuidelines#NonNumericRelease
-RPM_VERSION = '1.0.0'
-RPM_RELEASE = '1'
+RPM_VERSION = '1.0.1'
+RPM_RELEASE = '0.1.alpha.0'
 PACKAGEROOT = 'logcabin-%s' % RPM_VERSION
 
 rpms=RPMPackager.package(env,
