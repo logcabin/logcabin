@@ -1,6 +1,9 @@
 import sys
 import os
 
+_VERSION = '1.0.1'
+_RELEASE = '0.1.alpha.0'
+
 opts = Variables('Local.sc')
 
 opts.AddVariables(
@@ -16,6 +19,8 @@ opts.AddVariables(
     ("BUILDTYPE", "Build type (RELEASE or DEBUG)", "DEBUG"),
     ("VERBOSE", "Show full build information (0 or 1)", "0"),
     ("NUMCPUS", "Number of CPUs to use for build (0 means auto).", "0"),
+    ("RPM_VERSION", "Override version number for rpm", _VERSION),
+    ("RPM_RELEASE", "Override release number for rpm", _RELEASE),
 )
 
 env = Environment(options = opts,
@@ -220,10 +225,9 @@ skip_stripping_binaries_commands = [
     '%global debug_package %{nil}',
 ]
 
-VERSION = '1.0.1-alpha.0'
 # https://fedoraproject.org/wiki/Packaging:NamingGuidelines#NonNumericRelease
-RPM_VERSION = '1.0.1'
-RPM_RELEASE = '0.1.alpha.0'
+RPM_VERSION = env["RPM_VERSION"]
+RPM_RELEASE = env["RPM_RELEASE"]
 PACKAGEROOT = 'logcabin-%s' % RPM_VERSION
 
 rpms=RPMPackager.package(env,
