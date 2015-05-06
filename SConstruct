@@ -166,6 +166,12 @@ env.Alias('install', ['/etc', '/usr'])
 
 #### 'scons rpm' target
 
+# Work-around for older versions of SCons (2.3.0) that had LC_ALL set to
+# lowercase c instead of uppercase C. SCons hg changeset 2943:8e42d865bdda in
+# Nov 3, 2013 fixed this upstream in SCons. Without this workaround, building
+# the RPM with 2.3.0 would sometimes fail.
+env['RPM'] = 'LC_ALL=C rpmbuild'
+
 # monkey-patch for SCons.Tool.packaging.rpm.collectintargz, which tries to put
 # way too many files into the source tarball (the source tarball should only
 # contain the installed files, since we're not building it)
