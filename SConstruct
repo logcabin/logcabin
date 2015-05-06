@@ -1,6 +1,13 @@
 import sys
 import os
 
+# Access through env['VERSION'], env['RPM_VERSION'], and env['RPM_RELEASE'] to
+# allow users to override these. RPM versioning is explained here:
+# https://fedoraproject.org/wiki/Packaging:NamingGuidelines#NonNumericRelease
+_VERSION = '1.0.1-alpha.0'
+_RPM_VERSION = '1.0.1'
+_RPM_RELEASE = '0.1.alpha.0'
+
 opts = Variables('Local.sc')
 
 opts.AddVariables(
@@ -16,6 +23,9 @@ opts.AddVariables(
     ("BUILDTYPE", "Build type (RELEASE or DEBUG)", "DEBUG"),
     ("VERBOSE", "Show full build information (0 or 1)", "0"),
     ("NUMCPUS", "Number of CPUs to use for build (0 means auto).", "0"),
+    ("VERSION", "Override version string", _VERSION),
+    ("RPM_VERSION", "Override version number for rpm", _RPM_VERSION),
+    ("RPM_RELEASE", "Override release string for rpm", _RPM_RELEASE),
 )
 
 env = Environment(options = opts,
@@ -220,20 +230,16 @@ skip_stripping_binaries_commands = [
     '%global debug_package %{nil}',
 ]
 
-VERSION = '1.0.1-alpha.0'
-# https://fedoraproject.org/wiki/Packaging:NamingGuidelines#NonNumericRelease
-RPM_VERSION = '1.0.1'
-RPM_RELEASE = '0.1.alpha.0'
-PACKAGEROOT = 'logcabin-%s' % RPM_VERSION
+PACKAGEROOT = 'logcabin-%s' % env['RPM_VERSION']
 
 rpms=RPMPackager.package(env,
-    target         = ['logcabin-%s' % RPM_VERSION],
+    target         = ['logcabin-%s' % env['RPM_VERSION']],
     source         = env.FindInstalledFiles(),
     X_RPM_INSTALL  = '\n'.join(install_commands),
     PACKAGEROOT    = PACKAGEROOT,
     NAME           = 'logcabin',
-    VERSION        = RPM_VERSION,
-    PACKAGEVERSION = RPM_RELEASE,
+    VERSION        = env['RPM_VERSION'],
+    PACKAGEVERSION = env['RPM_RELEASE'],
     LICENSE        = 'ISC',
     SUMMARY        = 'LogCabin is clustered consensus deamon',
     X_RPM_GROUP    = ('Application/logcabin' + '\n' +
