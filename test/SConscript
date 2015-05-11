@@ -4,7 +4,7 @@ env.StaticObject("gtest-all.o",
                  "#gtest/src/gtest-all.cc",
                  CPPPATH = [ "#gtest", "#gtest/include" ],
                  CPPFLAGS = [ "-g", "-DDEBUG" ],
-                 CXXFLAGS = "-std=c++0x")
+                 CXXFLAGS = env["GTESTCXXFLAGS"])
 
 def SrcToVariant(srcs, variant_dir):
     """Find the corresponding paths to source files in a variant directory."""

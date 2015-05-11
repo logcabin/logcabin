@@ -23,6 +23,7 @@
 #include "Core/Debug.h"
 #include "Core/StringUtil.h"
 #include "Core/Time.h"
+#include "Core/Util.h"
 #include "Storage/Layout.h"
 #include "Storage/SnapshotFile.h"
 
@@ -203,7 +204,7 @@ Writer::seekToEnd()
     off64_t r = lseek64(file.fd, 0, SEEK_END);
     if (r < 0)
         PANIC("lseek failed: %s", strerror(errno));
-    bytesWritten = r;
+    bytesWritten = Core::Util::downCast<uint64_t>(r);
 }
 
 uint64_t
@@ -241,8 +242,8 @@ Writer::writeMessage(const google::protobuf::Message& message)
               file.path.c_str(),
               strerror(errno));
     }
-    bytesWritten += r;
-    *sharedBytesWritten.value += r;
+    bytesWritten += Core::Util::downCast<uint64_t>(r);
+    *sharedBytesWritten.value += Core::Util::downCast<uint64_t>(r);
 }
 
 void
@@ -254,8 +255,8 @@ Writer::writeRaw(const void* data, uint64_t length)
               file.path.c_str(),
               strerror(errno));
     }
-    bytesWritten += r;
-    *sharedBytesWritten.value += r;
+    bytesWritten += Core::Util::downCast<uint64_t>(r);
+    *sharedBytesWritten.value += Core::Util::downCast<uint64_t>(r);
 }
 
 } // namespace LogCabin::Storage::SnapshotFile

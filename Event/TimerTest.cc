@@ -16,6 +16,7 @@
 #include <gtest/gtest.h>
 #include <sys/time.h>
 
+#include "Core/Util.h"
 #include "Event/Loop.h"
 #include "Event/Timer.h"
 
@@ -75,8 +76,9 @@ typedef Clock::time_point TimePoint;
 uint64_t
 diffMillis(TimePoint startTime, TimePoint endTime)
 {
-    return std::chrono::duration_cast<std::chrono::milliseconds>(
-                endTime - startTime).count();
+    return Core::Util::downCast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+                endTime - startTime).count());
 }
 
 TEST_F(EventTimerTest, schedule_timeElapsed_TimingSensitive) {

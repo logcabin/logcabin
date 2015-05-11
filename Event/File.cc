@@ -27,7 +27,7 @@ namespace Event {
 
 //// class File::Monitor ////
 
-File::Monitor::Monitor(Event::Loop& eventLoop, File& file, int fileEvents)
+File::Monitor::Monitor(Event::Loop& eventLoop, File& file, uint32_t fileEvents)
     : eventLoop(eventLoop)
     , mutex()
     , file(&file)
@@ -65,7 +65,7 @@ File::Monitor::disableForever()
 }
 
 void
-File::Monitor::setEvents(int fileEvents)
+File::Monitor::setEvents(uint32_t fileEvents)
 {
     std::lock_guard<std::mutex> mutexGuard(mutex);
     if (file == NULL)

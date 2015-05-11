@@ -69,7 +69,7 @@ class File {
          *      called (except possibly for errors such as EPOLLHUP; these
          *      events are always active).
          */
-        Monitor(Event::Loop& eventLoop, File& file, int fileEvents);
+        Monitor(Event::Loop& eventLoop, File& file, uint32_t fileEvents);
 
         /**
          * Destructor; disables monitoring the file. See disableForever().
@@ -99,7 +99,7 @@ class File {
          *      until setEvents() has been called (except possibly for errors
          *      such as EPOLLHUP; these events are always active).
          */
-        void setEvents(int events);
+        void setEvents(uint32_t events);
 
         /**
          * Event::Loop that will monitor the file.
@@ -170,7 +170,7 @@ class File {
      *      Indicates whether the file is readable or writable or both (OR'ed
      *      combination of EPOLL_EVENTS values).
      */
-    virtual void handleFileEvent(int events) = 0;
+    virtual void handleFileEvent(uint32_t events) = 0;
 
     /**
      * The file descriptor to monitor.

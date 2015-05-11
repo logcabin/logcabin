@@ -53,6 +53,7 @@ class SimpleFileLog : public Log {
     ~SimpleFileLog();
     std::pair<uint64_t, uint64_t>
     append(const std::vector<const Entry*>& entries);
+    std::string getName() const;
     std::unique_ptr<Log::Sync> takeSync();
     void truncatePrefix(uint64_t firstEntryId);
     void truncateSuffix(uint64_t lastEntryId);

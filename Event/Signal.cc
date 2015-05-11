@@ -109,7 +109,7 @@ Signal::~Signal()
 }
 
 void
-Signal::handleFileEvent(int events)
+Signal::handleFileEvent(uint32_t events)
 {
     struct signalfd_siginfo info;
     ssize_t s = read(fd, &info, sizeof(struct signalfd_siginfo));

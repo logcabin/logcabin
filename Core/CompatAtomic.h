@@ -17,7 +17,8 @@
 #define LOGCABIN_CORE_COMPATATOMIC_H
 
 // std::atomic header file renamed in gcc 4.5.
-#if __GNUC__ == 4 && __GNUC_MINOR__ < 5
+// Clang uses <atomic> but has defines like gcc 4.2.
+#if __GNUC__ == 4 && __GNUC_MINOR__ < 5 && !__clang__
 #include <cstdatomic>
 #else
 #include <atomic>

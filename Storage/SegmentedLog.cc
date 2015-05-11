@@ -525,6 +525,15 @@ SegmentedLog::getLastLogIndex() const
         return getOpenSegment().endIndex;
 }
 
+std::string
+SegmentedLog::getName() const
+{
+    if (encoding == Encoding::BINARY)
+        return "Segmented-Binary";
+    else
+        return "Segmented-Text";
+}
+
 uint64_t
 SegmentedLog::getSizeBytes() const
 {
@@ -593,7 +602,7 @@ SegmentedLog::truncateSuffix(uint64_t newEndIndex)
             uint64_t i = newEndIndex + 1 - openSegment.startIndex;
             openSegment.bytes = openSegment.entries.at(i).offset;
             openSegment.entries.erase(
-                openSegment.entries.begin() + i,
+                openSegment.entries.begin() + int64_t(i),
                 openSegment.entries.end());
             openSegment.endIndex = newEndIndex;
             // Truncate and close the open segment, and open a new one.
@@ -630,7 +639,7 @@ SegmentedLog::truncateSuffix(uint64_t newEndIndex)
             totalClosedSegmentBytes -= (segment.bytes - newBytes);
             segment.bytes = newBytes;
             segment.entries.erase(
-                segment.entries.begin() + i,
+                segment.entries.begin() + int64_t(i),
                 segment.entries.end());
             segment.endIndex = newEndIndex;
 
@@ -1225,7 +1234,7 @@ SegmentedLog::segmentPreparerMain()
         uint64_t fileId = 0;
         try {
             fileId = preparedSegments.waitForDemand();
-        } catch (const Core::Util::ThreadInterruptedException& e) {
+        } catch (const Core::Util::ThreadInterruptedException&) {
             VERBOSE("Exiting");
             break;
         }

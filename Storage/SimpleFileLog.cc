@@ -238,6 +238,13 @@ SimpleFileLog::append(const std::vector<const Entry*>& entries)
     return range;
 }
 
+
+std::string
+SimpleFileLog::getName() const
+{
+    return "SimpleFile";
+}
+
 std::unique_ptr<Log::Sync>
 SimpleFileLog::takeSync()
 {

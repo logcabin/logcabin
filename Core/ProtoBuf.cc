@@ -166,9 +166,9 @@ serialize(const google::protobuf::Message& from,
               from.InitializationErrorString().c_str(),
               dumpString(from).c_str());
     }
-    uint32_t length = from.ByteSize();
+    uint32_t length = uint32_t(from.ByteSize());
     char* data = new char[skipBytes + length];
-    from.SerializeToArray(data + skipBytes, length);
+    from.SerializeToArray(data + skipBytes, int(length));
     to.setData(data, skipBytes + length, Core::Buffer::deleteArrayFn<char>);
 }
 

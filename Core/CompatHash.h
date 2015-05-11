@@ -19,7 +19,8 @@
 #define LOGCABIN_CORE_COMPATHASH_H
 
 // missing std::hash<std::shared_ptr<T>> implementation on gcc 4.4 and 4.5
-#if __GNUC__ == 4 && __GNUC_MINOR__ < 6
+// Clang has it but but has defines like gcc 4.2.
+#if __GNUC__ == 4 && __GNUC_MINOR__ < 6 && !__clang__
 
 namespace std {
 

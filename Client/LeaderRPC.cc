@@ -163,12 +163,10 @@ LeaderRPC::Call::wait(google::protobuf::Message& response,
 //// class LeaderRPC ////
 
 LeaderRPC::LeaderRPC(const RPC::Address& hosts,
-                     Event::Loop& eventLoop,
                      SessionManager::ClusterUUID& clusterUUID,
                      Backoff& sessionCreationBackoff,
                      SessionManager& sessionManager)
-    : eventLoop(eventLoop)
-    , clusterUUID(clusterUUID)
+    : clusterUUID(clusterUUID)
     , sessionCreationBackoff(sessionCreationBackoff)
     , sessionManager(sessionManager)
     , mutex()

@@ -82,7 +82,7 @@ class RandomState {
             abort();
         }
         initstate_r(seed, statebuf, STATE_BYTES, &randbuf);
-        static_assert(RAND_MAX >= (1 << 31), "RAND_MAX too small");
+        static_assert(RAND_MAX >= (1L << 30), "RAND_MAX too small");
         init = true;
     }
 
@@ -153,7 +153,7 @@ template<typename T>
 T
 getRandomBytes()
 {
-    T buf;
+    T buf {};
     size_t offset = 0;
     while (offset < sizeof(buf)) {
         uint64_t r = randomState.random64();
@@ -207,7 +207,7 @@ randomRangeDouble(double start, double end)
 uint64_t
 randomRange(uint64_t start, uint64_t end)
 {
-    return lround(randomRangeDouble(double(start), double(end)));
+    return uint64_t(lround(randomRangeDouble(double(start), double(end))));
 }
 
 } // namespace LogCabin::Core::Random

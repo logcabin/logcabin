@@ -119,6 +119,12 @@ class Log {
     virtual uint64_t getLastLogIndex() const = 0;
 
     /**
+     * Return the name of the log implementation as it would be specified in
+     * the config file.
+     */
+    virtual std::string getName() const = 0;
+
+    /**
      * Get the size of the entire log in bytes.
      */
     virtual uint64_t getSizeBytes() const = 0;

@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <fcntl.h>
+#include <ostream>
 #include <sys/stat.h>
 #include <unistd.h>
 

@@ -135,7 +135,7 @@ OpaqueServer::BoundListener::BoundListener(
 }
 
 void
-OpaqueServer::BoundListener::handleFileEvent(int events)
+OpaqueServer::BoundListener::handleFileEvent(uint32_t events)
 {
     int clientfd = accept4(fd, NULL, NULL, SOCK_NONBLOCK|SOCK_CLOEXEC);
     if (clientfd < 0) {

@@ -103,7 +103,7 @@ class Signal : private Event::File {
     /**
      * Generic event handler for files. Calls handleSignalEvent().
      */
-    void handleFileEvent(int events);
+    void handleFileEvent(uint32_t events);
 
     // Signal is not copyable.
     Signal(const Signal&) = delete;

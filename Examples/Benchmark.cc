@@ -18,7 +18,9 @@
  * This is a basic latency/bandwidth benchmark of LogCabin.
  */
 
-#if __GNUC__ == 4 && __GNUC_MINOR__ < 5
+// std::atomic header file renamed in gcc 4.5.
+// Clang uses <atomic> but has defines like gcc 4.2.
+#if __GNUC__ == 4 && __GNUC_MINOR__ < 5 && !__clang__
 #include <cstdatomic>
 #else
 #include <atomic>
@@ -201,7 +203,7 @@ uint64_t timeNanos()
     struct timespec now;
     int r = clock_gettime(CLOCK_REALTIME, &now);
     assert(r == 0);
-    return uint64_t(now.tv_sec) * 1000 * 1000 * 1000 + now.tv_nsec;
+    return uint64_t(now.tv_sec) * 1000 * 1000 * 1000 + uint64_t(now.tv_nsec);
 }
 
 /**
