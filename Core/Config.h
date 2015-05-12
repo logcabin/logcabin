@@ -64,14 +64,14 @@ class Config {
   public:
     struct FileNotFound : public std::runtime_error {
         explicit FileNotFound(const string& filename);
-        virtual ~FileNotFound() {}
+        virtual ~FileNotFound() throw() {}
         string filename;
     };
 
     // thrown only by T read(key) variant of read()
     struct KeyNotFound : public std::runtime_error {
         explicit KeyNotFound(const string& key);
-        virtual ~KeyNotFound() {}
+        virtual ~KeyNotFound() throw() {}
         string key;
     };
 
@@ -79,7 +79,7 @@ class Config {
         ConversionError(const string& key,
                         const string& value,
                         const string& typeName);
-        virtual ~ConversionError() {}
+        virtual ~ConversionError() throw() {}
         string key;
         string value;
         string typeName;
