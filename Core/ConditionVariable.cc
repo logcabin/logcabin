@@ -129,6 +129,7 @@ ConditionVariable::wait_until(
         int r = pthread_cond_timedwait(&cv, mutex, &wakespec);
         switch (r) {
             case 0:
+                break;
             case ETIMEDOUT:
                 break;
             default:

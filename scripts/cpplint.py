@@ -2937,6 +2937,53 @@ def ProcessFileData(filename, file_extension, lines, error):
                 include_state, function_state, class_state, error)
   class_state.CheckFinished(filename, error)
 
+  # This checker aims to catch errors like:
+  #   case FOO:
+  #       doStuff();
+  #   case BAR:
+  #       doOtherStuff();
+  #       break;
+  # where a break; was intended after doStuff()
+  lines = clean_lines.elided
+  for line in xrange(clean_lines.NumLines()):
+      if not Search(r'\s+case .*:', lines[line]):
+          continue
+      if Search(r'\bNOLINT\b', lines[line]):
+          continue
+      if line < 3:
+          continue
+      okpattern = r'(' + '|'.join([
+          r'\s+switch.*{',
+          r'\s+break;',
+          r'\s+PANIC\(',
+          r'\s+exit\(',
+          r'\s+abort\(',
+          r'\s+throw[\s;]',
+          r'\s+return[\s;]',
+          r'\s+continue[\s;]',
+      ]) + r')'
+      i = line - 1
+      ok = False
+      while i > 0:
+          if (Search(okpattern, lines[i]) or
+              Search(r'/[/\*]\s*fall[ -]?through',
+                     clean_lines.raw_lines[i])):
+              ok = True
+              break
+
+          if (Search(r'^\s*$', lines[i]) or
+              Search(r'\s+}', lines[i])):
+              i -= 1
+          else:
+              break
+      if ok:
+          continue
+      error(filename, line, 'logcabin/fallthrough', 5,
+            'No implicit fallthrough in switch. '
+            'Add explicit break or // fallthrough. '
+            'This checker is pretty dumb if you have a multi-line PANIC '
+            '(just add a break after it).')
+
   CheckForIncludeWhatYouUse(filename, clean_lines, include_state, error)
 
   # We check here rather than inside ProcessLine so that we see raw

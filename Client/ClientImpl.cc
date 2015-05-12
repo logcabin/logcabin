@@ -552,6 +552,7 @@ ClientImpl::getServerInfo(const std::string& host,
                 PANIC("Unknown error code %u returned in service-specific "
                       "error. This probably indicates a bug in the server",
                       error.error_code());
+                break;
             case RPCStatus::RPC_CANCELED:
                 PANIC("RPC canceled unexpectedly");
             case RPCStatus::INVALID_SERVICE:
@@ -614,6 +615,7 @@ ClientImpl::getServerStats(const std::string& host,
                 PANIC("Unknown error code %u returned in service-specific "
                       "error. This probably indicates a bug in the server",
                       error.error_code());
+                break;
             case RPCStatus::RPC_CANCELED:
                 PANIC("RPC canceled unexpectedly");
             case RPCStatus::INVALID_SERVICE:

@@ -111,6 +111,7 @@ ClientRPC::waitForReply(google::protobuf::Message* response,
                       Core::StringUtil::toString(timeout).c_str(),
                       Core::StringUtil::toString(Clock::now()).c_str());
             }
+            break;
         case OpaqueClientRPC::Status::OK:
             break;
         case OpaqueClientRPC::Status::ERROR:

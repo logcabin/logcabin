@@ -203,7 +203,9 @@ Address::refresh(TimePoint timeout)
 
         // These are somewhat normal errors.
         case EAI_FAMILY:
+            break;
         case EAI_NONAME:
+            break;
         case EAI_NODATA:
             break;
 
