@@ -132,9 +132,10 @@ class Algorithms {
     template<typename ConcreteHashFunction>
     void registerAlgorithm()
     {
+        // Using explicit types here to keep clang++-3.4 with libc++ happy.
         byName.insert({
-                ConcreteHashFunction::StaticAlgorithmName(),
-                writeChecksum<ConcreteHashFunction>});
+                std::string(ConcreteHashFunction::StaticAlgorithmName()),
+                Algorithm(writeChecksum<ConcreteHashFunction>)});
     }
 
 
