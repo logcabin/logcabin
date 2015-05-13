@@ -134,12 +134,15 @@ elif env['CXX_FAMILY'] == 'clang':
 
 env.Prepend(CXXFLAGS = [
     "-std=%s" % CXX_STANDARD,
+    "-fno-strict-overflow",
 ])
 env.Prepend(PROTOCXXFLAGS = [
     "-std=%s" % CXX_STANDARD,
+    "-fno-strict-overflow",
 ])
 env.Prepend(GTESTCXXFLAGS = [
     "-std=%s" % CXX_STANDARD,
+    "-fno-strict-overflow",
 ])
 
 if env["BUILDTYPE"] == "DEBUG":
