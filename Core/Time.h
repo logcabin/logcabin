@@ -158,10 +158,9 @@ MockableClock<BaseClock>::mockValue;
 // is usable with nanosecond granularity.
 // Clang with libstdc++ gives us no way to check the version,
 // so we just use CSteadyClock in that case.
-// Clang with libc++ is known to work at _LIBCPP_VERSION 1101, and below hasn't
-// been tried (use CSteadyClock).
-#if (__clang__ && (!defined(_LIBCPP_VERSION) || _LIBCPP_VERSION < 1101)) || \
-    (!__clang__ && __GNUC__ == 4 && __GNUC_MINOR__ < 8)
+// Clang with libc++ is known not to work at _LIBCPP_VERSION 1101 and hasn't
+// been tried with other versions (use CSteadyClock).
+#if __clang__ || (__GNUC__ == 4 && __GNUC_MINOR__ < 8)
 typedef MockableClock<CSteadyClock> SteadyClock;
 #else
 typedef MockableClock<std::chrono::steady_clock> SteadyClock;
@@ -174,10 +173,9 @@ typedef MockableClock<std::chrono::steady_clock> SteadyClock;
 // has nanosecond granularity.
 // Clang with libstdc++ gives us no way to check the version,
 // so we just use CSystemClock in that case.
-// Clang with libc++ is known to work at _LIBCPP_VERSION 1101, and below hasn't
-// been tried (use CSystemClock).
-#if (__clang__ && (!defined(_LIBCPP_VERSION) || _LIBCPP_VERSION < 1101)) || \
-    (!__clang__ && __GNUC__ == 4 && __GNUC_MINOR__ < 8)
+// Clang with libc++ is known not to work at _LIBCPP_VERSION 1101 and hasn't
+// been tried with other versions (use CSteadyClock).
+#if __clang__ || (__GNUC__ == 4 && __GNUC_MINOR__ < 8)
 typedef MockableClock<CSystemClock> SystemClock;
 #else
 typedef MockableClock<std::chrono::system_clock> SystemClock;
