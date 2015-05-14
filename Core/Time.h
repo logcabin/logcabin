@@ -67,11 +67,7 @@ struct CSystemClock {
     typedef duration::period period;
     typedef std::chrono::time_point<CSystemClock, duration> time_point;
 
-    // libstdc++ 4.7 renamed monotonic_clock to steady_clock to conform with
-    // C++11. This class defines both, since it's free.
-    static const bool is_monotonic = false;
     static const bool is_steady = false;
-
     static time_point now();
 };
 
@@ -97,10 +93,6 @@ struct CSteadyClock {
     typedef duration::rep rep;
     typedef duration::period period;
     typedef std::chrono::time_point<CSteadyClock, duration> time_point;
-
-    // libstdc++ 4.7 renamed monotonic_clock to steady_clock to conform with
-    // C++11. This class defines both, since it's free.
-    static const bool is_monotonic = true;
     static const bool is_steady = true;
 
     static time_point now();
@@ -121,13 +113,10 @@ struct MockableClock
     typedef typename BaseClock::period period;
     typedef typename BaseClock::time_point time_point;
 
-// libstdc++ 4.7 renamed monotonic_clock to steady_clock to conform with C++11.
-#if __GNUC__ == 4 && __GNUC_MINOR__ < 7
-    static const bool is_monotonic = BaseClock::is_monotonic;
-    static const bool is_steady = BaseClock::is_monotonic;
-#else
+    // libstdc++ 4.7 renamed monotonic_clock to steady_clock to conform with
+    // C++11. This file doesn't use a BaseClock from libstdc++ before 4.8, so
+    // it's ok to just assume is_steady is present.
     static const bool is_steady = BaseClock::is_steady;
-#endif
 
     static time_point now() {
         if (useMockValue)
