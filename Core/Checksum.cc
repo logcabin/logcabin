@@ -134,8 +134,8 @@ class Algorithms {
     {
         // Using explicit types here to keep clang++-3.4 with libc++ happy.
         byName.insert(std::pair<std::string, Algorithm>(
-                ConcreteHashFunction::StaticAlgorithmName(),
-                writeChecksum<ConcreteHashFunction>));
+                std::string(ConcreteHashFunction::StaticAlgorithmName()),
+                Algorithm(writeChecksum<ConcreteHashFunction>)));
     }
 
 
