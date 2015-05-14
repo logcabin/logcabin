@@ -357,7 +357,6 @@ MessageSocket::writable()
                                    bytesSent);
                 if (bytesSent < iov[i].iov_len) {
                     iov[i].iov_len -= bytesSent;
-                    bytesSent = 0;
                     break;
                 } else {
                     bytesSent -= iov[i].iov_len;

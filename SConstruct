@@ -41,6 +41,13 @@ env = Environment(options = opts,
                   ENV = os.environ)
 Help(opts.GenerateHelpText(env))
 
+# Needed for Clang Static Analyzer's scan-build tool
+env["CC"] = os.getenv("CC") or env["CC"]
+env["CXX"] = os.getenv("CXX") or env["CXX"]
+for k, v in os.environ.items():
+    if k.startswith("CCC_"):
+        env["ENV"][k] = v
+
 def detect_compiler():
     import subprocess
     reflags = re.IGNORECASE|re.MULTILINE
