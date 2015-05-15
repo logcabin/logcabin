@@ -63,7 +63,7 @@ void
 setAddr(Server& server)
 {
     using Core::StringUtil::format;
-    server.addresses = format("server%llu", server.serverId);
+    server.addresses = format("server" PRIu64 "", server.serverId);
 }
 
 uint64_t
@@ -1652,7 +1652,7 @@ class StateMachineUpdaterThreadMainHelper {
     {
     }
     void operator()() {
-        NOTICE("iter: %llu", iter);
+        NOTICE("iter: " PRIu64 "", iter);
         // not leader: go to sleep
         if (iter == 1) {
             consensus.startNewElection();

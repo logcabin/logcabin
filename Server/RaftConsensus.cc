@@ -206,7 +206,7 @@ Peer::beginLeadership()
 void
 Peer::exit()
 {
-    NOTICE("Flagging peer %llu to exit", serverId);
+    NOTICE("Flagging peer " PRIu64 " to exit", serverId);
     exiting = true;
 }
 
@@ -263,7 +263,7 @@ Peer::callRPC(Protocol::Raft::OpCode opCode,
     switch (rpc.waitForReply(&response, NULL, TimePoint::max())) {
         case RPCStatus::OK:
             if (rpcFailuresSinceLastWarning > 0) {
-                WARNING("RPC to server succeeded after %llu failures",
+                WARNING("RPC to server succeeded after " PRIu64 " failures",
                         rpcFailuresSinceLastWarning);
                 rpcFailuresSinceLastWarning = 0;
             }
@@ -278,7 +278,7 @@ Peer::callRPC(Protocol::Raft::OpCode opCode,
                 WARNING("RPC to server failed: %s",
                         rpc.getErrorMessage().c_str());
             } else if (rpcFailuresSinceLastWarning % 100 == 0) {
-                WARNING("Last %llu RPCs to server failed. This failure: %s",
+                WARNING("Last " PRIu64 " RPCs to server failed. This failure: %s",
                         rpcFailuresSinceLastWarning,
                         rpc.getErrorMessage().c_str());
             }
@@ -299,7 +299,7 @@ Peer::startThread(std::shared_ptr<Peer> self)
     thisCatchUpIterationStart = Clock::now();
     thisCatchUpIterationGoalId = consensus.log->getLastLogIndex();
     ++consensus.numPeerThreads;
-    NOTICE("Starting peer thread for server %llu", serverId);
+    NOTICE("Starting peer thread for server " PRIu64 "", serverId);
     std::thread(&RaftConsensus::peerThreadMain, &consensus, self).detach();
 }
 
@@ -545,7 +545,7 @@ Configuration::setConfiguration(
         uint64_t newId,
         const Protocol::Raft::Configuration& newDescription)
 {
-    NOTICE("Activating configuration %llu:\n%s", newId,
+    NOTICE("Activating configuration " PRIu64 ":\n%s", newId,
            Core::ProtoBuf::dumpString(newDescription).c_str());
 
     if (newDescription.next_configuration().servers().size() == 0)
@@ -985,7 +985,7 @@ RaftConsensus::init()
     }
 #endif
 
-    NOTICE("My server ID is %llu", serverId);
+    NOTICE("My server ID is " PRIu64 "", serverId);
 
     if (storageLayout.topDir.fd == -1) {
         if (globals.config.read("use-temporary-storage", false))
@@ -1006,7 +1006,7 @@ RaftConsensus::init()
          ++index) {
         const Log::Entry& entry = log->getEntry(index);
         if (entry.type() == Protocol::Raft::EntryType::UNKNOWN) {
-            PANIC("Don't understand the entry type for index %llu (term %llu) "
+            PANIC("Don't understand the entry type for index " PRIu64 " (term " PRIu64 ") "
                   "found on disk",
                   index, entry.term());
         }
@@ -1021,7 +1021,7 @@ RaftConsensus::init()
             log->getEntry(log->getLastLogIndex()).cluster_time());
     }
 
-    NOTICE("The log contains indexes %llu through %llu (inclusive)",
+    NOTICE("The log contains indexes " PRIu64 " through " PRIu64 " (inclusive)",
            log->getLogStartIndex(), log->getLastLogIndex());
 
     if (log->metadata.has_current_term())
@@ -1234,13 +1234,13 @@ RaftConsensus::handleAppendEntries(
 
     // If the caller's term is stale, just return our term to it.
     if (request.term() < currentTerm) {
-        VERBOSE("Caller(%llu) is stale. Our term is %llu, theirs is %llu",
+        VERBOSE("Caller(" PRIu64 ") is stale. Our term is " PRIu64 ", theirs is " PRIu64 "",
                  request.server_id(), currentTerm, request.term());
         return; // response was set to a rejection above
     }
     if (request.term() > currentTerm) {
-        NOTICE("Received AppendEntries request from server %llu in term %llu "
-               "(this server's term was %llu)",
+        NOTICE("Received AppendEntries request from server " PRIu64 " in term " PRIu64 " "
+               "(this server's term was " PRIu64 ")",
                 request.server_id(), request.term(), currentTerm);
         // We're about to bump our term in the stepDown below: update
         // 'response' accordingly.
@@ -1256,7 +1256,7 @@ RaftConsensus::handleAppendEntries(
     // Record the leader ID as a hint for clients.
     if (leaderId == 0) {
         leaderId = request.server_id();
-        NOTICE("All hail leader %llu for term %llu", leaderId, currentTerm);
+        NOTICE("All hail leader " PRIu64 " for term " PRIu64 "", leaderId, currentTerm);
         printElectionState();
     } else {
         assert(leaderId == request.server_id());
@@ -1315,7 +1315,7 @@ RaftConsensus::handleAppendEntries(
                 continue;
             // should never truncate committed entries:
             assert(commitIndex < index);
-            NOTICE("Truncating %llu entries after %llu from the log",
+            NOTICE("Truncating " PRIu64 " entries after " PRIu64 " from the log",
                    log->getLastLogIndex() - index + 1,
                    index - 1);
             log->truncateSuffix(index - 1);
@@ -1327,8 +1327,8 @@ RaftConsensus::handleAppendEntries(
         do {
             const Protocol::Raft::Entry& entry = *it;
             if (entry.type() == Protocol::Raft::EntryType::UNKNOWN) {
-                PANIC("Leader %llu is trying to send us an unknown log entry "
-                      "type for index %llu (term %llu). It shouldn't do that, "
+                PANIC("Leader " PRIu64 " is trying to send us an unknown log entry "
+                      "type for index " PRIu64 " (term " PRIu64 "). It shouldn't do that, "
                       "and there's not a good way forward. There's some hope "
                       "that if this server reboots, it'll come back up with a "
                       "newer version of the code that understands the entry.",
@@ -1355,7 +1355,7 @@ RaftConsensus::handleAppendEntries(
         commitIndex = request.commit_index();
         assert(commitIndex <= log->getLastLogIndex());
         stateChanged.notify_all();
-        VERBOSE("New commitIndex: %llu", commitIndex);
+        VERBOSE("New commitIndex: " PRIu64 "", commitIndex);
     }
 }
 
@@ -1371,13 +1371,13 @@ RaftConsensus::handleInstallSnapshot(
 
     // If the caller's term is stale, just return our term to it.
     if (request.term() < currentTerm) {
-        VERBOSE("Caller(%llu) is stale. Our term is %llu, theirs is %llu",
+        VERBOSE("Caller(" PRIu64 ") is stale. Our term is " PRIu64 ", theirs is " PRIu64 "",
                  request.server_id(), currentTerm, request.term());
         return;
     }
     if (request.term() > currentTerm) {
-        NOTICE("Received InstallSnapshot request from server %llu in "
-               "term %llu (this server's term was %llu)",
+        NOTICE("Received InstallSnapshot request from server " PRIu64 " in "
+               "term " PRIu64 " (this server's term was " PRIu64 ")",
                 request.server_id(), request.term(), currentTerm);
         // We're about to bump our term in the stepDown below: update
         // 'response' accordingly.
@@ -1393,7 +1393,7 @@ RaftConsensus::handleInstallSnapshot(
     // Record the leader ID as a hint for clients.
     if (leaderId == 0) {
         leaderId = request.server_id();
-        NOTICE("All hail leader %llu for term %llu", leaderId, currentTerm);
+        NOTICE("All hail leader " PRIu64 " for term " PRIu64 "", leaderId, currentTerm);
         printElectionState();
     } else {
         assert(leaderId == request.server_id());
@@ -1404,15 +1404,15 @@ RaftConsensus::handleInstallSnapshot(
             new Storage::SnapshotFile::Writer(storageLayout));
     }
     if (request.byte_offset() < snapshotWriter->getBytesWritten()) {
-        WARNING("Ignoring stale snapshot chunk for byte offset %llu when the "
-                "next byte needed is %llu",
+        WARNING("Ignoring stale snapshot chunk for byte offset " PRIu64 " when the "
+                "next byte needed is " PRIu64 "",
                 request.byte_offset(),
                 snapshotWriter->getBytesWritten());
         return;
     }
     if (request.byte_offset() > snapshotWriter->getBytesWritten()) {
-        PANIC("Leader tried to send snapshot chunk at byte offset %llu but the "
-              "next byte needed is %llu. It's supposed to send these in order.",
+        PANIC("Leader tried to send snapshot chunk at byte offset " PRIu64 " but the "
+              "next byte needed is " PRIu64 ". It's supposed to send these in order.",
               request.byte_offset(),
               snapshotWriter->getBytesWritten());
     }
@@ -1421,8 +1421,8 @@ RaftConsensus::handleInstallSnapshot(
     if (request.done()) {
         if (request.last_snapshot_index() < lastSnapshotIndex) {
             WARNING("The leader sent us a snapshot, but it's stale: it only "
-                    "covers up through index %llu and we already have one "
-                    "through %llu. A well-behaved leader shouldn't do that. "
+                    "covers up through index " PRIu64 " and we already have one "
+                    "through " PRIu64 ". A well-behaved leader shouldn't do that. "
                     "Discarding the snapshot.",
                     request.last_snapshot_index(),
                     lastSnapshotIndex);
@@ -1454,9 +1454,9 @@ RaftConsensus::handleRequestVote(
                      request.last_log_index() >= lastLogIndex));
 
     if (withholdVotesUntil > Clock::now()) {
-        NOTICE("Rejecting RequestVote for term %llu from server %llu, since "
-               "this server (which is in term %llu) recently heard from a "
-               "leader (%llu). Should server %llu be shut down?",
+        NOTICE("Rejecting RequestVote for term " PRIu64 " from server " PRIu64 ", since "
+               "this server (which is in term " PRIu64 ") recently heard from a "
+               "leader (" PRIu64 "). Should server " PRIu64 " be shut down?",
                request.term(), request.server_id(), currentTerm,
                leaderId, request.server_id());
         response.set_term(currentTerm);
@@ -1466,8 +1466,8 @@ RaftConsensus::handleRequestVote(
     }
 
     if (request.term() > currentTerm) {
-        NOTICE("Received RequestVote request from server %llu in term %llu "
-               "(this server's term was %llu)",
+        NOTICE("Received RequestVote request from server " PRIu64 " in term " PRIu64 " "
+               "(this server's term was " PRIu64 ")",
                 request.server_id(), request.term(), currentTerm);
         stepDown(request.term());
     }
@@ -1479,7 +1479,7 @@ RaftConsensus::handleRequestVote(
     if (request.term() == currentTerm) {
         if (logIsOk && votedFor == 0) {
             // Give caller our vote
-            NOTICE("Voting for %llu in term %llu",
+            NOTICE("Voting for " PRIu64 " in term " PRIu64 "",
                    request.server_id(), currentTerm);
             stepDown(currentTerm);
             setElectionTimer();
@@ -1522,7 +1522,7 @@ RaftConsensus::setConfiguration(
         // configurations has changed in the meantime
         response.mutable_configuration_changed()->set_error(
             Core::StringUtil::format(
-                "The current configuration has ID %llu (no longer %llu) "
+                "The current configuration has ID " PRIu64 " (no longer " PRIu64 ") "
                 "and it's %s",
                 configuration->id,
                 request.old_id(),
@@ -1532,13 +1532,13 @@ RaftConsensus::setConfiguration(
     if (configuration->state != Configuration::State::STABLE) {
         response.mutable_configuration_changed()->set_error(
             Core::StringUtil::format(
-                "The current configuration (%llu) is not stable (it's %s)",
+                "The current configuration (" PRIu64 ") is not stable (it's %s)",
                 configuration->id,
                 Core::StringUtil::toString(configuration->state).c_str()));
         return ClientResult::FAIL;
     }
 
-    NOTICE("Attempting to change the configuration from %llu",
+    NOTICE("Attempting to change the configuration from " PRIu64 "",
            configuration->id);
 
     // Set the staging servers in the configuration.
@@ -1546,7 +1546,7 @@ RaftConsensus::setConfiguration(
     for (auto it = request.new_servers().begin();
          it != request.new_servers().end();
          ++it) {
-        NOTICE("Adding server %llu at %s to staging servers",
+        NOTICE("Adding server " PRIu64 " at %s to staging servers",
                it->server_id(), it->addresses().c_str());
         Protocol::Raft::Server* s = nextConfiguration.add_servers();
         s->set_server_id(it->server_id());
@@ -1666,7 +1666,7 @@ RaftConsensus::beginSnapshot(uint64_t lastIncludedIndex)
 {
     std::lock_guard<Mutex> lockGuard(mutex);
 
-    NOTICE("Creating new snapshot through log index %llu (inclusive)",
+    NOTICE("Creating new snapshot through log index " PRIu64 " (inclusive)",
            lastIncludedIndex);
     std::unique_ptr<Storage::SnapshotFile::Writer> writer(
                 new Storage::SnapshotFile::Writer(storageLayout));
@@ -1674,8 +1674,8 @@ RaftConsensus::beginSnapshot(uint64_t lastIncludedIndex)
     // Only committed entries may be snapshotted.
     // (This check relies on commitIndex monotonically increasing.)
     if (lastIncludedIndex > commitIndex) {
-        PANIC("Attempted to snapshot uncommitted entries (%llu requested but "
-              "%llu is last committed entry)", lastIncludedIndex, commitIndex);
+        PANIC("Attempted to snapshot uncommitted entries (" PRIu64 " requested but "
+              "" PRIu64 " is last committed entry)", lastIncludedIndex, commitIndex);
     }
 
     // Format version of snapshot file is 1.
@@ -1697,7 +1697,7 @@ RaftConsensus::beginSnapshot(uint64_t lastIncludedIndex)
         header.set_last_cluster_time(0);
     } else if (lastIncludedIndex == lastSnapshotIndex) {
         WARNING("Taking a snapshot where we already have one, covering "
-                "entries 1 through %llu (inclusive)", lastIncludedIndex);
+                "entries 1 through " PRIu64 " (inclusive)", lastIncludedIndex);
         header.set_last_included_term(lastSnapshotTerm);
         header.set_last_cluster_time(lastSnapshotClusterTime);
     } else {
@@ -1736,8 +1736,8 @@ RaftConsensus::snapshotDone(
 {
     std::lock_guard<Mutex> lockGuard(mutex);
     if (lastIncludedIndex <= lastSnapshotIndex) {
-        NOTICE("Discarding snapshot through %llu since we already have one "
-               "(presumably from another server) through %llu",
+        NOTICE("Discarding snapshot through " PRIu64 " since we already have one "
+               "(presumably from another server) through " PRIu64 "",
                lastIncludedIndex, lastSnapshotIndex);
         writer->discard();
         return;
@@ -1763,7 +1763,7 @@ RaftConsensus::snapshotDone(
     std::pair<uint64_t, Protocol::Raft::Configuration> c =
         configurationManager->getLatestConfigurationAsOf(lastIncludedIndex);
     if (c.first == 0) {
-        WARNING("Could not find the latest configuration as of index %llu "
+        WARNING("Could not find the latest configuration as of index " PRIu64 " "
                 "(inclusive). This shouldn't happen if the snapshot was "
                 "created with a configuration, as they should be.",
                 lastIncludedIndex);
@@ -1771,7 +1771,7 @@ RaftConsensus::snapshotDone(
         configurationManager->setSnapshot(c.first, c.second);
     }
 
-    NOTICE("Completed snapshot through log index %llu (inclusive)",
+    NOTICE("Completed snapshot through log index " PRIu64 " (inclusive)",
            lastSnapshotIndex);
 
     // It may be beneficial to defer discarding entries if some followers are
@@ -1875,7 +1875,7 @@ RaftConsensus::stateMachineUpdaterThreadMain()
             configuration->forEach(std::ref(s));
             if (s.missingCount == 0) {
                 if (s.minVersion > s.maxVersion) {
-                    ERROR("The state machines on the %llu servers do not "
+                    ERROR("The state machines on the " PRIu64 " servers do not "
                           "currently support a common version "
                           "(max of mins=%u, min of maxes=%u). Will wait to "
                           "change the state machine version for at least "
@@ -1926,7 +1926,7 @@ RaftConsensus::stateMachineUpdaterThreadMain()
                 // (stateChanged will be notified). The backoff is here just to
                 // avoid spamming the NOTICE message.
                 NOTICE("Waiting to receive state machine supported version "
-                       "information from all peers (missing %llu of %llu)",
+                       "information from all peers (missing " PRIu64 " of " PRIu64 ")",
                        s.missingCount, s.allCount);
                 backoffUntil = now + STATE_MACHINE_UPDATER_BACKOFF;
             }
@@ -1988,8 +1988,8 @@ RaftConsensus::peerThreadMain(std::shared_ptr<Peer> peer)
 {
     std::unique_lock<Mutex> lockGuard(mutex);
     Core::ThreadId::setName(
-        Core::StringUtil::format("Peer(%llu)", peer->serverId));
-    NOTICE("Peer thread for server %llu started", peer->serverId);
+        Core::StringUtil::format("Peer(" PRIu64 ")", peer->serverId));
+    NOTICE("Peer thread for server " PRIu64 " started", peer->serverId);
 
     // Each iteration of this loop issues a new RPC or sleeps on the condition
     // variable.
@@ -2034,7 +2034,7 @@ RaftConsensus::peerThreadMain(std::shared_ptr<Peer> peer)
     // must return immediately after this
     --numPeerThreads;
     stateChanged.notify_all();
-    NOTICE("Peer thread for server %llu exiting", peer->serverId);
+    NOTICE("Peer thread for server " PRIu64 " exiting", peer->serverId);
 }
 
 void
@@ -2077,7 +2077,7 @@ RaftConsensus::stepDownThreadMain()
                 break;
             if (Clock::now() >= stepDownAt) {
                 NOTICE("No broadcast for a timeout, stepping down from leader "
-                       "of term %llu (converting to follower in term %llu)",
+                       "of term " PRIu64 " (converting to follower in term " PRIu64 ")",
                        currentTerm, currentTerm + 1);
                 stepDown(currentTerm + 1);
                 break;
@@ -2112,7 +2112,7 @@ RaftConsensus::advanceCommitIndex()
     if (log->getEntry(newCommitIndex).term() != currentTerm)
         return;
     commitIndex = newCommitIndex;
-    VERBOSE("New commitIndex: %llu", commitIndex);
+    VERBOSE("New commitIndex: " PRIu64 "", commitIndex);
     assert(commitIndex <= log->getLastLogIndex());
     stateChanged.notify_all();
 
@@ -2213,7 +2213,7 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
                 Core::Util::downCast<uint64_t>(request.ByteSize());
             if (requestSize < SOFT_RPC_SIZE_LIMIT || numEntries == 0) {
                 // this entry fits, send it
-                VERBOSE("sending entry <index=%llu,term=%llu>",
+                VERBOSE("sending entry <index=" PRIu64 ",term=" PRIu64 ">",
                         index, entry.term());
                 ++numEntries;
             } else {
@@ -2254,8 +2254,8 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
     // this term.
     assert(state == State::LEADER);
     if (response.term() > currentTerm) {
-        NOTICE("Received AppendEntries response from server %llu in term %llu "
-               "(this server's term was %llu)",
+        NOTICE("Received AppendEntries response from server " PRIu64 " in term " PRIu64 " "
+               "(this server's term was " PRIu64 ")",
                 peer.serverId, response.term(), currentTerm);
         stepDown(response.term());
     } else {
@@ -2377,8 +2377,8 @@ RaftConsensus::installSnapshot(std::unique_lock<Mutex>& lockGuard,
     // this term.
     assert(state == State::LEADER);
     if (response.term() > currentTerm) {
-        NOTICE("Received InstallSnapshot response from server %llu in "
-               "term %llu (this server's term was %llu)",
+        NOTICE("Received InstallSnapshot response from server " PRIu64 " in "
+               "term " PRIu64 " (this server's term was " PRIu64 ")",
                 peer.serverId, response.term(), currentTerm);
         stepDown(response.term());
     } else {
@@ -2407,7 +2407,7 @@ void
 RaftConsensus::becomeLeader()
 {
     assert(state == State::CANDIDATE);
-    NOTICE("Now leader for term %llu", currentTerm);
+    NOTICE("Now leader for term " PRIu64 "", currentTerm);
     state = State::LEADER;
     leaderId = serverId;
     printElectionState();
@@ -2443,7 +2443,7 @@ void
 RaftConsensus::discardUnneededEntries()
 {
     if (log->getLogStartIndex() <= lastSnapshotIndex) {
-        NOTICE("Removing log entries through %llu (inclusive) since "
+        NOTICE("Removing log entries through " PRIu64 " (inclusive) since "
                "they're no longer needed", lastSnapshotIndex);
         log->truncatePrefix(lastSnapshotIndex + 1);
         configurationManager->truncatePrefix(lastSnapshotIndex + 1);
@@ -2514,8 +2514,8 @@ RaftConsensus::readSnapshot()
         if (header.last_included_index() < lastSnapshotIndex) {
             PANIC("Trying to load a snapshot that is more stale than one this "
                   "server loaded earlier. The earlier snapshot covers through "
-                  "log index %llu (inclusive); this one covers through log "
-                  "index %llu (inclusive)",
+                  "log index " PRIu64 " (inclusive); this one covers through log "
+                  "index " PRIu64 " (inclusive)",
                   lastSnapshotIndex,
                   header.last_included_index());
 
@@ -2526,7 +2526,7 @@ RaftConsensus::readSnapshot()
         lastSnapshotBytes = reader->getSizeBytes();
         commitIndex = std::max(lastSnapshotIndex, commitIndex);
 
-        NOTICE("Reading snapshot which covers log entries 1 through %llu "
+        NOTICE("Reading snapshot which covers log entries 1 through " PRIu64 " "
                "(inclusive)", lastSnapshotIndex);
 
         // We should keep log entries if they might be needed for a quorum. So:
@@ -2575,7 +2575,7 @@ RaftConsensus::readSnapshot()
     }
     if (log->getLogStartIndex() > lastSnapshotIndex + 1) {
         PANIC("The newest snapshot on this server covers up through log index "
-              "%llu (inclusive), but its log starts at index %llu. This "
+              "" PRIu64 " (inclusive), but its log starts at index " PRIu64 ". This "
               "should never happen and indicates a corrupt disk state. If you "
               "want this server to participate in your cluster, you should "
               "back up all of its state, delete it, and add the server back "
@@ -2644,8 +2644,8 @@ RaftConsensus::requestVote(std::unique_lock<Mutex>& lockGuard, Peer& peer)
     }
 
     if (response.term() > currentTerm) {
-        NOTICE("Received RequestVote response from server %llu in "
-               "term %llu (this server's term was %llu)",
+        NOTICE("Received RequestVote response from server " PRIu64 " in "
+               "term " PRIu64 " (this server's term was " PRIu64 ")",
                 peer.serverId, response.term(), currentTerm);
         stepDown(response.term());
     } else {
@@ -2655,12 +2655,12 @@ RaftConsensus::requestVote(std::unique_lock<Mutex>& lockGuard, Peer& peer)
 
         if (response.granted()) {
             peer.haveVote_ = true;
-            NOTICE("Got vote from server %llu for term %llu",
+            NOTICE("Got vote from server " PRIu64 " for term " PRIu64 "",
                    peer.serverId, currentTerm);
             if (configuration->quorumAll(&Server::haveVote))
                 becomeLeader();
         } else {
-            NOTICE("Vote denied by server %llu for term %llu",
+            NOTICE("Vote denied by server " PRIu64 " for term " PRIu64 "",
                    peer.serverId, currentTerm);
         }
     }
@@ -2671,7 +2671,7 @@ RaftConsensus::setElectionTimer()
 {
     uint64_t ms = Core::Random::randomRange(ELECTION_TIMEOUT_MS,
                                             ELECTION_TIMEOUT_MS * 2);
-    VERBOSE("Will become candidate in %llu ms", ms);
+    VERBOSE("Will become candidate in " PRIu64 " ms", ms);
     startElectionAt = Clock::now() + std::chrono::milliseconds(ms);
     stateChanged.notify_all();
 }
@@ -2691,7 +2691,7 @@ RaftConsensus::printElectionState() const
             s = "LEADER,   ";
             break;
     }
-    NOTICE("server=%llu, term=%llu, state=%s leader=%llu, vote=%llu",
+    NOTICE("server=" PRIu64 ", term=" PRIu64 ", state=%s leader=" PRIu64 ", vote=" PRIu64 "",
            serverId,
            currentTerm,
            s,
@@ -2709,17 +2709,17 @@ RaftConsensus::startNewElection()
     }
 
     if (leaderId > 0) {
-        NOTICE("Running for election in term %llu "
-               "(haven't heard from leader %llu lately)",
+        NOTICE("Running for election in term " PRIu64 " "
+               "(haven't heard from leader " PRIu64 " lately)",
                currentTerm + 1,
                leaderId);
     } else if (state == State::CANDIDATE) {
-        NOTICE("Running for election in term %llu "
-               "(previous candidacy for term %llu timed out)",
+        NOTICE("Running for election in term " PRIu64 " "
+               "(previous candidacy for term " PRIu64 " timed out)",
                currentTerm + 1,
                currentTerm);
     } else {
-        NOTICE("Running for election in term %llu",
+        NOTICE("Running for election in term " PRIu64 "",
                currentTerm + 1);
     }
     ++currentTerm;
@@ -2746,7 +2746,7 @@ RaftConsensus::stepDown(uint64_t newTerm)
 {
     assert(currentTerm <= newTerm);
     if (currentTerm < newTerm) {
-        VERBOSE("stepDown(%llu)", newTerm);
+        VERBOSE("stepDown(" PRIu64 ")", newTerm);
         currentTerm = newTerm;
         leaderId = 0;
         votedFor = 0;

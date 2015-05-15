@@ -78,7 +78,7 @@ Globals::init()
     if (!uuid.empty())
         clusterUUID.set(uuid);
     serverId = config.read<uint64_t>("serverId");
-    Core::Debug::processName = Core::StringUtil::format("%llu", serverId);
+    Core::Debug::processName = Core::StringUtil::format("" PRIu64 "", serverId);
     {
         ServerStats::Lock serverStatsLock(serverStats);
         serverStatsLock->set_server_id(serverId);

@@ -88,8 +88,8 @@ Reader::readMessage(google::protobuf::Message& message)
     uint32_t length = 0;
     uint64_t r = readRaw(&length, sizeof(length));
     if (r < sizeof(length)) {
-        return format("Could only read %llu bytes of %llu-byte length field in "
-                      "file %s (at offset %llu of %llu-byte file)",
+        return format("Could only read " PRIu64 " bytes of " PRIu64 "-byte length field in "
+                      "file %s (at offset " PRIu64 " of " PRIu64 "-byte file)",
                       r,
                       sizeof(length),
                       file.path.c_str(),
@@ -98,8 +98,8 @@ Reader::readMessage(google::protobuf::Message& message)
     }
     length = be32toh(length);
     if (getSizeBytes() - bytesRead < length) {
-        return format("ProtoBuf is %u bytes long but there are only %llu "
-                      "bytes remaining in file %s (at offset %llu)",
+        return format("ProtoBuf is %u bytes long but there are only " PRIu64 " "
+                      "bytes remaining in file %s (at offset " PRIu64 ")",
                       length,
                       getSizeBytes() - bytesRead,
                       file.path.c_str(),
@@ -110,8 +110,8 @@ Reader::readMessage(google::protobuf::Message& message)
                            NULL);
     std::string error;
     if (!Core::ProtoBuf::parse(buf, message)) {
-        error = format("Could not parse ProtoBuf at bytes %llu-%llu (inclusive) "
-                       "in file %s of length %llu",
+        error = format("Could not parse ProtoBuf at bytes " PRIu64 "-" PRIu64 " (inclusive) "
+                       "in file %s of length " PRIu64 "",
                        bytesRead,
                        bytesRead + length -1,
                        file.path.c_str(),
@@ -121,7 +121,7 @@ Reader::readMessage(google::protobuf::Message& message)
     if (getSizeBytes() > 1024 && // minimum to keep quiet during unit tests
         10 * bytesRead / getSizeBytes() !=
         10 * (bytesRead - length) / getSizeBytes()) {
-        NOTICE("Read %llu%% of snapshot",
+        NOTICE("Read " PRIu64 "%% of snapshot",
                100 * bytesRead / getSizeBytes());
     }
     return error;

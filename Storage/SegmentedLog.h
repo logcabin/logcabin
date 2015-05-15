@@ -66,7 +66,7 @@ namespace Storage {
  * inopportune time (the segment file is first renamed, then truncated, and a
  * crash occurs in between).
  *
- * Open segments are named by the format string "open-%llu" with a unique
+ * Open segments are named by the format string "open-" PRIu64 "" with a unique
  * number. These should not exist when the server shuts down cleanly, but they
  * exist while the server is running and may be left around during a crash.
  * Open segments either contain entries which come after the last closed

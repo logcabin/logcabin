@@ -88,7 +88,7 @@ Layout::init(const std::string& storagePath, uint64_t serverId)
     topDir = FS::openDir(storagePath);
     serverDir = FS::openDir(
         topDir,
-        Core::StringUtil::format("server%llu", serverId));
+        Core::StringUtil::format("server" PRIu64 "", serverId));
     // We used to lock serverDir, but that doesn't work across NFS clients, at
     // least on RHEL6. Locking a file within the directory does seem to work.
     lockFile = FS::openFile(

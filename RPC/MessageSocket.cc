@@ -208,7 +208,7 @@ MessageSocket::sendMessage(MessageId messageId, Core::Buffer contents)
 {
     // Check the message length.
     if (contents.getLength() > maxMessageLength) {
-        PANIC("Message of length %llu bytes is too long to send "
+        PANIC("Message of length " PRIu64 " bytes is too long to send "
               "(limit is %u bytes)",
               contents.getLength(), maxMessageLength);
     }
