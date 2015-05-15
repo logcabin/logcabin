@@ -71,7 +71,7 @@ operator<<(std::ostream& os, const Log& log)
                                 data.length(), NULL);
             Protocol::Client::StateMachineCommand::Request command;
             if (!Core::ProtoBuf::parse(buffer, command)) {
-                WARNING("Could not parse protobuf in log entry %lu", i);
+                WARNING("Could not parse protobuf in log entry %llu", i);
                 os << Core::ProtoBuf::dumpString(e);
             } else {
                 e.clear_data();

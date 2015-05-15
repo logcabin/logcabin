@@ -63,7 +63,7 @@ void
 setAddr(Server& server)
 {
     using Core::StringUtil::format;
-    server.addresses = format("server%lu", server.serverId);
+    server.addresses = format("server%llu", server.serverId);
 }
 
 uint64_t
@@ -1652,7 +1652,7 @@ class StateMachineUpdaterThreadMainHelper {
     {
     }
     void operator()() {
-        NOTICE("iter: %lu", iter);
+        NOTICE("iter: %llu", iter);
         // not leader: go to sleep
         if (iter == 1) {
             consensus.startNewElection();

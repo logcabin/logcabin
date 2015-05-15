@@ -34,7 +34,7 @@ namespace Storage {
  * The current filesystem layout looks like this:
  *
  * / - topDir, defined by config option 'storagePath'
- *     "server%lu" % serverId/ - serverDir
+ *     "server%llu" % serverId/ - serverDir
  *         log/ - logDir, Storage::Log implementation-defined
  *         snapshot/ -  snapshotDir, contains snapshots
  *             snapshot - latest complete snapshot
@@ -90,7 +90,7 @@ class Layout {
     FilesystemUtil::File topDir;
     /**
      * Contains all files for this particular server.
-     * Sits underneath topDir in a directory called "server%lu" % serverId.
+     * Sits underneath topDir in a directory called "server%llu" % serverId.
      */
     FilesystemUtil::File serverDir;
     /**

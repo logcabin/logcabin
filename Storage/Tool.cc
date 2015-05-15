@@ -157,7 +157,7 @@ main(int argc, char** argv)
     config.readFile(options.configFilename.c_str());
 
     uint64_t serverId = config.read<uint64_t>("serverId");
-    NOTICE("Server ID is %lu", serverId);
+    NOTICE("Server ID is %llu", serverId);
 
     Storage::Layout storageLayout;
     storageLayout.init(config, serverId);

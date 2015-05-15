@@ -123,7 +123,7 @@ ClientRPC::waitForReply(google::protobuf::Message* response,
     // Extract the response's status field.
     if (responseBuffer.getLength() < sizeof(ResponseHeaderPrefix)) {
         PANIC("The response from the server for RPC to service %u, opcode "
-              "%u was too short to be valid (%lu bytes). This probably "
+              "%u was too short to be valid (%llu bytes). This probably "
               "indicates network or memory corruption.",
               service, opCode, responseBuffer.getLength());
     }

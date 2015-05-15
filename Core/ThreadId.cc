@@ -96,7 +96,7 @@ getName()
     std::lock_guard<std::mutex> lockGuard(Internal::mutex);
     auto it = Internal::threadNames.find(id);
     if (it == Internal::threadNames.end())
-        return StringUtil::format("thread %lu", id);
+        return StringUtil::format("thread %llu", id);
     else
         return it->second;
 }

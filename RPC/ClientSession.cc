@@ -102,7 +102,7 @@ ClientSession::MessageSocketHandler::handleReceivedMessage(
 
     auto it = session.responses.find(messageId);
     if (it == session.responses.end()) {
-        VERBOSE("Received an unexpected response with message ID %lu. "
+        VERBOSE("Received an unexpected response with message ID %llu. "
                 "This can happen for a number of reasons and is no cause "
                 "for alarm. For example, this happens if the RPC was "
                 "cancelled before its response arrived.",
@@ -112,7 +112,7 @@ ClientSession::MessageSocketHandler::handleReceivedMessage(
     Response& response = *it->second;
     if (response.status == Response::HAS_REPLY) {
         WARNING("Received a second response from the server for "
-                "message ID %lu. This indicates that either the client or "
+                "message ID %llu. This indicates that either the client or "
                 "server is assigning message IDs incorrectly, or "
                 "the server is misbehaving. Dropped this response.",
                 messageId);
