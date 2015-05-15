@@ -176,7 +176,7 @@ StateMachine::waitForResponse(uint64_t logIndex,
         const PC::ExactlyOnceRPCInfo& rpcInfo = command.tree().exactly_once();
         auto sessionIt = sessions.find(rpcInfo.client_id());
         if (sessionIt == sessions.end()) {
-            WARNING("Client %lu session expired but client still active",
+            WARNING("Client " PRIu64 " session expired but client still active",
                     rpcInfo.client_id());
             response.mutable_tree()->
                 set_status(PC::Status::SESSION_EXPIRED);
@@ -188,7 +188,7 @@ StateMachine::waitForResponse(uint64_t logIndex,
             // The response for this RPC has already been removed: the client
             // is not waiting for it. This request is just a duplicate that is
             // safe to drop.
-            WARNING("Client %lu asking for discarded response to RPC %lu",
+            WARNING("Client " PRIu64 " asking for discarded response to RPC " PRIu64 "",
                     rpcInfo.client_id(), rpcInfo.rpc_number());
             response.mutable_tree()->
                 set_status(PC::Status::SESSION_EXPIRED);
@@ -217,7 +217,7 @@ StateMachine::apply(const RaftConsensus::Entry& entry)
 {
     Command::Request command;
     if (!Core::ProtoBuf::parse(entry.command, command)) {
-        PANIC("Failed to parse protobuf for entry %lu",
+        PANIC("Failed to parse protobuf for entry " PRIu64 "",
               entry.index);
     }
     if (command.has_tree()) {
@@ -256,7 +256,7 @@ StateMachine::apply(const RaftConsensus::Entry& entry)
         uint16_t running = getVersion(entry.index - 1);
         if (requested < running) {
             WARNING("Rejecting downgrade of state machine version "
-                    "(running version %u but command at log index %lu wants "
+                    "(running version %u but command at log index " PRIu64 " wants "
                     "to switch to version %u)",
                     running,
                     entry.index,
@@ -304,7 +304,7 @@ StateMachine::applyThreadMain()
                     apply(entry);
                     break;
                 case RaftConsensus::Entry::SNAPSHOT:
-                    NOTICE("Loading snapshot through entry %lu into state "
+                    NOTICE("Loading snapshot through entry " PRIu64 " into state "
                            "machine", entry.index);
                     loadSnapshot(*entry.snapshotReader);
                     NOTICE("Done loading snapshot");
@@ -370,7 +370,7 @@ StateMachine::expireSessions(uint64_t clusterTime)
         uint64_t expireTime = session.lastModified + sessionTimeoutNanos;
         if (expireTime < clusterTime) {
             uint64_t diffNanos = clusterTime - session.lastModified;
-            NOTICE("Expiring client %lu's session after %lu.%09lu seconds "
+            NOTICE("Expiring client " PRIu64 "'s session after " PRIu64 ".%09lu seconds "
                    "of cluster time due to inactivity",
                    it->first,
                    diffNanos / (1000 * 1000 * 1000UL),
@@ -504,7 +504,7 @@ StateMachine::shouldTakeSnapshot(uint64_t lastIncludedIndex) const
     uint64_t logEntries = stats.last_log_index() - stats.last_snapshot_index();
     if (curr != logEntries &&
         10 * prev / logEntries != 10 * curr / logEntries) {
-        NOTICE("Have applied %lu%% of the %lu total log entries",
+        NOTICE("Have applied " PRIu64 "%% of the " PRIu64 " total log entries",
                100 * curr / logEntries,
                logEntries);
     }
@@ -563,7 +563,7 @@ StateMachine::snapshotWatchdogThreadMain()
                 if (snapshotWatchdogInterval != zero &&
                     now >= startTime + snapshotWatchdogInterval) { // check
                     if (currentProgress == startProgress) {
-                        ERROR("Snapshot process (counter %lu, pid %u) made no "
+                        ERROR("Snapshot process (counter " PRIu64 ", pid %u) made no "
                               "progress for %s. Killing it. If this happens "
                               "at all often, you should file a bug to "
                               "understand the root cause.",
@@ -581,7 +581,7 @@ StateMachine::snapshotWatchdogThreadMain()
                 }
             } else { // not yet tracking this child
                 VERBOSE("Beginning to track snapshot process "
-                        "(counter %lu, pid %u)",
+                        "(counter " PRIu64 ", pid %u)",
                         numSnapshotsAttempted,
                         childPid);
                 tracking = numSnapshotsAttempted;
@@ -592,7 +592,7 @@ StateMachine::snapshotWatchdogThreadMain()
                 waitUntil = startTime + snapshotWatchdogInterval;
         } else { // no child process
             if (tracking != ~0UL) {
-                VERBOSE("Snapshot ended: no longer tracking (counter %lu)",
+                VERBOSE("Snapshot ended: no longer tracking (counter " PRIu64 ")",
                         tracking);
                 tracking = ~0UL;
             }
@@ -625,7 +625,7 @@ StateMachine::takeSnapshot(uint64_t lastIncludedIndex,
         usleep(stateMachineChildSleepMs * 1000); // for testing purposes
         if (snapshotBlockPercentage > 0) { // for testing purposes
             if (Core::Random::randomRange(0, 100) < snapshotBlockPercentage) {
-                WARNING("Purposely deadlocking child (probability is %lu%%)",
+                WARNING("Purposely deadlocking child (probability is " PRIu64 "%%)",
                         snapshotBlockPercentage);
                 std::mutex mutex;
                 mutex.lock();
@@ -679,7 +679,7 @@ StateMachine::takeSnapshot(uint64_t lastIncludedIndex,
             ++numSnapshotsFailed;
             ERROR("Snapshot creation failed with status %d. This server will "
                   "try again, but something might be terribly wrong. "
-                  "%lu of %lu snapshots have failed in total.",
+                  "" PRIu64 " of " PRIu64 " snapshots have failed in total.",
                   status,
                   numSnapshotsFailed,
                   numSnapshotsAttempted);
@@ -696,7 +696,7 @@ StateMachine::warnUnknownRequest(
         lastUnknownRequestMessage = now;
         if (numUnknownRequestsSinceLastMessage > 0) {
             WARNING("This version of the state machine (%u) does not "
-                    "understand the given request (and %lu similar warnings "
+                    "understand the given request (and " PRIu64 " similar warnings "
                     "were suppressed since the last message): %s",
                     getVersion(~0UL),
                     numUnknownRequestsSinceLastMessage,

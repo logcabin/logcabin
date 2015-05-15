@@ -84,7 +84,7 @@ void
 ThreadDispatchService::workerMain()
 {
     Core::ThreadId::setName(
-        Core::StringUtil::format("%s(%lu)",
+        Core::StringUtil::format("%s(" PRIu64 ")",
                                  threadSafeService->getName().c_str(),
                                  Core::ThreadId::getId()));
     while (true) {

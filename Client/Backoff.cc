@@ -20,7 +20,7 @@ namespace Client {
 
 Backoff::Backoff(uint64_t windowCount, uint64_t windowNanos)
     : mutex()
-    , windowCount(std::max(1UL, windowCount))
+    , windowCount(std::max(UINT64_C(1), windowCount))
     , windowDuration(windowNanos)
     , startTimes()
 {

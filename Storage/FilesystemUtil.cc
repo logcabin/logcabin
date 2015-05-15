@@ -97,7 +97,7 @@ allocate(const File& file, uint64_t offset, uint64_t bytes)
                                    Core::Util::downCast<off_t>(offset),
                                    Core::Util::downCast<off_t>(bytes));
     if (errnum != 0) {
-        PANIC("Could not posix_fallocate bytes [%lu, %lu) of %s: %s",
+        PANIC("Could not posix_fallocate bytes [" PRIu64 ", " PRIu64 ") of %s: %s",
               offset, offset + bytes, file.path.c_str(), strerror(errnum));
     }
 }

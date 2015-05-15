@@ -78,7 +78,7 @@ Timer::schedule(uint64_t nanoseconds)
     newValue.it_value.tv_nsec = nanoseconds % nanosPerSecond;
     int r = timerfd_settime(fd, 0, &newValue, NULL);
     if (r != 0) {
-        PANIC("Could not set timer to +%luns: %s",
+        PANIC("Could not set timer to +" PRIu64 "ns: %s",
               nanoseconds,
               strerror(errno));
     }

@@ -232,8 +232,8 @@ ClientService::verifyRecipient(RPC::ServerRPC rpc)
                serverId != request.server_id()) {
         response.set_ok(false);
         response.set_error(Core::StringUtil::format(
-           "Mismatched server IDs: request intended for %lu, "
-           "but this server is %lu",
+           "Mismatched server IDs: request intended for " PRIu64 ", "
+           "but this server is " PRIu64 "",
            request.server_id(),
            serverId));
     } else {
