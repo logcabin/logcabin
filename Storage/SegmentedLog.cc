@@ -289,7 +289,7 @@ SegmentedLog::SegmentedLog(const FS::File& parentDir,
     , totalClosedSegmentBytes(0)
     , preparedSegments(
         std::max(config.read<uint64_t>("storageOpenSegments", 3),
-                 1UL))
+                 UINT64_C(1)))
     , currentSync(new SegmentedLog::Sync(0))
     , segmentPreparer()
 {
