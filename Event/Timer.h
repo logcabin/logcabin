@@ -128,7 +128,7 @@ class Timer : private File {
     /**
      * Generic event handler for files. Calls handleTimerEvent().
      */
-    void handleFileEvent(int events);
+    void handleFileEvent(uint32_t events);
 
     // Timer is not copyable.
     Timer(const Timer&) = delete;

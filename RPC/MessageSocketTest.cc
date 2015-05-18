@@ -36,7 +36,7 @@ using Core::Buffer;
 
 class MyMessageSocketHandler : public MessageSocket::Handler {
     MyMessageSocketHandler()
-        : lastReceivedId(-1)
+        : lastReceivedId(~0UL)
         , lastReceivedPayload()
         , disconnected(false)
     {

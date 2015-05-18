@@ -68,7 +68,7 @@ MessageSocket::SendSocket::~SendSocket()
 }
 
 void
-MessageSocket::SendSocket::handleFileEvent(int events)
+MessageSocket::SendSocket::handleFileEvent(uint32_t events)
 {
     messageSocket.writable();
 }
@@ -97,7 +97,7 @@ MessageSocket::ReceiveSocket::~ReceiveSocket()
 }
 
 void
-MessageSocket::ReceiveSocket::handleFileEvent(int events)
+MessageSocket::ReceiveSocket::handleFileEvent(uint32_t events)
 {
     messageSocket.readable();
 }
@@ -248,7 +248,7 @@ MessageSocket::readable()
                 disconnect();
                 return;
             }
-            inbound.bytesRead += bytesRead;
+            inbound.bytesRead += size_t(bytesRead);
             if (inbound.bytesRead < sizeof(Header))
                 return;
             // Transition to receiving data
@@ -293,7 +293,7 @@ MessageSocket::readable()
                 disconnect();
                 return;
             }
-            inbound.bytesRead += bytesRead;
+            inbound.bytesRead += size_t(bytesRead);
             if (inbound.bytesRead < (sizeof(Header) +
                                      inbound.header.payloadLength)) {
                 return;
@@ -391,7 +391,7 @@ MessageSocket::writable()
         }
 
         // Sent successfully.
-        outbound.bytesSent += bytesSent;
+        outbound.bytesSent += size_t(bytesSent);
         if (outbound.bytesSent != (sizeof(Header) +
                                    outbound.message.getLength())) {
             sendSocketMonitor.setEvents(EPOLLOUT|EPOLLONESHOT);

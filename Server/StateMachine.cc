@@ -316,7 +316,7 @@ StateMachine::applyThreadMain()
             if (shouldTakeSnapshot(lastIndex))
                 snapshotSuggested.notify_all();
         }
-    } catch (const Core::Util::ThreadInterruptedException& e) {
+    } catch (const Core::Util::ThreadInterruptedException&) {
         NOTICE("exiting");
         std::lock_guard<std::mutex> lockGuard(mutex);
         exiting = true;

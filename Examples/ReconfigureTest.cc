@@ -65,7 +65,7 @@ class OptionParser {
                     fatal = true;
                     break;
                 case 's':
-                    srand(atoi(optarg));
+                    srand(static_cast<unsigned int>(atoi(optarg)));
                     break;
                 case '?':
                 default:
@@ -199,10 +199,11 @@ main(int argc, char** argv)
     while (true) {
         Configuration newConfiguration;
         uint64_t desiredServers =
-            (rand() % fullConfiguration.size()) + 1; // NOLINT
+            (uint64_t(rand()) % fullConfiguration.size()) + 1; // NOLINT
         Configuration remainingServers = fullConfiguration;
         for (uint64_t i = 0; i < desiredServers; ++i) {
-            uint64_t j = (rand() % remainingServers.size()); // NOLINT
+            uint64_t j =
+                (uint64_t(rand()) % remainingServers.size()); // NOLINT
             newConfiguration.push_back(remainingServers.at(j));
             std::swap(remainingServers.at(j),
                       remainingServers.back());

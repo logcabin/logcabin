@@ -117,9 +117,14 @@ struct VectorHandler {
     std::vector<DebugMessage> messages;
 };
 
+void
+removeLogHandler()
+{
+    Core::Debug::setLogHandler(std::function<void(DebugMessage)>());
+}
+
 TEST_F(CoreDebugTest, setLogHandler) {
-    Core::Util::Finally _(std::bind(setLogHandler,
-                                    std::function<void(DebugMessage)>()));
+    Core::Util::Finally _(removeLogHandler);
     VectorHandler handler;
     setLogHandler(std::ref(handler));
     ERROR("Hello, world! %d", 9);

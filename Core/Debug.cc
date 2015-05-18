@@ -96,8 +96,8 @@ DebugMessage::operator=(DebugMessage&& other)
     function = other.function;
     logLevel = other.logLevel;
     logLevelString = other.logLevelString;
-    processName = std::move(processName);
-    threadName = std::move(threadName);
+    processName = std::move(other.processName);
+    threadName = std::move(other.threadName);
     message = std::move(other.message);
     return *this;
 }
@@ -205,17 +205,17 @@ getLogLevel(const char* fileName)
  * That is, __FILE__ plus this value will be the relative path from the top
  * directory of the code tree.
  */
-int
+size_t
 calculateLengthFilePrefix()
 {
     const char* start = __FILE__;
     const char* match = strstr(__FILE__, "Core/Debug.cc");
     assert(match != NULL);
-    return int(match - start);
+    return size_t(match - start);
 }
 
 /// Stores result of calculateLengthFilePrefix().
-const int lengthFilePrefix = calculateLengthFilePrefix();
+const size_t lengthFilePrefix = calculateLengthFilePrefix();
 
 /**
  * Strip out the common prefix of a filename to get a path from the project's
@@ -307,7 +307,7 @@ log(LogLevel level,
     if (logHandler) {
         DebugMessage d;
         d.filename = relativeFileName(fileName);
-        d.linenum = lineNum;
+        d.linenum = int(lineNum);
         d.function = functionName;
         d.logLevel = int(level);
         d.logLevelString = logLevelToString[uint32_t(level)];
@@ -318,7 +318,7 @@ log(LogLevel level,
         va_start(ap, format);
         // We're not really sure how big of a buffer will be necessary.
         // Try 1K, if not the return value will tell us how much is necessary.
-        int bufSize = 1024;
+        size_t bufSize = 1024;
         while (true) {
             char buf[bufSize];
             // vsnprintf trashes the va_list, so copy it first
@@ -326,12 +326,13 @@ log(LogLevel level,
             __va_copy(aq, ap);
             int r = vsnprintf(buf, bufSize, format, aq);
             assert(r >= 0); // old glibc versions returned -1
-            if (r < bufSize) {
-                buf[r - 1] = '\0'; // strip off "\n" added by LOG macro
+            size_t r2 = size_t(r);
+            if (r2 < bufSize) {
+                buf[r2 - 1] = '\0'; // strip off "\n" added by LOG macro
                 d.message = buf; // copy string
                 break;
             }
-            bufSize = r + 1;
+            bufSize = size_t(r2) + 1;
         }
         va_end(ap);
         (logHandler)(d);

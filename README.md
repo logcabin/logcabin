@@ -27,9 +27,11 @@ Building
 Pre-requisites:
 
 - Linux x86-64 (v2.6.32 and up should work)
-- git (v1.7 is known to work)
+- git (v1.7 and up should work)
 - scons (v2.0 and v2.3 are known to work)
-- g++ (v4.4 through v4.9 and v5.1 are known to work)
+- g++ (v4.4 through v4.9 and v5.1 are known to work) or
+  clang (v3.4 through v3.7 are known to work with libstdc++ 4.9, and libc++ is
+  also supported; see [CLANG.md](CLANG.md) for more info)
 - protobuf (v2.6.x suggested, v2.5.x should work, v2.3.x is not supported)
 - crypto++ (v5.6.1 is known to work)
 - doxygen (optional; v1.8.8 is known to work)

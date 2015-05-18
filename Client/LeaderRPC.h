@@ -228,8 +228,6 @@ class LeaderRPC : public LeaderRPCBase {
      *      Describe the servers to connect to. This class assumes that
      *      refreshing 'hosts' will result in a random host that might be the
      *      current cluster leader.
-     * \param eventLoop
-     *      Used to invoke RPCs.
      * \param clusterUUID
      *      Keeps track of the unique ID for this cluster, if known.
      * \param sessionCreationBackoff
@@ -238,7 +236,6 @@ class LeaderRPC : public LeaderRPCBase {
      *      Used to create new sessions.
      */
     LeaderRPC(const RPC::Address& hosts,
-              Event::Loop& eventLoop,
               SessionManager::ClusterUUID& clusterUUID,
               Backoff& sessionCreationBackoff,
               SessionManager& sessionManager);
@@ -316,11 +313,6 @@ class LeaderRPC : public LeaderRPCBase {
     void
     reportRedirect(std::shared_ptr<RPC::ClientSession> cachedSession,
                    const std::string& host);
-
-    /**
-     * Used to drive the underlying RPC mechanism.
-     */
-    Event::Loop& eventLoop;
 
     /**
      * Keeps track of the unique ID for this cluster, if known.

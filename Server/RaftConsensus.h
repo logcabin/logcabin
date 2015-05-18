@@ -53,11 +53,11 @@ namespace Server {
 // forward declaration
 class Globals;
 
+// forward declaration
+class RaftConsensus;
 
 namespace RaftConsensusInternal {
 
-// forward declaration
-class RaftConsensus;
 
 class Invariants {
   public:
@@ -862,6 +862,8 @@ class ClusterClock {
     Core::Time::SteadyClock::time_point localTimeAtEpoch;
 };
 
+} // namespace RaftConsensusInternal
+
 /**
  * An implementation of the Raft consensus algorithm. The algorithm is
  * described at https://raftconsensus.github.io
@@ -873,6 +875,16 @@ class ClusterClock {
  */
 class RaftConsensus {
   public:
+    typedef RaftConsensusInternal::Invariants Invariants;
+    typedef RaftConsensusInternal::Server Server;
+    typedef RaftConsensusInternal::LocalServer LocalServer;
+    typedef RaftConsensusInternal::Peer Peer;
+    typedef RaftConsensusInternal::Configuration Configuration;
+    typedef RaftConsensusInternal::ConfigurationManager ConfigurationManager;
+    typedef RaftConsensusInternal::ClusterClock ClusterClock;
+    typedef RaftConsensusInternal::Mutex Mutex;
+    typedef RaftConsensusInternal::Clock Clock;
+    typedef RaftConsensusInternal::TimePoint TimePoint;
 
     /**
      * This is returned by getNextEntry().
@@ -1666,14 +1678,10 @@ class RaftConsensus {
 
     Invariants invariants;
 
-    friend class LocalServer;
-    friend class Peer;
-    friend class Invariants;
+    friend class RaftConsensusInternal::LocalServer;
+    friend class RaftConsensusInternal::Peer;
+    friend class RaftConsensusInternal::Invariants;
 };
-
-} // namespace RaftConsensusInternal
-
-using RaftConsensusInternal::RaftConsensus;
 
 } // namespace LogCabin::Server
 } // namespace LogCabin

@@ -192,7 +192,7 @@ class OpaqueServer {
          *      address.
          */
         BoundListener(OpaqueServer& server, int fd);
-        void handleFileEvent(int events);
+        void handleFileEvent(uint32_t events);
         OpaqueServer& server;
     };
 

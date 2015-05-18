@@ -39,6 +39,7 @@ class MemoryLog : public Log {
     const Entry& getEntry(uint64_t logIndex) const;
     uint64_t getLogStartIndex() const;
     uint64_t getLastLogIndex() const;
+    std::string getName() const;
     uint64_t getSizeBytes() const;
     std::unique_ptr<Sync> takeSync();
     void truncatePrefix(uint64_t firstIndex);
