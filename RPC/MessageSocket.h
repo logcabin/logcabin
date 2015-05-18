@@ -155,7 +155,7 @@ class MessageSocket {
       public:
         SendSocket(int fd, MessageSocket& messageSocket);
         ~SendSocket();
-        void handleFileEvent(int events);
+        void handleFileEvent(uint32_t events);
       private:
         MessageSocket& messageSocket;
     };
@@ -169,7 +169,7 @@ class MessageSocket {
       public:
         ReceiveSocket(int fd, MessageSocket& messageSocket);
         ~ReceiveSocket();
-        void handleFileEvent(int events);
+        void handleFileEvent(uint32_t events);
       private:
         MessageSocket& messageSocket;
     };

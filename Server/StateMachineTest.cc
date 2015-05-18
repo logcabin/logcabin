@@ -367,9 +367,9 @@ TEST_F(ServerStateMachineTest, applyThreadMain_exiting_TimingSensitive)
         stateMachine->takeSnapshot(1, lockGuard);
         struct timeval endTime;
         EXPECT_EQ(0, gettimeofday(&endTime, NULL));
-        uint64_t elapsedMillis =
+        uint64_t elapsedMillis = uint64_t(
             ((endTime.tv_sec   * 1000 * 1000 + endTime.tv_usec) -
-             (startTime.tv_sec * 1000 * 1000 + startTime.tv_usec)) / 1000;
+             (startTime.tv_sec * 1000 * 1000 + startTime.tv_usec)) / 1000);
         EXPECT_GT(200U, elapsedMillis) <<
             "This test depends on timing, so failures are likely under "
             "heavy load, valgrind, etc.";

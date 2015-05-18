@@ -182,5 +182,4 @@ main(int argc, char** argv)
         tree.writeEx(key, toString(a + b));
         ++i;
     }
-    return 0;
 }

@@ -24,7 +24,7 @@
 #ifdef __bswap_constant_16
 #undef __bswap_constant_16
 #define __bswap_constant_16(x) \
-     ((uint16_t) ((((x) >> 8) & 0xff) | (((x) & 0xff) << 8)))
+     (uint16_t((((x) >> 8) & 0xff) | (((x) & 0xff) << 8)))
 #endif
 
 #endif /* LOGCABIN_CORE_ENDIAN_H */

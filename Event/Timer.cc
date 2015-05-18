@@ -135,7 +135,7 @@ Timer::isScheduled() const
 }
 
 void
-Timer::handleFileEvent(int events)
+Timer::handleFileEvent(uint32_t events)
 {
     handleTimerEvent();
 }

@@ -73,13 +73,19 @@ MemoryLog::getLastLogIndex() const
     return startIndex + entries.size() - 1;
 }
 
+std::string
+MemoryLog::getName() const
+{
+    return "Memory";
+}
+
 uint64_t
 MemoryLog::getSizeBytes() const
 {
     // TODO(ongaro): keep this pre-calculated for efficiency
     uint64_t size = 0;
     for (auto it = entries.begin(); it < entries.end(); ++it)
-        size += it->ByteSize();
+        size += uint64_t(it->ByteSize());
     return size;
 }
 
@@ -99,8 +105,9 @@ MemoryLog::truncatePrefix(uint64_t firstIndex)
         // offsets in range [0, firstIndex - startIndex). Be careful not to
         // erase past the end of the deque (STL doesn't check for this).
         entries.erase(entries.begin(),
-                      entries.begin() + std::min(firstIndex - startIndex,
-                                                 entries.size()));
+                      entries.begin() +
+                      int64_t(std::min(firstIndex - startIndex,
+                                       entries.size())));
         startIndex = firstIndex;
     }
 }

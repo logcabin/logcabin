@@ -231,8 +231,9 @@ TEST_F(RPCClientSessionTest, constructor_timeout_TimingSensitive) {
         Core::Time::SteadyClock::now() + std::chrono::milliseconds(5),
         Core::Config());
     auto end = Core::Time::SystemClock::now();
-    uint64_t elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                            end - start).count();
+    uint64_t elapsedMs =
+        uint64_t(std::chrono::duration_cast<std::chrono::milliseconds>(
+                            end - start).count());
     EXPECT_LE(5U, elapsedMs);
     EXPECT_GE(100U, elapsedMs);
     ClientSession::connectFn = ::connect;

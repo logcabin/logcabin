@@ -17,6 +17,7 @@
 #include <cstdlib>
 #include <ctype.h>
 #include <errno.h>
+#include <functional>
 #include <stdexcept>
 
 #include "Examples/Util.h"

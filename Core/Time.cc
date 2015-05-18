@@ -79,6 +79,10 @@ SteadyTimeConverter::SteadyTimeConverter()
 SystemClock::time_point
 SteadyTimeConverter::convert(SteadyClock::time_point when)
 {
+    // Note that this relies on signed integer wrapping, so -fwrapv or
+    // -fno-strict-overflow must be on for correctness under optimizing
+    // comiplers. The unit tests are pretty good at catching when this isn't
+    // the case.
     std::chrono::nanoseconds diff = when - steadyNow;
     SystemClock::time_point then = systemNow + diff;
     if (when > steadyNow && then < systemNow) // overflow

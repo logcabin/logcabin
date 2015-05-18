@@ -60,7 +60,6 @@ class ClientLeaderRPCTest : public ::testing::Test {
         server->registerService(Protocol::Common::ServiceId::CLIENT_SERVICE,
                                 service, 1);
         leaderRPC.reset(new LeaderRPC(address,
-                                      eventLoop,
                                       clusterUUID,
                                       sessionCreationBackoff,
                                       sessionManager));

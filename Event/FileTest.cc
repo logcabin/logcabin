@@ -34,7 +34,7 @@ struct MyFile : public Event::File {
         , triggerCount(0)
     {
     }
-    void handleFileEvent(int events) {
+    void handleFileEvent(uint32_t events) {
         ++triggerCount;
         eventLoop.exit();
     }

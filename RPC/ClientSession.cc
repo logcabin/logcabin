@@ -43,7 +43,7 @@ struct FileNotifier : public Event::File {
         , count(0)
     {
     }
-    void handleFileEvent(int events) {
+    void handleFileEvent(uint32_t events) {
         ++count;
         eventLoop.exit();
     }

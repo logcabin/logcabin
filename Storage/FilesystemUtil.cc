@@ -93,7 +93,9 @@ File::release()
 void
 allocate(const File& file, uint64_t offset, uint64_t bytes)
 {
-    int errnum = ::posix_fallocate(file.fd, offset, bytes);
+    int errnum = ::posix_fallocate(file.fd,
+                                   Core::Util::downCast<off_t>(offset),
+                                   Core::Util::downCast<off_t>(bytes));
     if (errnum != 0) {
         PANIC("Could not posix_fallocate bytes [%lu, %lu) of %s: %s",
               offset, offset + bytes, file.path.c_str(), strerror(errnum));
@@ -171,7 +173,7 @@ getSize(const File& file)
         PANIC("Could not stat %s: %s",
               file.path.c_str(), strerror(errno));
     }
-    return stat.st_size;
+    return Core::Util::downCast<uint64_t>(stat.st_size);
 }
 
 std::vector<std::string>
@@ -366,7 +368,7 @@ syncDir(const std::string& path)
 void
 truncate(const File& file, uint64_t bytes)
 {
-    if (::ftruncate(file.fd, bytes) != 0) {
+    if (::ftruncate(file.fd, Core::Util::downCast<off_t>(bytes)) != 0) {
         PANIC("Could not ftruncate %s: %s",
               file.path.c_str(),
               strerror(errno));

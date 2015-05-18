@@ -31,7 +31,6 @@
 namespace LogCabin {
 namespace Storage {
 
-using std::queue;
 using std::string;
 using std::vector;
 using FilesystemUtil::File;
@@ -48,7 +47,11 @@ namespace MockWritev {
 
 struct State {
     State() : allowWrites(), written() {}
-    queue<int> allowWrites; // negative values are taken as errno
+    /**
+     * Number of bytes to process in each writev call.
+     * Negative values are used as errno.
+     */
+    std::queue<int> allowWrites;
     string written;
 };
 std::unique_ptr<State> state;
@@ -72,7 +75,7 @@ writev(int fildes, const struct iovec* iov, int iovcnt)
         flattened += string(static_cast<const char*>(iov[i].iov_base),
                                                      iov[i].iov_len);
     }
-    state->written.append(flattened, 0, allowWrite);
+    state->written.append(flattened, 0, size_t(allowWrite));
     return allowWrite;
 }
 
