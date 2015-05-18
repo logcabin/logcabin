@@ -538,8 +538,9 @@ StateMachine::snapshotThreadMain()
 void
 StateMachine::snapshotWatchdogThreadMain()
 {
-    Core::ThreadId::setName("SnapshotStateMachineWatchdog");
     using Core::StringUtil::toString;
+    Core::ThreadId::setName("SnapshotStateMachineWatchdog");
+    std::unique_lock<std::mutex> lockGuard(mutex);
 
     // The snapshot process that this thread is currently tracking, based on
     // numSnapshotsAttempted. If set to ~0UL, this thread is not currently
@@ -553,7 +554,6 @@ StateMachine::snapshotWatchdogThreadMain()
     const std::chrono::nanoseconds zero = std::chrono::nanoseconds::zero();
 
     while (!exiting) {
-        std::unique_lock<std::mutex> lockGuard(mutex);
         TimePoint waitUntil = TimePoint::max();
         TimePoint now = Clock::now();
 
