@@ -16,7 +16,8 @@ Additional files:
 - `LogCabin.gpl` is a GIMP/Inkscape color palette for the colors used in the logo.
 - `sticker.svg` is a version of the logo optimized for printing to vinyl stickers
   (it has an enlarged chimney and door similar to the lasercut version, but
-  retains the color from the logo; on a 3x3" canvas).
+  retains the color from the logo; the roof is slightly enlarged on the left;
+  on a 3x3" canvas).
 
 
 Files in this directory are:
