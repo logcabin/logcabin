@@ -524,10 +524,8 @@ void
 StateMachine::snapshotThreadMain()
 {
     Core::ThreadId::setName("SnapshotStateMachine");
-    while (true) {
-        std::unique_lock<std::mutex> lockGuard(mutex);
-        if (exiting)
-            return;
+    std::unique_lock<std::mutex> lockGuard(mutex);
+    while (!exiting) {
         if (shouldTakeSnapshot(lastIndex))
             takeSnapshot(lastIndex, lockGuard);
         else
