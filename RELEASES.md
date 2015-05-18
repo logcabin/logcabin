@@ -15,7 +15,19 @@ See [RELEASE-PROCESS.md](RELEASE-PROCESS.md).
 Version 1.0.1-alpha.0 (In Development)
 ======================================
 
-Nothing noteworthy yet.
+Improvements:
+- Adds gcc 5.1 (which required no changes; issue #141) and clang 3.4, 3.5, 3.6,
+  and 3.7 (issue #9) as supported compilers.
+
+Bug fixes (high severity):
+- Fixes occasional hang when exiting (issue #144).
+
+Bug fixes (low severity):
+- Fixes Core::Debug::DebugMessage move constructor, where processName and
+  threadName were not moved over as they should have been (git 77d7f6b6).
+- Fixes signed integer overflow bug under aggressive optimizing compilers
+  affecting SteadyTimeConverter, which is only used in producing ServerStats
+  (git 64734001).
 
 Version 1.0.0 (2015-04-29)
 ==========================
