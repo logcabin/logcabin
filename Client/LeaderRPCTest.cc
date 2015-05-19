@@ -275,6 +275,18 @@ TEST_F(ClientLeaderRPCTest, reportFailure) {
     EXPECT_TRUE(leaderRPC->leaderSession.get());
 }
 
+TEST_F(ClientLeaderRPCTest, reportNotLeader) {
+    std::shared_ptr<RPC::ClientSession> session1 =
+        leaderRPC->getSession(TimePoint::max());
+    EXPECT_TRUE(leaderRPC->leaderSession.get());
+    leaderRPC->reportNotLeader(session1);
+    EXPECT_FALSE(leaderRPC->leaderSession.get());
+    std::shared_ptr<RPC::ClientSession> session2 =
+        leaderRPC->getSession(TimePoint::max());
+    leaderRPC->reportNotLeader(session1);
+    EXPECT_TRUE(leaderRPC->leaderSession.get());
+}
+
 TEST_F(ClientLeaderRPCTest, reportRedirect) {
     std::shared_ptr<RPC::ClientSession> session1 =
         leaderRPC->getSession(TimePoint::max());

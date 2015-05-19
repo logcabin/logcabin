@@ -21,6 +21,15 @@ namespace LogCabin {
 namespace Core {
 namespace Util {
 
+bool
+isPowerOfTwo(uint64_t x)
+{
+    if (x == 0)
+        return false;
+    else
+        return (x & (x - 1)) == 0;
+}
+
 void*
 memcpy(void* dest,
        std::initializer_list<std::pair<const void*, size_t>> src)

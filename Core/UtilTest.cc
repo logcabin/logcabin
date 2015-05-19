@@ -51,6 +51,19 @@ TEST(CoreUtilTest, Finally) {
     EXPECT_EQ("world", s);
 }
 
+TEST(CoreUtilTest, isPowerOfTwo) {
+    EXPECT_FALSE(isPowerOfTwo(0));
+    EXPECT_TRUE(isPowerOfTwo(1));
+    EXPECT_TRUE(isPowerOfTwo(2));
+    EXPECT_FALSE(isPowerOfTwo(3));
+    EXPECT_TRUE(isPowerOfTwo(4));
+    EXPECT_FALSE(isPowerOfTwo(5));
+    EXPECT_FALSE(isPowerOfTwo(6));
+    EXPECT_FALSE(isPowerOfTwo(7));
+    EXPECT_TRUE(isPowerOfTwo(8));
+    EXPECT_FALSE(isPowerOfTwo(9));
+    EXPECT_FALSE(isPowerOfTwo(10));
+}
 
 TEST(CoreUtilTest, memcpy) {
     char buf[16];

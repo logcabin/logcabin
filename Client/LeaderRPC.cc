@@ -19,6 +19,7 @@
 #include "Client/Backoff.h"
 #include "Client/LeaderRPC.h"
 #include "Core/Debug.h"
+#include "Core/Util.h"
 #include "Protocol/Common.h"
 #include "RPC/ClientSession.h"
 #include "RPC/ClientRPC.h"
@@ -110,23 +111,17 @@ LeaderRPC::Call::wait(google::protobuf::Message& response,
     // Decode the response
     switch (status) {
         case RPCStatus::OK:
+            leaderRPC.reportSuccess(cachedSession);
             return Call::Status::OK;
         case RPCStatus::SERVICE_SPECIFIC_ERROR:
             switch (error.error_code()) {
                 case Protocol::Client::Error::NOT_LEADER:
                     // The server we tried is not the current cluster leader.
                     if (error.has_leader_hint()) {
-                        NOTICE("Will try suggested %s as new leader "
-                               "(was using %s)",
-                               error.leader_hint().c_str(),
-                               cachedSession->toString().c_str());
                         leaderRPC.reportRedirect(cachedSession,
                                                  error.leader_hint());
                     } else {
-                        NOTICE("Will try random host as new leader "
-                               "(was using %s)",
-                               cachedSession->toString().c_str());
-                        leaderRPC.reportFailure(cachedSession);
+                        leaderRPC.reportNotLeader(cachedSession);
                     }
                     break;
                 default:
@@ -141,7 +136,6 @@ LeaderRPC::Call::wait(google::protobuf::Message& response,
             }
             break;
         case RPCStatus::RPC_FAILED:
-            NOTICE("RPC failed: %s", cachedSession->toString().c_str());
             leaderRPC.reportFailure(cachedSession);
             break;
         case RPCStatus::RPC_CANCELED:
@@ -173,6 +167,7 @@ LeaderRPC::LeaderRPC(const RPC::Address& hosts,
     , hosts(hosts)
     , leaderHint()
     , leaderSession() // set by connect()
+    , failuresSinceLastSuccess(0)
 {
 }
 
@@ -231,7 +226,7 @@ LeaderRPC::getSession(TimePoint timeout)
         address.refresh(timeout);
         leaderHint.clear();
     }
-    NOTICE("Connecting to: %s", address.toString().c_str());
+    VERBOSE("Connecting to: %s", address.toString().c_str());
     leaderSession = sessionManager.createSession(
         address, timeout, &clusterUUID);
     return leaderSession;
@@ -241,8 +236,42 @@ void
 LeaderRPC::reportFailure(std::shared_ptr<RPC::ClientSession> cachedSession)
 {
     std::lock_guard<std::mutex> lockGuard(mutex);
-    if (cachedSession == leaderSession)
-        leaderSession.reset();
+    if (cachedSession != leaderSession)
+        return;
+    ++failuresSinceLastSuccess;
+    if (Core::Util::isPowerOfTwo(failuresSinceLastSuccess)) {
+        NOTICE("RPC to server failed: %s "
+               "(there have been %lu failed attempts during this outage)",
+               cachedSession->toString().c_str(),
+               failuresSinceLastSuccess);
+    } else {
+        VERBOSE("RPC to server failed: %s "
+                "(there have been %lu failed attempts during this outage)",
+                cachedSession->toString().c_str(),
+                failuresSinceLastSuccess);
+    }
+    leaderSession.reset();
+}
+
+void
+LeaderRPC::reportNotLeader(std::shared_ptr<RPC::ClientSession> cachedSession)
+{
+    std::lock_guard<std::mutex> lockGuard(mutex);
+    if (cachedSession != leaderSession)
+        return;
+    ++failuresSinceLastSuccess;
+    if (Core::Util::isPowerOfTwo(failuresSinceLastSuccess)) {
+        NOTICE("Server [%s] is not leader, will try random host next "
+               "(there have been %lu failed attempts during this outage)",
+               cachedSession->toString().c_str(),
+               failuresSinceLastSuccess);
+    } else {
+        VERBOSE("Server [%s] is not leader, will try random host next "
+                "(there have been %lu failed attempts during this outage)",
+                cachedSession->toString().c_str(),
+                failuresSinceLastSuccess);
+    }
+    leaderSession.reset();
 }
 
 void
@@ -250,11 +279,40 @@ LeaderRPC::reportRedirect(std::shared_ptr<RPC::ClientSession> cachedSession,
                           const std::string& host)
 {
     std::lock_guard<std::mutex> lockGuard(mutex);
-    if (cachedSession == leaderSession) {
-        leaderSession.reset();
-        leaderHint = host;
+    if (cachedSession != leaderSession)
+        return;
+    ++failuresSinceLastSuccess;
+    if (Core::Util::isPowerOfTwo(failuresSinceLastSuccess)) {
+        NOTICE("Server [%s] is not leader, will try suggested %s next "
+               "(there have been %lu failed attempts during this outage)",
+               cachedSession->toString().c_str(),
+               host.c_str(),
+               failuresSinceLastSuccess);
+    } else {
+        VERBOSE("Server [%s] is not leader, will try suggested %s next "
+                "(there have been %lu failed attempts during this outage)",
+                cachedSession->toString().c_str(),
+                host.c_str(),
+                failuresSinceLastSuccess);
+    }
+    leaderSession.reset();
+    leaderHint = host;
+}
+
+void
+LeaderRPC::reportSuccess(std::shared_ptr<RPC::ClientSession> cachedSession)
+{
+    std::lock_guard<std::mutex> lockGuard(mutex);
+    if (cachedSession != leaderSession)
+        return;
+    if (failuresSinceLastSuccess > 0) {
+        NOTICE("Successfully connected to leader [%s] after %lu failures",
+               cachedSession->toString().c_str(),
+               failuresSinceLastSuccess);
+        failuresSinceLastSuccess = 0;
     }
 }
+
 
 } // namespace LogCabin::Client
 } // namespace LogCabin

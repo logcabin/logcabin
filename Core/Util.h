@@ -70,6 +70,12 @@ class Finally {
 };
 
 /**
+ * Return true if the log of x in base 2 is a whole number.
+ */
+bool
+isPowerOfTwo(uint64_t x);
+
+/**
  * Copy some noncontiguous chunks of data into a contiguous chunk.
  * \param dest
  *      Where the new copy should be written.
