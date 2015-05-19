@@ -2,6 +2,30 @@ from distutils.version import LooseVersion as Version
 import re
 import sys
 import os
+import subprocess
+
+# Python 2.6 doesn't have subprocess.check_output
+try:
+    subprocess.check_output
+except AttributeError:
+    def check_output_compat(*popenargs, **kwargs):
+        # This function was copied from Python 2.7's subprocess module.
+        # This function only is:
+        # Copyright (c) 2003-2005 by Peter Astrand <astrand@lysator.liu.se>
+        # Licensed to PSF under a Contributor Agreement.
+        # See http://www.python.org/2.4/license for licensing details.
+        if 'stdout' in kwargs:
+            raise ValueError('stdout argument not allowed, it will be overridden.')
+        process = subprocess.Popen(stdout=subprocess.PIPE, *popenargs, **kwargs)
+        output, unused_err = process.communicate()
+        retcode = process.poll()
+        if retcode:
+            cmd = kwargs.get("args")
+            if cmd is None:
+                cmd = popenargs[0]
+            raise subprocess.CalledProcessError(retcode, cmd, output=output)
+        return output
+    subprocess.check_output = check_output_compat
 
 # Access through env['VERSION'], env['RPM_VERSION'], and env['RPM_RELEASE'] to
 # allow users to override these. RPM versioning is explained here:
@@ -49,7 +73,6 @@ for k, v in os.environ.items():
         env["ENV"][k] = v
 
 def detect_compiler():
-    import subprocess
     reflags = re.IGNORECASE|re.MULTILINE
     output = subprocess.check_output([env['CXX'], '-v'],
                                      stderr=subprocess.STDOUT)
