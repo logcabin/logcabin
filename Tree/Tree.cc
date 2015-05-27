@@ -16,6 +16,7 @@
 
 #include <cassert>
 
+#include "build/Protocol/ServerStats.pb.h"
 #include "build/Tree/Snapshot.pb.h"
 #include "Core/Debug.h"
 #include "Core/StringUtil.h"
@@ -172,12 +173,12 @@ Directory::makeFile(const std::string& name)
     return &files[name];
 }
 
-void
+bool
 Directory::removeFile(const std::string& name)
 {
     assert(!name.empty());
     assert(!Core::StringUtil::endsWith(name, "/"));
-    files.erase(name);
+    return (files.erase(name) > 0);
 }
 
 void
@@ -278,6 +279,26 @@ Path::parentsThrough(std::vector<std::string>::const_iterator end) const
 
 Tree::Tree()
     : superRoot()
+    , numConditionsChecked(0)
+    , numConditionsFailed(0)
+    , numMakeDirectoryAttempted(0)
+    , numMakeDirectorySuccess(0)
+    , numListDirectoryAttempted(0)
+    , numListDirectorySuccess(0)
+    , numRemoveDirectoryAttempted(0)
+    , numRemoveDirectoryParentNotFound(0)
+    , numRemoveDirectoryTargetNotFound(0)
+    , numRemoveDirectoryDone(0)
+    , numRemoveDirectorySuccess(0)
+    , numWriteAttempted(0)
+    , numWriteSuccess(0)
+    , numReadAttempted(0)
+    , numReadSuccess(0)
+    , numRemoveFileAttempted(0)
+    , numRemoveFileParentNotFound(0)
+    , numRemoveFileTargetNotFound(0)
+    , numRemoveFileDone(0)
+    , numRemoveFileSuccess(0)
 {
     // Create the root directory so that users don't have to explicitly
     // call makeDirectory("/").
@@ -361,6 +382,7 @@ Result
 Tree::checkCondition(const std::string& path,
                      const std::string& contents) const
 {
+    ++numConditionsChecked;
     std::string actualContents;
     Result readResult = read(path, actualContents);
     if (readResult.status == Status::OK) {
@@ -374,6 +396,7 @@ Tree::checkCondition(const std::string& path,
                                   path.c_str(),
                                   actualContents.c_str(),
                                   contents.c_str());
+            ++numConditionsFailed;
             return result;
         }
     }
@@ -384,12 +407,14 @@ Tree::checkCondition(const std::string& path,
     result.status = Status::CONDITION_NOT_MET;
     result.error = format("Could not read value at path '%s': %s",
                           path.c_str(), readResult.error.c_str());
+    ++numConditionsFailed;
     return result;
 }
 
 Result
 Tree::makeDirectory(const std::string& symbolicPath)
 {
+    ++numMakeDirectoryAttempted;
     Path path(symbolicPath);
     if (path.result.status != Status::OK)
         return path.result;
@@ -403,6 +428,7 @@ Tree::makeDirectory(const std::string& symbolicPath)
                               path.symbolic.c_str());
         return result;
     }
+    ++numMakeDirectorySuccess;
     return result;
 }
 
@@ -410,6 +436,7 @@ Result
 Tree::listDirectory(const std::string& symbolicPath,
                     std::vector<std::string>& children) const
 {
+    ++numListDirectoryAttempted;
     children.clear();
     Path path(symbolicPath);
     if (path.result.status != Status::OK)
@@ -432,12 +459,14 @@ Tree::listDirectory(const std::string& symbolicPath,
         return result;
     }
     children = targetDir->getChildren();
+    ++numListDirectorySuccess;
     return result;
 }
 
 Result
 Tree::removeDirectory(const std::string& symbolicPath)
 {
+    ++numRemoveDirectoryAttempted;
     Path path(symbolicPath);
     if (path.result.status != Status::OK)
         return path.result;
@@ -445,6 +474,8 @@ Tree::removeDirectory(const std::string& symbolicPath)
     Result result = normalLookup(path, &parent);
     if (result.status == Status::LOOKUP_ERROR) {
         // no parent, already done
+        ++numRemoveDirectoryParentNotFound;
+        ++numRemoveDirectorySuccess;
         return Result();
     }
     if (result.status != Status::OK)
@@ -458,6 +489,8 @@ Tree::removeDirectory(const std::string& symbolicPath)
             return result;
         } else {
             // target does not exist, already done
+            ++numRemoveDirectoryTargetNotFound;
+            ++numRemoveDirectorySuccess;
             return result;
         }
     }
@@ -468,12 +501,15 @@ Tree::removeDirectory(const std::string& symbolicPath)
         // is to drop but then recreate the directory.
         parent->makeDirectory(path.target);
     }
+    ++numRemoveDirectoryDone;
+    ++numRemoveDirectorySuccess;
     return result;
 }
 
 Result
 Tree::write(const std::string& symbolicPath, const std::string& contents)
 {
+    ++numWriteAttempted;
     Path path(symbolicPath);
     if (path.result.status != Status::OK)
         return path.result;
@@ -489,12 +525,14 @@ Tree::write(const std::string& symbolicPath, const std::string& contents)
         return result;
     }
     targetFile->contents = contents;
+    ++numWriteSuccess;
     return result;
 }
 
 Result
 Tree::read(const std::string& symbolicPath, std::string& contents) const
 {
+    ++numReadAttempted;
     contents.clear();
     Path path(symbolicPath);
     if (path.result.status != Status::OK)
@@ -517,12 +555,14 @@ Tree::read(const std::string& symbolicPath, std::string& contents) const
         return result;
     }
     contents = targetFile->contents;
+    ++numReadSuccess;
     return result;
 }
 
 Result
 Tree::removeFile(const std::string& symbolicPath)
 {
+    ++numRemoveFileAttempted;
     Path path(symbolicPath);
     if (path.result.status != Status::OK)
         return path.result;
@@ -530,6 +570,8 @@ Tree::removeFile(const std::string& symbolicPath)
     Result result = normalLookup(path, &parent);
     if (result.status == Status::LOOKUP_ERROR) {
         // no parent, already done
+        ++numRemoveFileParentNotFound;
+        ++numRemoveFileSuccess;
         return Result();
     }
     if (result.status != Status::OK)
@@ -540,8 +582,57 @@ Tree::removeFile(const std::string& symbolicPath)
                               path.symbolic.c_str());
         return result;
     }
-    parent->removeFile(path.target);
+    if (parent->removeFile(path.target))
+        ++numRemoveFileDone;
+    else
+        ++numRemoveFileTargetNotFound;
+    ++numRemoveFileSuccess;
     return result;
+}
+
+void
+Tree::updateServerStats(Protocol::ServerStats::Tree& tstats) const
+{
+    tstats.set_num_conditions_checked(
+         numConditionsChecked);
+    tstats.set_num_conditions_failed(
+        numConditionsFailed);
+    tstats.set_num_make_directory_attempted(
+        numMakeDirectoryAttempted);
+    tstats.set_num_make_directory_success(
+        numMakeDirectorySuccess);
+    tstats.set_num_list_directory_attempted(
+        numListDirectoryAttempted);
+    tstats.set_num_list_directory_success(
+        numListDirectorySuccess);
+    tstats.set_num_remove_directory_attempted(
+        numRemoveDirectoryAttempted);
+    tstats.set_num_remove_directory_parent_not_found(
+        numRemoveDirectoryParentNotFound);
+    tstats.set_num_remove_directory_target_not_found(
+        numRemoveDirectoryTargetNotFound);
+    tstats.set_num_remove_directory_done(
+        numRemoveDirectoryDone);
+    tstats.set_num_remove_directory_success(
+        numRemoveDirectorySuccess);
+    tstats.set_num_write_attempted(
+        numWriteAttempted);
+    tstats.set_num_write_success(
+        numWriteSuccess);
+    tstats.set_num_read_attempted(
+        numReadAttempted);
+    tstats.set_num_read_success(
+        numReadSuccess);
+    tstats.set_num_remove_file_attempted(
+        numRemoveFileAttempted);
+    tstats.set_num_remove_file_parent_not_found(
+        numRemoveFileParentNotFound);
+    tstats.set_num_remove_file_target_not_found(
+        numRemoveFileTargetNotFound);
+    tstats.set_num_remove_file_done(
+        numRemoveFileDone);
+    tstats.set_num_remove_file_success(
+        numRemoveFileSuccess);
 }
 
 } // namespace LogCabin::Tree

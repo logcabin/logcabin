@@ -24,6 +24,12 @@
 #define LOGCABIN_TREE_TREE_H
 
 namespace LogCabin {
+
+// forward declaration
+namespace Protocol {
+class ServerStats_Tree;
+}
+
 namespace Tree {
 
 /**
@@ -188,8 +194,11 @@ class Directory {
      * Remove the child file by the given name, if any.
      * \param name
      *      Must not contain a trailing slash.
+     * \return
+     *      True if child file removed, false if no such file existed. This is
+     *      mostly useful for counting statistics.
      */
-    void removeFile(const std::string& name);
+    bool removeFile(const std::string& name);
 
     /**
      * Write the directory and its children to the stream.
@@ -413,6 +422,12 @@ class Tree {
     Result
     removeFile(const std::string& path);
 
+    /**
+     * Add metrics about the tree to the given structure.
+     */
+    void
+    updateServerStats(Protocol::ServerStats_Tree& tstats) const;
+
   private:
     /**
      * Resolve the final next-to-last component of the given path (the target's
@@ -463,6 +478,30 @@ class Tree {
      * on the root directory.
      */
     Internal::Directory superRoot;
+
+    // Server stats collected in updateServerStats.
+    // Note that when a condition fails, the operation is not invoked,
+    // so operations whose conditions fail are not counted as 'Attempted'.
+    mutable uint64_t numConditionsChecked;
+    mutable uint64_t numConditionsFailed;
+    uint64_t numMakeDirectoryAttempted;
+    uint64_t numMakeDirectorySuccess;
+    mutable uint64_t numListDirectoryAttempted;
+    mutable uint64_t numListDirectorySuccess;
+    uint64_t numRemoveDirectoryAttempted;
+    uint64_t numRemoveDirectoryParentNotFound;
+    uint64_t numRemoveDirectoryTargetNotFound;
+    uint64_t numRemoveDirectoryDone;
+    uint64_t numRemoveDirectorySuccess;
+    uint64_t numWriteAttempted;
+    uint64_t numWriteSuccess;
+    mutable uint64_t numReadAttempted;
+    mutable uint64_t numReadSuccess;
+    uint64_t numRemoveFileAttempted;
+    uint64_t numRemoveFileParentNotFound;
+    uint64_t numRemoveFileTargetNotFound;
+    uint64_t numRemoveFileDone;
+    uint64_t numRemoveFileSuccess;
 };
 
 

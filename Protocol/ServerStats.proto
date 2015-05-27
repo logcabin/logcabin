@@ -81,6 +81,29 @@ message ServerStats {
         optional uint64 metadata_version = 3;
     };
 
+    message Tree {
+        optional uint64 num_conditions_checked = 1;
+        optional uint64 num_conditions_failed = 2;
+        optional uint64 num_make_directory_attempted = 3;
+        optional uint64 num_make_directory_success = 4;
+        optional uint64 num_list_directory_attempted = 5;
+        optional uint64 num_list_directory_success = 6;
+        optional uint64 num_remove_directory_attempted = 7;
+        optional uint64 num_remove_directory_parent_not_found = 8;
+        optional uint64 num_remove_directory_target_not_found = 9;
+        optional uint64 num_remove_directory_done = 10;
+        optional uint64 num_remove_directory_success = 11;
+        optional uint64 num_write_attempted = 12;
+        optional uint64 num_write_success = 13;
+        optional uint64 num_read_attempted = 14;
+        optional uint64 num_read_success = 15;
+        optional uint64 num_remove_file_attempted = 16;
+        optional uint64 num_remove_file_parent_not_found = 17;
+        optional uint64 num_remove_file_target_not_found = 18;
+        optional uint64 num_remove_file_done = 19;
+        optional uint64 num_remove_file_success = 20;
+    };
+
     message StateMachine {
         optional bool snapshotting = 1;
         optional uint64 last_applied = 2;
@@ -94,6 +117,7 @@ message ServerStats {
         optional uint32 min_supported_version = 10;
         optional uint32 max_supported_version = 11;
         optional uint32 running_version = 12;
+        optional Tree tree = 13;
     };
 
     /**

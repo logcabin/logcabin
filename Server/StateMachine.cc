@@ -148,6 +148,7 @@ StateMachine::updateServerStats(Protocol::ServerStats& serverStats) const
     smStats.set_min_supported_version(MIN_SUPPORTED_VERSION);
     smStats.set_max_supported_version(MAX_SUPPORTED_VERSION);
     smStats.set_running_version(getVersion(lastIndex));
+    tree.updateServerStats(*smStats.mutable_tree());
 }
 
 void
