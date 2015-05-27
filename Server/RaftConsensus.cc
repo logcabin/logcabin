@@ -145,7 +145,15 @@ void
 LocalServer::updatePeerStats(Protocol::ServerStats::Raft::Peer& peerStats,
                              Core::Time::SteadyTimeConverter& time) const
 {
-    peerStats.set_last_synced_index(lastSyncedIndex);
+    switch (consensus.state) {
+        case RaftConsensus::State::FOLLOWER:
+            break;
+        case RaftConsensus::State::CANDIDATE:
+            break;
+        case RaftConsensus::State::LEADER:
+            peerStats.set_last_synced_index(lastSyncedIndex);
+            break;
+    }
 }
 
 ////////// Peer //////////
@@ -354,15 +362,30 @@ void
 Peer::updatePeerStats(Protocol::ServerStats::Raft::Peer& peerStats,
                       Core::Time::SteadyTimeConverter& time) const
 {
-    peerStats.set_request_vote_done(requestVoteDone);
-    peerStats.set_have_vote(haveVote_);
-    peerStats.set_force_heartbeat(forceHeartbeat);
-    peerStats.set_next_index(nextIndex);
-    peerStats.set_last_agree_index(lastAgreeIndex);
-    peerStats.set_is_caught_up(isCaughtUp_);
+    switch (consensus.state) {
+        case RaftConsensus::State::FOLLOWER:
+            break;
+        case RaftConsensus::State::CANDIDATE:
+            break;
+        case RaftConsensus::State::LEADER:
+            peerStats.set_force_heartbeat(forceHeartbeat);
+            peerStats.set_next_index(nextIndex);
+            peerStats.set_last_agree_index(lastAgreeIndex);
+            peerStats.set_is_caught_up(isCaughtUp_);
+            peerStats.set_next_heartbeat_at(time.unixNanos(nextHeartbeatTime));
+            break;
+    }
 
-    peerStats.set_next_heartbeat_at(time.unixNanos(nextHeartbeatTime));
-    peerStats.set_backoff_until(time.unixNanos(backoffUntil));
+    switch (consensus.state) {
+        case RaftConsensus::State::FOLLOWER:
+            break;
+        case RaftConsensus::State::CANDIDATE: // fallthrough
+        case RaftConsensus::State::LEADER:
+            peerStats.set_request_vote_done(requestVoteDone);
+            peerStats.set_have_vote(haveVote_);
+            peerStats.set_backoff_until(time.unixNanos(backoffUntil));
+            break;
+    }
 }
 
 ////////// Configuration::SimpleConfiguration //////////
