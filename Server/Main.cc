@@ -23,6 +23,7 @@
 #include "Core/Debug.h"
 #include "Core/StringUtil.h"
 #include "Core/ThreadId.h"
+#include "Core/Util.h"
 #include "Server/Globals.h"
 #include "Server/RaftConsensus.h"
 #include "include/LogCabin/Debug.h"
@@ -220,6 +221,7 @@ class PidFile {
                     strerror(errno));
             return;
         }
+        LogCabin::Core::Util::Finally _(std::bind(fclose, file));
         char readbuf[10];
         memset(readbuf, 0, sizeof(readbuf));
         size_t bytesRead = fread(readbuf, 1, sizeof(readbuf), file);
