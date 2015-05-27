@@ -71,6 +71,7 @@ message ServerStats {
         optional uint64 last_snapshot_cluster_time = 36;
         optional uint64 log_start_index = 33;
         optional uint64 log_bytes = 34;
+        optional uint64 num_entries_truncated = 37;
 
         repeated Peer peer = 91;
     };

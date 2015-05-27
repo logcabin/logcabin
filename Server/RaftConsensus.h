@@ -1653,6 +1653,13 @@ class RaftConsensus {
     TimePoint withholdVotesUntil;
 
     /**
+     * The total number of entries ever truncated from the end of the log.
+     * This happens only when a new leader tells this server to remove
+     * extraneous uncommitted entries from its log.
+     */
+    uint64_t numEntriesTruncated;
+
+    /**
      * The thread that executes leaderDiskThreadMain() to flush log entries to
      * stable storage in the background on leaders.
      */

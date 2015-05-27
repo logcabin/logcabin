@@ -961,6 +961,7 @@ RaftConsensus::RaftConsensus(Globals& globals)
     , clusterClock()
     , startElectionAt(TimePoint::max())
     , withholdVotesUntil(TimePoint::min())
+    , numEntriesTruncated(0)
     , leaderDiskThread()
     , timerThread()
     , stateMachineUpdaterThread()
@@ -1338,11 +1339,14 @@ RaftConsensus::handleAppendEntries(
                 continue;
             // should never truncate committed entries:
             assert(commitIndex < index);
+            uint64_t lastIndexKept = index - 1;
+            uint64_t numTruncating = log->getLastLogIndex() - lastIndexKept;
             NOTICE("Truncating %lu entries after %lu from the log",
-                   log->getLastLogIndex() - index + 1,
-                   index - 1);
-            log->truncateSuffix(index - 1);
-            configurationManager->truncateSuffix(index - 1);
+                   numTruncating,
+                   lastIndexKept);
+            numEntriesTruncated += numTruncating;
+            log->truncateSuffix(lastIndexKept);
+            configurationManager->truncateSuffix(lastIndexKept);
         }
 
         // Append this and all following entries.
@@ -1836,6 +1840,7 @@ RaftConsensus::updateServerStats(Protocol::ServerStats& serverStats) const
     raftStats.set_last_snapshot_term(lastSnapshotTerm);
     raftStats.set_last_snapshot_cluster_time(lastSnapshotClusterTime);
     raftStats.set_last_snapshot_bytes(lastSnapshotBytes);
+    raftStats.set_num_entries_truncated(numEntriesTruncated);
     raftStats.set_log_start_index(log->getLogStartIndex());
     raftStats.set_log_bytes(log->getSizeBytes());
     configuration->updateServerStats(serverStats, time);
