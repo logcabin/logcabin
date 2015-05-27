@@ -80,8 +80,9 @@ format(const char* format, ...)
         char buf[bufSize];
         // vsnprintf trashes the va_list, so copy it first
         va_list aq;
-        __va_copy(aq, ap);
+        va_copy(aq, ap);
         int r = vsnprintf(buf, bufSize, format, aq);
+        va_end(aq);
         assert(r >= 0); // old glibc versions returned -1
         size_t r2 = size_t(r);
         if (r2 < bufSize) {
