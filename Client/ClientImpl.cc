@@ -426,6 +426,7 @@ void
 ClientImpl::initDerived()
 {
     if (!leaderRPC) { // sometimes set in unit tests
+        NOTICE("Using server list: %s", hosts.c_str());
         leaderRPC.reset(new LeaderRPC(
             RPC::Address(hosts, Protocol::Common::DEFAULT_PORT),
             clusterUUID,
