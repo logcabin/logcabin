@@ -97,7 +97,93 @@ SteadyTimeConverter::unixNanos(SteadyClock::time_point when)
         convert(when).time_since_epoch()).count();
 }
 
-
 } // namespace LogCabin::Core::Time
 } // namespace LogCabin::Core
 } // namespace LogCabin
+
+namespace std {
+
+namespace {
+
+std::string
+padFraction(int64_t fraction, uint64_t digits)
+{
+    if (fraction == 0)
+        return "";
+    if (fraction < 0)
+        fraction *= -1;
+    while (fraction % 1000 == 0 && digits >= 3) {
+        digits -= 3;
+        fraction /= 1000;
+    }
+    char ret[digits + 2];
+    ret[0] = '.';
+    ret[digits + 1] = '\0';
+    for (uint64_t i = digits; i > 0; --i) {
+        ret[i] = char('0' + (fraction % 10));
+        fraction /= 10;
+    }
+    return ret;
+}
+
+} // namespace std::<anonymous>
+
+std::ostream&
+operator<<(std::ostream& os,
+           const std::chrono::nanoseconds& duration)
+{
+    int64_t nanos = duration.count();
+    if (nanos / 1000000000L != 0) {
+        int64_t whole    = nanos / 1000000000L;
+        int64_t fraction = nanos % 1000000000L;
+        os << whole << padFraction(fraction, 9) << " s";
+    } else if (nanos / 1000000L != 0) {
+        int64_t whole    = nanos / 1000000L;
+        int64_t fraction = nanos % 1000000L;
+        os << whole << padFraction(fraction, 6) << " ms";
+    } else if (nanos / 1000L != 0) {
+        int64_t whole    = nanos / 1000L;
+        int64_t fraction = nanos % 1000L;
+        os << whole << padFraction(fraction, 3) << " us";
+    } else {
+        os << nanos << " ns";
+    }
+    return os;
+}
+
+std::ostream&
+operator<<(std::ostream& os,
+           const std::chrono::microseconds& duration)
+{
+    return os << chrono::duration_cast<chrono::nanoseconds>(duration);
+}
+
+std::ostream&
+operator<<(std::ostream& os,
+           const std::chrono::milliseconds& duration)
+{
+    return os << chrono::duration_cast<chrono::nanoseconds>(duration);
+}
+
+std::ostream&
+operator<<(std::ostream& os,
+           const std::chrono::seconds& duration)
+{
+    return os << chrono::duration_cast<chrono::nanoseconds>(duration);
+}
+
+std::ostream&
+operator<<(std::ostream& os,
+           const std::chrono::minutes& duration)
+{
+    return os << chrono::duration_cast<chrono::nanoseconds>(duration);
+}
+
+std::ostream&
+operator<<(std::ostream& os,
+           const std::chrono::hours& duration)
+{
+    return os << chrono::duration_cast<chrono::nanoseconds>(duration);
+}
+
+} // namespace std

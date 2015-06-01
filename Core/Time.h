@@ -243,24 +243,27 @@ class SteadyTimeConverter {
 
 namespace std {
 
-/**
- * Prints std::milliseconds values in a way that is useful for unit tests.
- */
-inline std::ostream&
-operator<<(std::ostream& os,
-           const std::chrono::milliseconds& duration) {
-    return os << duration.count() << " ms";
-}
+// The following set of functions prints duration values in a human-friendly
+// way, including their units.
 
-/**
- * Prints std::nanoseconds values in a way that is useful for unit tests.
- */
-inline std::ostream&
+std::ostream&
 operator<<(std::ostream& os,
-           const std::chrono::nanoseconds& duration) {
-    return os << duration.count() << " ns";
-}
-
+           const std::chrono::nanoseconds& duration);
+std::ostream&
+operator<<(std::ostream& os,
+           const std::chrono::microseconds& duration);
+std::ostream&
+operator<<(std::ostream& os,
+           const std::chrono::milliseconds& duration);
+std::ostream&
+operator<<(std::ostream& os,
+           const std::chrono::seconds& duration);
+std::ostream&
+operator<<(std::ostream& os,
+           const std::chrono::minutes& duration);
+std::ostream&
+operator<<(std::ostream& os,
+           const std::chrono::hours& duration);
 
 /**
  * Prints std::time_point values in a way that is useful for unit tests.
