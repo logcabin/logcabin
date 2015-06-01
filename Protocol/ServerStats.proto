@@ -103,6 +103,8 @@ message ServerStats {
         optional uint64 num_segments = 1;
         optional uint64 open_segment_bytes = 2;
         optional uint64 metadata_version = 3;
+        optional RollingStat metadata_write_nanos = 4;
+        optional RollingStat filesystem_ops_nanos = 5;
     };
 
     message Tree {

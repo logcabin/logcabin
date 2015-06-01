@@ -22,6 +22,7 @@
 #include "Core/Buffer.h"
 #include "Core/ConditionVariable.h"
 #include "Core/Mutex.h"
+#include "Core/RollingStat.h"
 #include "Storage/FilesystemUtil.h"
 #include "Storage/Log.h"
 
@@ -86,6 +87,14 @@ namespace Storage {
  * format (version 1) is just a concatenation of serialized entry records.
  */
 class SegmentedLog : public Log {
+    /**
+     * Clock used for measuring disk performance.
+     */
+    typedef Core::Time::SteadyClock Clock;
+    /**
+     * Time point for measuring disk performance.
+     */
+    typedef Clock::time_point TimePoint;
 
   public:
 
@@ -123,6 +132,7 @@ class SegmentedLog : public Log {
     std::string getName() const;
     uint64_t getSizeBytes() const;
     std::unique_ptr<Log::Sync> takeSync();
+    void syncCompleteVirtual(std::unique_ptr<Log::Sync> sync);
     void truncatePrefix(uint64_t firstIndex);
     void truncateSuffix(uint64_t lastIndex);
     void updateMetadata();
@@ -279,11 +289,25 @@ class SegmentedLog : public Log {
             uint64_t size;
         };
 
-        explicit Sync(uint64_t lastIndex);
+        explicit Sync(uint64_t lastIndex,
+                      std::chrono::nanoseconds diskWriteDurationThreshold);
         ~Sync();
+        /**
+         * Add how long the filesystem ops took to 'nanos'. This is invoked
+         * from syncCompleteVirtual so that it is thread-safe with respect to
+         * the 'nanos' variable. We can't do it in 'wait' directly since that
+         * can execute concurrently with someone reading 'nanos'.
+         */
+        void updateStats(Core::RollingStat& nanos) const;
         void wait();
+        /// If a wait() exceeds this time, log a warning.
+        const std::chrono::nanoseconds diskWriteDurationThreshold;
         /// List of operations to perform during wait().
         std::deque<Op> ops;
+        /// Time at start of wait() call.
+        TimePoint waitStart;
+        /// Time at end of wait() call.
+        TimePoint waitEnd;
     };
 
     /**
@@ -554,6 +578,11 @@ class SegmentedLog : public Log {
     const bool shouldCheckInvariants;
 
     /**
+     * If a disk operation exceeds this much time, log a warning.
+     */
+    const std::chrono::milliseconds diskWriteDurationThreshold;
+
+    /**
      * The metadata this class mintains. This should be combined with the
      * superclass's metadata when being written out to disk.
      */
@@ -598,6 +627,16 @@ class SegmentedLog : public Log {
      * truncatePrefix().
      */
     std::unique_ptr<SegmentedLog::Sync> currentSync;
+
+    /**
+     * Tracks the time it takes to write a metadata file.
+     */
+    Core::RollingStat metadataWriteNanos;
+
+    /**
+     * Tracks the time it takes to execute wait() on a Sync object.
+     */
+    Core::RollingStat filesystemOpsNanos;
 
     /**
      * Opens files, allocates the to full size, and places them on
