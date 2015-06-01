@@ -8,6 +8,7 @@ src = [
     "Debug.cc",
     "ProtoBuf.cc",
     "Random.cc",
+    "RollingStat.cc",
     "ThreadId.cc",
     "Time.cc",
     "StringUtil.cc",
