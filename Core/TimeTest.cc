@@ -23,22 +23,7 @@ namespace Core {
 namespace {
 
 using StringUtil::toString;
-
-TEST(CoreTime, output_milliseconds) {
-    EXPECT_EQ("5 ms", toString(std::chrono::milliseconds(5)));
-}
-
-TEST(CoreTime, output_nanoseconds) {
-    EXPECT_EQ("5 ns", toString(std::chrono::nanoseconds(5)));
-}
-
-TEST(CoreTime, output_timepoint) {
-    EXPECT_EQ("TimePoint::min()",
-              toString(Time::SteadyClock::time_point::min()));
-    EXPECT_EQ("TimePoint::max()",
-              toString(Time::SystemClock::time_point::max()));
-    EXPECT_LT(0.0, std::stold(toString(Time::SystemClock::now())));
-}
+using std::chrono::nanoseconds;
 
 TEST(CoreTime, makeTimeSpec) {
     struct timespec s;
@@ -226,6 +211,107 @@ TEST(CoreTimeSteadyTimeConverter, unixNanos) {
               conv.unixNanos(Time::SteadyClock::time_point::min() +
                              std::chrono::hours(1)));
 }
+
+
+TEST(CoreTime, padFraction) {
+    EXPECT_EQ("5 s", toString(nanoseconds(5000000000)));
+    EXPECT_EQ("-5 s", toString(nanoseconds(-5000000000)));
+
+    EXPECT_EQ("5.100 s", toString(nanoseconds(5100000000)));
+    EXPECT_EQ("5.123456789 s", toString(nanoseconds(5123456789)));
+    EXPECT_EQ("-5.100 s", toString(nanoseconds(-5100000000)));
+
+    EXPECT_EQ("5.010 s", toString(nanoseconds(5010000000)));
+    EXPECT_EQ("5.120 s", toString(nanoseconds(5120000000)));
+    EXPECT_EQ("5.012345678 s", toString(nanoseconds(5012345678)));
+    EXPECT_EQ("-5.010 s", toString(nanoseconds(-5010000000)));
+
+    EXPECT_EQ("5.001 s", toString(nanoseconds(5001000000)));
+    EXPECT_EQ("5.123 s", toString(nanoseconds(5123000000)));
+    EXPECT_EQ("5.001234567 s", toString(nanoseconds(5001234567)));
+    EXPECT_EQ("-5.001 s", toString(nanoseconds(-5001000000)));
+
+    EXPECT_EQ("5.000100 s", toString(nanoseconds(5000100000)));
+    EXPECT_EQ("5.123400 s", toString(nanoseconds(5123400000)));
+    EXPECT_EQ("5.000123456 s", toString(nanoseconds(5000123456)));
+    EXPECT_EQ("-5.000100 s", toString(nanoseconds(-5000100000)));
+
+    EXPECT_EQ("5.000010 s", toString(nanoseconds(5000010000)));
+    EXPECT_EQ("5.123450 s", toString(nanoseconds(5123450000)));
+    EXPECT_EQ("5.000012345 s", toString(nanoseconds(5000012345)));
+    EXPECT_EQ("-5.000010 s", toString(nanoseconds(-5000010000)));
+
+    EXPECT_EQ("5.000001 s", toString(nanoseconds(5000001000)));
+    EXPECT_EQ("5.123456 s", toString(nanoseconds(5123456000)));
+    EXPECT_EQ("5.000001234 s", toString(nanoseconds(5000001234)));
+    EXPECT_EQ("-5.000001 s", toString(nanoseconds(-5000001000)));
+
+    EXPECT_EQ("5.000000100 s", toString(nanoseconds(5000000100)));
+    EXPECT_EQ("5.123456700 s", toString(nanoseconds(5123456700)));
+    EXPECT_EQ("5.000000123 s", toString(nanoseconds(5000000123)));
+    EXPECT_EQ("-5.000000100 s", toString(nanoseconds(-5000000100)));
+
+    EXPECT_EQ("5.000000010 s", toString(nanoseconds(5000000010)));
+    EXPECT_EQ("5.123456780 s", toString(nanoseconds(5123456780)));
+    EXPECT_EQ("5.000000012 s", toString(nanoseconds(5000000012)));
+    EXPECT_EQ("-5.000000010 s", toString(nanoseconds(-5000000010)));
+
+    EXPECT_EQ("5.000000001 s", toString(nanoseconds(5000000001)));
+    EXPECT_EQ("5.123456789 s", toString(nanoseconds(5123456789)));
+    EXPECT_EQ("5.000000001 s", toString(nanoseconds(5000000001)));
+    EXPECT_EQ("-5.000000001 s", toString(nanoseconds(-5000000001)));
+}
+
+TEST(CoreTime, output_nanoseconds) {
+    EXPECT_EQ("0 ns", toString(nanoseconds(0)));
+    EXPECT_EQ("5 ns", toString(nanoseconds(5)));
+}
+
+TEST(CoreTime, output_microseconds) {
+    EXPECT_EQ("5 us", toString(nanoseconds(5000)));
+    EXPECT_EQ("5.001 us", toString(nanoseconds(5001)));
+    EXPECT_EQ("5 us", toString(std::chrono::microseconds(5)));
+}
+
+TEST(CoreTime, output_milliseconds) {
+    EXPECT_EQ("5 ms", toString(nanoseconds(5000000)));
+    EXPECT_EQ("5.000001 ms", toString(nanoseconds(5000001)));
+    EXPECT_EQ("5 ms", toString(std::chrono::microseconds(5000)));
+    EXPECT_EQ("5.001 ms", toString(std::chrono::microseconds(5001)));
+    EXPECT_EQ("5 ms", toString(std::chrono::milliseconds(5)));
+}
+
+TEST(CoreTime, output_seconds) {
+    EXPECT_EQ("5 s", toString(nanoseconds(5000000000)));
+    EXPECT_EQ("5.000000001 s", toString(nanoseconds(5000000001)));
+    EXPECT_EQ("5 s", toString(std::chrono::microseconds(5000000)));
+    EXPECT_EQ("5.000001 s", toString(std::chrono::microseconds(5000001)));
+    EXPECT_EQ("5 s", toString(std::chrono::milliseconds(5000)));
+    EXPECT_EQ("5.001 s", toString(std::chrono::milliseconds(5001)));
+    EXPECT_EQ("5 s", toString(std::chrono::seconds(5)));
+}
+
+TEST(CoreTime, output_minutes) {
+    EXPECT_EQ("300 s", toString(std::chrono::minutes(5)));
+}
+
+TEST(CoreTime, output_hours) {
+    EXPECT_EQ("18000 s", toString(std::chrono::hours(5)));
+}
+
+TEST(CoreTime, output_negative) {
+    EXPECT_EQ("-3 ns", toString(nanoseconds(-3)));
+    EXPECT_EQ("-3.001 us", toString(nanoseconds(-3001)));
+}
+
+TEST(CoreTime, output_timepoint) {
+    EXPECT_EQ("TimePoint::min()",
+              toString(Time::SteadyClock::time_point::min()));
+    EXPECT_EQ("TimePoint::max()",
+              toString(Time::SystemClock::time_point::max()));
+    EXPECT_LT(0.0, std::stold(toString(Time::SystemClock::now())));
+}
+
 
 } // namespace LogCabin::Core::<anonymous>
 } // namespace LogCabin::Core

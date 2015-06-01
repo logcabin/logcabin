@@ -175,9 +175,13 @@ SegmentedLog::PreparedSegments::waitForOpenSegment()
 ////////// SegmentedLog::Sync //////////
 
 
-SegmentedLog::Sync::Sync(uint64_t lastIndex)
+SegmentedLog::Sync::Sync(uint64_t lastIndex,
+                         std::chrono::nanoseconds diskWriteDurationThreshold)
     : Log::Sync(lastIndex)
+    , diskWriteDurationThreshold(diskWriteDurationThreshold)
     , ops()
+    , waitStart(TimePoint::max())
+    , waitEnd(TimePoint::max())
 {
 }
 
@@ -191,6 +195,17 @@ SegmentedLog::Sync::wait()
     // This used to skip back-to-back fdatasync calls, presumably for
     // performance reasons. I removed it, since I have no reason to believe
     // that it's useful or sufficient.
+
+    waitStart = Clock::now();
+    uint64_t writes = 0;
+    uint64_t totalBytesWritten = 0;
+    uint64_t truncates = 0;
+    uint64_t renames = 0;
+    uint64_t fdatasyncs = 0;
+    uint64_t fsyncs = 0;
+    uint64_t closes = 0;
+    uint64_t unlinks = 0;
+
     while (!ops.empty()) {
         Op& op = ops.front();
         FS::File f(op.fd, "-unknown-");
@@ -204,37 +219,72 @@ SegmentedLog::Sync::wait()
                           op.fd,
                           strerror(errno));
                 }
+                ++writes;
+                totalBytesWritten += op.writeData.getLength();
                 break;
             }
             case Op::TRUNCATE: {
                 FS::truncate(f, op.size);
+                ++truncates;
                 break;
             }
             case Op::RENAME: {
                 FS::rename(f, op.filename1,
                            f, op.filename2);
+                ++renames;
                 break;
             }
             case Op::FDATASYNC: {
                 FS::fdatasync(f);
+                ++fdatasyncs;
                 break;
             }
             case Op::FSYNC: {
                 FS::fsync(f);
+                ++fsyncs;
                 break;
             }
             case Op::CLOSE: {
                 f.close();
+                ++closes;
                 break;
             }
             case Op::UNLINKAT: {
                 FS::removeFile(f, op.filename1);
+                ++unlinks;
                 break;
             }
         }
         f.release();
         ops.pop_front();
     }
+
+    waitEnd = Clock::now();
+    std::chrono::nanoseconds elapsed = waitEnd - waitStart;
+    if (elapsed > diskWriteDurationThreshold) {
+        WARNING("Executing filesystem operations took longer than expected "
+                "(%s for %lu writes totaling %lu bytes, %lu truncates, "
+                "%lu renames, %lu fdatasyncs, %lu fsyncs, %lu closes, and "
+                "%lu unlinks)",
+                Core::StringUtil::toString(elapsed).c_str(),
+                writes,
+                totalBytesWritten,
+                truncates,
+                renames,
+                fdatasyncs,
+                fsyncs,
+                closes,
+                unlinks);
+    }
+}
+
+void
+SegmentedLog::Sync::updateStats(Core::RollingStat& nanos) const
+{
+    std::chrono::nanoseconds elapsed = waitEnd - waitStart;
+    nanos.push(elapsed.count());
+    if (elapsed > diskWriteDurationThreshold)
+        nanos.noteExceptional(waitStart, elapsed.count());
 }
 
 
@@ -278,6 +328,8 @@ SegmentedLog::SegmentedLog(const FS::File& parentDir,
     , MAX_SEGMENT_SIZE(config.read<uint64_t>("storageSegmentBytes",
                                              8 * 1024 * 1024))
     , shouldCheckInvariants(config.read<bool>("storageDebug", false))
+    , diskWriteDurationThreshold(config.read<uint64_t>(
+        "electionTimeoutMilliseconds", 500) / 2)
     , metadata()
     , dir(FS::openDir(parentDir,
                       (encoding == Encoding::BINARY
@@ -290,7 +342,9 @@ SegmentedLog::SegmentedLog(const FS::File& parentDir,
     , preparedSegments(
         std::max(config.read<uint64_t>("storageOpenSegments", 3),
                  1UL))
-    , currentSync(new SegmentedLog::Sync(0))
+    , currentSync(new SegmentedLog::Sync(0, diskWriteDurationThreshold))
+    , metadataWriteNanos()
+    , filesystemOpsNanos()
     , segmentPreparer()
 {
     std::vector<Segment> segments = readSegmentFilenames();
@@ -544,9 +598,17 @@ std::unique_ptr<Log::Sync>
 SegmentedLog::takeSync()
 {
     std::unique_ptr<SegmentedLog::Sync> other(
-            new SegmentedLog::Sync(getLastLogIndex()));
+            new SegmentedLog::Sync(getLastLogIndex(),
+                                   diskWriteDurationThreshold));
     std::swap(other, currentSync);
     return std::move(other);
+}
+
+void
+SegmentedLog::syncCompleteVirtual(std::unique_ptr<Log::Sync> sync)
+{
+    static_cast<SegmentedLog::Sync*>(sync.get())->
+        updateStats(filesystemOpsNanos);
 }
 
 void
@@ -682,6 +744,8 @@ SegmentedLog::updateMetadata()
         filename = "metadata2";
     }
 
+    TimePoint start = Clock::now();
+
     NOTICE("Writing new storage metadata (version %lu) to %s",
            metadata.version(),
            filename.c_str());
@@ -695,6 +759,17 @@ SegmentedLog::updateMetadata()
               file.path.c_str(), strerror(errno));
     }
     FS::fsync(file);
+
+    TimePoint end = Clock::now();
+    std::chrono::nanoseconds elapsed = end - start;
+    metadataWriteNanos.push(elapsed.count());
+    if (elapsed > diskWriteDurationThreshold) {
+        WARNING("Writing metadata file took longer than expected "
+                "(%s for %lu bytes)",
+                Core::StringUtil::toString(elapsed).c_str(),
+                record.getLength());
+        metadataWriteNanos.noteExceptional(start, elapsed.count());
+    }
 }
 
 void
@@ -704,6 +779,8 @@ SegmentedLog::updateServerStats(Protocol::ServerStats& serverStats) const
     stats.set_num_segments(segmentsByStartIndex.size());
     stats.set_open_segment_bytes(getOpenSegment().bytes);
     stats.set_metadata_version(metadata.version());
+    metadataWriteNanos.updateProtoBuf(*stats.mutable_metadata_write_nanos());
+    filesystemOpsNanos.updateProtoBuf(*stats.mutable_filesystem_ops_nanos());
 }
 
 
@@ -1207,6 +1284,8 @@ SegmentedLog::serializeProto(const google::protobuf::Message& in) const
 std::pair<std::string, FS::File>
 SegmentedLog::prepareNewSegment(uint64_t id)
 {
+    TimePoint start = Clock::now();
+
     std::string filename = format(OPEN_SEGMENT_FORMAT, id);
     FS::File file = FS::openFile(dir, filename,
                                  O_CREAT|O_EXCL|O_RDWR);
@@ -1222,6 +1301,14 @@ SegmentedLog::prepareNewSegment(uint64_t id)
     }
     FS::fsync(file);
     FS::fsync(dir);
+
+    TimePoint end = Clock::now();
+    std::chrono::nanoseconds elapsed = end - start;
+    // TODO(ongaro): record elapsed times into RollingStat in a thread-safe way
+    if (elapsed > diskWriteDurationThreshold) {
+        WARNING("Preparing open segment file took longer than expected (%s)",
+                Core::StringUtil::toString(elapsed).c_str());
+    }
     return {std::move(filename), std::move(file)};
 }
 
