@@ -313,7 +313,7 @@ MessageSocket::read(void* buf, size_t maxBytes)
     if (actual > 0)
         return actual;
     if (actual == 0 || // peer performed orderly shutdown.
-        errno == ECONNRESET || errno == ETIMEDOUT) {
+        errno == ECONNRESET || errno == ETIMEDOUT || errno == EHOSTUNREACH) {
         return -1;
     }
     if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
