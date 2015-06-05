@@ -20,6 +20,9 @@ Improvements:
   and 3.7 (issue #9) as supported compilers.
 
 Bug fixes (high severity):
+- Fixes packaging up very large AppendEntries requests (issue #160). Before, it
+  was possible for a leader to send a non-contiguous list of entries to the
+  follower, and the follower would end up with a corrupt log.
 - Fixes occasional hang when exiting (issue #144).
 
 Bug fixes (low severity):

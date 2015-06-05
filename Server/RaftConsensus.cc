@@ -2247,6 +2247,7 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
             } else {
                 // this entry doesn't fit, discard it
                 request.mutable_entries()->RemoveLast();
+                break;
             }
         }
     }
