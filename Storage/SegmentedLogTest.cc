@@ -34,6 +34,97 @@ namespace {
 namespace FS = FilesystemUtil;
 using Core::STLUtil::sorted;
 
+std::vector<SegmentedLog::Sync::Op::OpCode>
+extractOpCodes(const SegmentedLog::Sync& sync)
+{
+    std::vector<SegmentedLog::Sync::Op::OpCode> ret;
+    for (auto it = sync.ops.begin(); it != sync.ops.end(); ++it)
+        ret.push_back(it->opCode);
+    return ret;
+}
+
+TEST(StorageSegmentedLogSyncTest, optimize)
+{
+    typedef SegmentedLog::Sync::Op Op;
+    SegmentedLog::Sync sync(0, std::chrono::nanoseconds(1));
+
+    sync.optimize(); // hopefully no out of bounds issues
+    EXPECT_EQ(0U, sync.ops.size());
+
+    // easy optimization case
+    sync.ops.emplace_back(30, Op::WRITE);
+    sync.ops.emplace_back(30, Op::FDATASYNC);
+    sync.ops.emplace_back(30, Op::WRITE);
+    sync.ops.emplace_back(30, Op::FDATASYNC);
+    sync.optimize();
+    EXPECT_EQ((std::vector<Op::OpCode> {
+                   Op::WRITE,
+                   Op::NOOP,
+                   Op::WRITE,
+                   Op::FDATASYNC,
+               }), extractOpCodes(sync));
+
+    // a few more
+    sync.ops.clear();
+    sync.ops.emplace_back(30, Op::WRITE);
+    sync.ops.emplace_back(30, Op::FDATASYNC);
+    sync.ops.emplace_back(30, Op::WRITE);
+    sync.ops.emplace_back(30, Op::FDATASYNC);
+    sync.ops.emplace_back(30, Op::WRITE);
+    sync.ops.emplace_back(30, Op::FDATASYNC);
+    sync.ops.emplace_back(30, Op::WRITE);
+    sync.ops.emplace_back(30, Op::FDATASYNC);
+    sync.optimize();
+    EXPECT_EQ((std::vector<Op::OpCode> {
+                   Op::WRITE,
+                   Op::NOOP,
+                   Op::WRITE,
+                   Op::NOOP,
+                   Op::WRITE,
+                   Op::NOOP,
+                   Op::WRITE,
+                   Op::FDATASYNC,
+               }), extractOpCodes(sync));
+
+    // trickier cases: differing fds
+    sync.ops.clear();
+    sync.ops.emplace_back(30, Op::WRITE);
+    sync.ops.emplace_back(30, Op::FDATASYNC);
+    sync.ops.emplace_back(30, Op::WRITE);
+    sync.ops.emplace_back(31, Op::FDATASYNC);
+    sync.ops.emplace_back(32, Op::WRITE);
+    sync.ops.emplace_back(31, Op::FDATASYNC);
+    sync.ops.emplace_back(32, Op::WRITE);
+    sync.ops.emplace_back(32, Op::FDATASYNC);
+    EXPECT_EQ((std::vector<Op::OpCode> {
+                   Op::WRITE,
+                   Op::FDATASYNC,
+                   Op::WRITE,
+                   Op::FDATASYNC,
+                   Op::WRITE,
+                   Op::FDATASYNC,
+                   Op::WRITE,
+                   Op::FDATASYNC,
+               }), extractOpCodes(sync));
+
+    // trickier cases: differing ops
+    sync.ops.clear();
+    sync.ops.emplace_back(30, Op::WRITE);
+    sync.ops.emplace_back(30, Op::WRITE);
+    sync.ops.emplace_back(30, Op::FDATASYNC);
+    sync.ops.emplace_back(30, Op::FSYNC);
+    sync.ops.emplace_back(30, Op::FDATASYNC);
+    EXPECT_EQ((std::vector<Op::OpCode> {
+                   Op::WRITE,
+                   Op::WRITE,
+                   Op::FDATASYNC,
+                   Op::FSYNC,
+                   Op::FDATASYNC,
+               }), extractOpCodes(sync));
+
+    sync.completed = true;
+}
+
 // One thing to keep in mind for these tests is truncatePrefix. Calling that
 // basically affects every other method, so every test should include
 // a call to truncatePrefix.

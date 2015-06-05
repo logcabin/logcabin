@@ -190,11 +190,31 @@ SegmentedLog::Sync::~Sync()
 }
 
 void
+SegmentedLog::Sync::optimize()
+{
+    if (ops.size() < 3)
+        return;
+    auto prev = ops.begin();
+    auto it = prev + 1;
+    auto next = it + 1;
+    while (next != ops.end()) {
+        if (prev->opCode == Op::FDATASYNC &&
+            it->opCode == Op::WRITE &&
+            next->opCode == Op::FDATASYNC &&
+            prev->fd == it->fd &&
+            it->fd == next->fd) {
+            prev->opCode = Op::NOOP;
+        }
+        prev = it;
+        it = next;
+        ++next;
+    }
+}
+
+void
 SegmentedLog::Sync::wait()
 {
-    // This used to skip back-to-back fdatasync calls, presumably for
-    // performance reasons. I removed it, since I have no reason to believe
-    // that it's useful or sufficient.
+    optimize();
 
     waitStart = Clock::now();
     uint64_t writes = 0;
@@ -252,6 +272,9 @@ SegmentedLog::Sync::wait()
             case Op::UNLINKAT: {
                 FS::removeFile(f, op.filename1);
                 ++unlinks;
+                break;
+            }
+            case Op::NOOP: {
                 break;
             }
         }

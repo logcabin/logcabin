@@ -271,6 +271,7 @@ class SegmentedLog : public Log {
                 FSYNC,
                 CLOSE,
                 UNLINKAT,
+                NOOP,
             };
             Op(int fd, OpCode opCode)
                 : fd(fd)
@@ -299,6 +300,10 @@ class SegmentedLog : public Log {
          * can execute concurrently with someone reading 'nanos'.
          */
         void updateStats(Core::RollingStat& nanos) const;
+        /**
+         * Called at the start of wait to avoid some redundant disk flushes.
+         */
+        void optimize();
         void wait();
         /// If a wait() exceeds this time, log a warning.
         const std::chrono::nanoseconds diskWriteDurationThreshold;
