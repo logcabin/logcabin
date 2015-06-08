@@ -497,7 +497,11 @@ SegmentedLog::append(const std::vector<const Entry*>& entries)
         Segment::Record record(openSegment->bytes);
         // Note that record.offset may change later, if this entry doesn't fit.
         record.entry = **it;
-        record.entry.set_index(index);
+        if (record.entry.has_index()) {
+            assert(index == record.entry.index());
+        } else {
+            record.entry.set_index(index);
+        }
         Core::Buffer buf = serializeProto(record.entry);
 
         // See if we need to roll over to a new head segment. If someone is

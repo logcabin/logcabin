@@ -111,8 +111,10 @@ message Entry {
      */
     required uint64 term = 1;
     /**
-     * The index for the entry. It's not used over the network, but it's here
-     * because some storage backends might want to use it.
+     * The index for the entry. It's truly optional (if you receive an entry
+     * over the network, you shouldn't rely on this). It's used for followers
+     * to check that they've got the entry at the right index and also used
+     * internally in some storage backends such as SegmentedLog.
      */
     optional uint64 index = 5;
 

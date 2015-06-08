@@ -2271,6 +2271,46 @@ TEST_F(ServerRaftConsensusPATest, appendEntries_limitSizeAndIgnoreResult)
     EXPECT_EQ(0U, peer->lastAgreeIndex);
 }
 
+// In #160, an entry that wouldn't fit in the request didn't cause the loop to
+// exit. If an entry later in the log would fit in the request, it would be
+// added to the request invalidly. This test targets that specific behavior (it
+// fails before the 'break' statement was added and passes after).
+TEST_F(ServerRaftConsensusPATest, appendEntries_limitSizeRegression)
+{
+    // First we determine the sizes contributed by the various entries in
+    // 'request'.
+    Protocol::Raft::AppendEntries::Request r2;
+    r2.CopyFrom(request);
+    r2.clear_entries();
+    int baseSize = r2.ByteSize(); // size of request with no entries
+    std::vector<int> entrySizes; // size of each entry
+    int totalSize = baseSize; // size of full request
+    for (int i = 0; i < request.entries_size(); ++i) {
+        *r2.add_entries() = request.entries(i);
+        int entrySize = r2.ByteSize() - baseSize;
+        entrySizes.push_back(entrySize);
+        totalSize += entrySize;
+        r2.clear_entries();
+    }
+    EXPECT_EQ((std::vector<int> { 32, 15, 8, 52 }),
+              entrySizes);
+    EXPECT_EQ(totalSize, request.ByteSize());
+
+    // We now cap request sizes so that entry 2 doesn't fit but entry 3 would.
+    consensus->SOFT_RPC_SIZE_LIMIT = (baseSize +
+                                      entrySizes.at(0) +
+                                      entrySizes.at(2) +
+                                      5);
+    *r2.add_entries() = request.entries(0);
+    r2.set_commit_index(1);
+    peer->exiting = true;
+    peerService->reply(Protocol::Raft::OpCode::APPEND_ENTRIES,
+                       r2, response);
+    std::unique_lock<Mutex> lockGuard(consensus->mutex);
+    consensus->appendEntries(lockGuard, *peer);
+    EXPECT_EQ(0U, peer->lastAgreeIndex);
+}
+
 TEST_F(ServerRaftConsensusPATest, appendEntries_forceHeartbeat)
 {
     peer->forceHeartbeat = true;

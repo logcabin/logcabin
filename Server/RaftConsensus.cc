@@ -1329,6 +1329,11 @@ RaftConsensus::handleAppendEntries(
          ++it) {
         ++index;
         const Protocol::Raft::Entry& entry = *it;
+        if (entry.has_index()) {
+            // This precaution was added after #160: "Packing entries into
+            // AppendEntries requests is broken (critical)".
+            assert(entry.index() == index);
+        }
         if (index < log->getLogStartIndex()) {
             // We already snapshotted and discarded this index, so presumably
             // we've received a committed entry we once already had.
