@@ -184,14 +184,19 @@ ClientSession::Timer::handleTimerEvent()
 
     // Send a ping or expire the session.
     if (!session.activePing) {
-        VERBOSE("ClientSession is suspicious. Sending ping.");
+        VERBOSE("Getting suspicious of %s: sending ping (have %u RPCs "
+                "outstanding)",
+                session.address.toString().c_str(),
+                session.numActiveRPCs);
         session.activePing = true;
         session.messageSocket->sendMessage(Protocol::Common::PING_MESSAGE_ID,
                                            Core::Buffer());
         schedule(session.PING_TIMEOUT_NS);
     } else {
-        VERBOSE("ClientSession to %s timed out.",
-                session.address.toString().c_str());
+        VERBOSE("ClientSession to %s timed out: didn't get ping reply in "
+                "time, failing %u outstanding RPCs",
+                session.address.toString().c_str(),
+                session.numActiveRPCs);
         // Fail all current and future RPCs.
         session.errorMessage = ("Server " +
                                 session.address.toString() +
