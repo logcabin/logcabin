@@ -2441,7 +2441,9 @@ void
 RaftConsensus::becomeLeader()
 {
     assert(state == State::CANDIDATE);
-    NOTICE("Now leader for term %lu", currentTerm);
+    NOTICE("Now leader for term %lu (appending no-op at index %lu)",
+           currentTerm,
+           log->getLastLogIndex() + 1);
     state = State::LEADER;
     leaderId = serverId;
     printElectionState();
