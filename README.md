@@ -17,7 +17,20 @@ Code-level documentation can be found at <https://logcabin.github.io>.
 Recent updates on LogCabin's development can be found at
 <http://ongardie.net/blog/+logcabin/>.
 
+Information about releases is in [RELEASES.md](RELEASES.md).
+
 This README will walk you through how to compile and run LogCabin.
+
+Questions
+=========
+
+The best place to ask questions is on the
+[raft-dev](https://groups.google.com/forum/#!forum/raft-dev) mailing list by
+prefixing the subject line with "[LogCabin]" (we may create a separate mailing
+list for LogCabin in the future if LogCabin-specific posts start to be a
+significant fraction of the raft-dev traffic). You might also try `#logcabin`
+on the freenode IRC network, although there isn't always people around. Use
+GitHub Issues to report problems or suggest features.
 
 Building
 ========
