@@ -352,7 +352,7 @@ SegmentedLog::SegmentedLog(const FS::File& parentDir,
                                              8 * 1024 * 1024))
     , shouldCheckInvariants(config.read<bool>("storageDebug", false))
     , diskWriteDurationThreshold(config.read<uint64_t>(
-        "electionTimeoutMilliseconds", 500) / 2)
+        "electionTimeoutMilliseconds", 500) / 4)
     , metadata()
     , dir(FS::openDir(parentDir,
                       (encoding == Encoding::BINARY
