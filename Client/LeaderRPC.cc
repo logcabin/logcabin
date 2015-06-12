@@ -164,6 +164,8 @@ LeaderRPC::LeaderRPC(const RPC::Address& hosts,
     , sessionCreationBackoff(sessionCreationBackoff)
     , sessionManager(sessionManager)
     , mutex()
+    , isConnecting(false)
+    , connected()
     , hosts(hosts)
     , leaderHint()
     , leaderSession() // set by connect()
@@ -208,27 +210,73 @@ LeaderRPC::makeCall()
 std::shared_ptr<RPC::ClientSession>
 LeaderRPC::getSession(TimePoint timeout)
 {
-    std::lock_guard<std::mutex> lockGuard(mutex);
+    std::unique_lock<std::mutex> lockGuard(mutex);
+
+    // Threads used to hold the mutex while creating a new session, but then to
+    // respect timeouts, you'd have to acquire the mutex with a timeout. This
+    // condition variable approach seems cleaner to me, where the mutex is only
+    // held during computation, not during I/O. See #173. -Diego
+    while (isConnecting) {
+        // Go to sleep, as another thread is already creating a new session.
+        connected.wait_until(lockGuard, timeout);
+        if (Clock::now() > timeout) {
+            return RPC::ClientSession::makeErrorSession(
+                sessionManager.eventLoop,
+                "Failed to get session to leader in time that another thread "
+                "is creating: timeout expired");
+        }
+    }
+
     if (leaderSession)
         return leaderSession;
 
-    // sleep if we've tried to connect too much recently
-    sessionCreationBackoff.delayAndBegin(timeout);
+    // This thread will create a new session; others should wait.
+    isConnecting = true;
 
+    // Determine which address to connect to while still holding the lock.
     RPC::Address address;
     if (leaderHint.empty()) {
-        // Hope the next random host is the leader.
-        // If that turns out to be false, we will soon find out.
-        hosts.refresh(timeout);
+        // Hope the next random host is the leader. If that turns out to be
+        // false, we will soon find out.
         address = hosts;
     } else {
+        // Connect to the leader given by 'leaderHint'.
         address = RPC::Address(leaderHint, Protocol::Common::DEFAULT_PORT);
-        address.refresh(timeout);
-        leaderHint.clear();
+        // Don't clear leaderHint until down below, in case this thread times
+        // out before making any use of it.
     }
-    VERBOSE("Connecting to: %s", address.toString().c_str());
-    leaderSession = sessionManager.createSession(
-        address, timeout, &clusterUUID);
+
+    // Don't hang onto the mutex for any of this blocking stuff (doing so would
+    // delay other threads with shorter timeouts; see #173).
+    std::shared_ptr<RPC::ClientSession> session;
+    bool usedHint = true;
+    {
+        Core::MutexUnlock<std::mutex> unlockGuard(lockGuard);
+
+        // sleep if we've tried to connect too much recently
+        sessionCreationBackoff.delayAndBegin(timeout);
+        if (Clock::now() > timeout) {
+            session = RPC::ClientSession::makeErrorSession(
+                    sessionManager.eventLoop,
+                    "Failed to create session to leader: timeout expired");
+            usedHint = false;
+        } else {
+            address.refresh(timeout);
+            VERBOSE("Connecting to: %s", address.toString().c_str());
+            session = sessionManager.createSession(
+                    address,
+                    timeout,
+                    &clusterUUID);
+        }
+    }
+
+    // Assign back to leaderSession only now that we have the lock again.
+    leaderSession = session;
+    if (usedHint)
+        leaderHint.clear();
+    // Unblock other threads and return.
+    isConnecting = false;
+    connected.notify_all();
     return leaderSession;
 }
 

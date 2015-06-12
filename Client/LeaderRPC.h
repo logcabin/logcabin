@@ -21,6 +21,7 @@
 
 #include "build/Protocol/Client.pb.h"
 #include "Client/SessionManager.h"
+#include "Core/ConditionVariable.h"
 #include "RPC/Address.h"
 #include "RPC/ClientRPC.h"
 
@@ -353,10 +354,20 @@ class LeaderRPC : public LeaderRPCBase {
 
     /**
      * Protects all of the following member variables in this class.
-     * Threads hang on to this mutex while initiating new sessions to possible
-     * cluster leaders, in case other threads are already handling the problem.
      */
     std::mutex mutex;
+
+    /**
+     * Set to true when some thread is already initiating a new session.
+     * When this is already true, other threads wait on #connected
+     * rather than starting additional sessions.
+     */
+    bool isConnecting;
+
+    /**
+     * Notified when #isConnecting becomes false (when #leaderSession is set).
+     */
+    Core::ConditionVariable connected;
 
     /**
      * An address referring to the hosts in the LogCabin cluster. A random host

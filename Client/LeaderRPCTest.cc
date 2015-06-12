@@ -32,6 +32,7 @@ namespace Client {
 namespace {
 
 using Protocol::Client::OpCode;
+typedef LeaderRPCBase::Clock Clock;
 typedef LeaderRPCBase::TimePoint TimePoint;
 
 class ClientLeaderRPCTest : public ::testing::Test {
@@ -130,11 +131,10 @@ TEST_F(ClientLeaderRPCTest, Call_start_timeout) {
     ConnectInProgress c;
     RPC::ClientSession::connectFn = std::ref(c);
     call.start(OpCode::STATE_MACHINE_QUERY, request, TimePoint::min());
-    EXPECT_EQ("Closed session: Failed to connect socket to 127.0.0.1 "
-              "(resolved to 127.0.0.1:5254): timeout expired",
+    EXPECT_EQ("Closed session: Failed to create session to leader: "
+              "timeout expired",
               call.cachedSession->toString());
-    EXPECT_EQ("Failed to connect socket to 127.0.0.1 "
-              "(resolved to 127.0.0.1:5254): timeout expired",
+    EXPECT_EQ("Failed to create session to leader: timeout expired",
               call.rpc.getErrorMessage());
     EXPECT_EQ(LeaderRPCBase::Call::Status::TIMEOUT,
               call.wait(response, TimePoint::min()));
@@ -261,7 +261,63 @@ TEST_F(ClientLeaderRPCTest, callRPCFailed) {
     EXPECT_EQ(expResponse, response);
 }
 
-// getSession() tested pretty well in tests for Call
+TEST_F(ClientLeaderRPCTest, getSession_normal) {
+    // first create the connection
+    EXPECT_FALSE(leaderRPC->leaderSession.get());
+    EXPECT_EQ("Active session to 127.0.0.1 (resolved to 127.0.0.1:5254)",
+              leaderRPC->getSession(TimePoint::max())->toString());
+    EXPECT_TRUE(leaderRPC->leaderSession.get());
+
+    // now return right away
+    EXPECT_EQ("Active session to 127.0.0.1 (resolved to 127.0.0.1:5254)",
+              leaderRPC->getSession(TimePoint::min())->toString());
+    EXPECT_TRUE(leaderRPC->leaderSession.get());
+    EXPECT_EQ(1U, leaderRPC->connected.notificationCount);
+}
+
+TEST_F(ClientLeaderRPCTest, getSession_timeoutWhileWaitingOnOther) {
+    leaderRPC->isConnecting = true;
+    EXPECT_EQ("Closed session: Failed to get session to leader in time that "
+              "another thread is creating: timeout expired",
+              leaderRPC->getSession(Clock::now() +
+                                    std::chrono::milliseconds(1))->toString());
+    EXPECT_FALSE(leaderRPC->leaderSession.get());
+    leaderRPC->isConnecting = false;
+}
+
+struct GetSessionHelper {
+    explicit GetSessionHelper(LeaderRPC& leaderRPC)
+        : leaderRPC(leaderRPC)
+        , count(0)
+    {
+    }
+    void operator()() {
+        leaderRPC.isConnecting = false;
+        ++count;
+    }
+    LeaderRPC& leaderRPC;
+    uint64_t count;
+};
+
+TEST_F(ClientLeaderRPCTest, getSession_blockSlightlyOnOther) {
+    // This simulates the case where one thread is connecting,
+    // so getSession had to block for a while.
+    leaderRPC->isConnecting = true;
+    GetSessionHelper helper(*leaderRPC);
+    leaderRPC->connected.callback = std::ref(helper);
+    EXPECT_EQ("Active session to 127.0.0.1 (resolved to 127.0.0.1:5254)",
+              leaderRPC->getSession(TimePoint::max())->toString());
+    EXPECT_EQ(1U, helper.count);
+}
+
+TEST_F(ClientLeaderRPCTest, getSession_timeoutBeforeCreateSession) {
+    leaderRPC->leaderHint = "127.0.0.1:5254";
+    EXPECT_EQ("Closed session: Failed to create session to leader: "
+              "timeout expired",
+              leaderRPC->getSession(TimePoint::min())->toString());
+    EXPECT_TRUE(leaderRPC->leaderSession.get());
+    EXPECT_EQ("127.0.0.1:5254", leaderRPC->leaderHint);
+}
 
 TEST_F(ClientLeaderRPCTest, reportFailure) {
     std::shared_ptr<RPC::ClientSession> session1 =

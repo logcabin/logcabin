@@ -163,8 +163,8 @@ class SessionManager {
                   ClusterUUID* clusterUUID = NULL,
                   ServerId* serverId = NULL);
 
-  private:
     Event::Loop& eventLoop;
+  private:
     const Core::Config& config;
     /**
      * Used only for unit testing. Set to false, normally.

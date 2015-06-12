@@ -24,6 +24,8 @@ Bug fixes (high severity):
   was possible for a leader to send a non-contiguous list of entries to the
   follower, and the follower would end up with a corrupt log.
 - Fixes occasional hang when exiting (issue #144).
+- Fixes client waiting past its timeout on another client's connection attempt
+  (issue #173).
 
 Bug fixes (low severity):
 - Fixes Core::Debug::DebugMessage move constructor, where processName and
