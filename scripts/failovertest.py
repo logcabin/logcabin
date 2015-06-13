@@ -20,14 +20,14 @@ This runs some basic tests against a LogCabin cluster while periodically
 killing servers.
 
 Usage:
-  failovertest.py [options]
+  failovertest.py [--client=<cmd>]... [options]
   failovertest.py (-h | --help)
 
 Options:
   -h --help            Show this help message and exit
   --binary=<cmd>       Server binary to execute [default: build/LogCabin]
   --client=<cmd>       Client binary to execute
-                       [default: build/Examples/FailoverTest]
+                       [default: 'build/Examples/FailoverTest']
   --reconf=<opts>      Additional options to pass through to the Reconfigure
                        binary. [default: '']
   --servers=<num>      Number of servers [default: 5]
@@ -49,7 +49,7 @@ import time
 
 def main():
     arguments = docopt(__doc__)
-    client_command = arguments['--client']
+    client_commands = arguments['--client']
     server_command = arguments['--binary']
     num_servers = int(arguments['--servers'])
     reconf_opts = arguments['--reconf']
@@ -106,11 +106,12 @@ def main():
             reconf_opts,
             ' '.join([h[0] for h in smokehosts[:num_servers]])))
 
-        print('Starting %s %s on localhost' % (client_command, cluster))
-        client = sandbox.rsh('localhost',
-                             '%s %s' % (client_command, cluster),
-                             bg=True,
-                             stderr=open('debug/client', 'w'))
+        for i, client_command in enumerate(client_commands):
+            print('Starting %s %s on localhost' % (client_command, cluster))
+            sandbox.rsh('localhost',
+                        '%s %s' % (client_command, cluster),
+                        bg=True,
+                        stderr=open('debug/client%d' % i, 'w'))
 
         start = time.time()
         lastkill = start
