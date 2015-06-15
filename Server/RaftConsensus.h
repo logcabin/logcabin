@@ -1301,6 +1301,20 @@ class RaftConsensus {
     void interruptAll();
 
     /**
+     * Helper for #appendEntries() to put the right number of entries into the
+     * request.
+     * \param nextIndex
+     *      First entry to send to the follower.
+     * \param request
+     *      AppendEntries request ProtoBuf in which to pack the entries.
+     * \return
+     *      Number of entries in the request.
+     */
+    uint64_t
+    packEntries(uint64_t nextIndex,
+                Protocol::Raft::AppendEntries::Request& request) const;
+
+    /**
      * Try to read the latest good snapshot from disk. Loads the header of the
      * snapshot file, which is used internally by the consensus module. The
      * rest of the file reader is kept in #snapshotReader for the state machine
@@ -1401,6 +1415,14 @@ class RaftConsensus {
      * send.
      */
     const uint64_t HEARTBEAT_PERIOD_MS;
+
+    /**
+     * A leader will pack at most this many entries into an AppendEntries
+     * request message. This helps bound processing time when entries are very
+     * small in size.
+     * Const except for unit tests.
+     */
+    uint64_t MAX_LOG_ENTRIES_PER_REQUEST;
 
     /**
      * A candidate or leader waits this long after an RPC fails before sending

@@ -923,6 +923,9 @@ RaftConsensus::RaftConsensus(Globals& globals)
     , HEARTBEAT_PERIOD_MS(globals.config.read<uint64_t>(
         "heartbeatPeriodMilliseconds",
         ELECTION_TIMEOUT_MS / 2))
+    , MAX_LOG_ENTRIES_PER_REQUEST(globals.config.read<uint64_t>(
+            "maxLogEntriesPerRequest",
+            5000))
     , RPC_FAILURE_BACKOFF_MS(globals.config.read<uint64_t>(
         "rpcFailureBackoffMilliseconds",
         ELECTION_TIMEOUT_MS / 2))
@@ -2231,31 +2234,9 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
     request.set_term(currentTerm);
     request.set_prev_log_term(prevLogTerm);
     request.set_prev_log_index(prevLogIndex);
-
-    // Add as many as entries as will fit comfortably in the request. It's
-    // easiest to add one entry at a time until the RPC gets too big, then back
-    // the last one out.
     uint64_t numEntries = 0;
-    if (!peer.forceHeartbeat) {
-        for (uint64_t index = peer.nextIndex;
-             index <= lastLogIndex;
-             ++index) {
-            const Log::Entry& entry = log->getEntry(index);
-            *request.add_entries() = entry;
-            uint64_t requestSize =
-                Core::Util::downCast<uint64_t>(request.ByteSize());
-            if (requestSize < SOFT_RPC_SIZE_LIMIT || numEntries == 0) {
-                // this entry fits, send it
-                VERBOSE("sending entry <index=%lu,term=%lu>",
-                        index, entry.term());
-                ++numEntries;
-            } else {
-                // this entry doesn't fit, discard it
-                request.mutable_entries()->RemoveLast();
-                break;
-            }
-        }
-    }
+    if (!peer.forceHeartbeat)
+        numEntries = packEntries(peer.nextIndex, request);
     request.set_commit_index(std::min(commitIndex, prevLogIndex + numEntries));
 
     // Execute RPC
@@ -2522,6 +2503,70 @@ RaftConsensus::interruptAll()
     // A configuration is sometimes missing for unit tests.
     if (configuration)
         configuration->forEach(&Server::interrupt);
+}
+
+uint64_t
+RaftConsensus::packEntries(
+        uint64_t nextIndex,
+        Protocol::Raft::AppendEntries::Request& request) const
+{
+    // Add as many as entries as will fit comfortably in the request. It's
+    // easiest to add one entry at a time until the RPC gets too big, then back
+    // the last one out.
+
+    // Calculating the size of the request ProtoBuf is a bit expensive, so this
+    // estimates high, then if it reaches the size limit, corrects the estimate
+    // and keeps going. This is a dumb algorithm but does well enough. It gets
+    // the number of calls to request.ByteSize() down to about 15 even with
+    // extremely small entries (10 bytes of payload data in each of 50,000
+    // entries filling to a 1MB max).
+
+    // Processing 19000 entries here with 10 bytes of data each (total request
+    // size of 1MB) still takes about 42 milliseconds on an overloaded laptop
+    // when compiling in DEBUG mode. That's a bit slow, in case someone has
+    // aggressive election timeouts. As a result, the total number of entries
+    // in a request is now limited to MAX_LOG_ENTRIES_PER_REQUEST=5000, which
+    // amortizes RPC overhead well enough anyhow. This limit will only kick in
+    // when the entry size drops below 200 bytes, since 1M/5K=200.
+
+    using Core::Util::downCast;
+    uint64_t lastIndex = std::min(log->getLastLogIndex(),
+                                  nextIndex + MAX_LOG_ENTRIES_PER_REQUEST - 1);
+    google::protobuf::RepeatedPtrField<Protocol::Raft::Entry>& requestEntries =
+        *request.mutable_entries();
+
+    uint64_t numEntries = 0;
+    uint64_t currentSize = downCast<uint64_t>(request.ByteSize());
+
+    for (uint64_t index = nextIndex; index <= lastIndex; ++index) {
+        const Log::Entry& entry = log->getEntry(index);
+        *requestEntries.Add() = entry;
+
+        // Each member of a repeated message field is encoded with a tag
+        // and a length. We conservatively assume the tag and length will
+        // be up to 10 bytes each (2^64), though in practice the tag is
+        // probably one byte and the length is probably two.
+        currentSize += entry.ByteSize() + 20;
+
+        if (currentSize >= SOFT_RPC_SIZE_LIMIT) {
+            // The message might be too big: calculate more exact but more
+            // expensive size.
+            uint64_t actualSize = downCast<uint64_t>(request.ByteSize());
+            assert(currentSize >= actualSize);
+            currentSize = actualSize;
+            if (currentSize >= SOFT_RPC_SIZE_LIMIT && numEntries > 0) {
+                // This entry doesn't fit and we've already got some
+                // entries to send: discard this one and stop adding more.
+                requestEntries.RemoveLast();
+                break;
+            }
+        }
+        // This entry fit, so we'll send it.
+        ++numEntries;
+    }
+
+    assert(numEntries == uint64_t(requestEntries.size()));
+    return numEntries;
 }
 
 void

@@ -23,9 +23,11 @@ Improvements:
   fallen far behind.
 
 Bug fixes (high severity):
-- Fixes packaging up very large AppendEntries requests (issue #160). Before, it
-  was possible for a leader to send a non-contiguous list of entries to the
-  follower, and the follower would end up with a corrupt log.
+- Fixes packaging up very large AppendEntries requests. Before, it was possible
+  for a leader to send a non-contiguous list of entries to the follower, and
+  the follower would end up with a corrupt log (issue #160). Before, it was
+  also possible for packing up the requests to take so long as to cause
+  availability and performance problems (issue #161).
 - Fixes occasional hang when exiting (issue #144).
 - Fixes client waiting past its timeout on another client's connection attempt
   (issue #173).

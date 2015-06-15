@@ -2256,6 +2256,8 @@ TEST_F(ServerRaftConsensusPATest, appendEntries_rpcFailed)
     EXPECT_EQ(0U, peer->lastAgreeIndex);
 }
 
+// Mostly a test for packEntries now that that function has been split out of
+// AppendEntries.
 TEST_F(ServerRaftConsensusPATest, appendEntries_limitSizeAndIgnoreResult)
 {
     consensus->SOFT_RPC_SIZE_LIMIT = 1;
@@ -2271,6 +2273,9 @@ TEST_F(ServerRaftConsensusPATest, appendEntries_limitSizeAndIgnoreResult)
     EXPECT_EQ(0U, peer->lastAgreeIndex);
 }
 
+// Mostly a test for packEntries now that that function has been split out of
+// AppendEntries.
+//
 // In #160, an entry that wouldn't fit in the request didn't cause the loop to
 // exit. If an entry later in the log would fit in the request, it would be
 // added to the request invalidly. This test targets that specific behavior (it
@@ -2615,6 +2620,50 @@ TEST_F(ServerRaftConsensusTest, interruptAll)
     Peer& peer = *getPeer(2);
     EXPECT_EQ("RPC canceled by user", peer.rpc.getErrorMessage());
     EXPECT_EQ(1U, consensus->stateChanged.notificationCount);
+}
+
+// packEntries used to be part of appendEntries. The tests
+// appendEntries_limitSizeAndIgnoreResult and appendEntries_limitSizeRegression
+// mostly target the packEntries functionality.
+
+TEST_F(ServerRaftConsensusTest, packEntries)
+{
+    init();
+    consensus->stepDown(5);
+
+    // limit by log length (of 0)
+    Protocol::Raft::AppendEntries::Request request;
+    EXPECT_EQ(0U, consensus->packEntries(1U, request));
+    request.clear_entries();
+
+    // limit by log length (of 2)
+    consensus->append({&entry1});
+    consensus->append({&entry2});
+    EXPECT_EQ(2U, consensus->packEntries(1U, request));
+    request.clear_entries();
+
+    // limit by number of log entries
+    for (uint64_t i = 0; i < 128; ++i)
+        consensus->append({&entry2});
+    consensus->SOFT_RPC_SIZE_LIMIT = 1024 * 1024;
+    consensus->MAX_LOG_ENTRIES_PER_REQUEST = 32;
+    EXPECT_EQ(32U, consensus->packEntries(3U, request));
+    request.clear_entries();
+    consensus->MAX_LOG_ENTRIES_PER_REQUEST = 5000;
+
+    // limit by number of bytes
+    consensus->SOFT_RPC_SIZE_LIMIT = 1024;
+    uint64_t n = consensus->packEntries(3U, request);
+    EXPECT_GT(5000U, n);
+    EXPECT_LT(0U, n);
+    EXPECT_GE(1024, request.ByteSize());
+    *request.add_entries() = consensus->log->getEntry(3);
+    EXPECT_LE(1024, request.ByteSize());
+    request.clear_entries();
+
+    // one entry is allowed even if it's too big
+    consensus->SOFT_RPC_SIZE_LIMIT = 1;
+    EXPECT_EQ(1U, consensus->packEntries(3U, request));
 }
 
 TEST_F(ServerRaftConsensusTest, readSnapshot)
