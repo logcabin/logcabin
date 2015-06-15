@@ -143,7 +143,7 @@ class Server {
      * \warning
      *      Only valid when we're leader.
      */
-    virtual uint64_t getLastAgreeIndex() const = 0;
+    virtual uint64_t getMatchIndex() const = 0;
     /**
      * Return true if this Server has awarded us its vote for this term.
      */
@@ -228,7 +228,7 @@ class LocalServer : public Server {
     void exit();
     void beginRequestVote();
     void beginLeadership();
-    uint64_t getLastAgreeIndex() const;
+    uint64_t getMatchIndex() const;
     bool haveVote() const;
     uint64_t getLastAckEpoch() const;
     void interrupt();
@@ -240,7 +240,7 @@ class LocalServer : public Server {
     RaftConsensus& consensus;
     /**
      * The index of the last log entry that has been flushed to disk.
-     * Valid for leaders only. Returned by getLastAgreeIndex() and used to
+     * Valid for leaders only. Returned by getMatchIndex() and used to
      * advance the leader's commitIndex.
      */
     uint64_t lastSyncedIndex;
@@ -272,7 +272,7 @@ class Peer : public Server {
     void beginLeadership();
     void exit();
     uint64_t getLastAckEpoch() const;
-    uint64_t getLastAgreeIndex() const;
+    uint64_t getMatchIndex() const;
     bool haveVote() const;
     bool isCaughtUp() const;
     void interrupt();
@@ -393,9 +393,9 @@ class Peer : public Server {
     uint64_t nextIndex;
 
     /**
-     * See #getLastAgreeIndex().
+     * See #getMatchIndex().
      */
-    uint64_t lastAgreeIndex;
+    uint64_t matchIndex;
 
     /**
      * See #getLastAckEpoch().

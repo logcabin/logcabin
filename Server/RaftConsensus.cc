@@ -107,7 +107,7 @@ LocalServer::getLastAckEpoch() const
 }
 
 uint64_t
-LocalServer::getLastAgreeIndex() const
+LocalServer::getMatchIndex() const
 {
     return lastSyncedIndex;
 }
@@ -172,7 +172,7 @@ Peer::Peer(uint64_t serverId, RaftConsensus& consensus)
       // is set incorrectly, it's self-correcting, so it's just a potential
       // performance issue.
     , nextIndex(consensus.log->getLastLogIndex() + 1)
-    , lastAgreeIndex(0)
+    , matchIndex(0)
     , lastAckEpoch(0)
     , nextHeartbeatTime(TimePoint::min())
     , backoffUntil(TimePoint::min())
@@ -204,7 +204,7 @@ void
 Peer::beginLeadership()
 {
     nextIndex = consensus.log->getLastLogIndex() + 1;
-    lastAgreeIndex = 0;
+    matchIndex = 0;
     suppressBulkData = true;
     snapshotFile.reset();
     snapshotFileOffset = 0;
@@ -225,9 +225,9 @@ Peer::getLastAckEpoch() const
 }
 
 uint64_t
-Peer::getLastAgreeIndex() const
+Peer::getMatchIndex() const
 {
-    return lastAgreeIndex;
+    return matchIndex;
 }
 
 bool
@@ -352,7 +352,7 @@ Peer::dumpToStream(std::ostream& os) const
         case RaftConsensus::State::LEADER:
             os << "suppressBulkData: " << suppressBulkData << std::endl;
             os << "nextIndex: " << nextIndex << std::endl;
-            os << "lastAgreeIndex: " << lastAgreeIndex << std::endl;
+            os << "matchIndex: " << matchIndex << std::endl;
             break;
     }
     return os;
@@ -370,7 +370,7 @@ Peer::updatePeerStats(Protocol::ServerStats::Raft::Peer& peerStats,
         case RaftConsensus::State::LEADER:
             peerStats.set_suppress_bulk_data(suppressBulkData);
             peerStats.set_next_index(nextIndex);
-            peerStats.set_last_agree_index(lastAgreeIndex);
+            peerStats.set_last_agree_index(matchIndex);
             peerStats.set_is_caught_up(isCaughtUp_);
             peerStats.set_next_heartbeat_at(time.unixNanos(nextHeartbeatTime));
             break;
@@ -2052,7 +2052,7 @@ RaftConsensus::peerThreadMain(std::shared_ptr<Peer> peer)
 
                 // Leaders replicate entries and periodically send heartbeats.
                 case State::LEADER:
-                    if (peer->getLastAgreeIndex() < log->getLastLogIndex() ||
+                    if (peer->getMatchIndex() < log->getLastLogIndex() ||
                         peer->nextHeartbeatTime < now) {
                         // appendEntries delegates to installSnapshot if we
                         // need to send a snapshot instead
@@ -2129,7 +2129,7 @@ void
 RaftConsensus::advanceCommitIndex()
 {
     if (state != State::LEADER) {
-        // getLastAgreeIndex is undefined unless we're leader
+        // getMatchIndex is undefined unless we're leader
         WARNING("advanceCommitIndex called as %s",
                 Core::StringUtil::toString(state).c_str());
         return;
@@ -2137,7 +2137,7 @@ RaftConsensus::advanceCommitIndex()
 
     // calculate the largest entry ID stored on a quorum of servers
     uint64_t newCommitIndex =
-        configuration->quorumMin(&Server::getLastAgreeIndex);
+        configuration->quorumMin(&Server::getMatchIndex);
     if (commitIndex >= newCommitIndex)
         return;
     // If we have discarded the entry, it's because we already knew it was
@@ -2281,21 +2281,21 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
         peer.nextHeartbeatTime = start +
             std::chrono::milliseconds(HEARTBEAT_PERIOD_MS);
         if (response.success()) {
-            if (peer.lastAgreeIndex > prevLogIndex + numEntries) {
+            if (peer.matchIndex > prevLogIndex + numEntries) {
                 // Revisit this warning if we pipeline AppendEntries RPCs for
                 // performance.
-                WARNING("lastAgreeIndex should monotonically increase within a "
+                WARNING("matchIndex should monotonically increase within a "
                         "term, since servers don't forget entries. But it "
                         "didn't.");
             } else {
-                peer.lastAgreeIndex = prevLogIndex + numEntries;
+                peer.matchIndex = prevLogIndex + numEntries;
                 advanceCommitIndex();
             }
-            peer.nextIndex = peer.lastAgreeIndex + 1;
+            peer.nextIndex = peer.matchIndex + 1;
             peer.suppressBulkData = false;
 
             if (!peer.isCaughtUp_ &&
-                peer.thisCatchUpIterationGoalId <= peer.lastAgreeIndex) {
+                peer.thisCatchUpIterationGoalId <= peer.matchIndex) {
                 Clock::duration duration =
                     Clock::now() - peer.thisCatchUpIterationStart;
                 uint64_t thisCatchUpIterationMs =
@@ -2425,11 +2425,11 @@ RaftConsensus::installSnapshot(std::unique_lock<Mutex>& lockGuard,
         if (request.done()) {
             NOTICE("Done sending snapshot through index %lu to follower",
                    peer.lastSnapshotIndex);
-            peer.lastAgreeIndex = peer.lastSnapshotIndex;
+            peer.matchIndex = peer.lastSnapshotIndex;
             peer.nextIndex = peer.lastSnapshotIndex + 1;
             // These entries are already committed if they're in a snapshot, so
             // the commitIndex shouldn't advance, but let's just follow the
-            // simple rule that bumping lastAgreeIndex should always be
+            // simple rule that bumping matchIndex should always be
             // followed by a call to advanceCommitIndex():
             advanceCommitIndex();
             peer.snapshotFile.reset();
@@ -2459,7 +2459,7 @@ RaftConsensus::becomeLeader()
     clusterClock.newEpoch(clusterClock.clusterTimeAtEpoch);
 
     // The ordering is pretty important here: First set nextIndex and
-    // lastAgreeIndex for ourselves and each follower, then append the no op.
+    // matchIndex for ourselves and each follower, then append the no op.
     // Otherwise we'll set our localServer's last agree index too high.
     configuration->forEach(&Server::beginLeadership);
 

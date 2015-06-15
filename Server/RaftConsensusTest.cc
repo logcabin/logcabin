@@ -1472,15 +1472,15 @@ class SetConfigurationHelper3 {
             peer->isCaughtUp_ = true;
         } else if (iter == 2) { // no-op entry
             drainDiskQueue(*consensus);
-            peer->lastAgreeIndex = 2;
+            peer->matchIndex = 2;
             consensus->advanceCommitIndex();
         } else if (iter == 3) { // transitional entry
             drainDiskQueue(*consensus);
-            peer->lastAgreeIndex = 3;
+            peer->matchIndex = 3;
             consensus->advanceCommitIndex();
         } else if (iter == 4) { // new configuration entry
             drainDiskQueue(*consensus);
-            peer->lastAgreeIndex = 4;
+            peer->matchIndex = 4;
             consensus->advanceCommitIndex();
         } else {
             FAIL();
@@ -1711,7 +1711,7 @@ class StateMachineUpdaterThreadMainHelper {
             EXPECT_EQ("advance_version { "
                       "  requested_version: 4 "
                       "}", command);
-            peer.lastAgreeIndex = 5;
+            peer.matchIndex = 5;
             consensus.commitIndex = 5;
             consensus.stateChanged.notify_all(); // to satisfy RaftInvariants
         // leader and all info and servers overlap on current version: go to
@@ -2086,11 +2086,11 @@ TEST_F(ServerRaftConsensusTest,
     consensus->startNewElection();
     consensus->becomeLeader();
     drainDiskQueue(*consensus);
-    getPeer(2)->lastAgreeIndex = 2;
+    getPeer(2)->matchIndex = 2;
     consensus->advanceCommitIndex();
     EXPECT_EQ(State::LEADER, consensus->state);
     EXPECT_EQ(0U, consensus->commitIndex);
-    getPeer(2)->lastAgreeIndex = 3;
+    getPeer(2)->matchIndex = 3;
     consensus->advanceCommitIndex();
     EXPECT_EQ(3U, consensus->commitIndex);
 }
@@ -2116,13 +2116,13 @@ TEST_F(ServerRaftConsensusTest, advanceCommitIndex_commitCfgWithoutSelf)
         "}");
     consensus->append({&entry1});
     drainDiskQueue(*consensus);
-    getPeer(2)->lastAgreeIndex = 3;
+    getPeer(2)->matchIndex = 3;
     consensus->advanceCommitIndex();
     EXPECT_EQ(3U, consensus->commitIndex);
     EXPECT_EQ(4U, consensus->log->getLastLogIndex());
     EXPECT_EQ(State::LEADER, consensus->state);
 
-    getPeer(2)->lastAgreeIndex = 4;
+    getPeer(2)->matchIndex = 4;
     consensus->advanceCommitIndex();
     EXPECT_EQ(4U, consensus->commitIndex);
     EXPECT_EQ(State::FOLLOWER, consensus->state);
@@ -2253,7 +2253,7 @@ TEST_F(ServerRaftConsensusPATest, appendEntries_rpcFailed)
     std::unique_lock<Mutex> lockGuard(consensus->mutex);
     consensus->appendEntries(lockGuard, *peer);
     EXPECT_LT(Clock::now(), peer->backoffUntil);
-    EXPECT_EQ(0U, peer->lastAgreeIndex);
+    EXPECT_EQ(0U, peer->matchIndex);
 }
 
 // Mostly a test for packEntries now that that function has been split out of
@@ -2270,7 +2270,7 @@ TEST_F(ServerRaftConsensusPATest, appendEntries_limitSizeAndIgnoreResult)
                        request, response);
     std::unique_lock<Mutex> lockGuard(consensus->mutex);
     consensus->appendEntries(lockGuard, *peer);
-    EXPECT_EQ(0U, peer->lastAgreeIndex);
+    EXPECT_EQ(0U, peer->matchIndex);
 }
 
 // Mostly a test for packEntries now that that function has been split out of
@@ -2313,7 +2313,7 @@ TEST_F(ServerRaftConsensusPATest, appendEntries_limitSizeRegression)
                        r2, response);
     std::unique_lock<Mutex> lockGuard(consensus->mutex);
     consensus->appendEntries(lockGuard, *peer);
-    EXPECT_EQ(0U, peer->lastAgreeIndex);
+    EXPECT_EQ(0U, peer->matchIndex);
 }
 
 TEST_F(ServerRaftConsensusPATest, appendEntries_suppressBulkData)
@@ -2337,7 +2337,7 @@ TEST_F(ServerRaftConsensusPATest, appendEntries_termChanged)
     std::unique_lock<Mutex> lockGuard(consensus->mutex);
     consensus->appendEntries(lockGuard, *peer);
     EXPECT_EQ(TimePoint::min(), peer->backoffUntil);
-    EXPECT_EQ(0U, peer->lastAgreeIndex);
+    EXPECT_EQ(0U, peer->matchIndex);
     EXPECT_EQ(State::FOLLOWER, consensus->state);
 }
 
@@ -2349,7 +2349,7 @@ TEST_F(ServerRaftConsensusPATest, appendEntries_termStale)
                        request, response);
     std::unique_lock<Mutex> lockGuard(consensus->mutex);
     consensus->appendEntries(lockGuard, *peer);
-    EXPECT_EQ(0U, peer->lastAgreeIndex);
+    EXPECT_EQ(0U, peer->matchIndex);
     EXPECT_EQ(State::FOLLOWER, consensus->state);
     EXPECT_EQ(10U, consensus->currentTerm);
 }
@@ -2361,7 +2361,7 @@ TEST_F(ServerRaftConsensusPATest, appendEntries_ok)
     std::unique_lock<Mutex> lockGuard(consensus->mutex);
     consensus->appendEntries(lockGuard, *peer);
     EXPECT_EQ(consensus->currentEpoch, peer->lastAckEpoch);
-    EXPECT_EQ(4U, peer->lastAgreeIndex);
+    EXPECT_EQ(4U, peer->matchIndex);
     EXPECT_EQ(Clock::mockValue +
               milliseconds(consensus->HEARTBEAT_PERIOD_MS),
               peer->nextHeartbeatTime);
@@ -2530,7 +2530,7 @@ TEST_F(ServerRaftConsensusPSTest, installSnapshot_ok)
     // make sure we don't use an updated lastSnapshotIndex value
     consensus->lastSnapshotIndex = 1;
     consensus->installSnapshot(lockGuard, *peer);
-    EXPECT_EQ(2U, peer->lastAgreeIndex);
+    EXPECT_EQ(2U, peer->matchIndex);
     EXPECT_EQ(3U, peer->nextIndex);
     EXPECT_FALSE(peer->snapshotFile);
     EXPECT_EQ(0U, peer->snapshotFileOffset);
@@ -3129,7 +3129,7 @@ class UpToDateLeaderHelper {
         if (iter == 1) {
             peer->lastAckEpoch = consensus->currentEpoch;
         } else if (iter == 2) {
-            peer->lastAgreeIndex = 4;
+            peer->matchIndex = 4;
             consensus->advanceCommitIndex();
         } else {
             FAIL();

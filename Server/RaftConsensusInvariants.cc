@@ -186,7 +186,7 @@ Invariants::checkBasic()
     // advanceCommitIndex is called everywhere it needs to be.
     if (consensus.state == RaftConsensus::State::LEADER) {
         uint64_t majorityEntry =
-            consensus.configuration->quorumMin(&Server::getLastAgreeIndex);
+            consensus.configuration->quorumMin(&Server::getMatchIndex);
         expect(consensus.commitIndex >= majorityEntry ||
                majorityEntry < consensus.log->getLogStartIndex() ||
                consensus.log->getEntry(majorityEntry).term() !=
@@ -284,7 +284,7 @@ Invariants::checkPeerBasic()
         if (!peer->requestVoteDone) {
             expect(!peer->haveVote_);
         }
-        expect(peer->lastAgreeIndex <= consensus.log->getLastLogIndex());
+        expect(peer->matchIndex <= consensus.log->getLastLogIndex());
         expect(peer->lastAckEpoch <= consensus.currentEpoch);
         expect(peer->nextHeartbeatTime <= Clock::now() +
                std::chrono::milliseconds(consensus.HEARTBEAT_PERIOD_MS));
