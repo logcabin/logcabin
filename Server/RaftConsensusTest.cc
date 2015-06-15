@@ -1177,7 +1177,8 @@ TEST_F(ServerRaftConsensusTest, handleSnapshotChunk_newLeader)
     EXPECT_GT(Clock::mockValue +
               milliseconds(consensus->ELECTION_TIMEOUT_MS * 2),
               consensus->startElectionAt);
-    EXPECT_EQ("term: 10 ", response);
+    EXPECT_EQ("term: 10 "
+              "bytes_stored: 5", response);
     consensus->snapshotWriter->discard();
 }
 
@@ -1208,7 +1209,8 @@ TEST_F(ServerRaftConsensusTest, handleInstallSnapshot)
 
     // useful data, but not done yet
     consensus->handleInstallSnapshot(request, response);
-    EXPECT_EQ("term: 10 ", response);
+    EXPECT_EQ("term: 10 "
+              "bytes_stored: 37", response);
     EXPECT_EQ(0U, consensus->lastSnapshotIndex);
     EXPECT_TRUE(bool(consensus->snapshotWriter));
 
@@ -1220,7 +1222,8 @@ TEST_F(ServerRaftConsensusTest, handleInstallSnapshot)
     LogCabin::Core::Debug::setLogPolicy({
         {"Server/RaftConsensus.cc", "WARNING"}
     });
-    EXPECT_EQ("term: 10 ", response);
+    EXPECT_EQ("term: 10 "
+              "bytes_stored: 37", response);
     EXPECT_EQ(0U, consensus->lastSnapshotIndex);
     EXPECT_TRUE(bool(consensus->snapshotWriter));
 
@@ -1229,7 +1232,8 @@ TEST_F(ServerRaftConsensusTest, handleInstallSnapshot)
     request.set_data("hello world!");
     request.set_done(true);
     consensus->handleInstallSnapshot(request, response);
-    EXPECT_EQ("term: 10 ", response);
+    EXPECT_EQ("term: 10 "
+              "bytes_stored: 49", response);
     EXPECT_EQ(1U, consensus->lastSnapshotIndex);
     EXPECT_FALSE(bool(consensus->snapshotWriter));
     char helloWorld[13];
@@ -1240,6 +1244,54 @@ TEST_F(ServerRaftConsensusTest, handleInstallSnapshot)
     EXPECT_STREQ("hello world!", helloWorld);
 
     // TODO(ongaro): Test that the configuration is update accordingly
+}
+
+TEST_F(ServerRaftConsensusTest, handleInstallSnapshot_byteOffsetHigh)
+{
+    init();
+    consensus->stepDown(10);
+    consensus->append({&entry1});
+    consensus->commitIndex = 1;
+
+    // Take a snapshot, saving it directly instead of calling snapshotDone().
+    // This way, the consensus module does not know about the snapshot file.
+    std::unique_ptr<Storage::SnapshotFile::Writer> writer =
+        consensus->beginSnapshot(1);
+    writer->save();
+    std::string snapshotContents =
+        readEntireFileAsString(consensus->storageLayout.snapshotDir,
+                               "snapshot");
+
+    Protocol::Raft::InstallSnapshot::Request request;
+    Protocol::Raft::InstallSnapshot::Response response;
+    request.set_server_id(3);
+    request.set_term(10);
+    request.set_last_snapshot_index(1);
+    request.set_byte_offset(1);
+    request.set_data(snapshotContents);
+    request.set_done(false);
+
+    // expect warnings
+    LogCabin::Core::Debug::setLogPolicy({
+        {"Server/RaftConsensus.cc", "ERROR"}
+    });
+
+    // byte offset higher than offset written,
+    // version 2 behavior
+    request.set_version(2);
+    consensus->handleInstallSnapshot(request, response);
+    EXPECT_EQ("term: 10 "
+              "bytes_stored: 0",
+              response);
+    request.clear_version();
+
+    // byte offset higher than offset written,
+    // version 1 compatibility
+    consensus->handleInstallSnapshot(request, response);
+    EXPECT_EQ("term: 11 "
+              "bytes_stored: 0",
+              response);
+    EXPECT_EQ(11U, consensus->currentTerm);
 }
 
 TEST_F(ServerRaftConsensusTest, handleRequestVote)
@@ -2461,6 +2513,7 @@ class ServerRaftConsensusPSTest : public ServerRaftConsensusPTest {
         request.set_byte_offset(0);
         request.set_data("hello, world!");
         request.set_done(true);
+        request.set_version(2);
 
         response.set_term(5);
     }
@@ -2557,6 +2610,40 @@ TEST_F(ServerRaftConsensusPSTest, installSnapshot_suppressBulkData)
     EXPECT_FALSE(peer->suppressBulkData);
     consensus->installSnapshot(lockGuard, *peer);
     EXPECT_FALSE(peer->suppressBulkData);
+}
+
+TEST_F(ServerRaftConsensusPSTest, installSnapshot_notAllBytesStored)
+{
+    peer->suppressBulkData = false;
+    consensus->SOFT_RPC_SIZE_LIMIT = 7;
+    request.set_data("hello, ");
+    request.set_done(false);
+    response.set_bytes_stored(4);
+    peerService->reply(Protocol::Raft::OpCode::INSTALL_SNAPSHOT,
+                       request, response);
+    request.set_byte_offset(4);
+    request.set_data("o, worl");
+    response.set_bytes_stored(0);
+    peerService->reply(Protocol::Raft::OpCode::INSTALL_SNAPSHOT,
+                       request, response);
+    request.set_byte_offset(0);
+    request.set_data("hello, ");
+    response.set_bytes_stored(7);
+    peerService->reply(Protocol::Raft::OpCode::INSTALL_SNAPSHOT,
+                       request, response);
+    request.set_byte_offset(7);
+    request.set_data("world!");
+    request.set_done(true);
+    response.set_bytes_stored(13);
+    peerService->reply(Protocol::Raft::OpCode::INSTALL_SNAPSHOT,
+                       request, response);
+
+    std::unique_lock<Mutex> lockGuard(consensus->mutex);
+    consensus->installSnapshot(lockGuard, *peer);
+    consensus->installSnapshot(lockGuard, *peer);
+    consensus->installSnapshot(lockGuard, *peer);
+    consensus->installSnapshot(lockGuard, *peer);
+    EXPECT_EQ(2U, peer->matchIndex);
 }
 
 

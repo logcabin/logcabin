@@ -1438,6 +1438,8 @@ RaftConsensus::handleInstallSnapshot(
         snapshotWriter.reset(
             new Storage::SnapshotFile::Writer(storageLayout));
     }
+    response.set_bytes_stored(snapshotWriter->getBytesWritten());
+
     if (request.byte_offset() < snapshotWriter->getBytesWritten()) {
         WARNING("Ignoring stale snapshot chunk for byte offset %lu when the "
                 "next byte needed is %lu",
@@ -1446,12 +1448,28 @@ RaftConsensus::handleInstallSnapshot(
         return;
     }
     if (request.byte_offset() > snapshotWriter->getBytesWritten()) {
-        PANIC("Leader tried to send snapshot chunk at byte offset %lu but the "
-              "next byte needed is %lu. It's supposed to send these in order.",
-              request.byte_offset(),
-              snapshotWriter->getBytesWritten());
+        WARNING("Leader tried to send snapshot chunk at byte offset %lu but "
+                "the next byte needed is %lu. Discarding the chunk.",
+                request.byte_offset(),
+                snapshotWriter->getBytesWritten());
+        if (!request.has_version() || request.version() < 2) {
+            // For compatibility with InstallSnapshot version 1 leader: such a
+            // leader assumes the InstallSnapshot RPC succeeded if the terms
+            // match (it ignores the 'bytes_stored' field). InstallSnapshot
+            // hasn't succeeded here, so we can't respond ok.
+            WARNING("Incrementing our term (to %lu) to force the leader "
+                    "(of %lu) to step down and forget about the partial "
+                    "snapshot it's sending",
+                    currentTerm + 1,
+                    currentTerm);
+            stepDown(currentTerm + 1);
+            // stepDown() changed currentTerm to currentTerm + 1
+            response.set_term(currentTerm);
+        }
+        return;
     }
     snapshotWriter->writeRaw(request.data().data(), request.data().length());
+    response.set_bytes_stored(snapshotWriter->getBytesWritten());
 
     if (request.done()) {
         if (request.last_snapshot_index() < lastSnapshotIndex) {
@@ -2348,6 +2366,7 @@ RaftConsensus::installSnapshot(std::unique_lock<Mutex>& lockGuard,
     Protocol::Raft::InstallSnapshot::Request request;
     request.set_server_id(serverId);
     request.set_term(currentTerm);
+    request.set_version(2);
 
     // Open the latest snapshot if we haven't already. Stash a copy of the
     // lastSnapshotIndex that goes along with the file, since it's possible
@@ -2420,9 +2439,17 @@ RaftConsensus::installSnapshot(std::unique_lock<Mutex>& lockGuard,
         stateChanged.notify_all();
         peer.nextHeartbeatTime = start +
             std::chrono::milliseconds(HEARTBEAT_PERIOD_MS);
-        peer.snapshotFileOffset += numDataBytes;
         peer.suppressBulkData = false;
-        if (request.done()) {
+        if (response.has_bytes_stored()) {
+            // Normal path (since InstallSnapshot version 2).
+            peer.snapshotFileOffset = response.bytes_stored();
+        } else {
+            // This is the old path for InstallSnapshot version 1 followers
+            // only. The leader would just assume the snapshot chunk was always
+            // appended to the file if the terms matched.
+            peer.snapshotFileOffset += numDataBytes;
+        }
+        if (peer.snapshotFileOffset == peer.snapshotFile->getFileLength()) {
             NOTICE("Done sending snapshot through index %lu to follower",
                    peer.lastSnapshotIndex);
             peer.matchIndex = peer.lastSnapshotIndex;

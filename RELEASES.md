@@ -38,6 +38,9 @@ Bug fixes (low severity):
 - Fixes signed integer overflow bug under aggressive optimizing compilers
   affecting SteadyTimeConverter, which is only used in producing ServerStats
   (git 64734001).
+- Fixes repeated PANIC in InstallSnapshot after server restarts while
+  receiving a snapshot (issue #174). This could result in a temporary
+  availability issue that would resolve itself on the next term change.
 
 Version 1.0.0 (2015-04-29)
 ==========================
