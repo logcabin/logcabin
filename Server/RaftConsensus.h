@@ -373,11 +373,18 @@ class Peer : public Server {
     bool haveVote_;
 
     /**
-     * Indicates that nextIndex is still a (poor) guess: the leader should
-     * send heartbeats to save bandwidth until it finds where the follower's
-     * log diverges from its own. Only used when leader.
+     * Indicates that the leader and the follower aren't necessarily
+     * synchronized. The leader should not send large amounts of data (with
+     * many log entries or large chunks of a snapshot file) to the follower
+     * while this flag is true. For example, the follower might have been
+     * disconnected, or the leader might not know where the follower's log
+     * diverges from its own. It's better to sync up using small RPCs like
+     * heartbeats, then begin/resume sending bulk data after receiving an
+     * acknowledgment.
+     *
+     * Only used when leader.
      */
-    bool forceHeartbeat;
+    bool suppressBulkData;
 
     /**
      * The index of the next entry to send to the follower. Only used when

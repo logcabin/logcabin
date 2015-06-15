@@ -165,7 +165,7 @@ Peer::Peer(uint64_t serverId, RaftConsensus& consensus)
     , exiting(false)
     , requestVoteDone(false)
     , haveVote_(false)
-    , forceHeartbeat(true)
+    , suppressBulkData(true)
       // It's somewhat important to set nextIndex correctly here, since peers
       // that are added to the configuration won't go through beginLeadership()
       // on the current leader. I say somewhat important because, if nextIndex
@@ -205,7 +205,7 @@ Peer::beginLeadership()
 {
     nextIndex = consensus.log->getLastLogIndex() + 1;
     lastAgreeIndex = 0;
-    forceHeartbeat = true;
+    suppressBulkData = true;
     snapshotFile.reset();
     snapshotFileOffset = 0;
     lastSnapshotIndex = 0;
@@ -350,7 +350,7 @@ Peer::dumpToStream(std::ostream& os) const
             os << std::endl;
             break;
         case RaftConsensus::State::LEADER:
-            os << "forceHeartbeat: " << forceHeartbeat << std::endl;
+            os << "suppressBulkData: " << suppressBulkData << std::endl;
             os << "nextIndex: " << nextIndex << std::endl;
             os << "lastAgreeIndex: " << lastAgreeIndex << std::endl;
             break;
@@ -368,7 +368,7 @@ Peer::updatePeerStats(Protocol::ServerStats::Raft::Peer& peerStats,
         case RaftConsensus::State::CANDIDATE:
             break;
         case RaftConsensus::State::LEADER:
-            peerStats.set_force_heartbeat(forceHeartbeat);
+            peerStats.set_suppress_bulk_data(suppressBulkData);
             peerStats.set_next_index(nextIndex);
             peerStats.set_last_agree_index(lastAgreeIndex);
             peerStats.set_is_caught_up(isCaughtUp_);
@@ -2235,7 +2235,7 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
     request.set_prev_log_term(prevLogTerm);
     request.set_prev_log_index(prevLogIndex);
     uint64_t numEntries = 0;
-    if (!peer.forceHeartbeat)
+    if (!peer.suppressBulkData)
         numEntries = packEntries(peer.nextIndex, request);
     request.set_commit_index(std::min(commitIndex, prevLogIndex + numEntries));
 
@@ -2251,6 +2251,7 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
         case Peer::CallStatus::OK:
             break;
         case Peer::CallStatus::FAILED:
+            peer.suppressBulkData = true;
             peer.backoffUntil = start +
                 std::chrono::milliseconds(RPC_FAILURE_BACKOFF_MS);
             return;
@@ -2291,7 +2292,7 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
                 advanceCommitIndex();
             }
             peer.nextIndex = peer.lastAgreeIndex + 1;
-            peer.forceHeartbeat = false;
+            peer.suppressBulkData = false;
 
             if (!peer.isCaughtUp_ &&
                 peer.thisCatchUpIterationGoalId <= peer.lastAgreeIndex) {
@@ -2357,14 +2358,21 @@ RaftConsensus::installSnapshot(std::unique_lock<Mutex>& lockGuard,
             FS::openFile(storageLayout.snapshotDir, "snapshot", O_RDONLY)));
         peer.snapshotFileOffset = 0;
         peer.lastSnapshotIndex = lastSnapshotIndex;
+        NOTICE("Beginning to send snapshot of %lu bytes up through index %lu "
+               "to follower",
+               peer.snapshotFile->getFileLength(),
+               lastSnapshotIndex);
     }
     request.set_last_snapshot_index(peer.lastSnapshotIndex);
     request.set_byte_offset(peer.snapshotFileOffset);
-    // The amount of data we can send is bounded by the remaining bytes in the
-    // file and the maximum length for RPCs.
-    uint64_t numDataBytes = std::min(
-        peer.snapshotFile->getFileLength() - peer.snapshotFileOffset,
-        SOFT_RPC_SIZE_LIMIT);
+    uint64_t numDataBytes = 0;
+    if (!peer.suppressBulkData) {
+        // The amount of data we can send is bounded by the remaining bytes in
+        // the file and the maximum length for RPCs.
+        numDataBytes = std::min(
+            peer.snapshotFile->getFileLength() - peer.snapshotFileOffset,
+            SOFT_RPC_SIZE_LIMIT);
+    }
     request.set_data(peer.snapshotFile->get<char>(peer.snapshotFileOffset,
                                                   numDataBytes),
                      numDataBytes);
@@ -2383,6 +2391,7 @@ RaftConsensus::installSnapshot(std::unique_lock<Mutex>& lockGuard,
         case Peer::CallStatus::OK:
             break;
         case Peer::CallStatus::FAILED:
+            peer.suppressBulkData = true;
             peer.backoffUntil = start +
                 std::chrono::milliseconds(RPC_FAILURE_BACKOFF_MS);
             return;
@@ -2412,7 +2421,10 @@ RaftConsensus::installSnapshot(std::unique_lock<Mutex>& lockGuard,
         peer.nextHeartbeatTime = start +
             std::chrono::milliseconds(HEARTBEAT_PERIOD_MS);
         peer.snapshotFileOffset += numDataBytes;
+        peer.suppressBulkData = false;
         if (request.done()) {
+            NOTICE("Done sending snapshot through index %lu to follower",
+                   peer.lastSnapshotIndex);
             peer.lastAgreeIndex = peer.lastSnapshotIndex;
             peer.nextIndex = peer.lastSnapshotIndex + 1;
             // These entries are already committed if they're in a snapshot, so
@@ -2718,6 +2730,7 @@ RaftConsensus::requestVote(std::unique_lock<Mutex>& lockGuard, Peer& peer)
         case Peer::CallStatus::OK:
             break;
         case Peer::CallStatus::FAILED:
+            peer.suppressBulkData = true;
             peer.backoffUntil = start +
                 std::chrono::milliseconds(RPC_FAILURE_BACKOFF_MS);
             return;

@@ -2205,9 +2205,9 @@ class ServerRaftConsensusPATest : public ServerRaftConsensusPTest {
         // leader has determined that peer and it diverge on the first log
         // entry.
         EXPECT_EQ(5U, peer->nextIndex);
-        EXPECT_TRUE(peer->forceHeartbeat);
+        EXPECT_TRUE(peer->suppressBulkData);
         peer->nextIndex = 1;
-        peer->forceHeartbeat = false;
+        peer->suppressBulkData = false;
 
         request.set_server_id(1);
         request.set_term(6);
@@ -2316,16 +2316,16 @@ TEST_F(ServerRaftConsensusPATest, appendEntries_limitSizeRegression)
     EXPECT_EQ(0U, peer->lastAgreeIndex);
 }
 
-TEST_F(ServerRaftConsensusPATest, appendEntries_forceHeartbeat)
+TEST_F(ServerRaftConsensusPATest, appendEntries_suppressBulkData)
 {
-    peer->forceHeartbeat = true;
+    peer->suppressBulkData = true;
     request.mutable_entries()->Clear();
     request.set_commit_index(0);
     peerService->reply(Protocol::Raft::OpCode::APPEND_ENTRIES,
                        request, response);
     std::unique_lock<Mutex> lockGuard(consensus->mutex);
     consensus->appendEntries(lockGuard, *peer);
-    EXPECT_FALSE(peer->forceHeartbeat);
+    EXPECT_FALSE(peer->suppressBulkData);
 }
 
 TEST_F(ServerRaftConsensusPATest, appendEntries_termChanged)
@@ -2472,6 +2472,7 @@ class ServerRaftConsensusPSTest : public ServerRaftConsensusPTest {
 
 TEST_F(ServerRaftConsensusPSTest, installSnapshot_rpcFailed)
 {
+    peer->suppressBulkData = false;
     peerService->closeSession(Protocol::Raft::OpCode::INSTALL_SNAPSHOT,
                               request);
     // expect warning
@@ -2487,6 +2488,7 @@ TEST_F(ServerRaftConsensusPSTest, installSnapshot_rpcFailed)
 
 TEST_F(ServerRaftConsensusPSTest, installSnapshot_termChanged)
 {
+    peer->suppressBulkData = false;
     peerService->runArbitraryCode(
             Protocol::Raft::OpCode::INSTALL_SNAPSHOT,
             request,
@@ -2499,6 +2501,7 @@ TEST_F(ServerRaftConsensusPSTest, installSnapshot_termChanged)
 
 TEST_F(ServerRaftConsensusPSTest, installSnapshot_termStale)
 {
+    peer->suppressBulkData = false;
     response.set_term(10);
     peerService->reply(Protocol::Raft::OpCode::INSTALL_SNAPSHOT,
                        request, response);
@@ -2511,6 +2514,7 @@ TEST_F(ServerRaftConsensusPSTest, installSnapshot_termStale)
 
 TEST_F(ServerRaftConsensusPSTest, installSnapshot_ok)
 {
+    peer->suppressBulkData = false;
     consensus->SOFT_RPC_SIZE_LIMIT = 7;
     request.set_data("hello, ");
     request.set_done(false);
@@ -2536,6 +2540,25 @@ TEST_F(ServerRaftConsensusPSTest, installSnapshot_ok)
               milliseconds(consensus->HEARTBEAT_PERIOD_MS),
               peer->nextHeartbeatTime);
 }
+
+TEST_F(ServerRaftConsensusPSTest, installSnapshot_suppressBulkData)
+{
+    peer->suppressBulkData = true;
+    consensus->SOFT_RPC_SIZE_LIMIT = 7;
+    request.set_data("");
+    request.set_done(false);
+    peerService->reply(Protocol::Raft::OpCode::INSTALL_SNAPSHOT,
+                       request, response);
+    request.set_data("hello, ");
+    peerService->reply(Protocol::Raft::OpCode::INSTALL_SNAPSHOT,
+                       request, response);
+    std::unique_lock<Mutex> lockGuard(consensus->mutex);
+    consensus->installSnapshot(lockGuard, *peer);
+    EXPECT_FALSE(peer->suppressBulkData);
+    consensus->installSnapshot(lockGuard, *peer);
+    EXPECT_FALSE(peer->suppressBulkData);
+}
+
 
 TEST_F(ServerRaftConsensusTest, becomeLeader)
 {
@@ -3178,7 +3201,7 @@ TEST_F(ServerRaftConsensusTest, regression_nextIndexForNewServer)
     consensus->startNewElection();
     consensus->append({&entry5});
     EXPECT_EQ(4U, getPeer(2)->nextIndex);
-    EXPECT_TRUE(getPeer(2)->forceHeartbeat);
+    EXPECT_TRUE(getPeer(2)->suppressBulkData);
 }
 
 
