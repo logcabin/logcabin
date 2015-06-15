@@ -194,6 +194,21 @@ TEST_F(ServerStateMachineTest, waitForResponse_openSession)
               response);
 }
 
+TEST_F(ServerStateMachineTest, waitForResponse_closeSession)
+{
+    stateMachine->lastIndex = 3;
+    StateMachine::Command::Request request;
+    request.mutable_close_session()->set_client_id(3);
+    StateMachine::Command::Response response;
+    stateMachine->versionHistory.insert({3, 2});
+    EXPECT_FALSE(stateMachine->waitForResponse(2, request, response));
+    EXPECT_FALSE(response.has_close_session());
+    EXPECT_TRUE(stateMachine->waitForResponse(3, request, response));
+    EXPECT_EQ("close_session { "
+              "}",
+              response);
+}
+
 TEST_F(ServerStateMachineTest, waitForResponse_advanceVersion)
 {
     StateMachine::Command::Request request;
@@ -302,34 +317,85 @@ TEST_F(ServerStateMachineTest, apply_openSession)
     EXPECT_EQ(0U, session.responses.size());
 }
 
+TEST_F(ServerStateMachineTest, apply_closeSession)
+{
+    stateMachine->sessions.insert({2, {}});
+    stateMachine->sessions.insert({3, {}});
+    stateMachine->sessions.insert({4, {}});
+    StateMachine::Command::Request command;
+    command.mutable_close_session()->set_client_id(3);
+
+    RaftConsensus::Entry entry;
+    entry.index = 6;
+    entry.type = RaftConsensus::Entry::DATA;
+    entry.command = serialize(command);
+    entry.clusterTime = 2;
+
+
+    // first apply will have no effect (only warning) because state machine
+    // version 1 does not support the CloseSession command
+    Core::Debug::setLogPolicy({
+        {"Server/StateMachine.cc", "ERROR"},
+        {"", "WARNING"},
+    });
+    stateMachine->versionHistory.insert({4, 1});
+    stateMachine->apply(entry);
+    ASSERT_EQ((std::vector<uint64_t>{2, 3, 4}),
+              Core::STLUtil::sorted(
+                  Core::STLUtil::getKeys(stateMachine->sessions)));
+    Core::Debug::setLogPolicy({
+        {"", "WARNING"},
+    });
+
+    // second apply will work
+    stateMachine->versionHistory.insert({5, 2});
+    stateMachine->apply(entry);
+    ASSERT_EQ((std::vector<uint64_t>{2, 4}),
+              Core::STLUtil::sorted(
+                  Core::STLUtil::getKeys(stateMachine->sessions)));
+
+    // third apply will have no effect since the session was already closed
+    stateMachine->apply(entry);
+    ASSERT_EQ((std::vector<uint64_t>{2, 4}),
+              Core::STLUtil::sorted(
+                  Core::STLUtil::getKeys(stateMachine->sessions)));
+}
+
+
 TEST_F(ServerStateMachineTest, apply_advanceVersion)
 {
-    StateMachine::Command::Request command =
-        Core::ProtoBuf::fromString<StateMachine::Command::Request>(
-            "advance_version: { "
-            "  requested_version: 1 "
-            "}");
     RaftConsensus::Entry entry;
     entry.index = 6;
     entry.type = RaftConsensus::Entry::DATA;
     entry.clusterTime = 2;
 
+    // stay at version 1
+    StateMachine::Command::Request command;
+    command.mutable_advance_version()->set_requested_version(1);
     entry.command = serialize(command);
     stateMachine->apply(entry);
     stateMachine->apply(entry);
     stateMachine->apply(entry); // should silently succeed
+    EXPECT_EQ(1U, stateMachine->getVersion(10000));
 
-    command = Core::ProtoBuf::fromString<StateMachine::Command::Request>(
-            "advance_version: { "
-            "  requested_version: 1 "
-            "}");
+    // up to version 2
+    command.mutable_advance_version()->set_requested_version(2);
+    entry.command = serialize(command);
+    stateMachine->apply(entry);
+    EXPECT_EQ(2U, stateMachine->getVersion(10000));
+
+    // downgrade to version 1 should give warning
+    command.mutable_advance_version()->set_requested_version(1);
     entry.command = serialize(command);
     Core::Debug::setLogPolicy({
         {"Server/StateMachine.cc", "ERROR"},
         {"", "WARNING"},
     });
-    stateMachine->apply(entry); // expect warning
-    EXPECT_EQ(1U, stateMachine->getVersion(10000));
+    stateMachine->apply(entry);
+    Core::Debug::setLogPolicy({
+        {"", "WARNING"},
+    });
+    EXPECT_EQ(2U, stateMachine->getVersion(10000));
 }
 
 TEST_F(ServerStateMachineTest, apply_unknown)
@@ -539,12 +605,12 @@ TEST_F(ServerStateMachineTest, loadSnapshot_unknownFormatVersion)
 
 TEST_F(ServerStateMachineTest, loadVersionHistory_unknownVersion)
 {
-    stateMachine->versionHistory.insert({1, 2});
+    stateMachine->versionHistory.insert({1, 3});
     SnapshotStateMachine::Header header;
     stateMachine->serializeVersionHistory(header);
     EXPECT_DEATH(stateMachine->loadVersionHistory(header),
-                 "State machine version read from snapshot was 2, but this "
-                 "code only supports 1 through 1");
+                 "State machine version read from snapshot was 3, but this "
+                 "code only supports 1 through 2");
 }
 
 

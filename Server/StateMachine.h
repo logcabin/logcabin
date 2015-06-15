@@ -38,6 +38,11 @@ class RaftConsensus;
 /**
  * Interprets and executes operations that have been committed into the Raft
  * log.
+ *
+ * Version history:
+ * - Version 1 of the State Machine shipped with LogCabin v1.0.0.
+ * - Version 2 added the CloseSession command, which clients can use when they
+ *   gracefully shut down.
  */
 class StateMachine {
   public:
@@ -54,7 +59,7 @@ class StateMachine {
          * This state machine code can behave like all versions between
          * MIN_SUPPORTED_VERSION and MAX_SUPPORTED_VERSION, inclusive.
          */
-        MAX_SUPPORTED_VERSION = 1,
+        MAX_SUPPORTED_VERSION = 2,
     };
 
 
@@ -200,8 +205,15 @@ class StateMachine {
      * Called to log a debug message if appropriate when the state machine
      * encounters a query or command that is not understood by the current
      * running version.
+     * \param request
+     *      Problematic command/query.
+     * \param reason
+     *      Explains why 'request' is problematic. Should complete the sentence
+     *      "This version of the state machine (%lu) " + reason, and it should
+     *      not contain end punctuation.
      */
-    void warnUnknownRequest(const google::protobuf::Message& request) const;
+    void warnUnknownRequest(const google::protobuf::Message& request,
+                            const char* reason) const;
 
     /**
      * Consensus module from which this state machine pulls commands and
@@ -303,6 +315,13 @@ class StateMachine {
      * prevent spamming the debug log.
      */
     mutable TimePoint lastUnknownRequestMessage;
+
+    /**
+     * Total number of commands/queries that this state machine either did not
+     * understand or could not process because they were introduced in a newer
+     * version.
+     */
+    mutable uint64_t numUnknownRequests;
 
     /**
      * The number of debug messages suppressed by warnUnknownRequest() since

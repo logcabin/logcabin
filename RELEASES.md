@@ -21,6 +21,12 @@ Improvements:
 - Optimizes setting nextIndex on leaders by capping it to just past the
   follower's last log index. This helps with followers that are new or have
   fallen far behind.
+- Clients now make a best effort attempt to close their sessions when they shut
+  down gracefully (issue #116). Before, client sessions were only ever expired
+  after a timeout. This state could accumulate quickly when running short-lived
+  clients in a tight loop. Enabling this change requires all servers to be
+  updated (so that the state machine is updated); new clients talking to old
+  clusters will issue a warning that they are unable to close their sessions.
 
 Bug fixes (high severity):
 - Fixes packaging up very large AppendEntries requests. Before, it was possible

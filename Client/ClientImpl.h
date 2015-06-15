@@ -286,9 +286,13 @@ class ClientImpl {
         TimePoint lastKeepAliveStart;
         /**
          * How often session keep-alive requests are sent during periods of
-         * inactivity, in milliseconds.
+         * inactivity.
          */
-        uint64_t keepAliveIntervalMs;
+        std::chrono::milliseconds keepAliveInterval;
+        /**
+         * How long to wait for the CloseSession RPC before giving up.
+         */
+        std::chrono::milliseconds sessionCloseTimeout;
 
         /**
          * If set, this is an ongoing keep-alive RPC. This call is canceled to

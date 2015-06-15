@@ -136,6 +136,26 @@ message OpenSession {
 }
 
 /**
+ * CloseSession state machine command: Terminate a session with the cluster.
+ * This cleans up any state that the session held; future RPCs on this session
+ * will have errors.
+ * \since
+ *      This command was introduced in state machine version 2. State machines
+ *      running version 1 will ignore this command; they only expire sessions
+ *      based on timeouts.
+ */
+message CloseSession {
+    message Request {
+        /**
+         * The ID assigned to the client as previously returned by OpenSession.
+         */
+        required uint64 client_id = 1;
+    }
+    message Response {
+    }
+}
+
+/**
  * A server in a configuration. Used in the GetConfiguration and
  * SetConfiguration RPCs.
  */
@@ -395,15 +415,18 @@ message StateMachineCommand {
     message Request {
         // The following are mutually exclusive.
         optional OpenSession.Request open_session = 1;
+        optional CloseSession.Request close_session = 4;
         optional ReadWriteTree.Request tree = 2;
         optional AdvanceStateMachineVersion.Request advance_version = 3;
     }
     /**
-     * This is what the state machine outputs for read-write commands from the log.
+     * This is what the state machine outputs for read-write commands from the
+     * log.
      */
     message Response {
         // The following are mutually exclusive.
         optional OpenSession.Response open_session = 1;
+        optional CloseSession.Response close_session = 4;
         optional ReadWriteTree.Response tree = 2;
         optional AdvanceStateMachineVersion.Response advance_version = 3;
     }

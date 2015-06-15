@@ -70,6 +70,7 @@ StateMachine::StateMachine(std::shared_ptr<RaftConsensus> consensus,
     , childPid(0)
     , lastIndex(0)
     , lastUnknownRequestMessage(TimePoint::min())
+    , numUnknownRequests(0)
     , numUnknownRequestsSinceLastMessage(0)
     , numSnapshotsAttempted(0)
     , numSnapshotsFailed(0)
@@ -121,7 +122,7 @@ StateMachine::query(const Query::Request& request,
                                         *response.mutable_tree());
         return true;
     }
-    warnUnknownRequest(request);
+    warnUnknownRequest(request, "does not understand the given request");
     return false;
 }
 
@@ -135,6 +136,7 @@ StateMachine::updateServerStats(Protocol::ServerStats& serverStats) const
     smStats.set_snapshotting(childPid != 0);
     smStats.set_last_applied(lastIndex);
     smStats.set_num_sessions(sessions.size());
+    smStats.set_num_unknown_requests(numUnknownRequests);
     smStats.set_num_snapshots_attempted(numSnapshotsAttempted);
     smStats.set_num_snapshots_failed(numSnapshotsFailed);
     smStats.set_num_redundant_advance_version_entries(
@@ -172,6 +174,7 @@ StateMachine::waitForResponse(uint64_t logIndex,
     // was applied using getVersion(logIndex), then reply and return true/false
     // based on that. Existing commands have been around since version 1, so we
     // skip this check for now.
+    uint16_t versionThen = getVersion(logIndex);
 
     if (command.has_tree()) {
         const PC::ExactlyOnceRPCInfo& rpcInfo = command.tree().exactly_once();
@@ -201,9 +204,12 @@ StateMachine::waitForResponse(uint64_t logIndex,
         response.mutable_open_session()->
             set_client_id(logIndex);
         return true;
+    } else if (versionThen >= 2 && command.has_close_session()) {
+        response.mutable_close_session(); // no fields to set
+        return true;
     } else if (command.has_advance_version()) {
         response.mutable_advance_version()->
-            set_running_version(getVersion(logIndex));
+            set_running_version(versionThen);
         return true;
     }
     // don't warnUnknownRequest here, since we already did so in apply()
@@ -221,6 +227,7 @@ StateMachine::apply(const RaftConsensus::Entry& entry)
         PANIC("Failed to parse protobuf for entry %lu",
               entry.index);
     }
+    uint16_t runningVersion = getVersion(entry.index - 1);
     if (command.has_tree()) {
         PC::ExactlyOnceRPCInfo rpcInfo = command.tree().exactly_once();
         auto it = sessions.find(rpcInfo.client_id());
@@ -251,42 +258,49 @@ StateMachine::apply(const RaftConsensus::Entry& entry)
         uint64_t clientId = entry.index;
         Session& session = sessions.insert({clientId, {}}).first->second;
         session.lastModified = entry.clusterTime;
+    } else if (command.has_close_session()) {
+        if (runningVersion >= 2) {
+            sessions.erase(command.close_session().client_id());
+        } else {
+            // Command is ignored in version < 2.
+            warnUnknownRequest(command, "may not process the given request, "
+                               "which was introduced in version 2");
+        }
     } else if (command.has_advance_version()) {
         uint16_t requested = Core::Util::downCast<uint16_t>(
                 command.advance_version(). requested_version());
-        uint16_t running = getVersion(entry.index - 1);
-        if (requested < running) {
+        if (requested < runningVersion) {
             WARNING("Rejecting downgrade of state machine version "
                     "(running version %u but command at log index %lu wants "
                     "to switch to version %u)",
-                    running,
+                    runningVersion,
                     entry.index,
                     requested);
             ++numRejectedAdvanceVersionEntries;
-        } else if (requested > running) {
+        } else if (requested > runningVersion) {
             if (requested > MAX_SUPPORTED_VERSION) {
                 PANIC("Cannot upgrade state machine to version %u (from %u) "
                       "because this code only supports up to version %u",
                       requested,
-                      running,
+                      runningVersion,
                       MAX_SUPPORTED_VERSION);
             } else {
-                // someday, maybe we'll get here
-                // versionHistory.insert(...)
-                PANIC("state machine version > 1 not supported");
+                NOTICE("Upgrading state machine to version %u (from %u)",
+                       requested,
+                       runningVersion);
+                versionHistory.insert({entry.index, requested});
             }
             ++numSuccessfulAdvanceVersionEntries;
-        } else { // requested == running
+        } else { // requested == runningVersion
             // nothing to do
             // If this stat is high, see note in RaftConsensus.cc.
             ++numRedundantAdvanceVersionEntries;
         }
         ++numTotalAdvanceVersionEntries;
     } else { // unknown command
-        // This could be because the state machine hasn't been upgraded yet to
-        // handle the command. These are (deterministically) ignored by all
-        // state machines running the current version.
-        warnUnknownRequest(command);
+        // This is (deterministically) ignored by all state machines running
+        // the current version.
+        warnUnknownRequest(command, "does not understand the given request");
     }
 }
 
@@ -688,22 +702,25 @@ StateMachine::takeSnapshot(uint64_t lastIncludedIndex,
 
 void
 StateMachine::warnUnknownRequest(
-        const google::protobuf::Message& request) const
+        const google::protobuf::Message& request,
+        const char* reason) const
 {
+    ++numUnknownRequests;
     TimePoint now = Clock::now();
     if (lastUnknownRequestMessage + unknownRequestMessageBackoff < now) {
         lastUnknownRequestMessage = now;
         if (numUnknownRequestsSinceLastMessage > 0) {
-            WARNING("This version of the state machine (%u) does not "
-                    "understand the given request (and %lu similar warnings "
+            WARNING("This version of the state machine (%u) %s "
+                    "(and %lu similar warnings "
                     "were suppressed since the last message): %s",
                     getVersion(~0UL),
+                    reason,
                     numUnknownRequestsSinceLastMessage,
                     Core::ProtoBuf::dumpString(request).c_str());
         } else {
-            WARNING("This version of the state machine (%u) does not "
-                    "understand the given request: %s",
+            WARNING("This version of the state machine (%u) %s: %s",
                     getVersion(~0UL),
+                    reason,
                     Core::ProtoBuf::dumpString(request).c_str());
         }
         numUnknownRequestsSinceLastMessage = 0;

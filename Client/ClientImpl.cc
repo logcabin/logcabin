@@ -221,7 +221,13 @@ ClientImpl::ExactlyOnceRPCHelper::ExactlyOnceRPCHelper(ClientImpl* client)
     , exiting(false)
     , lastKeepAliveStart(TimePoint::min())
       // TODO(ongaro): set dynamically based on cluster configuration
-    , keepAliveIntervalMs(60 * 1000)
+    , keepAliveInterval(std::chrono::milliseconds(60 * 1000))
+    , sessionCloseTimeout(std::chrono::milliseconds(
+        client->config.read<uint64_t>(
+            "sessionCloseTimeoutMilliseconds",
+            client->config.read<uint64_t>(
+                "tcpConnectTimeoutMilliseconds",
+                1000))))
     , keepAliveCall()
     , keepAliveThread()
 {
@@ -240,6 +246,37 @@ ClientImpl::ExactlyOnceRPCHelper::exit()
         keepAliveCV.notify_all();
         if (keepAliveCall)
             keepAliveCall->cancel();
+        if (clientId > 0) {
+            Protocol::Client::StateMachineCommand::Request request;
+            Protocol::Client::StateMachineCommand::Response response;
+            request.mutable_close_session()->set_client_id(clientId);
+            LeaderRPC::Status status = client->leaderRPC->call(
+                    OpCode::STATE_MACHINE_COMMAND,
+                    request,
+                    response,
+                    ClientImpl::Clock::now() + sessionCloseTimeout);
+            switch (status) {
+                case LeaderRPC::Status::OK:
+                    break;
+                case LeaderRPC::Status::TIMEOUT:
+                    using Core::StringUtil::toString;
+                    WARNING("Could not definitively close client session %lu "
+                            "within timeout (%s). It may remain open until it "
+                            "expires.",
+                            clientId,
+                            toString(sessionCloseTimeout).c_str());
+                    break;
+                case LeaderRPC::Status::INVALID_REQUEST:
+                    WARNING("The server and/or replicated state machine "
+                            "doesn't support the CloseSession command or "
+                            "claims the request is malformed. This client's "
+                            "session (%lu) will remain open until it expires. "
+                            "Consider upgrading your servers (this command "
+                            "was introduced in state machine version 2).",
+                            clientId);
+                    break;
+            }
+        }
     }
     if (keepAliveThread.joinable())
         keepAliveThread.join();
@@ -324,9 +361,8 @@ ClientImpl::ExactlyOnceRPCHelper::keepAliveThreadMain()
     std::unique_lock<Core::Mutex> lockGuard(mutex);
     while (!exiting) {
         TimePoint nextKeepAlive;
-        if (keepAliveIntervalMs > 0) {
-            nextKeepAlive = (lastKeepAliveStart +
-                             std::chrono::milliseconds(keepAliveIntervalMs));
+        if (keepAliveInterval.count() > 0) {
+            nextKeepAlive = lastKeepAliveStart + keepAliveInterval;
         } else {
             nextKeepAlive = TimePoint::max();
         }
@@ -408,10 +444,10 @@ ClientImpl::ClientImpl(const std::map<std::string, std::string>& options)
 
 ClientImpl::~ClientImpl()
 {
+    exactlyOnceRPCHelper.exit();
     eventLoop.exit();
     if (eventLoopThread.joinable())
         eventLoopThread.join();
-    exactlyOnceRPCHelper.exit();
 }
 
 void

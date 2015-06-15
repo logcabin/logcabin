@@ -586,6 +586,14 @@ class Cluster {
      * - clusterUUID (see sample.conf)
      * - tcpHeartbeatTimeoutMilliseconds (see sample.conf)
      * - tcpConnectTimeoutMilliseconds (see sample.conf)
+     * - sessionCloseTimeoutMilliseconds:
+     *      This Cluster object opens a session with LogCabin before issuing
+     *      any read-write commands to the replicated state machine. When this
+     *      Cluster object is destroyed, it will attempt to close its session
+     *      gracefully. This timeout controls the number of milliseconds that
+     *      the client will wait until giving up on the close session RPC. It
+     *      defaults to tcpConnectTimeoutMilliseconds, since they should be on
+     *      the same order of magnitude.
      */
     typedef std::map<std::string, std::string> Options;
 

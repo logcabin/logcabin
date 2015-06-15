@@ -97,6 +97,8 @@ class TreeLeaderRPC : public LeaderRPCBase {
                 cresponse.mutable_open_session()->
                     set_client_id(1);
                 return Status::OK;
+            } else if (crequest.has_close_session()) {
+                return Status::OK;
             }
         }
         PANIC("Unexpected request: %d %s",
