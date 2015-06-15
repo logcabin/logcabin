@@ -18,6 +18,9 @@ Version 1.0.1-alpha.0 (In Development)
 Improvements:
 - Adds gcc 5.1 (which required no changes; issue #141) and clang 3.4, 3.5, 3.6,
   and 3.7 (issue #9) as supported compilers.
+- Optimizes setting nextIndex on leaders by capping it to just past the
+  follower's last log index. This helps with followers that are new or have
+  fallen far behind.
 
 Bug fixes (high severity):
 - Fixes packaging up very large AppendEntries requests (issue #160). Before, it

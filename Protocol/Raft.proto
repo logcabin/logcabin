@@ -231,8 +231,8 @@ message AppendEntries {
         required bool success = 2;
         /**
          * The recipient's last log index (after it's applied this RPC's
-         * changes to the log), which might be useful later to speed up finding
-         * where the leader and a behind follower have diverged.
+         * changes to the log). This is used to speed up finding the correct
+         * value for nextIndex with a follower that is far behind the leader.
          */
         optional uint64 last_log_index = 3;
 

@@ -2333,6 +2333,15 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
         } else {
             if (peer.nextIndex > 1)
                 --peer.nextIndex;
+            // A server that hasn't been around for a while might have a much
+            // shorter log than ours. The AppendEntries reply contains the
+            // index of its last log entry, and there's no reason for us to
+            // set nextIndex to be more than 1 past that (that would leave a
+            // gap, so it will always be rejected).
+            if (response.has_last_log_index() &&
+                peer.nextIndex > response.last_log_index() + 1) {
+                peer.nextIndex = response.last_log_index() + 1;
+            }
         }
     }
     if (response.has_server_capabilities()) {

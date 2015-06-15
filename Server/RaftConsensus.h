@@ -381,7 +381,7 @@ class Peer : public Server {
 
     /**
      * The index of the next entry to send to the follower. Only used when
-     * leader.
+     * leader. Minimum value of 1.
      */
     uint64_t nextIndex;
 

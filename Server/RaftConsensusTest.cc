@@ -2364,6 +2364,32 @@ TEST_F(ServerRaftConsensusPATest, appendEntries_ok)
     // TODO(ongaro): test catchup code
 }
 
+TEST_F(ServerRaftConsensusPATest, appendEntries_mismatch)
+{
+    // if the follower's log is too short, need to decrement nextIndex
+    std::unique_lock<Mutex> lockGuard(consensus->mutex);
+
+    // decrementing by one
+    peer->nextIndex = 5;
+    request.set_prev_log_index(4);
+    request.set_prev_log_term(6);
+    request.clear_entries();
+    response.set_success(false);
+    response.set_last_log_index(300);
+    peerService->reply(Protocol::Raft::OpCode::APPEND_ENTRIES,
+                       request, response);
+    consensus->appendEntries(lockGuard, *peer);
+    EXPECT_EQ(4U, peer->nextIndex);
+
+    // capping to last log index + 1
+    peer->nextIndex = 5;
+    response.set_last_log_index(0);
+    peerService->reply(Protocol::Raft::OpCode::APPEND_ENTRIES,
+                       request, response);
+    consensus->appendEntries(lockGuard, *peer);
+    EXPECT_EQ(1U, peer->nextIndex);
+}
+
 TEST_F(ServerRaftConsensusPATest, appendEntries_serverCapabilities)
 {
     auto& cap = *response.mutable_server_capabilities();
