@@ -2205,9 +2205,9 @@ class ServerRaftConsensusPATest : public ServerRaftConsensusPTest {
         // leader has determined that peer and it diverge on the first log
         // entry.
         EXPECT_EQ(5U, peer->nextIndex);
-        EXPECT_TRUE(peer->forceHeartbeat);
+        EXPECT_TRUE(peer->suppressBulkData);
         peer->nextIndex = 1;
-        peer->forceHeartbeat = false;
+        peer->suppressBulkData = false;
 
         request.set_server_id(1);
         request.set_term(6);
@@ -2256,6 +2256,8 @@ TEST_F(ServerRaftConsensusPATest, appendEntries_rpcFailed)
     EXPECT_EQ(0U, peer->lastAgreeIndex);
 }
 
+// Mostly a test for packEntries now that that function has been split out of
+// AppendEntries.
 TEST_F(ServerRaftConsensusPATest, appendEntries_limitSizeAndIgnoreResult)
 {
     consensus->SOFT_RPC_SIZE_LIMIT = 1;
@@ -2271,6 +2273,9 @@ TEST_F(ServerRaftConsensusPATest, appendEntries_limitSizeAndIgnoreResult)
     EXPECT_EQ(0U, peer->lastAgreeIndex);
 }
 
+// Mostly a test for packEntries now that that function has been split out of
+// AppendEntries.
+//
 // In #160, an entry that wouldn't fit in the request didn't cause the loop to
 // exit. If an entry later in the log would fit in the request, it would be
 // added to the request invalidly. This test targets that specific behavior (it
@@ -2311,16 +2316,16 @@ TEST_F(ServerRaftConsensusPATest, appendEntries_limitSizeRegression)
     EXPECT_EQ(0U, peer->lastAgreeIndex);
 }
 
-TEST_F(ServerRaftConsensusPATest, appendEntries_forceHeartbeat)
+TEST_F(ServerRaftConsensusPATest, appendEntries_suppressBulkData)
 {
-    peer->forceHeartbeat = true;
+    peer->suppressBulkData = true;
     request.mutable_entries()->Clear();
     request.set_commit_index(0);
     peerService->reply(Protocol::Raft::OpCode::APPEND_ENTRIES,
                        request, response);
     std::unique_lock<Mutex> lockGuard(consensus->mutex);
     consensus->appendEntries(lockGuard, *peer);
-    EXPECT_FALSE(peer->forceHeartbeat);
+    EXPECT_FALSE(peer->suppressBulkData);
 }
 
 TEST_F(ServerRaftConsensusPATest, appendEntries_termChanged)
@@ -2362,6 +2367,32 @@ TEST_F(ServerRaftConsensusPATest, appendEntries_ok)
               peer->nextHeartbeatTime);
 
     // TODO(ongaro): test catchup code
+}
+
+TEST_F(ServerRaftConsensusPATest, appendEntries_mismatch)
+{
+    // if the follower's log is too short, need to decrement nextIndex
+    std::unique_lock<Mutex> lockGuard(consensus->mutex);
+
+    // decrementing by one
+    peer->nextIndex = 5;
+    request.set_prev_log_index(4);
+    request.set_prev_log_term(6);
+    request.clear_entries();
+    response.set_success(false);
+    response.set_last_log_index(300);
+    peerService->reply(Protocol::Raft::OpCode::APPEND_ENTRIES,
+                       request, response);
+    consensus->appendEntries(lockGuard, *peer);
+    EXPECT_EQ(4U, peer->nextIndex);
+
+    // capping to last log index + 1
+    peer->nextIndex = 5;
+    response.set_last_log_index(0);
+    peerService->reply(Protocol::Raft::OpCode::APPEND_ENTRIES,
+                       request, response);
+    consensus->appendEntries(lockGuard, *peer);
+    EXPECT_EQ(1U, peer->nextIndex);
 }
 
 TEST_F(ServerRaftConsensusPATest, appendEntries_serverCapabilities)
@@ -2441,6 +2472,7 @@ class ServerRaftConsensusPSTest : public ServerRaftConsensusPTest {
 
 TEST_F(ServerRaftConsensusPSTest, installSnapshot_rpcFailed)
 {
+    peer->suppressBulkData = false;
     peerService->closeSession(Protocol::Raft::OpCode::INSTALL_SNAPSHOT,
                               request);
     // expect warning
@@ -2456,6 +2488,7 @@ TEST_F(ServerRaftConsensusPSTest, installSnapshot_rpcFailed)
 
 TEST_F(ServerRaftConsensusPSTest, installSnapshot_termChanged)
 {
+    peer->suppressBulkData = false;
     peerService->runArbitraryCode(
             Protocol::Raft::OpCode::INSTALL_SNAPSHOT,
             request,
@@ -2468,6 +2501,7 @@ TEST_F(ServerRaftConsensusPSTest, installSnapshot_termChanged)
 
 TEST_F(ServerRaftConsensusPSTest, installSnapshot_termStale)
 {
+    peer->suppressBulkData = false;
     response.set_term(10);
     peerService->reply(Protocol::Raft::OpCode::INSTALL_SNAPSHOT,
                        request, response);
@@ -2480,6 +2514,7 @@ TEST_F(ServerRaftConsensusPSTest, installSnapshot_termStale)
 
 TEST_F(ServerRaftConsensusPSTest, installSnapshot_ok)
 {
+    peer->suppressBulkData = false;
     consensus->SOFT_RPC_SIZE_LIMIT = 7;
     request.set_data("hello, ");
     request.set_done(false);
@@ -2505,6 +2540,25 @@ TEST_F(ServerRaftConsensusPSTest, installSnapshot_ok)
               milliseconds(consensus->HEARTBEAT_PERIOD_MS),
               peer->nextHeartbeatTime);
 }
+
+TEST_F(ServerRaftConsensusPSTest, installSnapshot_suppressBulkData)
+{
+    peer->suppressBulkData = true;
+    consensus->SOFT_RPC_SIZE_LIMIT = 7;
+    request.set_data("");
+    request.set_done(false);
+    peerService->reply(Protocol::Raft::OpCode::INSTALL_SNAPSHOT,
+                       request, response);
+    request.set_data("hello, ");
+    peerService->reply(Protocol::Raft::OpCode::INSTALL_SNAPSHOT,
+                       request, response);
+    std::unique_lock<Mutex> lockGuard(consensus->mutex);
+    consensus->installSnapshot(lockGuard, *peer);
+    EXPECT_FALSE(peer->suppressBulkData);
+    consensus->installSnapshot(lockGuard, *peer);
+    EXPECT_FALSE(peer->suppressBulkData);
+}
+
 
 TEST_F(ServerRaftConsensusTest, becomeLeader)
 {
@@ -2589,6 +2643,50 @@ TEST_F(ServerRaftConsensusTest, interruptAll)
     Peer& peer = *getPeer(2);
     EXPECT_EQ("RPC canceled by user", peer.rpc.getErrorMessage());
     EXPECT_EQ(1U, consensus->stateChanged.notificationCount);
+}
+
+// packEntries used to be part of appendEntries. The tests
+// appendEntries_limitSizeAndIgnoreResult and appendEntries_limitSizeRegression
+// mostly target the packEntries functionality.
+
+TEST_F(ServerRaftConsensusTest, packEntries)
+{
+    init();
+    consensus->stepDown(5);
+
+    // limit by log length (of 0)
+    Protocol::Raft::AppendEntries::Request request;
+    EXPECT_EQ(0U, consensus->packEntries(1U, request));
+    request.clear_entries();
+
+    // limit by log length (of 2)
+    consensus->append({&entry1});
+    consensus->append({&entry2});
+    EXPECT_EQ(2U, consensus->packEntries(1U, request));
+    request.clear_entries();
+
+    // limit by number of log entries
+    for (uint64_t i = 0; i < 128; ++i)
+        consensus->append({&entry2});
+    consensus->SOFT_RPC_SIZE_LIMIT = 1024 * 1024;
+    consensus->MAX_LOG_ENTRIES_PER_REQUEST = 32;
+    EXPECT_EQ(32U, consensus->packEntries(3U, request));
+    request.clear_entries();
+    consensus->MAX_LOG_ENTRIES_PER_REQUEST = 5000;
+
+    // limit by number of bytes
+    consensus->SOFT_RPC_SIZE_LIMIT = 1024;
+    uint64_t n = consensus->packEntries(3U, request);
+    EXPECT_GT(5000U, n);
+    EXPECT_LT(0U, n);
+    EXPECT_GE(1024, request.ByteSize());
+    *request.add_entries() = consensus->log->getEntry(3);
+    EXPECT_LE(1024, request.ByteSize());
+    request.clear_entries();
+
+    // one entry is allowed even if it's too big
+    consensus->SOFT_RPC_SIZE_LIMIT = 1;
+    EXPECT_EQ(1U, consensus->packEntries(3U, request));
 }
 
 TEST_F(ServerRaftConsensusTest, readSnapshot)
@@ -3103,7 +3201,7 @@ TEST_F(ServerRaftConsensusTest, regression_nextIndexForNewServer)
     consensus->startNewElection();
     consensus->append({&entry5});
     EXPECT_EQ(4U, getPeer(2)->nextIndex);
-    EXPECT_TRUE(getPeer(2)->forceHeartbeat);
+    EXPECT_TRUE(getPeer(2)->suppressBulkData);
 }
 
 
