@@ -45,9 +45,6 @@ class MockClientImpl : public ClientImpl {
 
     using ClientImpl::read;
 
-    std::shared_ptr<TestingCallbacks> callbacks;
-
-
   private:
 
     // MockClientImpl is not copyable
