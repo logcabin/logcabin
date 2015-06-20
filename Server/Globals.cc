@@ -20,18 +20,21 @@
 #include "Core/StringUtil.h"
 #include "Protocol/Common.h"
 #include "RPC/Server.h"
-#include "Server/RaftService.h"
-#include "Server/RaftConsensus.h"
 #include "Server/ClientService.h"
 #include "Server/Globals.h"
+#include "Server/RaftConsensus.h"
+#include "Server/RaftService.h"
 #include "Server/StateMachine.h"
+#include "include/LogCabin/Debug.h"
 
 namespace LogCabin {
 namespace Server {
 
 ////////// Globals::SigIntHandler //////////
 
-Globals::ExitHandler::ExitHandler(Event::Loop& eventLoop, int signalNumber)
+Globals::ExitHandler::ExitHandler(
+        Event::Loop& eventLoop,
+        int signalNumber)
     : Signal(signalNumber)
     , eventLoop(eventLoop)
 {
@@ -44,6 +47,27 @@ Globals::ExitHandler::handleSignalEvent()
     eventLoop.exit();
 }
 
+Globals::LogRotateHandler::LogRotateHandler(
+        Event::Loop& eventLoop,
+        int signalNumber)
+    : Signal(signalNumber)
+    , eventLoop(eventLoop)
+{
+}
+
+void
+Globals::LogRotateHandler::handleSignalEvent()
+{
+    NOTICE("%s: rotating logs", strsignal(signalNumber));
+    std::string error = Core::Debug::reopenLogFromFilename();
+    if (!error.empty()) {
+        PANIC("Failed to rotate log file: %s",
+              error.c_str());
+    }
+    NOTICE("%s: done rotating logs", strsignal(signalNumber));
+}
+
+
 ////////// Globals //////////
 
 Globals::Globals()
@@ -52,10 +76,13 @@ Globals::Globals()
     , sigIntBlocker(SIGINT)
     , sigTermBlocker(SIGTERM)
     , sigUsr1Blocker(SIGUSR1)
+    , sigUsr2Blocker(SIGUSR2)
     , sigIntHandler(eventLoop, SIGINT)
     , sigIntMonitor(eventLoop, sigIntHandler)
     , sigTermHandler(eventLoop, SIGTERM)
     , sigTermMonitor(eventLoop, sigTermHandler)
+    , sigUsr2Handler(eventLoop, SIGUSR2)
+    , sigUsr2Monitor(eventLoop, sigUsr2Handler)
     , serverStats(*this)
     , clusterUUID()
     , serverId(~0UL)
@@ -151,6 +178,7 @@ Globals::leaveSignalsBlocked()
     sigIntBlocker.leaveBlocked();
     sigTermBlocker.leaveBlocked();
     sigUsr1Blocker.leaveBlocked();
+    sigUsr2Blocker.leaveBlocked();
 }
 
 void

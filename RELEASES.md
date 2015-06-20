@@ -12,7 +12,7 @@ Release Process
 
 See [RELEASE-PROCESS.md](RELEASE-PROCESS.md).
 
-Version 1.0.1-alpha.0 (In Development)
+Version 1.1.0-alpha.0 (In Development)
 ======================================
 
 Improvements:
@@ -47,6 +47,14 @@ Bug fixes (low severity):
 - Fixes repeated PANIC in InstallSnapshot after server restarts while
   receiving a snapshot (issue #174). This could result in a temporary
   availability issue that would resolve itself on the next term change.
+
+New backwards-compatible changes:
+- getLogFilename, setLogFilename, and reopenLogFromFilename were introduced in
+  `include/LogCabin/Debug.h`.
+- The LogCabin daemon will now reopen its log file on SIGUSR2 (useful for log
+  rotation). Signal handling was not listed as part of LogCabin's public API
+  until now; signals listed in --help messages are now subject to semantic
+  versioning.
 
 Version 1.0.0 (2015-04-29)
 ==========================

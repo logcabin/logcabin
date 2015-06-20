@@ -153,6 +153,18 @@ class OptionParser {
             << std::endl
             << "                               "
             << "and exit"
+            << std::endl
+            << std::endl
+
+            << "Signals:"
+            << std::endl
+
+            << "  SIGUSR1                      "
+            << "Dump ServerStats to debug log (experimental)"
+            << std::endl
+
+            << "  SIGUSR2                      "
+            << "Reopen the debug log file"
             << std::endl;
     }
 
@@ -277,13 +289,12 @@ main(int argc, char** argv)
 
     // Set debug log file
     if (!options.debugLogFilename.empty()) {
-        FILE* debugLog = fopen(options.debugLogFilename.c_str(), "a");
-        if (debugLog == NULL) {
-            PANIC("Could not open %s for writing debug log messages: %s",
-                  options.debugLogFilename.c_str(),
-                  strerror(errno));
+        std::string error =
+            Core::Debug::setLogFilename(options.debugLogFilename);
+        if (!error.empty()) {
+            PANIC("Failed to set debug log file: %s",
+                  error.c_str());
         }
-        Core::Debug::setLogFile(debugLog);
     }
 
     NOTICE("Using config file %s", options.configFilename.c_str());

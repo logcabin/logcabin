@@ -122,7 +122,7 @@ const char* logLevelToString[] =
 };
 
 /**
- * Protects #policy and #isLoggingCache.
+ * Protects #policy, #isLoggingCache, and #logFilename.
  */
 std::mutex mutex;
 
@@ -147,6 +147,12 @@ std::vector<std::pair<std::string, std::string>> policy;
  * Protected by #mutex.
  */
 std::unordered_map<const char*, LogLevel> isLoggingCache;
+
+/**
+ * Filename of currently open stream, if known.
+ * Protected by #mutex.
+ */
+std::string logFilename;
 
 /**
  * Where log messages go (unless logHandler is set).
@@ -240,10 +246,54 @@ relativeFileName(const char* fileName)
 } // namespace Internal
 using namespace Internal; // NOLINT
 
+std::string
+getLogFilename()
+{
+    std::lock_guard<std::mutex> lockGuard(mutex);
+    return logFilename;
+}
+
+std::string
+setLogFilename(const std::string& filename)
+{
+    FILE* next = fopen(filename.c_str(), "a");
+    if (next == NULL) {
+        return Core::StringUtil::format(
+            "Could not open %s for writing debug log messages: %s",
+            filename.c_str(),
+            strerror(errno));
+    }
+    FILE* old;
+    {
+        std::lock_guard<std::mutex> lockGuard(mutex);
+        old = stream;
+        stream = next;
+        logFilename = filename;
+    }
+    if (old != stdout && old != stderr) {
+        if (fclose(old) != 0) {
+            WARNING("Failed to close previous debug log file descriptor: %s",
+                    strerror(errno));
+        }
+    }
+    return {};
+}
+
+std::string
+reopenLogFromFilename()
+{
+    std::string filename = getLogFilename();
+    if (filename.empty())
+        return {};
+    else
+        return setLogFilename(filename);
+}
+
 FILE*
 setLogFile(FILE* newFile)
 {
     std::lock_guard<std::mutex> lockGuard(mutex);
+    logFilename.clear();
     FILE* old = stream;
     stream = newFile;
     return old;

@@ -59,6 +59,16 @@ class Globals {
         Event::Loop& eventLoop;
     };
 
+    /**
+     * Re-opens the log file upon receiving a UNIX signal.
+     */
+    class LogRotateHandler : public Event::Signal {
+      public:
+        LogRotateHandler(Event::Loop& eventLoop, int signalNumber);
+        void handleSignalEvent();
+        Event::Loop& eventLoop;
+    };
+
   public:
 
     /// Constructor.
@@ -115,17 +125,18 @@ class Globals {
 
     /**
      * Block SIGTERM, which is handled by sigTermHandler.
-     * Signals are blocked early on in the startup process so that newly
-     * spawned threads also have them blocked.
      */
     Event::Signal::Blocker sigTermBlocker;
 
     /**
      * Block SIGUSR1, which is handled by serverStats.
-     * Signals are blocked early on in the startup process so that newly
-     * spawned threads also have them blocked.
      */
     Event::Signal::Blocker sigUsr1Blocker;
+
+    /**
+     * Block SIGUSR2, which is handled by sigUsr2Handler.
+     */
+    Event::Signal::Blocker sigUsr2Blocker;
 
     /**
      * Exits the event loop upon receiving SIGINT (keyboard interrupt).
@@ -146,6 +157,17 @@ class Globals {
      * Registers sigTermHandler with the event loop.
      */
     Event::Signal::Monitor sigTermMonitor;
+
+    /**
+     * Re-opens log files upon receiving SIGUSR2 (user-defined signal). This
+     * should normally be invoked by tools like logrotate.
+     */
+    LogRotateHandler sigUsr2Handler;
+
+    /**
+     * Registers sigUsr2Handler with the event loop.
+     */
+    Event::Signal::Monitor sigUsr2Monitor;
 
   public:
     /**

@@ -30,8 +30,8 @@ except AttributeError:
 # Access through env['VERSION'], env['RPM_VERSION'], and env['RPM_RELEASE'] to
 # allow users to override these. RPM versioning is explained here:
 # https://fedoraproject.org/wiki/Packaging:NamingGuidelines#NonNumericRelease
-_VERSION = '1.0.1-alpha.0'
-_RPM_VERSION = '1.0.1'
+_VERSION = '1.1.0-alpha.0'
+_RPM_VERSION = '1.1.0'
 _RPM_RELEASE = '0.1.alpha.0'
 
 opts = Variables('Local.sc')

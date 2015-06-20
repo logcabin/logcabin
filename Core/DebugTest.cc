@@ -15,11 +15,13 @@
  */
 
 #include <gtest/gtest.h>
+#include <sys/stat.h>
 #include <unordered_map>
 
 #include "Core/Debug.h"
 #include "Core/STLUtil.h"
 #include "Core/Util.h"
+#include "Storage/FilesystemUtil.h"
 #include "include/LogCabin/Debug.h"
 
 namespace LogCabin {
@@ -38,9 +40,18 @@ namespace {
 
 class CoreDebugTest : public ::testing::Test {
   public:
-    CoreDebugTest() {
+    CoreDebugTest()
+        : tmpdir(Storage::FilesystemUtil::mkdtemp())
+    {
         setLogPolicy({});
+        setLogFile(stderr);
     }
+    ~CoreDebugTest() {
+        setLogFile(stderr);
+        Storage::FilesystemUtil::remove(tmpdir);
+    }
+
+    std::string tmpdir;
 };
 
 
@@ -101,9 +112,43 @@ TEST_F(CoreDebugTest, isLogging) {
               STLUtil::getItems(Internal::isLoggingCache));
 }
 
+TEST_F(CoreDebugTest, getLogFilename) {
+    EXPECT_EQ("", getLogFilename());
+    EXPECT_EQ("", setLogFilename(tmpdir + "/x"));
+    EXPECT_EQ(tmpdir + "/x", getLogFilename());
+    EXPECT_NE("", setLogFilename(tmpdir + "/bogus/x"));
+    EXPECT_EQ(tmpdir + "/x", getLogFilename());
+}
+
+TEST_F(CoreDebugTest, setLogFilename) {
+    EXPECT_EQ("", setLogFilename(tmpdir + "/x"));
+    EXPECT_EQ(std::string() +
+              "Could not open " + tmpdir + "/bogus/x for writing debug "
+              "log messages: No such file or directory",
+              setLogFilename(tmpdir + "/bogus/x"));
+
+    EXPECT_EQ(tmpdir + "/x", getLogFilename());
+    ERROR("If you see this on your terminal, this test has failed");
+    struct stat stats;
+    EXPECT_EQ(0, stat((tmpdir + "/x").c_str(), &stats)) << strerror(errno);
+    EXPECT_LT(10, stats.st_size);
+}
+
+TEST_F(CoreDebugTest, reopenLogFromFilename) {
+    EXPECT_EQ("", reopenLogFromFilename());
+    EXPECT_EQ("", setLogFilename(tmpdir + "/x"));
+    EXPECT_EQ("", reopenLogFromFilename());
+}
+
 TEST_F(CoreDebugTest, setLogFile) {
     EXPECT_EQ(stderr, setLogFile(stdout));
     EXPECT_EQ(stdout, setLogFile(stderr));
+}
+
+TEST_F(CoreDebugTest, setLogFile_clearsFilename) {
+    EXPECT_EQ("", setLogFilename(tmpdir + "/x"));
+    EXPECT_EQ(0, fclose(setLogFile(stderr)));
+    EXPECT_EQ("", getLogFilename());
 }
 
 struct VectorHandler {

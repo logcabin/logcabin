@@ -74,9 +74,44 @@ struct DebugMessage {
 };
 
 /**
- * Change the file on which debug log messages are written.
+ * Return the filename given to the last successful call to setLogFilename(),
+ * or the empty string if none.
+ * \since LogCabin v1.1.0.
+ */
+std::string getLogFilename();
+
+/**
+ * Open the given file by name and append future debug log messages to it.
  * Note that if a handler is set with setLogHandler, this file will not be
  * used.
+ * \param filename
+ *      Name of file. If it already exists, new messages will be appended at
+ *      the end. If the file is already open, this will re-open it (useful for
+ *      rotating logs).
+ * \return
+ *      Error message if errors were encountered opening the file, otherwise an
+ *      empty string indicates success.
+ * \since LogCabin v1.1.0.
+ */
+std::string setLogFilename(const std::string& filename);
+
+/**
+ * Called to rotate the log file.
+ * If there was a previous call to setLogFilename(), this will reopen that file
+ * by name, returning any errors. Otherwise, it will do nothing.
+ * \return
+ *      Error message if errors were encountered in reopening the file,
+ *      otherwise an empty string indicates success.
+ * \since LogCabin v1.1.0.
+ */
+std::string reopenLogFromFilename();
+
+/**
+ * Change the file on which debug log messages are written.
+ *
+ * Note that if a handler is set with setLogHandler, this file will not be
+ * used. If a filename has been set with setLogFilename(), this will clear it.
+ *
  * \param newFile
  *      Handle to open file where log messages will be written.
  * \return
