@@ -46,13 +46,6 @@ stop() {
     [ $RETVAL = 0 ] && rm -f ${lockfile} ${pidfile}
 }
 
-reload() {
-    echo -n $"Reloading $prog: "
-    killproc -p ${pidfile} ${prog} -HUP
-    RETVAL=$?
-    echo
-}
-
 configtest() {
     ${logcabin} -t -c ${conffile} $FLAG
     RETVAL=$?
@@ -87,14 +80,11 @@ case "$1" in
             start
         fi
         ;;
-    force-reload|reload)
-        reload
-        ;;
     configtest)
         configtest
         ;;
     *)
-        echo $"Usage: $prog {start|stop|restart|condrestart|try-restart|force-reload|upgrade|reload|status|help|configtest}"
+        echo $"Usage: $prog {start|stop|restart|condrestart|try-restart|status|help|configtest}"
         RETVAL=2
 esac
 
