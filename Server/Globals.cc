@@ -166,7 +166,7 @@ Globals::init()
     }
 
     if (!stateMachine) {
-        stateMachine.reset(new StateMachine(raft, config));
+        stateMachine.reset(new StateMachine(raft, config, *this));
     }
 
     serverStats.enable();
@@ -186,6 +186,16 @@ Globals::run()
 {
     eventLoop.runForever();
 }
+
+void
+Globals::unblockAllSignals()
+{
+    sigIntBlocker.unblock();
+    sigTermBlocker.unblock();
+    sigUsr1Blocker.unblock();
+    sigUsr2Blocker.unblock();
+}
+
 
 } // namespace LogCabin::Server
 } // namespace LogCabin

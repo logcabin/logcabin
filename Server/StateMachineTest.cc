@@ -68,7 +68,8 @@ class ServerStateMachineTest : public ::testing::Test {
         consensus->advanceCommitIndex();
 
         stateMachineSuppressThreads = true;
-        stateMachine.reset(new StateMachine(consensus, globals.config));
+        stateMachine.reset(new StateMachine(consensus, globals.config,
+                                            globals));
     }
     ~ServerStateMachineTest() {
         stateMachineSuppressThreads = false;
@@ -630,6 +631,7 @@ struct SnapshotWatchdogThreadMainHelper {
             pid_t pid = fork();
             ASSERT_NE(pid, -1) << strerror(errno); // error
             if (pid == 0) { // child
+                stateMachine.globals.unblockAllSignals();
                 while (true)
                     usleep(5000);
             }
@@ -666,13 +668,13 @@ struct SnapshotWatchdogThreadMainHelper {
             Core::Debug::setLogPolicy({
                 {"", "WARNING"},
             });
-            // child should be receiving SIGHUP
+            // child should be receiving SIGKILL
             int status = 0;
             EXPECT_EQ(stateMachine.childPid,
                       waitpid(stateMachine.childPid, &status, 0))
                 << strerror(errno);
             EXPECT_TRUE(WIFSIGNALED(status));
-            EXPECT_EQ(SIGHUP, WTERMSIG(status));
+            EXPECT_EQ(SIGKILL, WTERMSIG(status));
             stateMachine.childPid = 0;
             stateMachine.writer->discard();
             stateMachine.writer.reset();

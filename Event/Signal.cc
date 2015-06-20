@@ -50,31 +50,31 @@ createSignalFd(int signalNumber)
 
 Signal::Blocker::Blocker(int signalNumber)
     : signalNumber(signalNumber)
+    , isBlocked(false)
     , shouldLeaveBlocked(false)
 {
-    // Block signal
-    sigset_t mask;
-    sigemptyset(&mask);
-    sigaddset(&mask, signalNumber);
-    int r = pthread_sigmask(SIG_BLOCK, &mask, NULL);
-    if (r != 0) {
-        PANIC("Could not block signal %d: %s",
-              signalNumber, strerror(r));
-    }
+    block();
 }
 
 Signal::Blocker::~Blocker()
 {
-    if (!shouldLeaveBlocked) {
-        // Unblock signal
+    if (!shouldLeaveBlocked)
+        unblock();
+}
+
+void
+Signal::Blocker::block()
+{
+    if (!isBlocked) {
         sigset_t mask;
         sigemptyset(&mask);
         sigaddset(&mask, signalNumber);
-        int r = pthread_sigmask(SIG_UNBLOCK, &mask, NULL);
+        int r = pthread_sigmask(SIG_BLOCK, &mask, NULL);
         if (r != 0) {
-            PANIC("Could not unblock signal %d: %s",
+            PANIC("Could not block signal %d: %s",
                   signalNumber, strerror(r));
         }
+        isBlocked = true;
     }
 }
 
@@ -83,6 +83,24 @@ Signal::Blocker::leaveBlocked()
 {
     shouldLeaveBlocked = true;
 }
+
+void
+Signal::Blocker::unblock()
+{
+    if (isBlocked) {
+        sigset_t mask;
+        sigemptyset(&mask);
+        sigaddset(&mask, signalNumber);
+        int r = pthread_sigmask(SIG_UNBLOCK, &mask, NULL);
+        if (r != 0) {
+            PANIC("Could not unblock signal %d: %s",
+                  signalNumber, strerror(r));
+        }
+        isBlocked = false;
+        shouldLeaveBlocked = false;
+    }
+}
+
 
 //// class Signal::Monitor ////
 

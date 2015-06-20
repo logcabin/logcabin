@@ -24,19 +24,34 @@ namespace LogCabin {
 namespace Event {
 namespace {
 
-struct ExitOnSigTerm : public Event::Signal {
-    explicit ExitOnSigTerm(Event::Loop& loop)
-        : Signal(SIGTERM)
-        , triggerCount(0)
+struct ExitOnSignal : public Event::Signal {
+    ExitOnSignal(Event::Loop& loop, int signal)
+        : Signal(signal)
         , eventLoop(loop)
+        , triggerCount(0)
     {
     }
     void handleSignalEvent() {
         ++triggerCount;
         eventLoop.exit();
     }
-    uint32_t triggerCount;
     Event::Loop& eventLoop;
+    uint32_t triggerCount;
+};
+
+struct ExitOnTimer : public Event::Timer {
+    explicit ExitOnTimer(Event::Loop& loop)
+        : Timer()
+        , eventLoop(loop)
+        , triggerCount(0)
+    {
+    }
+    void handleTimerEvent() {
+        ++triggerCount;
+        eventLoop.exit();
+    }
+    Event::Loop& eventLoop;
+    uint32_t triggerCount;
 };
 
 struct EventSignalTest : public ::testing::Test {
@@ -47,9 +62,61 @@ struct EventSignalTest : public ::testing::Test {
     Event::Loop loop;
 };
 
+struct EventSignalBlockerTest : EventSignalTest {
+};
+
+TEST_F(EventSignalBlockerTest, constructor) {
+    Event::Signal::Blocker block(SIGTERM);
+    ExitOnSignal signal(loop, SIGTERM);
+    Event::Signal::Monitor monitor(loop, signal);
+    EXPECT_EQ(0, kill(getpid(), SIGTERM));
+
+    ExitOnTimer timer(loop);
+    Event::Timer::Monitor timerMonitor(loop, timer);
+    timer.schedule(1000*1000);
+    loop.runForever();
+    EXPECT_EQ(1U, signal.triggerCount);
+}
+
+TEST_F(EventSignalBlockerTest, destructor) {
+    ExitOnSignal signal(loop, SIGTERM);
+    Event::Signal::Monitor monitor(loop, signal);
+    {
+        Event::Signal::Blocker block(SIGTERM);
+    }
+    EXPECT_DEATH(kill(getpid(), SIGTERM),
+                 "");
+}
+
+TEST_F(EventSignalBlockerTest, block) {
+    Event::Signal::Blocker block(SIGTERM);
+    ExitOnSignal signal(loop, SIGTERM);
+    Event::Signal::Monitor monitor(loop, signal);
+    block.unblock();
+    block.block();
+    block.block();
+    EXPECT_EQ(0, kill(getpid(), SIGTERM));
+
+    ExitOnTimer timer(loop);
+    Event::Timer::Monitor timerMonitor(loop, timer);
+    timer.schedule(1000*1000);
+    loop.runForever();
+    EXPECT_EQ(1U, signal.triggerCount);
+}
+
+TEST_F(EventSignalBlockerTest, unblock) {
+    Event::Signal::Blocker block(SIGTERM);
+    ExitOnSignal signal(loop, SIGTERM);
+    Event::Signal::Monitor monitor(loop, signal);
+    block.unblock();
+    block.unblock();
+    EXPECT_DEATH(kill(getpid(), SIGTERM),
+                 "");
+}
+
 TEST_F(EventSignalTest, constructor) {
     Event::Signal::Blocker block(SIGTERM);
-    ExitOnSigTerm signal(loop);
+    ExitOnSignal signal(loop, SIGTERM);
     Event::Signal::Monitor monitor(loop, signal);
 }
 
@@ -59,7 +126,7 @@ TEST_F(EventSignalTest, destructor) {
 
 TEST_F(EventSignalTest, fires) {
     Event::Signal::Blocker block(SIGTERM);
-    ExitOnSigTerm signal(loop);
+    ExitOnSignal signal(loop, SIGTERM);
     Event::Signal::Monitor monitor(loop, signal);
     // Warning: if you run this in gdb, you'll need to pass the signal through
     // to the application.

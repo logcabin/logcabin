@@ -24,6 +24,7 @@
 #include "Core/Random.h"
 #include "Core/ThreadId.h"
 #include "Core/Util.h"
+#include "Server/Globals.h"
 #include "Server/RaftConsensus.h"
 #include "Server/StateMachine.h"
 #include "Storage/SnapshotFile.h"
@@ -40,8 +41,10 @@ bool stateMachineSuppressThreads = false;
 uint32_t stateMachineChildSleepMs = 0;
 
 StateMachine::StateMachine(std::shared_ptr<RaftConsensus> consensus,
-                           Core::Config& config)
+                           Core::Config& config,
+                           Globals& globals)
     : consensus(consensus)
+    , globals(globals)
       // This configuration option isn't advertised as part of the public API:
       // it's only useful for testing.
     , snapshotBlockPercentage(
@@ -338,7 +341,7 @@ StateMachine::applyThreadMain()
         entriesApplied.notify_all();
         snapshotSuggested.notify_all();
         snapshotStarted.notify_all();
-        killSnapshotProcess(Core::HoldingMutex(lockGuard));
+        killSnapshotProcess(Core::HoldingMutex(lockGuard), SIGTERM);
     }
 }
 
@@ -406,12 +409,14 @@ StateMachine::getVersion(uint64_t logIndex) const
 }
 
 void
-StateMachine::killSnapshotProcess(Core::HoldingMutex holdingMutex)
+StateMachine::killSnapshotProcess(Core::HoldingMutex holdingMutex,
+                                  int signum)
 {
     if (childPid != 0) {
-        int r = kill(childPid, SIGHUP);
+        int r = kill(childPid, signum);
         if (r != 0) {
-            WARNING("Could not send SIGHUP to child process: %s",
+            WARNING("Could not send %s to child process: %s",
+                    strsignal(signum),
                     strerror(errno));
         }
     }
@@ -583,7 +588,8 @@ StateMachine::snapshotWatchdogThreadMain()
                               numSnapshotsAttempted,
                               childPid,
                               toString(snapshotWatchdogInterval).c_str());
-                        killSnapshotProcess(Core::HoldingMutex(lockGuard));
+                        killSnapshotProcess(Core::HoldingMutex(lockGuard),
+                                            SIGKILL);
                         // Don't kill for another interval,
                         // hopefully child will be reaped by then.
                     }
@@ -635,6 +641,7 @@ StateMachine::takeSnapshot(uint64_t lastIncludedIndex,
         PANIC("Couldn't fork: %s", strerror(errno));
     } else if (pid == 0) { // child
         Core::Debug::processName += "-child";
+        globals.unblockAllSignals();
         usleep(stateMachineChildSleepMs * 1000); // for testing purposes
         if (snapshotBlockPercentage > 0) { // for testing purposes
             if (Core::Random::randomRange(0, 100) < snapshotBlockPercentage) {
@@ -681,10 +688,10 @@ StateMachine::takeSnapshot(uint64_t lastIncludedIndex,
             writer->seekToEnd();
             consensus->snapshotDone(lastIncludedIndex, std::move(writer));
         } else if (exiting &&
-                   WIFSIGNALED(status) && WTERMSIG(status) == SIGHUP) {
+                   WIFSIGNALED(status) && WTERMSIG(status) == SIGTERM) {
             writer->discard();
             writer.reset();
-            NOTICE("Child exited from SIGHUP since this process is "
+            NOTICE("Child exited from SIGTERM since this process is "
                    "exiting");
         } else {
             writer->discard();

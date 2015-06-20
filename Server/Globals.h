@@ -106,6 +106,13 @@ class Globals {
     void run();
 
     /**
+     * Enable asynchronous signal delivery for all signals that this class is
+     * in charge of. This should be called in a child process after invoking
+     * fork(), as the StateMachine does.
+     */
+    void unblockAllSignals();
+
+    /**
      * Global configuration options.
      */
     Core::Config config;

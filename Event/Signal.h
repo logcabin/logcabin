@@ -40,17 +40,44 @@ class Signal : private Event::File {
      * Blocks asynchronous signal delivery on the current thread for the given
      * signal. This should normally be called before any secondary threads are
      * started, so that all subsequent threads also have the signal blocked.
+     * \warning
+     *      This class is not thread-safe: the caller must use an external
+     *      mutex or (more commonly) may only manipulate this class while
+     *      a single thread is running.
      */
     class Blocker {
       public:
-        /// Constructor. Masks asynchronous signal delivery for signalNumber.
+        /**
+         * Constructor.
+         * Masks asynchronous signal delivery for signalNumber.
+         */
         explicit Blocker(int signalNumber);
-        /// Destructor. Unmasks asynchronous signal delivery for signalNumber.
+        /**
+         * Destructor. Unmasks asynchronous signal delivery for signalNumber.
+         */
         ~Blocker();
-        /// Leave the signal blocked when this object is destroyed.
+        /**
+         * Blocks further signals if they are not already blocked.
+         */
+        void block();
+        /**
+         * Leave the signal blocked when this object is destroyed.
+         */
         void leaveBlocked();
+        /**
+         * Unblocks signals if they are blocked. Also clears
+         * #shouldLeaveBlocked.
+         */
+        void unblock();
         const int signalNumber;
       private:
+        /**
+         * Set to true if the signal is currently blocked.
+         */
+        bool isBlocked;
+        /**
+         * Set to true if the signal should be left unblocked on destruction.
+         */
         bool shouldLeaveBlocked;
     };
 

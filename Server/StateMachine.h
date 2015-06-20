@@ -33,6 +33,7 @@ namespace LogCabin {
 namespace Server {
 
 // forward declaration
+class Globals;
 class RaftConsensus;
 
 /**
@@ -64,7 +65,8 @@ class StateMachine {
 
 
     StateMachine(std::shared_ptr<RaftConsensus> consensus,
-                 Core::Config& config);
+                 Core::Config& config,
+                 Globals& globals);
     ~StateMachine();
 
     /**
@@ -151,10 +153,10 @@ class StateMachine {
     uint16_t getVersion(uint64_t logIndex) const;
 
     /**
-     * If there is a current snapshot process, send it a SIGHUP and return
+     * If there is a current snapshot process, send it a signal and return
      * immediately.
      */
-    void killSnapshotProcess(Core::HoldingMutex holdingMutex);
+    void killSnapshotProcess(Core::HoldingMutex holdingMutex, int signum);
 
     /**
      * Restore the #sessions table from a snapshot.
@@ -220,6 +222,11 @@ class StateMachine {
      * snapshots.
      */
     std::shared_ptr<RaftConsensus> consensus;
+
+    /**
+     * Server-wide globals. Used to unblock signal handlers in child process.
+     */
+    Globals& globals;
 
     /**
      * Used for testing the snapshot watchdog thread. The probability that a
@@ -296,7 +303,7 @@ class StateMachine {
 
     /**
      * The PID of snapshotThread's child process, if any. This is used by
-     * applyThread to signal exits: if applyThread is exiting, it sends SIGHUP
+     * applyThread to signal exits: if applyThread is exiting, it sends SIGTERM
      * to this child process. A childPid of 0 indicates that there is no child
      * process.
      */
