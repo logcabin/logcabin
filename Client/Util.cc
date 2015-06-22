@@ -13,31 +13,19 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <stdexcept>
-#include <gtest/gtest.h>
-
-#include "Examples/Util.h"
+#include "Core/Time.h"
+#include "include/LogCabin/Util.h"
 
 namespace LogCabin {
-namespace Examples {
+namespace Client {
 namespace Util {
-namespace {
 
-TEST(ExamplesUtilTest, parseTime) {
-    EXPECT_EQ(10000000000UL, parseTime("10s"));
-    EXPECT_EQ(182000000UL, parseTime("182ms"));
-    EXPECT_EQ(9000UL, parseTime("9us"));
-    EXPECT_EQ(9000UL, parseTime("9 us "));
-    EXPECT_EQ(10UL, parseTime("10ns"));
-    EXPECT_EQ(10UL, parseTime("10ns"));
-    EXPECT_EQ(0UL, parseTime("0s"));
-    EXPECT_EQ(0UL, parseTime("0"));
-    EXPECT_THROW(parseTime("10e"), std::runtime_error);
-    EXPECT_THROW(parseTime(""), std::runtime_error);
-    EXPECT_THROW(parseTime(" "), std::runtime_error);
+uint64_t
+parseDuration(const std::string& description)
+{
+    return Core::Time::parseDuration(description);
 }
 
-} // namespace LogCabin::Examples::Util::<anonymous>
-} // namespace LogCabin::Examples::Util
-} // namespace LogCabin::Examples
+} // namespace LogCabin::Util
+} // namespace LogCabin::Client
 } // namespace LogCabin

@@ -1,51 +1,37 @@
-Import('env', 'object_files')
+Import('env')
 
 libs = [ "pthread", "protobuf", "rt", "cryptopp" ]
 
-src = [
-    "Util.cc",
-]
-
-object_files['Examples'] = env.StaticObject(src)
-
 env.Default([
     env.Program("Benchmark",
-                (["Benchmark.cc", "#build/liblogcabin.a"] +
-                 object_files['Examples']),
+                ["Benchmark.cc", "#build/liblogcabin.a"],
                 LIBS = libs),
 
     env.Program("FailoverTest",
-                (["FailoverTest.cc", "#build/liblogcabin.a"] +
-                 object_files['Examples']),
+                ["FailoverTest.cc", "#build/liblogcabin.a"],
                 LIBS = libs),
 
     env.Program("HelloWorld",
-                (["HelloWorld.cc", "#build/liblogcabin.a"] +
-                 object_files['Examples']),
+                ["HelloWorld.cc", "#build/liblogcabin.a"],
                 LIBS = libs),
 
     env.Program("Reconfigure",
-                (["Reconfigure.cc", "#build/liblogcabin.a"] +
-                 object_files['Examples']),
+                ["Reconfigure.cc", "#build/liblogcabin.a"],
                 LIBS = libs),
 
     env.Program("ReconfigureTest",
-                (["ReconfigureTest.cc", "#build/liblogcabin.a"] +
-                 object_files['Examples']),
+                ["ReconfigureTest.cc", "#build/liblogcabin.a"],
                 LIBS = libs),
 
     env.Program("ServerStats",
-                (["ServerStats.cc", "#build/liblogcabin.a"] +
-                 object_files['Examples']),
+                ["ServerStats.cc", "#build/liblogcabin.a"],
                 LIBS = libs),
 
     env.Program("SmokeTest",
-                (["SmokeTest.cc", "#build/liblogcabin.a"] +
-                 object_files['Examples']),
+                ["SmokeTest.cc", "#build/liblogcabin.a"],
                 LIBS = libs),
 
     env.Program("TreeOps",
-                (["TreeOps.cc", "#build/liblogcabin.a"] +
-                 object_files['Examples']),
+                ["TreeOps.cc", "#build/liblogcabin.a"],
                 LIBS = libs),
 ])

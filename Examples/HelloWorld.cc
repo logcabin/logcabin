@@ -18,13 +18,12 @@
 #include <iostream>
 
 #include <LogCabin/Client.h>
-#include "Examples/Util.h"
+#include <LogCabin/Util.h>
 
 namespace {
 
 using LogCabin::Client::Cluster;
 using LogCabin::Client::Tree;
-using LogCabin::Examples::Util::parseTime;
 
 /**
  * Parses argv for the main function.
@@ -35,7 +34,7 @@ class OptionParser {
         : argc(argc)
         , argv(argv)
         , cluster("logcabin:5254")
-        , timeout(parseTime("0s"))
+        , timeout(LogCabin::Client::Util::parseDuration("0s"))
     {
         while (true) {
             static struct option longOptions[] = {
@@ -55,7 +54,7 @@ class OptionParser {
                     cluster = optarg;
                     break;
                 case 't':
-                    timeout = parseTime(optarg);
+                    timeout = LogCabin::Client::Util::parseDuration(optarg);
                     break;
                 case 'h':
                     usage();

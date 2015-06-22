@@ -182,6 +182,19 @@ typedef MockableClock<std::chrono::system_clock> SystemClock;
 #endif
 
 /**
+ * Convert a human-readable description of a time duration into a number of
+ * nanoseconds.
+ * \param description
+ *      Something like 10, 10s, 200ms, 3us, or 999ns. With no units, defaults
+ *      to seconds.
+ * \return
+ *      Number of nanoseconds.
+ * \throw std::runtime_error
+ *      If description could not be parsed successfully.
+ */
+uint64_t parseDuration(const std::string& description);
+
+/**
  * Read the CPU's cycle counter.
  * This is useful for benchmarking.
  */

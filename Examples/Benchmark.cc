@@ -33,7 +33,7 @@
 #include <unistd.h>
 
 #include <LogCabin/Client.h>
-#include "Examples/Util.h"
+#include <LogCabin/Util.h>
 
 namespace {
 
@@ -41,7 +41,6 @@ using LogCabin::Client::Cluster;
 using LogCabin::Client::Result;
 using LogCabin::Client::Status;
 using LogCabin::Client::Tree;
-using LogCabin::Examples::Util::parseTime;
 
 /**
  * Parses argv for the main function.
@@ -55,7 +54,7 @@ class OptionParser {
         , size(1024)
         , writers(1)
         , totalWrites(1000)
-        , timeout(parseTime("30s"))
+        , timeout(LogCabin::Client::Util::parseDuration("30s"))
     {
         while (true) {
             static struct option longOptions[] = {
@@ -78,7 +77,7 @@ class OptionParser {
                     cluster = optarg;
                     break;
                 case 'd':
-                    timeout = parseTime(optarg);
+                    timeout = LogCabin::Client::Util::parseDuration(optarg);
                     break;
                 case 'h':
                     usage();

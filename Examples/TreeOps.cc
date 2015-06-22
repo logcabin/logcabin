@@ -22,13 +22,12 @@
 
 #include <LogCabin/Client.h>
 #include <LogCabin/Debug.h>
-#include "Examples/Util.h"
+#include <LogCabin/Util.h>
 
 namespace {
 
 using LogCabin::Client::Cluster;
 using LogCabin::Client::Tree;
-using LogCabin::Examples::Util::parseTime;
 
 enum class Command {
     MKDIR,
@@ -54,7 +53,7 @@ class OptionParser {
         , dir()
         , path()
         , quiet(false)
-        , timeout(parseTime("0s"))
+        , timeout(LogCabin::Client::Util::parseDuration("0s"))
     {
         while (true) {
             static struct option longOptions[] = {
@@ -89,7 +88,7 @@ class OptionParser {
                     break;
                 }
                 case 't':
-                    timeout = parseTime(optarg);
+                    timeout = LogCabin::Client::Util::parseDuration(optarg);
                     break;
                 case 'h':
                     usage();

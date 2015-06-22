@@ -14,6 +14,7 @@
  */
 
 #include <gtest/gtest.h>
+#include <stdexcept>
 
 #include "Core/StringUtil.h"
 #include "Core/Time.h"
@@ -130,6 +131,20 @@ TEST(CoreTime, SteadyClock_now_progressTimingSensitive) {
     EXPECT_LT(b, a + std::chrono::microseconds(1500));
 }
 
+TEST(CoreTime, parseDuration) {
+    EXPECT_EQ(10000000000UL, Time::parseDuration("10s"));
+    EXPECT_EQ(182000000UL, Time::parseDuration("182ms"));
+    EXPECT_EQ(9000UL, Time::parseDuration("9us"));
+    EXPECT_EQ(9000UL, Time::parseDuration("9 us "));
+    EXPECT_EQ(10UL, Time::parseDuration("10ns"));
+    EXPECT_EQ(10UL, Time::parseDuration("10ns"));
+    EXPECT_EQ(0UL, Time::parseDuration("0s"));
+    EXPECT_EQ(0UL, Time::parseDuration("0"));
+    EXPECT_THROW(Time::parseDuration("10e"), std::runtime_error);
+    EXPECT_THROW(Time::parseDuration(""), std::runtime_error);
+    EXPECT_THROW(Time::parseDuration(" "), std::runtime_error);
+}
+
 TEST(CoreTime, rdtsc_increasing) {
     uint64_t a = Time::rdtsc();
     uint64_t b = Time::rdtsc();
@@ -211,7 +226,6 @@ TEST(CoreTimeSteadyTimeConverter, unixNanos) {
               conv.unixNanos(Time::SteadyClock::time_point::min() +
                              std::chrono::hours(1)));
 }
-
 
 TEST(CoreTime, padFraction) {
     EXPECT_EQ("5 s", toString(nanoseconds(5000000000)));

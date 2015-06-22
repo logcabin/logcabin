@@ -13,36 +13,16 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/**
- * \file
- * Common utilities and definitions for example client programs.
- */
+#include <gtest/gtest.h>
 
-#include <cinttypes>
-#include <string>
-
-#ifndef LOGCABIN_EXAMPLES_UTIL_H
-#define LOGCABIN_EXAMPLES_UTIL_H
+#include "include/LogCabin/Util.h"
 
 namespace LogCabin {
-namespace Examples {
-namespace Util {
+namespace Client {
+namespace {
 
-/**
- * Convert a human-readable description of a time duration into a number of
- * nanoseconds.
- * \param description
- *      Something like 10, 10s, 200ms, 3us, or 999ns. With no units, defaults
- *      to seconds.
- * \return
- *      Number of nanoseconds.
- * \throw std::runtime_error
- *      If description could not be parsed successfully.
- */
-uint64_t parseTime(const std::string& description);
+// nothing to test in parseDuration
 
-} // namespace LogCabin::Examples::Util
-} // namespace LogCabin::Examples
+} // namespace LogCabin::Client::<anonymous>
+} // namespace LogCabin::Client
 } // namespace LogCabin
-
-#endif /* LOGCABIN_EXAMPLES_UTIL_H */

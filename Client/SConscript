@@ -7,5 +7,6 @@ src = [
     "LeaderRPC.cc",
     "MockClientImpl.cc",
     "SessionManager.cc",
+    "Util.cc",
 ]
 object_files['Client'] = env.StaticObject(src)
