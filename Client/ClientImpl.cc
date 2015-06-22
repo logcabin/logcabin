@@ -420,6 +420,20 @@ ClientImpl::ExactlyOnceRPCHelper::keepAliveThreadMain()
 
 ////////// class ClientImpl //////////
 
+ClientImpl::TimePoint
+ClientImpl::absTimeout(uint64_t relTimeoutNanos)
+{
+    if (relTimeoutNanos == 0)
+        return ClientImpl::TimePoint::max();
+    ClientImpl::TimePoint now = ClientImpl::Clock::now();
+    ClientImpl::TimePoint then =
+        now + std::chrono::nanoseconds(relTimeoutNanos);
+    if (then < now) // overflow
+        return ClientImpl::TimePoint::max();
+    else
+        return then;
+}
+
 ClientImpl::ClientImpl(const std::map<std::string, std::string>& options)
     : config(options)
     , eventLoop()

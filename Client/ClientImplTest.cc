@@ -205,6 +205,7 @@ class ClientClientImplTest : public ::testing::Test {
     Client::ClientImpl client;
 };
 
+
 class ClientClientImplServiceMockTest : public ClientClientImplTest {
   public:
     ClientClientImplServiceMockTest()
@@ -227,6 +228,18 @@ class ClientClientImplServiceMockTest : public ClientClientImplTest {
     std::shared_ptr<RPC::ServiceMock> service;
     std::unique_ptr<RPC::Server> server;
 };
+
+TEST_F(ClientClientImplTest, absTimeout)
+{
+    using Client::ClientImpl;
+    EXPECT_EQ(ClientImpl::TimePoint::max(),
+              ClientImpl::absTimeout(0));
+    EXPECT_EQ(ClientImpl::TimePoint::max(),
+              ClientImpl::absTimeout(~0UL));
+    auto t = ClientImpl::absTimeout(35UL * 1000 * 1000 * 1000);
+    EXPECT_LT(ClientImpl::Clock::now() + std::chrono::seconds(30), t);
+    EXPECT_GT(ClientImpl::Clock::now() + std::chrono::seconds(40), t);
+}
 
 TEST_F(ClientClientImplServiceMockTest, exactlyOnceRPCInfo_exit_invalidRequest)
 {

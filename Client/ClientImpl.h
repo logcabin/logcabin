@@ -55,6 +55,14 @@ class ClientImpl {
     /// Type for absolute time values used for timeouts.
     typedef LeaderRPC::TimePoint TimePoint;
 
+    /**
+     * Return the absolute time when the calling operation should timeout.
+     * \param relTimeoutNanos
+     *      The number of nanoseconds from now to time out, or 0 for no
+     *      timeout.
+     */
+    static TimePoint absTimeout(uint64_t relTimeoutNanos);
+
     /// Constructor.
     explicit ClientImpl(const std::map<std::string, std::string>& options =
                             std::map<std::string, std::string>());

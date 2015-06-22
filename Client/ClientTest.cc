@@ -27,29 +27,10 @@
 #include "include/LogCabin/Client.h"
 
 namespace LogCabin {
-
-namespace Client {
-namespace Internal {
-
-ClientImpl::TimePoint absTimeout(uint64_t relTimeoutNanos);
-
-} // namespace LogCabin::Client::Internal
-} // namespace LogCabin::Client
-
 namespace {
 
 using Core::ProtoBuf::fromString;
 using Core::StringUtil::format;
-
-TEST(ClientInternalTest, absTimeout)
-{
-    using Client::Internal::absTimeout;
-    EXPECT_EQ(Client::ClientImpl::TimePoint::max(), absTimeout(0));
-    EXPECT_EQ(Client::ClientImpl::TimePoint::max(), absTimeout(~0UL));
-    auto t = absTimeout(35UL * 1000 * 1000 * 1000);
-    EXPECT_LT(Client::ClientImpl::Clock::now() + std::chrono::seconds(30), t);
-    EXPECT_GT(Client::ClientImpl::Clock::now() + std::chrono::seconds(40), t);
-}
 
 
 #if DEBUG
