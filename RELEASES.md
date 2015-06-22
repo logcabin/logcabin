@@ -64,6 +64,8 @@ Changes to unstable APIs:
   `scripts/serverstats.py` have been removed. The logcabinctl program can now
   be used to fetch the stats instead, and the Python wrapper wasn't kept
   up-to-date anyhow.
+- `Examples/HelloWorld` is no longer installed to
+  `/usr/bin/logcabin-helloworld`.
 
 Version 1.0.0 (2015-04-29)
 ==========================
