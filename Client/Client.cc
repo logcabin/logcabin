@@ -536,10 +536,17 @@ Cluster::getServerStats(const std::string& host,
                         uint64_t timeoutNanoseconds,
                         Protocol::ServerStats& stats)
 {
-    return clientImpl->getServerStats(
+
+    Protocol::ServerControl::ServerStatsGet::Request request;
+    Protocol::ServerControl::ServerStatsGet::Response response;
+    Result result = clientImpl->serverControl(
                 host,
                 ClientImpl::absTimeout(timeoutNanoseconds),
-                stats);
+                Protocol::ServerControl::OpCode::SERVER_STATS_GET,
+                request,
+                response);
+    stats = response.server_stats();
+    return result;
 }
 
 Protocol::ServerStats

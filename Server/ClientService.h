@@ -53,7 +53,6 @@ class ClientService : public RPC::Service {
     ////////// RPC handlers //////////
 
     void getServerInfo(RPC::ServerRPC rpc);
-    void getServerStats(RPC::ServerRPC rpc);
     void getConfiguration(RPC::ServerRPC rpc);
     void setConfiguration(RPC::ServerRPC rpc);
     void stateMachineCommand(RPC::ServerRPC rpc);

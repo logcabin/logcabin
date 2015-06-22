@@ -50,9 +50,6 @@ ClientService::handleRPC(RPC::ServerRPC rpc)
         case OpCode::GET_SERVER_INFO:
             getServerInfo(std::move(rpc));
             break;
-        case OpCode::GET_SERVER_STATS:
-            getServerStats(std::move(rpc));
-            break;
         case OpCode::VERIFY_RECIPIENT:
             verifyRecipient(std::move(rpc));
             break;
@@ -104,14 +101,6 @@ ClientService::getServerInfo(RPC::ServerRPC rpc)
     Protocol::Client::Server& info = *response.mutable_server_info();
     info.set_server_id(globals.raft->serverId);
     info.set_addresses(globals.raft->serverAddresses);
-    rpc.reply(response);
-}
-
-void
-ClientService::getServerStats(RPC::ServerRPC rpc)
-{
-    PRELUDE(GetServerStats);
-    *response.mutable_server_stats() = globals.serverStats.getCurrent();
     rpc.reply(response);
 }
 

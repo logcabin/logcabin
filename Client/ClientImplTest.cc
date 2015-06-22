@@ -306,35 +306,6 @@ TEST_F(ClientClientImplTest, getServerInfo_timeout) {
 }
 
 
-TEST_F(ClientClientImplServiceMockTest, getServerStats) {
-    Protocol::Client::GetServerStats::Request request;
-    Protocol::Client::GetServerStats::Response response;
-    Protocol::ServerStats& ret = *response.mutable_server_stats();
-    ret.set_server_id(3);
-
-    service->closeSession(Protocol::Client::OpCode::GET_SERVER_STATS,
-                          request);
-    service->reply(Protocol::Client::OpCode::GET_SERVER_STATS,
-                   request, response);
-    Protocol::ServerStats stats;
-    Client::Result result = client.getServerStats("127.0.0.1",
-                                                  TimePoint::max(),
-                                                  stats);
-    EXPECT_EQ(Client::Status::OK, result.status);
-    EXPECT_EQ("server_id: 3",
-              stats);
-}
-
-TEST_F(ClientClientImplTest, getServerStats_timeout) {
-    Protocol::ServerStats stats;
-    Client::Result result = client.getServerStats("127.0.0.1",
-                                                  TimePoint::min(),
-                                                  stats);
-    EXPECT_EQ(Client::Status::TIMEOUT, result.status);
-    EXPECT_EQ("Client-specified timeout elapsed", result.error);
-    EXPECT_EQ("", stats);
-}
-
 TEST_F(ClientClientImplTest, makeDirectory_getRPCInfo_timeout) {
     EXPECT_EQ(0U, client.exactlyOnceRPCHelper.clientId);
     Client::Result result =

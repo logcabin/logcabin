@@ -96,11 +96,6 @@ class ClientImpl {
                          TimePoint timeout,
                          Server& info);
 
-    /// See Cluster::getServerStats.
-    Result getServerStats(const std::string& host,
-                          TimePoint timeout,
-                          Protocol::ServerStats& stats);
-
     /**
      * Return the canonicalized path name resulting from accessing path
      * relative to workingDirectory.

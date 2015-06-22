@@ -59,6 +59,12 @@ New backwards-compatible changes:
   used to inspect and manipulate an individual server's state. Its command line
   is now part of LogCabin's public API.
 
+Changes to unstable APIs:
+- `build/Examples/ServerStats` or `/usr/bin/logcabin-serverstats` along with
+  `scripts/serverstats.py` have been removed. The logcabinctl program can now
+  be used to fetch the stats instead, and the Python wrapper wasn't kept
+  up-to-date anyhow.
+
 Version 1.0.0 (2015-04-29)
 ==========================
 
