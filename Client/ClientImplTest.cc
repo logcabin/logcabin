@@ -210,9 +210,11 @@ class ClientClientImplServiceMockTest : public ClientClientImplTest {
   public:
     ClientClientImplServiceMockTest()
         : service()
+        , controlService()
         , server()
     {
         service = std::make_shared<RPC::ServiceMock>();
+        controlService = std::make_shared<RPC::ServiceMock>();
         server.reset(new RPC::Server(client.eventLoop,
                                      Protocol::Common::MAX_MESSAGE_LENGTH));
         RPC::Address address("127.0.0.1", Protocol::Common::DEFAULT_PORT);
@@ -220,12 +222,15 @@ class ClientClientImplServiceMockTest : public ClientClientImplTest {
         EXPECT_EQ("", server->bind(address));
         server->registerService(Protocol::Common::ServiceId::CLIENT_SERVICE,
                                 service, 1);
+        server->registerService(Protocol::Common::ServiceId::CONTROL_SERVICE,
+                                controlService, 1);
     }
     ~ClientClientImplServiceMockTest()
     {
     }
 
     std::shared_ptr<RPC::ServiceMock> service;
+    std::shared_ptr<RPC::ServiceMock> controlService;
     std::unique_ptr<RPC::Server> server;
 };
 
@@ -368,6 +373,42 @@ TEST_F(ClientClientImplTest, listDirectory_timeout) {
     EXPECT_EQ("Client-specified timeout elapsed", result.error);
     EXPECT_EQ(std::vector<std::string> { }, children);
 }
+
+TEST_F(ClientClientImplServiceMockTest, serverControl) {
+    Protocol::ServerControl::ServerInfoGet::Request request;
+    Protocol::ServerControl::ServerInfoGet::Response response;
+    response.set_server_id(3);
+    controlService->closeSession(
+            Protocol::ServerControl::OpCode::SERVER_INFO_GET,
+            request);
+    controlService->reply(
+            Protocol::ServerControl::SERVER_INFO_GET,
+            request,
+            response);
+    Client::Result result = client.serverControl(
+            "127.0.0.1",
+            TimePoint::max(),
+            Protocol::ServerControl::OpCode::SERVER_INFO_GET,
+            request,
+            response);
+    EXPECT_EQ(Client::Status::OK, result.status);
+    EXPECT_EQ(3U, response.server_id());
+}
+
+TEST_F(ClientClientImplTest, serverControl_timeout) {
+    Protocol::ServerControl::ServerInfoGet::Request request;
+    Protocol::ServerControl::ServerInfoGet::Response response;
+    Client::Result result = client.serverControl(
+            "127.0.0.1",
+            TimePoint::min(),
+            Protocol::ServerControl::OpCode::SERVER_INFO_GET,
+            request,
+            response);
+    EXPECT_EQ(Client::Status::TIMEOUT, result.status);
+    EXPECT_EQ("Client-specified timeout elapsed", result.error);
+    EXPECT_FALSE(response.has_server_id());
+}
+
 
 class KeepAliveThreadMain_cancel_Helper {
     explicit KeepAliveThreadMain_cancel_Helper(

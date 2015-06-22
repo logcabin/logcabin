@@ -286,6 +286,7 @@ env.Default(storageTool)
 ### scons install target
 
 env.InstallAs('/etc/init.d/logcabin',           'scripts/logcabin-init-redhat')
+env.InstallAs('/usr/bin/logcabinctl',           'build/Client/ServerControl')
 env.InstallAs('/usr/bin/logcabind',             'build/LogCabin')
 env.InstallAs('/usr/bin/logcabin',              'build/Examples/TreeOps')
 env.InstallAs('/usr/bin/logcabin-benchmark',    'build/Examples/Benchmark')

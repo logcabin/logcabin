@@ -1,0 +1,137 @@
+// Copyright (c) 2015 Diego Ongaro
+//
+// Permission to use, copy, modify, and distribute this software for any
+// purpose with or without fee is hereby granted, provided that the above
+// copyright notice and this permission notice appear in all copies.
+//
+// THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR(S) DISCLAIM ALL WARRANTIES
+// WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+// MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL AUTHORS BE LIABLE FOR
+// ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+// WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+// ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+// OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+package LogCabin.Protocol.ServerControl;
+
+import "build/Protocol/ServerStats.proto";
+
+/**
+ * \file
+ * This file contains the formats for RPCs that the logcabinctl client sends to
+ * individual servers to query and control their internal state.
+ */
+
+/**
+ * Identifies which RPC is being executed.
+ */
+enum OpCode {
+    DEBUG_FILENAME_GET = 1;
+    DEBUG_FILENAME_SET = 2;
+    DEBUG_POLICY_GET = 3;
+    DEBUG_POLICY_SET = 4;
+    DEBUG_ROTATE = 5;
+    SERVER_INFO_GET = 6;
+    SERVER_STATS_DUMP = 7;
+    SERVER_STATS_GET = 8;
+    SNAPSHOT_CONTROL = 9;
+};
+
+/**
+ * The type of "service-specific error" replies that this service returns.
+ */
+message Error {
+    // No errors are defined.
+    //enum Code {
+    //};
+    //required Code error_code = 1;
+}
+
+/**
+ * DebugFilenameGet RPC: Print the server's debug log filename.
+ */
+message DebugFilenameGet {
+    message Request {
+    }
+    message Response {
+        optional string filename = 1;
+    }
+}
+
+/**
+ * DebugFilenameSet RPC: Change the server's debug log filename.
+ */
+message DebugFilenameSet {
+    message Request {
+        optional string filename = 1;
+    }
+    message Response {
+        /**
+         * This field will be present if any error occurred and not present
+         * otherwise.
+         */
+        optional string error = 1;
+    }
+}
+
+/**
+ * DebugRotate RPC: Rotate the server's debug log file.
+ */
+message DebugRotate {
+    message Request {
+    }
+    message Response {
+        /**
+         * This field will be present if any error occurred and not present
+         * otherwise.
+         */
+        optional string error = 1;
+    }
+}
+
+/**
+ * ServerInfoGet RPC: Retrieve basic information from the given server.
+ */
+message ServerInfoGet {
+    message Request {
+    }
+    message Response {
+        /**
+         * The ID of the server.
+         */
+        optional uint64 server_id = 1;
+        /**
+         * The network address(es) of the server (comma-delimited).
+         */
+        optional string addresses = 2;
+        /**
+         * The POSIX process ID of the server.
+         */
+        optional uint64 process_id = 3;
+    }
+}
+
+/**
+ * ServerStatsDump RPC: Write detailed server metrics to server's debug log.
+ */
+message ServerStatsDump {
+    message Request {
+    }
+    message Response {
+    }
+}
+
+/**
+ * ServerStatsGet RPC: Retrieve statistics from the given server, which are
+ * useful for diagnostics.
+ */
+message ServerStatsGet {
+    message Request {
+    }
+    message Response {
+        /**
+         * Metrics, statistics, state and other such information.
+         */
+        optional LogCabin.Protocol.ServerStats server_stats = 1;
+    }
+}

@@ -875,5 +875,71 @@ ClientImpl::removeFile(const std::string& path,
     return Result();
 }
 
+Result
+ClientImpl::serverControl(const std::string& host,
+                          TimePoint timeout,
+                          Protocol::ServerControl::OpCode opCode,
+                          const google::protobuf::Message& request,
+                          google::protobuf::Message& response)
+{
+    Result timeoutResult;
+    timeoutResult.status = Client::Status::TIMEOUT;
+    timeoutResult.error = "Client-specified timeout elapsed";
+
+    while (true) {
+        sessionCreationBackoff.delayAndBegin(timeout);
+
+        RPC::Address address(host, Protocol::Common::DEFAULT_PORT);
+        address.refresh(timeout);
+
+        // TODO(ongaro): Ideally we'd learn the serverID the same way we learn
+        // the cluster UUID and then assert that in future calls. In practice,
+        // we're only making one call for now, so it doesn't matter.
+        std::shared_ptr<RPC::ClientSession> session =
+            sessionManager.createSession(address, timeout, &clusterUUID);
+
+        RPC::ClientRPC rpc(session,
+                           Protocol::Common::ServiceId::CONTROL_SERVICE,
+                           1,
+                           opCode,
+                           request);
+
+        typedef RPC::ClientRPC::Status RPCStatus;
+        Protocol::Client::Error error;
+        RPCStatus status = rpc.waitForReply(&response, &error, timeout);
+
+        // Decode the response
+        switch (status) {
+            case RPCStatus::OK:
+                return Result();
+            case RPCStatus::RPC_FAILED:
+                break;
+            case RPCStatus::TIMEOUT:
+                return timeoutResult;
+            case RPCStatus::SERVICE_SPECIFIC_ERROR:
+                // Hmm, we don't know what this server is trying to tell us,
+                // but something is wrong. The server shouldn't reply back with
+                // error codes we don't understand. That's why we gave it a
+                // serverSpecificErrorVersion number in the request header.
+                PANIC("Unknown error code %u returned in service-specific "
+                      "error. This probably indicates a bug in the server",
+                      error.error_code());
+                break;
+            case RPCStatus::RPC_CANCELED:
+                PANIC("RPC canceled unexpectedly");
+            case RPCStatus::INVALID_SERVICE:
+                PANIC("The server isn't running the ControlService");
+            case RPCStatus::INVALID_REQUEST:
+                PANIC("The server's ControlService doesn't support the "
+                      "RPC or claims the request is malformed");
+        }
+        if (timeout < Clock::now())
+            return timeoutResult;
+        else
+            continue;
+    }
+}
+
+
 } // namespace LogCabin::Client
 } // namespace LogCabin

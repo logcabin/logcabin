@@ -94,6 +94,11 @@ enum {
      */
     RAFT_SERVICE = 2,
 
+    /**
+     * Used by the logcabinctl client to query and change the internal state of
+     * a server.
+     */
+    CONTROL_SERVICE = 3,
 };
 }
 

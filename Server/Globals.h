@@ -36,9 +36,10 @@ class Server;
 namespace Server {
 
 // forward declarations
+class ClientService;
+class ControlService;
 class RaftConsensus;
 class RaftService;
-class ClientService;
 class StateMachine;
 
 /**
@@ -206,6 +207,12 @@ class Globals {
     std::shared_ptr<Server::StateMachine> stateMachine;
 
   private:
+
+    /**
+     * Service used by logcabinctl to query and change a server's internal
+     * state.
+     */
+    std::shared_ptr<Server::ControlService> controlService;
 
     /**
      * Service used to communicate between servers.

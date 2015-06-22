@@ -21,6 +21,7 @@
 #include "Protocol/Common.h"
 #include "RPC/Server.h"
 #include "Server/ClientService.h"
+#include "Server/ControlService.h"
 #include "Server/Globals.h"
 #include "Server/RaftConsensus.h"
 #include "Server/RaftService.h"
@@ -88,6 +89,7 @@ Globals::Globals()
     , serverId(~0UL)
     , raft()
     , stateMachine()
+    , controlService()
     , raftService()
     , clientService()
     , rpcServer()
@@ -115,6 +117,10 @@ Globals::init()
         raft->serverId = serverId;
     }
 
+    if (!controlService) {
+        controlService.reset(new ControlService(*this));
+    }
+
     if (!raftService) {
         raftService.reset(new RaftService(*this));
     }
@@ -128,10 +134,14 @@ Globals::init()
                                         Protocol::Common::MAX_MESSAGE_LENGTH));
 
         uint32_t maxThreads = config.read<uint16_t>("maxThreads", 16);
-        rpcServer->registerService(Protocol::Common::ServiceId::RAFT_SERVICE,
+        namespace ServiceId = Protocol::Common::ServiceId;
+        rpcServer->registerService(ServiceId::CONTROL_SERVICE,
+                                   controlService,
+                                   maxThreads);
+        rpcServer->registerService(ServiceId::RAFT_SERVICE,
                                    raftService,
                                    maxThreads);
-        rpcServer->registerService(Protocol::Common::ServiceId::CLIENT_SERVICE,
+        rpcServer->registerService(ServiceId::CLIENT_SERVICE,
                                    clientService,
                                    maxThreads);
 

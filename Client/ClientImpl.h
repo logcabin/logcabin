@@ -19,6 +19,7 @@
 #include <string>
 #include <thread>
 
+#include "build/Protocol/ServerControl.pb.h"
 #include "include/LogCabin/Client.h"
 #include "Client/Backoff.h"
 #include "Client/LeaderRPC.h"
@@ -153,6 +154,15 @@ class ClientImpl {
                       const Condition& condition,
                       TimePoint timeout);
 
+    /**
+     * Low-level interface to ServerControl service used by
+     * Client/ServerControl.cc.
+     */
+    Result serverControl(const std::string& host,
+                         TimePoint timeout,
+                         Protocol::ServerControl::OpCode opCode,
+                         const google::protobuf::Message& request,
+                         google::protobuf::Message& response);
 
   protected:
 

@@ -677,7 +677,7 @@ class Cluster {
                   uint64_t timeoutNanoseconds,
                   Server& info);
     /**
-     * Like getServerStats but throws exceptions upon errors.
+     * Like getServerInfo but throws exceptions upon errors.
      */
     Server
     getServerInfoEx(const std::string& host,

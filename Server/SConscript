@@ -1,11 +1,12 @@
 Import('env', 'object_files')
 
 src = [
+    "ClientService.cc",
+    "ControlService.cc",
+    "Globals.cc",
     "RaftConsensus.cc",
     "RaftConsensusInvariants.cc",
     "RaftService.cc",
-    "ClientService.cc",
-    "Globals.cc",
     "ServerStats.cc",
     "StateMachine.cc",
 ]

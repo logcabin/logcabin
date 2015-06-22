@@ -15,7 +15,7 @@ See [RELEASE-PROCESS.md](RELEASE-PROCESS.md).
 Version 1.1.0-alpha.0 (In Development)
 ======================================
 
-Improvements:
+Internal improvements:
 - Adds gcc 5.1 (which required no changes; issue #141) and clang 3.4, 3.5, 3.6,
   and 3.7 (issue #9) as supported compilers.
 - Optimizes setting nextIndex on leaders by capping it to just past the
@@ -55,6 +55,9 @@ New backwards-compatible changes:
   rotation). Signal handling was not listed as part of LogCabin's public API
   until now; signals listed in --help messages are now subject to semantic
   versioning.
+- The `build/Examples/ServerControl` or `/usr/bin/logcabinctl` program can be
+  used to inspect and manipulate an individual server's state. Its command line
+  is now part of LogCabin's public API.
 
 Version 1.0.0 (2015-04-29)
 ==========================
