@@ -140,8 +140,6 @@ class OptionParser {
             << "Change the server's debug log filename."
             << std::endl
 
-            // TODO(ongaro): implement debug policy get/set
-#if 0
             << ospace("debug policy get")
             << "Print the server's debug log policy."
             << std::endl
@@ -149,7 +147,6 @@ class OptionParser {
             << ospace("debug policy set <value>")
             << "Change the server's debug log policy."
             << std::endl
-#endif
 
             << ospace("debug rotate")
             << "Rotate the server's debug log file."
@@ -272,6 +269,8 @@ class ServerControl {
 
     DEFINE_RPC(DebugFilenameGet,       DEBUG_FILENAME_GET)
     DEFINE_RPC(DebugFilenameSet,       DEBUG_FILENAME_SET)
+    DEFINE_RPC(DebugPolicyGet,         DEBUG_POLICY_GET)
+    DEFINE_RPC(DebugPolicySet,         DEBUG_POLICY_SET)
     DEFINE_RPC(DebugRotate,            DEBUG_ROTATE)
     DEFINE_RPC(ServerInfoGet,          SERVER_INFO_GET)
     DEFINE_RPC(ServerStatsDump,        SERVER_STATS_DUMP)
@@ -326,6 +325,23 @@ main(int argc, char** argv)
                 server.DebugFilenameSet(request, response);
                 if (response.has_error())
                     error(response.error());
+                return 0;
+            }
+        } else if (options.at(1) == "policy") {
+            if (options.at(2) == "get") {
+                options.done();
+                Proto::DebugPolicyGet::Request request;
+                Proto::DebugPolicyGet::Response response;
+                server.DebugPolicyGet(request, response);
+                std::cout << response.policy() << std::endl;
+                return 0;
+            } else if (options.at(2) == "set") {
+                std::string value = options.at(3);
+                options.done();
+                Proto::DebugPolicySet::Request request;
+                Proto::DebugPolicySet::Response response;
+                request.set_policy(value);
+                server.DebugPolicySet(request, response);
                 return 0;
             }
         } else if (options.at(1) == "rotate") {

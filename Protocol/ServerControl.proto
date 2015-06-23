@@ -75,6 +75,29 @@ message DebugFilenameSet {
 }
 
 /**
+ * DebugPolicySet RPC: Get the server's verbosity.
+ */
+message DebugPolicyGet {
+    message Request {
+    }
+    message Response {
+        optional string policy = 1;
+    }
+}
+
+/**
+ * DebugPolicySet RPC: Set the server's verbosity.
+ * The format is as described in Core::Debug:logPolicyFromString.
+ */
+message DebugPolicySet {
+    message Request {
+        optional string policy = 1;
+    }
+    message Response {
+    }
+}
+
+/**
  * DebugRotate RPC: Rotate the server's debug log file.
  */
 message DebugRotate {

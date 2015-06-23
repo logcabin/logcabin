@@ -48,6 +48,12 @@ ControlService::handleRPC(RPC::ServerRPC rpc)
         case OpCode::DEBUG_FILENAME_SET:
             debugFilenameSet(std::move(rpc));
             break;
+        case OpCode::DEBUG_POLICY_GET:
+            debugPolicyGet(std::move(rpc));
+            break;
+        case OpCode::DEBUG_POLICY_SET:
+            debugPolicySet(std::move(rpc));
+            break;
         case OpCode::DEBUG_ROTATE:
             debugRotate(std::move(rpc));
             break;
@@ -111,6 +117,28 @@ ControlService::debugFilenameSet(RPC::ServerRPC rpc)
               error.c_str());
         response.set_error(error);
     }
+    rpc.reply(response);
+}
+
+void
+ControlService::debugPolicyGet(RPC::ServerRPC rpc)
+{
+    PRELUDE(DebugPolicyGet);
+    response.set_policy(
+            Core::Debug::logPolicyToString(
+                Core::Debug::getLogPolicy()));
+    rpc.reply(response);
+}
+
+void
+ControlService::debugPolicySet(RPC::ServerRPC rpc)
+{
+    PRELUDE(DebugPolicySet);
+    NOTICE("Switching to log policy %s",
+           request.policy().c_str());
+    Core::Debug::setLogPolicy(
+            Core::Debug::logPolicyFromString(
+                request.policy()));
     rpc.reply(response);
 }
 
