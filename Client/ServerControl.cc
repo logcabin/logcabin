@@ -116,6 +116,8 @@ class OptionParser {
 
     void usage() {
         std::cout << "Inspect or modify the state of a single LogCabin server."
+                  << std::endl
+                  << "This program was added in LogCabin v1.1.0."
                   << std::endl;
         std::cout << std::endl;
 
