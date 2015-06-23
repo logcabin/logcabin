@@ -25,13 +25,14 @@ prog=logcabin
 logcabin=${LOGCABIN-/usr/bin/logcabind}
 conffile=${CONFFILE-/etc/logcabin.conf}
 lockfile=${LOCKFILE-/var/lock/subsys/logcabin}
+logfile=${LOGFILE-/var/log/logcabin/logcabin.log}
 pidfile=${PIDFILE-/var/run/logcabin.pid}
 DAEMON_COREFILE_LIMIT='unlimited'
 RETVAL=0
 
 start() {
     echo -n $"Starting $prog: "
-    daemon ${logcabin} --daemon --config ${conffile} --log /var/log/${prog}.log --pidfile ${pidfile}
+    daemon ${logcabin} --daemon --config ${conffile} --log ${logfile} --pidfile ${pidfile}
     RETVAL=$?
     echo
     [ $RETVAL = 0 ] && touch ${lockfile}
