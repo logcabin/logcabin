@@ -122,7 +122,7 @@ const char* logLevelToString[] =
 };
 
 /**
- * Protects #policy, #isLoggingCache, and #logFilename.
+ * Protects #logPolicy, #isLoggingCache, and #logFilename.
  */
 std::mutex mutex;
 
@@ -136,11 +136,11 @@ std::mutex mutex;
  *
  * Protected by #mutex.
  */
-std::vector<std::pair<std::string, std::string>> policy;
+std::vector<std::pair<std::string, std::string>> logPolicy;
 
 /**
  * A cache of the results of getLogLevel(), since that function is slow.
- * This needs to be cleared when the policy changes.
+ * This needs to be cleared when the logPolicy changes.
  * The key to the map is a pointer to the absolute filename, which should be a
  * string literal.
  *
@@ -195,7 +195,7 @@ logLevelFromString(const std::string& level)
 LogLevel
 getLogLevel(const char* fileName)
 {
-    for (auto it = policy.begin(); it != policy.end(); ++it) {
+    for (auto it = logPolicy.begin(); it != logPolicy.end(); ++it) {
         const std::string& pattern = it->first;
         const std::string& logLevel = it->second;
         if (Core::StringUtil::startsWith(fileName, pattern) ||
@@ -308,12 +308,19 @@ setLogHandler(std::function<void(DebugMessage)> handler)
     return old;
 }
 
+std::vector<std::pair<std::string, std::string>>
+getLogPolicy()
+{
+    std::lock_guard<std::mutex> lockGuard(mutex);
+    return logPolicy;
+}
+
 void
 setLogPolicy(const std::vector<std::pair<std::string,
                                          std::string>>& newPolicy)
 {
     std::lock_guard<std::mutex> lockGuard(mutex);
-    policy = newPolicy;
+    logPolicy = newPolicy;
     isLoggingCache.clear();
 }
 
@@ -323,6 +330,58 @@ setLogPolicy(const std::initializer_list<std::pair<std::string,
 {
     setLogPolicy(std::vector<std::pair<std::string,
                                          std::string>>(newPolicy));
+}
+
+std::vector<std::pair<std::string, std::string>>
+logPolicyFromString(const std::string& in)
+{
+    std::vector<std::pair<std::string, std::string>> policy;
+    std::vector<std::string> rules = Core::StringUtil::split(in, ',');
+    for (auto it = rules.begin(); it != rules.end(); ++it) {
+        std::vector<std::string> pair = Core::StringUtil::split(*it, '@');
+        if (pair.size() == 1) {
+            policy.emplace_back("", pair.at(0));
+        } else if (pair.size() == 2) {
+            policy.emplace_back(pair.at(0), pair.at(1));
+        } else {
+            // someone put an @ in their pattern? odd
+            assert(pair.size() >= 3);
+            std::string level = pair.back();
+            pair.pop_back();
+            policy.emplace_back(Core::StringUtil::join(pair, "@"),
+                                level);
+        }
+    }
+    return policy;
+}
+
+std::string
+logPolicyToString(const std::vector<std::pair<std::string,
+                                              std::string>>& policy)
+{
+    std::stringstream ss;
+    if (policy.empty()) {
+        ss << LogLevel::NOTICE;
+    } else {
+        bool lastPatternEmpty = false;
+        for (uint64_t i = 0; i < policy.size(); ++i) {
+            if (policy.at(i).first.empty()) {
+                lastPatternEmpty = true;
+            } else {
+                lastPatternEmpty = false;
+                ss << policy.at(i).first;
+                ss << "@";
+            }
+            ss << policy.at(i).second;
+            if (i < policy.size() - 1)
+                ss << ",";
+        }
+        if (!lastPatternEmpty) {
+            ss << ",";
+            ss << LogLevel::NOTICE;
+        }
+    }
+    return ss.str();
 }
 
 std::ostream&

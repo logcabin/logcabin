@@ -133,6 +133,15 @@ std::function<void(DebugMessage)>
 setLogHandler(std::function<void(DebugMessage)> newHandler);
 
 /**
+ * Return the current log policy (as set by a previous call to setLogPolicy).
+ * Note that this may be empty, indicating that the default level of NOTICE is
+ * in use.
+ * \since LogCabin v1.1.0.
+ */
+std::vector<std::pair<std::string, std::string>>
+getLogPolicy();
+
+/**
  * Specify the log messages that should be displayed for each filename.
  * This first component is a pattern; the second is a log level.
  * A filename is matched against each pattern in order: if the filename starts
@@ -150,6 +159,31 @@ void
 setLogPolicy(const std::initializer_list<
                         std::pair<std::string, std::string>>& newPolicy);
 
+/**
+ * Build a log policy from its string representation.
+ * \param in
+ *      A string of the form "pattern@level,pattern@level,level".
+ *      The pattern is separated from the level by an at symbol. Multiple rules
+ *      are separated by comma. A rule with an empty pattern (match all) does
+ *      not need an at symbol.
+ * \return
+ *      Logging policy based on string description.
+ * \since LogCabin v1.1.0.
+ */
+std::vector<std::pair<std::string, std::string>>
+logPolicyFromString(const std::string& in);
+
+/**
+ * Serialize a log policy into a string representation.
+ * \param policy
+ *      Logging policy in the format required by setLogPolicy.
+ * \return
+ *      String representation as accepted by logPolicyFromString.
+ * \since LogCabin v1.1.0.
+ */
+std::string
+logPolicyToString(const std::vector<
+                            std::pair<std::string, std::string>>& policy);
 
 } // namespace LogCabin::Core::Debug
 } // namespace LogCabin::Core

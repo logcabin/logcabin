@@ -183,6 +183,50 @@ TEST_F(CoreDebugTest, setLogHandler) {
     EXPECT_EQ("Hello, world! 9", m.message);
 }
 
+TEST_F(CoreDebugTest, setLogPolicy) {
+    setLogPolicy({{"prefix", "VERBOSE"},
+                  {"suffix", "ERROR"},
+                  {"", "WARNING"}});
+    EXPECT_EQ(LogLevel::VERBOSE, Internal::getLogLevel("prefixabcsuffix"));
+    EXPECT_EQ(LogLevel::ERROR, Internal::getLogLevel("abcsuffix"));
+    EXPECT_EQ(LogLevel::WARNING, Internal::getLogLevel("asdf"));
+}
+
+std::string normalize(const std::string& in) {
+    return logPolicyToString(logPolicyFromString(in));
+}
+
+
+TEST_F(CoreDebugTest, logPolicyFromString) {
+    EXPECT_EQ("NOTICE", normalize(""));
+    EXPECT_EQ("ERROR", normalize("ERROR"));
+    EXPECT_EQ("ERROR", normalize("@ERROR"));
+    EXPECT_EQ("prefix@VERBOSE,suffix@ERROR,WARNING",
+              normalize("prefix@VERBOSE,suffix@ERROR,WARNING"));
+    EXPECT_EQ("prefix@VERBOSE,suffix@ERROR,NOTICE",
+              normalize("prefix@VERBOSE,suffix@ERROR,@NOTICE"));
+    EXPECT_EQ("prefix@VERBOSE,suffix@ERROR,NOTICE",
+              normalize("prefix@VERBOSE,suffix@ERROR,NOTICE"));
+}
+
+TEST_F(CoreDebugTest, logPolicyToString) {
+    EXPECT_EQ("NOTICE",
+              logPolicyToString(getLogPolicy()));
+    setLogPolicy({{"", "ERROR"}});
+    EXPECT_EQ("ERROR",
+              logPolicyToString(getLogPolicy()));
+    setLogPolicy({{"prefix", "VERBOSE"},
+                  {"suffix", "ERROR"},
+                  {"", "WARNING"}});
+    EXPECT_EQ("prefix@VERBOSE,suffix@ERROR,WARNING",
+              logPolicyToString(getLogPolicy()));
+    setLogPolicy({{"prefix", "VERBOSE"},
+                  {"suffix", "ERROR"}});
+    EXPECT_EQ("prefix@VERBOSE,suffix@ERROR,NOTICE",
+              logPolicyToString(getLogPolicy()));
+}
+
+
 // log: low cost-benefit in testing
 
 } // namespace LogCabin::Core::Debug::<anonymous>

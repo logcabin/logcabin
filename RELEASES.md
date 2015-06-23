@@ -53,8 +53,9 @@ Internal improvements:
 
 New backwards-compatible changes:
 
-- `getLogFilename`, `setLogFilename`, and `reopenLogFromFilename` were
-  introduced in `include/LogCabin/Debug.h`.
+- `getLogFilename`, `setLogFilename`, `reopenLogFromFilename`, `getLogPolicy`,
+  `logPolicyFromString`, `logPolicyToString` were introduced in
+  `include/LogCabin/Debug.h`.
 - The LogCabin daemon will now reopen its log file on `SIGUSR2` (useful for log
   rotation). Signal handling was not listed as part of LogCabin's public API
   until now; signals listed in `--help` messages are now subject to semantic
