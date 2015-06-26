@@ -280,6 +280,8 @@ class Tree {
      *       - INVALID_ARGUMENT if workingDirectory is malformed.
      *       - TYPE_ERROR if parent of workingDirectory is a file.
      *       - TYPE_ERROR if workingDirectory exists but is a file.
+     *       - CONDITION_NOT_MET if predicate from setCondition() was false.
+     *       - TIMEOUT if timeout elapsed before the operation completed.
      *      If this returns an error, future operations on this tree using
      *      relative paths will fail until a valid working directory is set.
      */
@@ -364,6 +366,8 @@ class Tree {
      *       - INVALID_ARGUMENT if path is malformed.
      *       - TYPE_ERROR if a parent of path is a file.
      *       - TYPE_ERROR if path exists but is a file.
+     *       - CONDITION_NOT_MET if predicate from setCondition() was false.
+     *       - TIMEOUT if timeout elapsed before the operation completed.
      */
     Result
     makeDirectory(const std::string& path);
@@ -390,6 +394,8 @@ class Tree {
      *       - LOOKUP_ERROR if path does not exist.
      *       - TYPE_ERROR if a parent of path is a file.
      *       - TYPE_ERROR if path exists but is a file.
+     *       - CONDITION_NOT_MET if predicate from setCondition() was false.
+     *       - TIMEOUT if timeout elapsed before the operation completed.
      */
     Result
     listDirectory(const std::string& path,
@@ -414,6 +420,8 @@ class Tree {
      *       - INVALID_ARGUMENT if path is malformed.
      *       - TYPE_ERROR if a parent of path is a file.
      *       - TYPE_ERROR if path exists but is a file.
+     *       - CONDITION_NOT_MET if predicate from setCondition() was false.
+     *       - TIMEOUT if timeout elapsed before the operation completed.
      */
     Result
     removeDirectory(const std::string& path);
@@ -438,6 +446,8 @@ class Tree {
      *       - LOOKUP_ERROR if a parent of path does not exist.
      *       - TYPE_ERROR if a parent of path is a file.
      *       - TYPE_ERROR if path exists but is a directory.
+     *       - CONDITION_NOT_MET if predicate from setCondition() was false.
+     *       - TIMEOUT if timeout elapsed before the operation completed.
      */
     Result
     write(const std::string& path, const std::string& contents);
@@ -461,6 +471,8 @@ class Tree {
      *       - LOOKUP_ERROR if path does not exist.
      *       - TYPE_ERROR if a parent of path is a file.
      *       - TYPE_ERROR if path is a directory.
+     *       - CONDITION_NOT_MET if predicate from setCondition() was false.
+     *       - TIMEOUT if timeout elapsed before the operation completed.
      */
     Result
     read(const std::string& path, std::string& contents) const;
@@ -480,6 +492,8 @@ class Tree {
      *       - INVALID_ARGUMENT if path is malformed.
      *       - TYPE_ERROR if a parent of path is a file.
      *       - TYPE_ERROR if path exists but is a directory.
+     *       - CONDITION_NOT_MET if predicate from setCondition() was false.
+     *       - TIMEOUT if timeout elapsed before the operation completed.
      */
     Result
     removeFile(const std::string& path);
