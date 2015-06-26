@@ -282,6 +282,11 @@ storageTool = env.Program("build/Storage/Tool",
             LIBS = [ "pthread", "protobuf", "rt", "cryptopp" ])
 env.Default(storageTool)
 
+# Create empty directory so that it can be installed to /var/log/logcabin
+try:
+    os.mkdir("build/emptydir")
+except OSError:
+    pass # directory exists
 
 ### scons install target
 
@@ -293,7 +298,8 @@ env.InstallAs('/usr/bin/logcabin-benchmark',    'build/Examples/Benchmark')
 env.InstallAs('/usr/bin/logcabin-reconfigure',  'build/Examples/Reconfigure')
 env.InstallAs('/usr/bin/logcabin-smoketest',    'build/Examples/SmokeTest')
 env.InstallAs('/usr/bin/logcabin-storage',      'build/Storage/Tool')
-env.Alias('install', ['/etc', '/usr'])
+env.InstallAs('/var/log/logcabin',              'build/emptydir')
+env.Alias('install', ['/etc', '/usr', '/var'])
 
 
 #### 'scons rpm' target
@@ -325,7 +331,7 @@ for target in env.FindInstalledFiles():
     parent = target.get_dir()
     source = target.sources[0]
     install_commands.append('mkdir -p $RPM_BUILD_ROOT%s' % parent)
-    install_commands.append('cp %s $RPM_BUILD_ROOT%s' % (source, target))
+    install_commands.append('cp -r %s $RPM_BUILD_ROOT%s' % (source, target))
 
 # We probably don't want rpm to strip binaries.
 # This is kludged into the spec file.
@@ -391,7 +397,10 @@ def remove_sources(env, target, source):
     for g in garbage:
         if env['VERBOSE'] == '1':
             print 'rm %s' % g
-        os.remove(str(g))
+        try:
+            os.remove(str(g))
+        except OSError:
+            os.rmdir(str(g))
 
 # Rename PACKAGEROOT directory and subdirectories (should be empty)
 def remove_packageroot(env, target, source):
