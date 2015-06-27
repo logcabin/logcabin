@@ -43,6 +43,8 @@ Internal improvements:
 
 - Adds gcc 5.1 (which required no changes; issue #141) and clang 3.4, 3.5, 3.6,
   and 3.7 (issue #9) as supported compilers.
+- `liblogcabin.a` is now compiled with `-fPIC`, so it can be linked into shared
+  object (.so) files.
 - Optimizes setting `nextIndex` on leaders by capping it to just past the
   follower's last log index. This helps with followers that are new or have
   fallen far behind.
