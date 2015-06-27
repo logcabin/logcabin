@@ -275,24 +275,28 @@ Tree::setCondition(const std::string& path, const std::string& value)
 
     std::lock_guard<std::mutex> lockGuard(mutex);
     std::string realPath;
-    Result result = treeDetails->clientImpl->canonicalize(
-                                path,
-                                treeDetails->workingDirectory,
-                                realPath);
     std::shared_ptr<TreeDetails> newTreeDetails(new TreeDetails(*treeDetails));
-    if (result.status != Status::OK) {
-        newTreeDetails->condition = {
-            Core::StringUtil::format(
-                    "invalid from prior call to setCondition('%s') "
-                    "relative to '%s'",
-                    path.c_str(),
-                    treeDetails->workingDirectory.c_str()),
-            value,
-        };
-        treeDetails = newTreeDetails;
-        return result;
+    if (path.empty()) {
+        newTreeDetails->condition = {"", ""};
+    } else {
+        Result result = treeDetails->clientImpl->canonicalize(
+                                    path,
+                                    treeDetails->workingDirectory,
+                                    realPath);
+        if (result.status != Status::OK) {
+            newTreeDetails->condition = {
+                Core::StringUtil::format(
+                        "invalid from prior call to setCondition('%s') "
+                        "relative to '%s'",
+                        path.c_str(),
+                        treeDetails->workingDirectory.c_str()),
+                value,
+            };
+            treeDetails = newTreeDetails;
+            return result;
+        }
+        newTreeDetails->condition = {realPath, value};
     }
-    newTreeDetails->condition = {path, value};
     treeDetails = newTreeDetails;
     return Result();
 }

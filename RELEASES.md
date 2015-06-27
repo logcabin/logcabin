@@ -36,6 +36,8 @@ Bug fixes (low severity):
 - Fixes repeated PANIC in InstallSnapshot RPC after a server restarts while
   receiving a snapshot (issue #174). This could result in a temporary
   availability issue that would resolve itself on the next term change.
+- Fixes failing conditional tree operations after setting a condition with a
+  relative path (#177).
 
 Internal improvements:
 
