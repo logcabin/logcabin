@@ -38,6 +38,43 @@ namespace Core {
 namespace Debug {
 
 /**
+ * The levels of verbosity for log messages. Higher values are noisier.
+ *
+ * \since LogCabin v1.1.0. New levels may be added in future minor releases
+ * (adding a new level is considered backwards-compatible), so use 'default'
+ * values in switch statements.
+ */
+enum class LogLevel {
+    // If you change this enum, you should also update logLevelToString() and
+    // logLevelFromString() in Core/Debug.cc.
+    /**
+     * This log level is just used for disabling all log messages, which is
+     * really only useful in unit tests.
+     */
+    SILENT = 0,
+    /**
+     * Bad stuff that shouldn't happen. The system broke its contract to users
+     * in some way or some major assumption was violated.
+     */
+    ERROR = 10,
+    /**
+     * Messages at the WARNING level indicate that, although something went
+     * wrong or something unexpected happened, it was transient and
+     * recoverable.
+     */
+    WARNING = 20,
+    /**
+     * A system message that might be useful for administrators and developers.
+     */
+    NOTICE = 30,
+    /**
+     * Messages at the VERBOSE level don't necessarily indicate that anything
+     * went wrong, but they could be useful in diagnosing problems.
+     */
+    VERBOSE = 40,
+};
+
+/**
  * When LogCabin wants to print a log message, this is the information that
  * gets included.
  */
@@ -61,7 +98,9 @@ struct DebugMessage {
     int linenum;
     /// The output of __FUNCTION__.
     const char* function;
-    /// The level of importance of the message as an integer.
+    /// The level of importance of the message as an integer. This should have
+    /// been of type LogLevel but int was exposed originally; int is used for
+    /// backwards compatibility.
     int logLevel;
     /// The level of importance of the message as a static string.
     const char* logLevelString;

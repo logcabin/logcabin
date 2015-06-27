@@ -25,7 +25,6 @@
 #include "Storage/FilesystemUtil.h"
 #include "Storage/Layout.h"
 #include "Storage/SnapshotFile.h"
-#include "include/LogCabin/Debug.h"
 
 namespace LogCabin {
 namespace Storage {

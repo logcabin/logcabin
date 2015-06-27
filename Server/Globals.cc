@@ -26,7 +26,6 @@
 #include "Server/RaftConsensus.h"
 #include "Server/RaftService.h"
 #include "Server/StateMachine.h"
-#include "include/LogCabin/Debug.h"
 
 namespace LogCabin {
 namespace Server {

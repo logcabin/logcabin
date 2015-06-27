@@ -26,7 +26,6 @@
 #include "Core/Util.h"
 #include "Server/Globals.h"
 #include "Server/RaftConsensus.h"
-#include "include/LogCabin/Debug.h"
 
 namespace {
 

@@ -29,8 +29,8 @@ namespace Core {
 namespace Debug {
 
 namespace Internal {
-extern const char* logLevelToString[];
 extern std::unordered_map<const char*, LogLevel> isLoggingCache;
+const char* logLevelToString(LogLevel);
 LogLevel logLevelFromString(const std::string& level);
 LogLevel getLogLevel(const char* fileName);
 const char* relativeFileName(const char* fileName);
@@ -57,15 +57,15 @@ class CoreDebugTest : public ::testing::Test {
 
 TEST_F(CoreDebugTest, logLevelToString) {
     EXPECT_STREQ("SILENT",
-                 Internal::logLevelToString[uint32_t(LogLevel::SILENT)]);
+                 Internal::logLevelToString(LogLevel::SILENT));
     EXPECT_STREQ("ERROR",
-                 Internal::logLevelToString[uint32_t(LogLevel::ERROR)]);
+                 Internal::logLevelToString(LogLevel::ERROR));
     EXPECT_STREQ("WARNING",
-                 Internal::logLevelToString[uint32_t(LogLevel::WARNING)]);
+                 Internal::logLevelToString(LogLevel::WARNING));
     EXPECT_STREQ("NOTICE",
-                 Internal::logLevelToString[uint32_t(LogLevel::NOTICE)]);
+                 Internal::logLevelToString(LogLevel::NOTICE));
     EXPECT_STREQ("VERBOSE",
-                 Internal::logLevelToString[uint32_t(LogLevel::VERBOSE)]);
+                 Internal::logLevelToString(LogLevel::VERBOSE));
 }
 
 TEST_F(CoreDebugTest, logLevelFromString) {

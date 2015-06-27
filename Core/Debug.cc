@@ -108,20 +108,6 @@ std::string processName = Core::StringUtil::format("%u", getpid());
 namespace Internal {
 
 /**
- * Used to convert LogLevels into strings that will be printed.
- * This array must match the LogLevel enum in Core/Debug.h.
- */
-const char* logLevelToString[] =
-{
-    "SILENT",
-    "ERROR",
-    "WARNING",
-    "NOTICE",
-    "VERBOSE",
-    NULL // must be the last element in the array
-};
-
-/**
  * Protects #logPolicy, #isLoggingCache, and #logFilename.
  */
 std::mutex mutex;
@@ -167,17 +153,37 @@ FILE* stream = stderr;
 std::function<void(DebugMessage)> logHandler;
 
 /**
+ * Convert a log level to a (static) string.
+ * PANICs if the string is not a valid log level (case insensitive).
+ */
+const char*
+logLevelToString(LogLevel level)
+{
+    switch (level) {
+        case LogLevel::SILENT:  return "SILENT";
+        case LogLevel::ERROR:   return "ERROR";
+        case LogLevel::WARNING: return "WARNING";
+        case LogLevel::NOTICE:  return "NOTICE";
+        case LogLevel::VERBOSE: return "VERBOSE";
+    }
+    log(LogLevel::ERROR, __FILE__, __LINE__, __FUNCTION__,
+        "%d is not a valid log level.\n", level);
+    abort();
+}
+
+/**
  * Convert a string to a log level.
  * PANICs if the string is not a valid log level (case insensitive).
  */
 LogLevel
 logLevelFromString(const std::string& level)
 {
-    for (uint32_t i = 0; logLevelToString[i] != NULL; ++i) {
-        if (strcasecmp(logLevelToString[i], level.c_str()) == 0)
-            return LogLevel(i);
-    }
-    log((LogLevel::ERROR), __FILE__, __LINE__, __FUNCTION__,
+    if (strcasecmp(level.c_str(), "SILENT")  == 0)  return LogLevel::SILENT;
+    if (strcasecmp(level.c_str(), "ERROR")   == 0)   return LogLevel::ERROR;
+    if (strcasecmp(level.c_str(), "WARNING") == 0) return LogLevel::WARNING;
+    if (strcasecmp(level.c_str(), "NOTICE")  == 0)  return LogLevel::NOTICE;
+    if (strcasecmp(level.c_str(), "VERBOSE") == 0) return LogLevel::VERBOSE;
+    log(LogLevel::ERROR, __FILE__, __LINE__, __FUNCTION__,
         "'%s' is not a valid log level.\n", level.c_str());
     abort();
 }
@@ -387,7 +393,7 @@ logPolicyToString(const std::vector<std::pair<std::string,
 std::ostream&
 operator<<(std::ostream& ostream, LogLevel level)
 {
-    ostream << logLevelToString[uint32_t(level)];
+    ostream << logLevelToString(level);
     return ostream;
 }
 
@@ -419,7 +425,7 @@ log(LogLevel level,
         d.linenum = int(lineNum);
         d.function = functionName;
         d.logLevel = int(level);
-        d.logLevelString = logLevelToString[uint32_t(level)];
+        d.logLevelString = logLevelToString(level);
         d.processName = processName;
         d.threadName = ThreadId::getName();
 
@@ -482,7 +488,7 @@ log(LogLevel level,
     fprintf(stream, "%s.%06lu %s:%d in %s() %s[%s:%s]: ",
             formattedSeconds, now.tv_nsec / 1000,
             relativeFileName(fileName), lineNum, functionName,
-            logLevelToString[uint32_t(level)],
+            logLevelToString(level),
             processName.c_str(), ThreadId::getName().c_str());
 
     va_start(ap, format);

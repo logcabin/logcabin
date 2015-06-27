@@ -18,6 +18,8 @@
 #include <cstdlib>
 #include <string>
 
+#include "include/LogCabin/Debug.h"
+
 #ifndef LOGCABIN_CORE_DEBUG_H
 #define LOGCABIN_CORE_DEBUG_H
 
@@ -27,38 +29,6 @@ namespace Debug {
 
 // Configuring logging is exposed to clients as well as servers,
 // so that stuff goes in a public header file: "include/LogCabin/Debug.h"
-
-/**
- * The levels of verbosity for log messages. Higher values are noisier.
- */
-enum class LogLevel {
-    // Keep this in sync with logLevelToString in Core/Debug.cc.
-    /**
-     * This log level is just used for disabling all log messages, which is
-     * really only useful in unit tests.
-     */
-    SILENT = 0,
-    /**
-     * Bad stuff that shouldn't happen. The system broke its contract to users
-     * in some way or some major assumption was violated.
-     */
-    ERROR = 1,
-    /**
-     * Messages at the WARNING level indicate that, although something went
-     * wrong or something unexpected happened, it was transient and
-     * recoverable.
-     */
-    WARNING = 2,
-    /**
-     * A system message that might be useful for administrators and developers.
-     */
-    NOTICE = 3,
-    /**
-     * Messages at the VERBOSE level don't necessarily indicate that anything
-     * went wrong, but they could be useful in diagnosing problems.
-     */
-    VERBOSE = 4,
-};
 
 /**
  * Output a LogLevel to a stream. Having this improves gtest error messages.

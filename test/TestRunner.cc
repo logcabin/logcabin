@@ -20,7 +20,6 @@
 
 #include "Core/Debug.h"
 #include "Storage/FilesystemUtil.h"
-#include "include/LogCabin/Debug.h"
 
 namespace {
 

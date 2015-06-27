@@ -23,7 +23,6 @@
 #include "RPC/OpaqueServerRPC.h"
 #include "RPC/Protocol.h"
 #include "RPC/ServerRPC.h"
-#include "include/LogCabin/Debug.h"
 
 namespace LogCabin {
 namespace RPC {
