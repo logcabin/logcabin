@@ -15,8 +15,6 @@
 
 package LogCabin.Protocol.Client;
 
-import "build/Protocol/ServerStats.proto";
-
 /**
  * \file
  * This file contains the formats for RPCs between clients and servers.
@@ -365,21 +363,6 @@ message GetServerInfo {
     }
 }
 
-
-/**
- * GetServerStats RPC: Retrieve statistics from the given server, which are
- * useful for diagnostics.
- */
-message GetServerStats {
-    message Request {
-    }
-    message Response {
-        /**
-         * Metrics, statistics, state and other such information.
-         */
-        required LogCabin.Protocol.ServerStats server_stats = 1;
-    }
-}
 
 /**
  * AdvanceStateMachineVersion state machine command: changes state machine
