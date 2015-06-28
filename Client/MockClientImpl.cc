@@ -73,6 +73,8 @@ class TreeLeaderRPC : public LeaderRPCBase {
             if (localCallbacks->stateMachineQuery(qrequest, qresponse))
                 return Status::OK;
             qresponse.Clear();
+            if (timeout < Clock::now())
+                return Status::TIMEOUT;
             if (qrequest.has_tree()) {
                 LogCabin::Tree::ProtoBuf::readOnlyTreeRPC(
                     tree, qrequest.tree(), *qresponse.mutable_tree());
@@ -89,6 +91,8 @@ class TreeLeaderRPC : public LeaderRPCBase {
             if (localCallbacks->stateMachineCommand(crequest, cresponse))
                 return Status::OK;
             cresponse.Clear();
+            if (timeout < Clock::now())
+                return Status::TIMEOUT;
             if (crequest.has_tree()) {
                 LogCabin::Tree::ProtoBuf::readWriteTreeRPC(
                     tree, crequest.tree(), *cresponse.mutable_tree());
