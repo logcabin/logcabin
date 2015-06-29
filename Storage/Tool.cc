@@ -95,6 +95,10 @@ class OptionParser {
             << "equivalent of a fsck for the log."
             << std::endl
             << std::endl
+            << "This program is subject to change (it is not part of "
+            << "LogCabin's stable API)."
+            << std::endl
+            << std::endl
 
             << "Usage: " << argv[0] << " [options]"
             << std::endl
@@ -155,6 +159,10 @@ main(int argc, char** argv)
     NOTICE("Using config file %s", options.configFilename.c_str());
     Core::Config config;
     config.readFile(options.configFilename.c_str());
+
+    Core::Debug::setLogPolicy(
+        Core::Debug::logPolicyFromString(
+            config.read<std::string>("logPolicy", "NOTICE")));
 
     uint64_t serverId = config.read<uint64_t>("serverId");
     NOTICE("Server ID is %lu", serverId);

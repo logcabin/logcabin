@@ -23,6 +23,7 @@
 #include "Core/ProtoBuf.h"
 #include "build/Protocol/ServerControl.pb.h"
 #include "include/LogCabin/Client.h"
+#include "include/LogCabin/Debug.h"
 #include "include/LogCabin/Util.h"
 
 namespace LogCabin {
@@ -39,32 +40,41 @@ class OptionParser {
         , argv(argv)
         , args()
         , lastIndex(0)
+        , logPolicy("")
         , server("localhost:5254")
         , timeout(Client::Util::parseDuration("0s"))
     {
         while (true) {
             static struct option longOptions[] = {
+               {"help",  no_argument, NULL, 'h'},
                {"server",  required_argument, NULL, 's'},
                {"timeout",  required_argument, NULL, 't'},
-               {"help",  no_argument, NULL, 'h'},
+               {"verbose",  no_argument, NULL, 'v'},
+               {"verbosity",  required_argument, NULL, 256},
                {0, 0, 0, 0}
             };
-            int c = getopt_long(argc, argv, "s:t:h", longOptions, NULL);
+            int c = getopt_long(argc, argv, "s:t:hv", longOptions, NULL);
 
             // Detect the end of the options.
             if (c == -1)
                 break;
 
             switch (c) {
+                case 'h':
+                    usage();
+                    exit(0);
                 case 's':
                     server = optarg;
                     break;
                 case 't':
                     timeout = Client::Util::parseDuration(optarg);
                     break;
-                case 'h':
-                    usage();
-                    exit(0);
+                case 'v':
+                    logPolicy = "VERBOSE";
+                    break;
+                case 256:
+                    logPolicy = optarg;
+                    break;
                 case '?':
                 default:
                     // getopt_long already printed an error message.
@@ -116,6 +126,7 @@ class OptionParser {
 
     void usage() {
         std::cout << "Inspect or modify the state of a single LogCabin server."
+                  << std::endl
                   << std::endl
                   << "This program was added in LogCabin v1.1.0."
                   << std::endl;
@@ -217,7 +228,24 @@ class OptionParser {
             << "Set timeout for the operation"
             << std::endl << space
             << "(0 means wait forever) [default: 0s]"
+            << std::endl
+
+            << ospace("-v, --verbose")
+            << "Same as --verbosity=VERBOSE"
+            << std::endl
+
+            << ospace("--verbosity=<policy>")
+            << "Set which log messages are shown."
+            << std::endl << space
+            << "Comma-separated LEVEL or PATTERN@LEVEL rules."
+            << std::endl << space
+            << "Levels: SILENT, ERROR, WARNING, NOTICE, VERBOSE."
+            << std::endl << space
+            << "Patterns match filename prefixes or suffixes."
+            << std::endl << space
+            << "Example: Client@NOTICE,Test.cc@SILENT,VERBOSE."
             << std::endl;
+
         // TODO(ongaro): human-readable vs machine-readable output?
     }
 
@@ -225,6 +253,7 @@ class OptionParser {
     char**& argv;
     std::vector<std::string> args;
     uint64_t lastIndex;
+    std::string logPolicy;
     std::string server;
     uint64_t timeout;
 };
@@ -295,6 +324,8 @@ main(int argc, char** argv)
     using namespace LogCabin::Client;
     using Core::ProtoBuf::dumpString;
     Client::OptionParser options(argc, argv);
+    Client::Debug::setLogPolicy(
+        Client::Debug::logPolicyFromString(options.logPolicy));
     ServerControl server(options.server,
                          ClientImpl::absTimeout(options.timeout));
 

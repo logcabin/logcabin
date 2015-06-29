@@ -51,21 +51,23 @@ class OptionParser {
         , command()
         , condition()
         , dir()
+        , logPolicy("")
         , path()
-        , quiet(false)
         , timeout(LogCabin::Client::Util::parseDuration("0s"))
     {
         while (true) {
             static struct option longOptions[] = {
                {"cluster",  required_argument, NULL, 'c'},
                {"dir",  required_argument, NULL, 'd'},
+               {"help",  no_argument, NULL, 'h'},
                {"condition",  required_argument, NULL, 'p'},
                {"quiet",  no_argument, NULL, 'q'},
                {"timeout",  required_argument, NULL, 't'},
-               {"help",  no_argument, NULL, 'h'},
+               {"verbose",  no_argument, NULL, 'v'},
+               {"verbosity",  required_argument, NULL, 256},
                {0, 0, 0, 0}
             };
-            int c = getopt_long(argc, argv, "c:d:p:t:hq", longOptions, NULL);
+            int c = getopt_long(argc, argv, "c:d:p:t:hqv", longOptions, NULL);
 
             // Detect the end of the options.
             if (c == -1)
@@ -78,6 +80,9 @@ class OptionParser {
                 case 'd':
                     dir = optarg;
                     break;
+                case 'h':
+                    usage();
+                    exit(0);
                 case 'p': {
                     std::istringstream stream(optarg);
                     std::string path;
@@ -87,14 +92,17 @@ class OptionParser {
                     condition = {path, value};
                     break;
                 }
+                case 'q':
+                    logPolicy = "WARNING";
+                    break;
                 case 't':
                     timeout = LogCabin::Client::Util::parseDuration(optarg);
                     break;
-                case 'h':
-                    usage();
-                    exit(0);
-                case 'q':
-                    quiet = true;
+                case 'v':
+                    logPolicy = "VERBOSE";
+                    break;
+                case 256:
+                    logPolicy = optarg;
                     break;
                 case '?':
                 default:
@@ -156,6 +164,9 @@ class OptionParser {
     void usage() {
         std::cout << "Run various operations on a LogCabin replicated state "
                   << "machine."
+                  << std::endl
+                  << std::endl
+                  << "This program was released in LogCabin v1.0.0."
                   << std::endl;
         std::cout << std::endl;
 
@@ -224,7 +235,7 @@ class OptionParser {
             << std::endl
 
             << "  -q, --quiet                    "
-            << "Suppress NOTICE messages"
+            << "Same as --verbosity=WARNING"
             << std::endl
 
             << "  -t <time>, --timeout=<time>    "
@@ -232,6 +243,29 @@ class OptionParser {
             << std::endl
             << "                                 "
             << "(0 means wait forever) [default: 0s]"
+            << std::endl
+
+            << "  -v, --verbose                  "
+            << "Same as --verbosity=VERBOSE (added in v1.1.0)"
+            << std::endl
+
+            << "  --verbosity=<policy>           "
+            << "Set which log messages are shown."
+            << std::endl
+            << "                                 "
+            << "Comma-separated LEVEL or PATTERN@LEVEL rules."
+            << std::endl
+            << "                                 "
+            << "Levels: SILENT ERROR WARNING NOTICE VERBOSE."
+            << std::endl
+            << "                                 "
+            << "Patterns match filename prefixes or suffixes."
+            << std::endl
+            << "                                 "
+            << "Example: Client@NOTICE,Test.cc@SILENT,VERBOSE."
+            << std::endl
+            << "                                 "
+            << "(added in v1.1.0)"
             << std::endl;
     }
 
@@ -241,8 +275,8 @@ class OptionParser {
     Command command;
     std::pair<std::string, std::string> condition;
     std::string dir;
+    std::string logPolicy;
     std::string path;
-    bool quiet;
     uint64_t timeout;
 };
 
@@ -282,40 +316,22 @@ main(int argc, char** argv)
 {
     OptionParser options(argc, argv);
 
-    if (options.quiet) {
-        LogCabin::Client::Debug::setLogPolicy({{"", "WARNING"}});
-    }
+    LogCabin::Client::Debug::setLogPolicy(
+        LogCabin::Client::Debug::logPolicyFromString(
+            options.logPolicy));
 
     Cluster cluster(options.cluster);
     Tree tree = cluster.getTree();
 
     if (options.timeout > 0) {
-        if (!options.quiet) {
-            std::cout << "Setting timeout to "
-                      << options.timeout
-                      << " nanoseconds"
-                      << std::endl;
-        }
         tree.setTimeout(options.timeout);
     }
 
     if (!options.dir.empty()) {
-        if (!options.quiet) {
-            std::cout << "Setting working directory to "
-                      << options.dir
-                      << std::endl;
-        }
         tree.setWorkingDirectoryEx(options.dir);
     }
 
     if (!options.condition.first.empty()) {
-        if (!options.quiet) {
-            std::cout << "Setting condition that "
-                      << options.condition.first
-                      << " == "
-                      << options.condition.second
-                      << std::endl;
-        }
         tree.setConditionEx(options.condition.first,
                             options.condition.second);
     }

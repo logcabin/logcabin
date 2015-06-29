@@ -67,6 +67,9 @@ New backwards-compatible changes:
 - The `build/Examples/ServerControl` or `/usr/bin/logcabinctl` program can be
   used to inspect and manipulate an individual server's state. Its command line
   is now part of LogCabin's public API.
+- All clients now have `--verbose` and `--verbosity` to control the debug log
+  level and policy (issue #153). The server's config file now has a new option
+  `logPolicy` to control the same.
 
 Changes to unstable APIs:
 

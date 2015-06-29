@@ -23,6 +23,7 @@
 #include <string>
 
 #include <LogCabin/Client.h>
+#include <LogCabin/Debug.h>
 
 namespace {
 
@@ -42,15 +43,18 @@ class OptionParser {
         : argc(argc)
         , argv(argv)
         , cluster("logcabin:5254")
+        , logPolicy("")
         , servers()
     {
         while (true) {
             static struct option longOptions[] = {
                {"cluster",  required_argument, NULL, 'c'},
                {"help",  no_argument, NULL, 'h'},
+               {"verbose",  no_argument, NULL, 'v'},
+               {"verbosity",  required_argument, NULL, 256},
                {0, 0, 0, 0}
             };
-            int c = getopt_long(argc, argv, "c:h", longOptions, NULL);
+            int c = getopt_long(argc, argv, "c:hv", longOptions, NULL);
 
             // Detect the end of the options.
             if (c == -1)
@@ -63,6 +67,12 @@ class OptionParser {
                 case 'h':
                     usage();
                     exit(0);
+                case 'v':
+                    logPolicy = "VERBOSE";
+                    break;
+                case 256:
+                    logPolicy = optarg;
+                    break;
                 case '?':
                 default:
                     // getopt_long already printed an error message.
@@ -95,6 +105,9 @@ class OptionParser {
             << "Changes the membership of a LogCabin cluster."
             << std::endl
             << std::endl
+            << "This program was released in LogCabin v1.0.0."
+            << std::endl
+            << std::endl
 
             << "Usage: " << argv[0] << " [options] set <server>..."
             << std::endl
@@ -118,12 +131,36 @@ class OptionParser {
 
             << "  -h, --help                             "
             << "Print this usage information"
+            << std::endl
+
+            << "  -v, --verbose                  "
+            << "Same as --verbosity=VERBOSE (added in v1.1.0)"
+            << std::endl
+
+            << "  --verbosity=<policy>           "
+            << "Set which log messages are shown."
+            << std::endl
+            << "                                 "
+            << "Comma-separated LEVEL or PATTERN@LEVEL rules."
+            << std::endl
+            << "                                 "
+            << "Levels: SILENT ERROR WARNING NOTICE VERBOSE."
+            << std::endl
+            << "                                 "
+            << "Patterns match filename prefixes or suffixes."
+            << std::endl
+            << "                                 "
+            << "Example: Client@NOTICE,Test.cc@SILENT,VERBOSE."
+            << std::endl
+            << "                                 "
+            << "(added in v1.1.0)"
             << std::endl;
     }
 
     int& argc;
     char**& argv;
     std::string cluster;
+    std::string logPolicy;
     std::vector<std::string> servers;
 };
 
@@ -147,6 +184,9 @@ int
 main(int argc, char** argv)
 {
     OptionParser options(argc, argv);
+    LogCabin::Client::Debug::setLogPolicy(
+        LogCabin::Client::Debug::logPolicyFromString(
+            options.logPolicy));
     Cluster cluster(options.cluster);
 
     std::pair<uint64_t, Configuration> configuration =

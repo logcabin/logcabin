@@ -25,6 +25,7 @@
 
 #include <google/protobuf/stubs/common.h>
 #include <LogCabin/Client.h>
+#include <LogCabin/Debug.h>
 
 namespace {
 
@@ -42,6 +43,7 @@ class OptionParser {
         : argc(argc)
         , argv(argv)
         , cluster("logcabin:5254")
+        , logPolicy("")
         , mock(false)
     {
         while (true) {
@@ -49,9 +51,11 @@ class OptionParser {
                {"cluster",  required_argument, NULL, 'c'},
                {"mock",  no_argument, NULL, 'm'},
                {"help",  no_argument, NULL, 'h'},
+               {"verbose",  no_argument, NULL, 'v'},
+               {"verbosity",  required_argument, NULL, 256},
                {0, 0, 0, 0}
             };
-            int c = getopt_long(argc, argv, "c:hm", longOptions, NULL);
+            int c = getopt_long(argc, argv, "c:hmv", longOptions, NULL);
 
             // Detect the end of the options.
             if (c == -1)
@@ -67,6 +71,12 @@ class OptionParser {
                 case 'm':
                     mock = true;
                     break;
+                case 'v':
+                    logPolicy = "VERBOSE";
+                    break;
+                case 256:
+                    logPolicy = optarg;
+                    break;
                 case '?':
                 default:
                     // getopt_long already printed an error message.
@@ -80,6 +90,10 @@ class OptionParser {
         std::cout
             << "Runs an extremely basic test against LogCabin, useful as a "
             << "quick sanity check."
+            << std::endl
+            << std::endl
+            << "This program is subject to change (it is not part of "
+            << "LogCabin's stable API)."
             << std::endl
             << std::endl
 
@@ -109,12 +123,33 @@ class OptionParser {
             << std::endl
             << "                                 "
             << "use a client-local, in-memory data structure"
+            << std::endl
+
+            << "  -v, --verbose                  "
+            << "Same as --verbosity=VERBOSE"
+            << std::endl
+
+            << "  --verbosity=<policy>           "
+            << "Set which log messages are shown."
+            << std::endl
+            << "                                 "
+            << "Comma-separated LEVEL or PATTERN@LEVEL rules."
+            << std::endl
+            << "                                 "
+            << "Levels: SILENT ERROR WARNING NOTICE VERBOSE."
+            << std::endl
+            << "                                 "
+            << "Patterns match filename prefixes or suffixes."
+            << std::endl
+            << "                                 "
+            << "Example: Client@NOTICE,Test.cc@SILENT,VERBOSE."
             << std::endl;
     }
 
     int& argc;
     char**& argv;
     std::string cluster;
+    std::string logPolicy;
     bool mock;
 };
 
@@ -125,6 +160,9 @@ main(int argc, char** argv)
 {
     atexit(google::protobuf::ShutdownProtobufLibrary);
     OptionParser options(argc, argv);
+    LogCabin::Client::Debug::setLogPolicy(
+        LogCabin::Client::Debug::logPolicyFromString(
+            options.logPolicy));
     Cluster cluster = (options.mock
         ? Cluster(std::make_shared<LogCabin::Client::TestingCallbacks>())
         : Cluster(options.cluster));

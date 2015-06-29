@@ -103,6 +103,9 @@ class OptionParser {
             << "Runs a LogCabin server."
             << std::endl
             << std::endl
+            << "This program was released in LogCabin v1.0.0."
+            << std::endl
+            << std::endl
 
             << "Usage: " << argv[0] << " [options]"
             << std::endl
@@ -271,7 +274,6 @@ main(int argc, char** argv)
     using namespace LogCabin;
 
     Core::ThreadId::setName("evloop");
-    //Core::Debug::setLogPolicy({{"Server", "VERBOSE"}});
 
     // Parse command line args.
     OptionParser options(argc, argv);
@@ -325,6 +327,13 @@ main(int argc, char** argv)
         // Initialize and run Globals.
         Server::Globals globals;
         globals.config.readFile(options.configFilename.c_str());
+
+        // Set debug log policy.
+        // A few log messages above already got through; oh well.
+        Core::Debug::setLogPolicy(
+            Core::Debug::logPolicyFromString(
+                globals.config.read<std::string>("logPolicy", "NOTICE")));
+
         NOTICE("Config file settings:\n"
                "# begin config\n"
                "%s"

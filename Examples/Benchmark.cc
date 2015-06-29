@@ -33,6 +33,7 @@
 #include <unistd.h>
 
 #include <LogCabin/Client.h>
+#include <LogCabin/Debug.h>
 #include <LogCabin/Util.h>
 
 namespace {
@@ -51,6 +52,7 @@ class OptionParser {
         : argc(argc)
         , argv(argv)
         , cluster("logcabin:5254")
+        , logPolicy("")
         , size(1024)
         , writers(1)
         , totalWrites(1000)
@@ -64,9 +66,11 @@ class OptionParser {
                {"threads",  required_argument, NULL, 't'},
                {"timeout",  required_argument, NULL, 'd'},
                {"writes",  required_argument, NULL, 'w'},
+               {"verbose",  no_argument, NULL, 'v'},
+               {"verbosity",  required_argument, NULL, 256},
                {0, 0, 0, 0}
             };
-            int c = getopt_long(argc, argv, "c:hs:t:w:", longOptions, NULL);
+            int c = getopt_long(argc, argv, "c:hs:t:w:v", longOptions, NULL);
 
             // Detect the end of the options.
             if (c == -1)
@@ -91,6 +95,12 @@ class OptionParser {
                 case 'w':
                     totalWrites = uint64_t(atol(optarg));
                     break;
+                case 'v':
+                    logPolicy = "VERBOSE";
+                    break;
+                case 256:
+                    logPolicy = optarg;
+                    break;
                 case '?':
                 default:
                     // getopt_long already printed an error message.
@@ -106,6 +116,10 @@ class OptionParser {
             << "the given number of"
             << std::endl
             << "writes or the timeout, whichever comes first."
+            << std::endl
+            << std::endl
+            << "This program is subject to change (it is not part of "
+            << "LogCabin's stable API)."
             << std::endl
             << std::endl
 
@@ -144,12 +158,33 @@ class OptionParser {
 
             << "  --writes <num>          "
             << "Number of total writes [default: 1000]"
+            << std::endl
+
+            << "  -v, --verbose           "
+            << "Same as --verbosity=VERBOSE"
+            << std::endl
+
+            << "  --verbosity=<policy>    "
+            << "Set which log messages are shown."
+            << std::endl
+            << "                          "
+            << "Comma-separated LEVEL or PATTERN@LEVEL rules."
+            << std::endl
+            << "                          "
+            << "Levels: SILENT, ERROR, WARNING, NOTICE, VERBOSE."
+            << std::endl
+            << "                          "
+            << "Patterns match filename prefixes or suffixes."
+            << std::endl
+            << "                          "
+            << "Example: Client@NOTICE,Test.cc@SILENT,VERBOSE."
             << std::endl;
     }
 
     int& argc;
     char**& argv;
     std::string cluster;
+    std::string logPolicy;
     uint64_t size;
     uint64_t writers;
     uint64_t totalWrites;
@@ -233,6 +268,9 @@ int
 main(int argc, char** argv)
 {
     OptionParser options(argc, argv);
+    LogCabin::Client::Debug::setLogPolicy(
+        LogCabin::Client::Debug::logPolicyFromString(
+            options.logPolicy));
     Cluster cluster = Cluster(options.cluster);
     Tree tree = cluster.getTree();
 
