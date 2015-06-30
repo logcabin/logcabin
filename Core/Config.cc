@@ -99,8 +99,14 @@ demangle(const string& name)
 
 // exceptions
 
+Config::Exception::Exception(const std::string& error)
+    : std::runtime_error(error)
+{
+}
+
+
 Config::FileNotFound::FileNotFound(const string& filename)
-    : runtime_error(format(
+    : Exception(format(
         "The config file %s could not be opened",
         filename.c_str()))
     , filename(filename)
@@ -108,7 +114,7 @@ Config::FileNotFound::FileNotFound(const string& filename)
 }
 
 Config::KeyNotFound::KeyNotFound(const string& key)
-    : runtime_error(format(
+    : Exception(format(
         "The configuration does not specify %s",
         key.c_str()))
     , key(key)
@@ -118,7 +124,7 @@ Config::KeyNotFound::KeyNotFound(const string& key)
 Config::ConversionError::ConversionError(const string& key,
                                          const string& value,
                                          const string& typeName)
-    : runtime_error(format(
+    : Exception(format(
         "The value %s for key %s could not be converted to a %s",
         key.c_str(), value.c_str(), demangle(typeName).c_str()))
     , key(key)

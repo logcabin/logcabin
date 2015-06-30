@@ -267,42 +267,51 @@ timerThreadMain(uint64_t timeout, std::atomic<bool>& exit)
 int
 main(int argc, char** argv)
 {
-    OptionParser options(argc, argv);
-    LogCabin::Client::Debug::setLogPolicy(
-        LogCabin::Client::Debug::logPolicyFromString(
-            options.logPolicy));
-    Cluster cluster = Cluster(options.cluster);
-    Tree tree = cluster.getTree();
+    try {
 
-    std::string key("/bench");
-    std::string value(options.size, 'v');
+        OptionParser options(argc, argv);
+        LogCabin::Client::Debug::setLogPolicy(
+            LogCabin::Client::Debug::logPolicyFromString(
+                options.logPolicy));
+        Cluster cluster = Cluster(options.cluster);
+        Tree tree = cluster.getTree();
 
-    uint64_t startNanos = timeNanos();
-    std::atomic<bool> exit(false);
-    std::vector<uint64_t> writesDonePerThread(options.writers);
-    uint64_t totalWritesDone = 0;
-    std::vector<std::thread> threads;
-    std::thread timer(timerThreadMain, options.timeout, std::ref(exit));
-    for (uint64_t i = 0; i < options.writers; ++i) {
-        threads.emplace_back(writeThreadMain, i, std::ref(options),
-                             tree, std::ref(key), std::ref(value),
-                             std::ref(exit),
-                             std::ref(writesDonePerThread.at(i)));
+        std::string key("/bench");
+        std::string value(options.size, 'v');
+
+        uint64_t startNanos = timeNanos();
+        std::atomic<bool> exit(false);
+        std::vector<uint64_t> writesDonePerThread(options.writers);
+        uint64_t totalWritesDone = 0;
+        std::vector<std::thread> threads;
+        std::thread timer(timerThreadMain, options.timeout, std::ref(exit));
+        for (uint64_t i = 0; i < options.writers; ++i) {
+            threads.emplace_back(writeThreadMain, i, std::ref(options),
+                                 tree, std::ref(key), std::ref(value),
+                                 std::ref(exit),
+                                 std::ref(writesDonePerThread.at(i)));
+        }
+        for (uint64_t i = 0; i < options.writers; ++i) {
+            threads.at(i).join();
+            totalWritesDone += writesDonePerThread.at(i);
+        }
+        uint64_t endNanos = timeNanos();
+        exit = true;
+        timer.join();
+
+        tree.removeFile(key);
+        std::cout << "Benchmark took "
+                  << static_cast<double>(endNanos - startNanos) / 1e6
+                  << " ms to write "
+                  << totalWritesDone
+                  << " objects"
+                  << std::endl;
+        return 0;
+
+    } catch (const LogCabin::Client::Exception& e) {
+        std::cerr << "Exiting due to LogCabin::Client::Exception: "
+                  << e.what()
+                  << std::endl;
+        exit(1);
     }
-    for (uint64_t i = 0; i < options.writers; ++i) {
-        threads.at(i).join();
-        totalWritesDone += writesDonePerThread.at(i);
-    }
-    uint64_t endNanos = timeNanos();
-    exit = true;
-    timer.join();
-
-    tree.removeFile(key);
-    std::cout << "Benchmark took "
-              << static_cast<double>(endNanos - startNanos) / 1e6
-              << " ms to write "
-              << totalWritesDone
-              << " objects"
-              << std::endl;
-    return 0;
 }

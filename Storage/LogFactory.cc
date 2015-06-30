@@ -48,7 +48,7 @@ makeLog(const Core::Config& config,
                                    SegmentedLog::Encoding::TEXT,
                                    config));
     } else {
-        PANIC("Unknown storage module from config file: %s", module.c_str());
+        EXIT("Unknown storage module from config file: %s", module.c_str());
     }
     return log;
 }

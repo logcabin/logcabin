@@ -867,8 +867,9 @@ ClientImpl::serverControl(const std::string& host,
             case RPCStatus::INVALID_SERVICE:
                 PANIC("The server isn't running the ControlService");
             case RPCStatus::INVALID_REQUEST:
-                PANIC("The server's ControlService doesn't support the "
-                      "RPC or claims the request is malformed");
+                // ControlService was added in v1.1.0.
+                EXIT("The server's ControlService doesn't support the "
+                     "RPC or claims the request is malformed");
         }
         if (timeout < Clock::now())
             return timeoutResult;

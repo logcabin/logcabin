@@ -14,6 +14,7 @@
  */
 
 #include "Core/Time.h"
+#include "include/LogCabin/Client.h"
 #include "include/LogCabin/Util.h"
 
 namespace LogCabin {
@@ -23,7 +24,11 @@ namespace Util {
 uint64_t
 parseDuration(const std::string& description)
 {
-    return Core::Time::parseDuration(description);
+    try {
+        return Core::Time::parseDuration(description);
+    } catch (const std::runtime_error& e) {
+        throw Client::InvalidArgumentException(e.what());
+    }
 }
 
 } // namespace LogCabin::Util

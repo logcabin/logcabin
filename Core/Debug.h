@@ -113,6 +113,15 @@ extern std::string processName;
 } while (0)
 
 /**
+ * Log an ERROR message and exit the process with status 1.
+ * \copydetails ERROR
+ */
+#define EXIT(format, ...) do { \
+    ERROR(format " Exiting...", ##__VA_ARGS__); \
+    ::exit(1); \
+} while (0)
+
+/**
  * Log an ERROR message.
  * \param format
  *      A printf-style format string for the message. It should not include a

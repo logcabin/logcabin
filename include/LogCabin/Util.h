@@ -40,7 +40,7 @@ namespace Util {
  *      to seconds.
  * \return
  *      Number of nanoseconds.
- * \throw std::runtime_error
+ * \throw Client::InvalidArgumentException
  *      If description could not be parsed successfully.
  * \warning
  *      This function is subject to change. It is not subject to the versioning

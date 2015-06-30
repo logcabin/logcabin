@@ -62,20 +62,28 @@ class Config {
     typedef std::string string;
 
   public:
-    struct FileNotFound : public std::runtime_error {
+    /**
+     * Base class for Config exceptions.
+     */
+    struct Exception : public std::runtime_error {
+        explicit Exception(const std::string& error);
+    };
+
+
+    struct FileNotFound : public Exception {
         explicit FileNotFound(const string& filename);
         virtual ~FileNotFound() throw() {}
         string filename;
     };
 
     // thrown only by T read(key) variant of read()
-    struct KeyNotFound : public std::runtime_error {
+    struct KeyNotFound : public Exception {
         explicit KeyNotFound(const string& key);
         virtual ~KeyNotFound() throw() {}
         string key;
     };
 
-    struct ConversionError : public std::runtime_error {
+    struct ConversionError : public Exception {
         ConversionError(const string& key,
                         const string& value,
                         const string& typeName);

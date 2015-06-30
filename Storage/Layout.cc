@@ -99,8 +99,8 @@ Layout::init(const std::string& storagePath, uint64_t serverId)
     // running
     std::string error = FS::tryFlock(lockFile, LOCK_EX|LOCK_NB);
     if (!error.empty()) {
-        PANIC("Could not lock storage directory. Is LogCabin already running? "
-              "Error was: %s", error.c_str());
+        EXIT("Could not lock storage directory. Is LogCabin already running? "
+             "Error was: %s", error.c_str());
     }
     logDir = FS::openDir(serverDir, "log");
     snapshotDir = FS::openDir(serverDir, "snapshot");

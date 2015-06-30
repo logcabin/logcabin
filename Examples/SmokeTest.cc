@@ -158,27 +158,37 @@ class OptionParser {
 int
 main(int argc, char** argv)
 {
-    atexit(google::protobuf::ShutdownProtobufLibrary);
-    OptionParser options(argc, argv);
-    LogCabin::Client::Debug::setLogPolicy(
-        LogCabin::Client::Debug::logPolicyFromString(
-            options.logPolicy));
-    Cluster cluster = (options.mock
-        ? Cluster(std::make_shared<LogCabin::Client::TestingCallbacks>())
-        : Cluster(options.cluster));
+    try {
 
-    Tree tree = cluster.getTree();
-    tree.makeDirectoryEx("/etc");
-    tree.writeEx("/etc/passwd", "ha");
-    std::string contents = tree.readEx("/etc/passwd");
-    assert(contents == "ha");
+        atexit(google::protobuf::ShutdownProtobufLibrary);
+        OptionParser options(argc, argv);
+        LogCabin::Client::Debug::setLogPolicy(
+            LogCabin::Client::Debug::logPolicyFromString(
+                options.logPolicy));
+        Cluster cluster = (options.mock
+            ? Cluster(std::make_shared<LogCabin::Client::TestingCallbacks>())
+            : Cluster(options.cluster));
 
-    // need to write a kilobyte for snapshot to be taken under default settings
-    std::string laughter;
-    for (int i = 0; i < 512; ++i)
-        laughter += "ha";
-    tree.writeEx("/etc/lol", laughter);
+        Tree tree = cluster.getTree();
+        tree.makeDirectoryEx("/etc");
+        tree.writeEx("/etc/passwd", "ha");
+        std::string contents = tree.readEx("/etc/passwd");
+        assert(contents == "ha");
 
-    tree.removeDirectoryEx("/etc");
-    return 0;
+        // need to write a kilobyte for snapshot to be taken under default
+        // settings
+        std::string laughter;
+        for (int i = 0; i < 512; ++i)
+            laughter += "ha";
+        tree.writeEx("/etc/lol", laughter);
+
+        tree.removeDirectoryEx("/etc");
+        return 0;
+
+    } catch (const LogCabin::Client::Exception& e) {
+        std::cerr << "Exiting due to LogCabin::Client::Exception: "
+                  << e.what()
+                  << std::endl;
+        exit(1);
+    }
 }

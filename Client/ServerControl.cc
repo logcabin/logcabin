@@ -323,82 +323,91 @@ main(int argc, char** argv)
     using namespace LogCabin;
     using namespace LogCabin::Client;
     using Core::ProtoBuf::dumpString;
-    Client::OptionParser options(argc, argv);
-    Client::Debug::setLogPolicy(
-        Client::Debug::logPolicyFromString(options.logPolicy));
-    ServerControl server(options.server,
-                         ClientImpl::absTimeout(options.timeout));
 
-    if (options.at(0) == "info") {
-        if (options.at(1) == "get") {
-            options.done();
-            Proto::ServerInfoGet::Request request;
-            Proto::ServerInfoGet::Response response;
-            server.ServerInfoGet(request, response);
-            std::cout << dumpString(response);
-            return 0;
-        }
-    } else if (options.at(0) == "debug") {
-        if (options.at(1) == "filename") {
-            if (options.at(2) == "get") {
+    try {
+        Client::OptionParser options(argc, argv);
+        Client::Debug::setLogPolicy(
+            Client::Debug::logPolicyFromString(options.logPolicy));
+        ServerControl server(options.server,
+                             ClientImpl::absTimeout(options.timeout));
+
+        if (options.at(0) == "info") {
+            if (options.at(1) == "get") {
                 options.done();
-                Proto::DebugFilenameGet::Request request;
-                Proto::DebugFilenameGet::Response response;
-                server.DebugFilenameGet(request, response);
-                std::cout << response.filename() << std::endl;
+                Proto::ServerInfoGet::Request request;
+                Proto::ServerInfoGet::Response response;
+                server.ServerInfoGet(request, response);
+                std::cout << dumpString(response);
                 return 0;
-            } else if (options.at(2) == "set") {
-                std::string value = options.at(3);
+            }
+        } else if (options.at(0) == "debug") {
+            if (options.at(1) == "filename") {
+                if (options.at(2) == "get") {
+                    options.done();
+                    Proto::DebugFilenameGet::Request request;
+                    Proto::DebugFilenameGet::Response response;
+                    server.DebugFilenameGet(request, response);
+                    std::cout << response.filename() << std::endl;
+                    return 0;
+                } else if (options.at(2) == "set") {
+                    std::string value = options.at(3);
+                    options.done();
+                    Proto::DebugFilenameSet::Request request;
+                    Proto::DebugFilenameSet::Response response;
+                    request.set_filename(value);
+                    server.DebugFilenameSet(request, response);
+                    if (response.has_error())
+                        error(response.error());
+                    return 0;
+                }
+            } else if (options.at(1) == "policy") {
+                if (options.at(2) == "get") {
+                    options.done();
+                    Proto::DebugPolicyGet::Request request;
+                    Proto::DebugPolicyGet::Response response;
+                    server.DebugPolicyGet(request, response);
+                    std::cout << response.policy() << std::endl;
+                    return 0;
+                } else if (options.at(2) == "set") {
+                    std::string value = options.at(3);
+                    options.done();
+                    Proto::DebugPolicySet::Request request;
+                    Proto::DebugPolicySet::Response response;
+                    request.set_policy(value);
+                    server.DebugPolicySet(request, response);
+                    return 0;
+                }
+            } else if (options.at(1) == "rotate") {
                 options.done();
-                Proto::DebugFilenameSet::Request request;
-                Proto::DebugFilenameSet::Response response;
-                request.set_filename(value);
-                server.DebugFilenameSet(request, response);
+                Proto::DebugRotate::Request request;
+                Proto::DebugRotate::Response response;
+                server.DebugRotate(request, response);
                 if (response.has_error())
                     error(response.error());
                 return 0;
             }
-        } else if (options.at(1) == "policy") {
-            if (options.at(2) == "get") {
+        } else if (options.at(0) == "stats") {
+            if (options.at(1) == "get") {
                 options.done();
-                Proto::DebugPolicyGet::Request request;
-                Proto::DebugPolicyGet::Response response;
-                server.DebugPolicyGet(request, response);
-                std::cout << response.policy() << std::endl;
+                Proto::ServerStatsGet::Request request;
+                Proto::ServerStatsGet::Response response;
+                server.ServerStatsGet(request, response);
+                std::cout << dumpString(response.server_stats());
                 return 0;
-            } else if (options.at(2) == "set") {
-                std::string value = options.at(3);
+            } else if (options.at(1) == "dump") {
                 options.done();
-                Proto::DebugPolicySet::Request request;
-                Proto::DebugPolicySet::Response response;
-                request.set_policy(value);
-                server.DebugPolicySet(request, response);
+                Proto::ServerStatsDump::Request request;
+                Proto::ServerStatsDump::Response response;
+                server.ServerStatsDump(request, response);
                 return 0;
             }
-        } else if (options.at(1) == "rotate") {
-            options.done();
-            Proto::DebugRotate::Request request;
-            Proto::DebugRotate::Response response;
-            server.DebugRotate(request, response);
-            if (response.has_error())
-                error(response.error());
-            return 0;
         }
-    } else if (options.at(0) == "stats") {
-        if (options.at(1) == "get") {
-            options.done();
-            Proto::ServerStatsGet::Request request;
-            Proto::ServerStatsGet::Response response;
-            server.ServerStatsGet(request, response);
-            std::cout << dumpString(response.server_stats());
-            return 0;
-        } else if (options.at(1) == "dump") {
-            options.done();
-            Proto::ServerStatsDump::Request request;
-            Proto::ServerStatsDump::Response response;
-            server.ServerStatsDump(request, response);
-            return 0;
-        }
+        options.usageError("Unknown command");
+
+    } catch (const LogCabin::Client::Exception& e) {
+        std::cerr << "Exiting due to LogCabin::Client::Exception: "
+                  << e.what()
+                  << std::endl;
+        exit(1);
     }
-    options.usageError("Unknown command");
 }

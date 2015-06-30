@@ -15,13 +15,25 @@
 
 #include <gtest/gtest.h>
 
+#include "include/LogCabin/Client.h"
 #include "include/LogCabin/Util.h"
 
 namespace LogCabin {
 namespace Client {
 namespace {
 
-// nothing to test in parseDuration
+TEST(ClientUtilTest, parseDuration) {
+    EXPECT_EQ(6U, Util::parseDuration("6ns"));
+    EXPECT_THROW(Util::parseDuration("99 apples"),
+                 Client::InvalidArgumentException);
+    try {
+        Util::parseDuration("99 apples");
+    } catch (const std::runtime_error& e) {
+        EXPECT_STREQ("Invalid time description: could not parse units "
+                     "from 99 apples",
+                     e.what());
+    }
+}
 
 } // namespace LogCabin::Client::<anonymous>
 } // namespace LogCabin::Client

@@ -154,7 +154,7 @@ Globals::init()
         std::vector<std::string> listenAddresses =
             Core::StringUtil::split(listenAddressesStr, ',');
         if (listenAddresses.empty()) {
-            PANIC("No server addresses specified to listen on");
+            EXIT("No server addresses specified to listen on");
         }
         for (auto it = listenAddresses.begin();
              it != listenAddresses.end();
@@ -163,9 +163,9 @@ Globals::init()
             address.refresh(RPC::Address::TimePoint::max());
             std::string error = rpcServer->bind(address);
             if (!error.empty()) {
-                PANIC("Could not listen on address %s: %s",
-                      address.toString().c_str(),
-                      error.c_str());
+                EXIT("Could not listen on address %s: %s",
+                     address.toString().c_str(),
+                     error.c_str());
             }
             NOTICE("Serving on %s",
                    address.toString().c_str());

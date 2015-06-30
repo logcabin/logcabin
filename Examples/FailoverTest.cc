@@ -197,26 +197,36 @@ verify(Tree& tree)
 int
 main(int argc, char** argv)
 {
-    OptionParser options(argc, argv);
-    LogCabin::Client::Debug::setLogPolicy(
-        LogCabin::Client::Debug::logPolicyFromString(
-            options.logPolicy));
-    Cluster cluster(options.cluster);
-    Tree tree = cluster.getTree();
-    tree.setTimeout(options.timeout);
-    tree.setWorkingDirectoryEx("/failovertest");
-    tree.writeEx("0000000000000000", "0000000000000001");
-    tree.writeEx("0000000000000001", "0000000000000001");
-    uint64_t i = 2;
-    while (true) {
-        if ((i & (i-1)) == 0) { // powers of two
-            std::cout << "i=" << i << std::endl;
-            verify(tree);
+    try {
+
+        OptionParser options(argc, argv);
+        LogCabin::Client::Debug::setLogPolicy(
+            LogCabin::Client::Debug::logPolicyFromString(
+                options.logPolicy));
+        Cluster cluster(options.cluster);
+        Tree tree = cluster.getTree();
+        tree.setTimeout(options.timeout);
+        tree.setWorkingDirectoryEx("/failovertest");
+        tree.writeEx("0000000000000000", "0000000000000001");
+        tree.writeEx("0000000000000001", "0000000000000001");
+        uint64_t i = 2;
+        while (true) {
+            if ((i & (i-1)) == 0) { // powers of two
+                std::cout << "i=" << i << std::endl;
+                verify(tree);
+            }
+            std::string key = toString(i);
+            uint64_t a = toU64(tree.readEx(toString(i - 2)));
+            uint64_t b = toU64(tree.readEx(toString(i - 1)));
+            tree.writeEx(key, toString(a + b));
+            ++i;
         }
-        std::string key = toString(i);
-        uint64_t a = toU64(tree.readEx(toString(i - 2)));
-        uint64_t b = toU64(tree.readEx(toString(i - 1)));
-        tree.writeEx(key, toString(a + b));
-        ++i;
+        return 0;
+
+    } catch (const LogCabin::Client::Exception& e) {
+        std::cerr << "Exiting due to LogCabin::Client::Exception: "
+                  << e.what()
+                  << std::endl;
+        exit(1);
     }
 }

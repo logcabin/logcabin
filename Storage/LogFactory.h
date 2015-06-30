@@ -38,7 +38,7 @@ namespace LogFactory {
  * Construct and return a Log object.
  * \param config
  *      Determines which concrete type of Log to construct.
- *      PANICs if this is invalid.
+ *      EXITs if this is invalid.
  * \param storageLayout
  *      Log implementations that write to the filesystem should place their
  *      files in here.

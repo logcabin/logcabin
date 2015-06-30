@@ -153,17 +153,26 @@ class OptionParser {
 int
 main(int argc, char** argv)
 {
-    OptionParser options(argc, argv);
-    LogCabin::Client::Debug::setLogPolicy(
-        LogCabin::Client::Debug::logPolicyFromString(
-            options.logPolicy));
-    Cluster cluster(options.cluster);
-    Tree tree = cluster.getTree();
-    tree.setTimeout(options.timeout);
-    tree.makeDirectoryEx("/etc");
-    tree.writeEx("/etc/passwd", "ha");
-    std::string contents = tree.readEx("/etc/passwd");
-    assert(contents == "ha");
-    tree.removeDirectoryEx("/etc");
-    return 0;
+    try {
+
+        OptionParser options(argc, argv);
+        LogCabin::Client::Debug::setLogPolicy(
+            LogCabin::Client::Debug::logPolicyFromString(
+                options.logPolicy));
+        Cluster cluster(options.cluster);
+        Tree tree = cluster.getTree();
+        tree.setTimeout(options.timeout);
+        tree.makeDirectoryEx("/etc");
+        tree.writeEx("/etc/passwd", "ha");
+        std::string contents = tree.readEx("/etc/passwd");
+        assert(contents == "ha");
+        tree.removeDirectoryEx("/etc");
+        return 0;
+
+    } catch (const LogCabin::Client::Exception& e) {
+        std::cerr << "Exiting due to LogCabin::Client::Exception: "
+                  << e.what()
+                  << std::endl;
+        exit(1);
+    }
 }
