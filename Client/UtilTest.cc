@@ -22,17 +22,25 @@ namespace LogCabin {
 namespace Client {
 namespace {
 
-TEST(ClientUtilTest, parseDuration) {
-    EXPECT_EQ(6U, Util::parseDuration("6ns"));
-    EXPECT_THROW(Util::parseDuration("99 apples"),
+TEST(ClientUtilTest, parseSignedDuration) {
+    EXPECT_EQ(6U, Util::parseSignedDuration("6ns"));
+    EXPECT_THROW(Util::parseSignedDuration("99 apples"),
                  Client::InvalidArgumentException);
     try {
-        Util::parseDuration("99 apples");
+        Util::parseSignedDuration("99 apples");
     } catch (const std::runtime_error& e) {
         EXPECT_STREQ("Invalid time description: could not parse units "
                      "from 99 apples",
                      e.what());
     }
+}
+
+TEST(ClientUtilTest, parseNonNegativeDuration) {
+    EXPECT_EQ(6U, Util::parseNonNegativeDuration("6ns"));
+    EXPECT_THROW(Util::parseNonNegativeDuration("99 apples"),
+                 Client::InvalidArgumentException);
+    EXPECT_THROW(Util::parseNonNegativeDuration("-6ns"),
+                 Client::InvalidArgumentException);
 }
 
 } // namespace LogCabin::Client::<anonymous>

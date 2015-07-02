@@ -36,17 +36,56 @@ namespace Util {
  * Convert a human-readable description of a time duration into a number of
  * nanoseconds.
  * \param description
- *      Something like 10, 10s, 200ms, 3us, or 999ns. With no units, defaults
- *      to seconds.
+ *      Something like 10, 10s, -200ms, 3us, or -999ns. With no units, defaults
+ *      to seconds. May be negative.
+ *      Allowed units:
+ *          ns, nanosecond(s),
+ *          ms, millisecond(s),
+ *          s, second(s),
+ *          min, minute(s),
+ *          h, hr, hour(s),
+ *          d, day(s),
+ *          w, wk, week(s),
+ *          mo, month(s),
+ *          y, yr, year(s).
  * \return
- *      Number of nanoseconds.
+ *      Number of nanoseconds (may be negative, capped to the range of a signed
+ *      64-bit integer).
  * \throw Client::InvalidArgumentException
  *      If description could not be parsed successfully.
  * \warning
  *      This function is subject to change. It is not subject to the versioning
  *      requirements of LogCabin's public API.
  */
-uint64_t parseDuration(const std::string& description);
+int64_t parseSignedDuration(const std::string& description);
+
+/**
+ * Convert a human-readable description of a time duration into a number of
+ * nanoseconds.
+ * \param description
+ *      Something like 10, 10s, 200ms, 3us, or 999ns. With no units, defaults
+ *      to seconds. May not be negative.
+ *      Allowed units:
+ *          ns, nanosecond(s),
+ *          ms, millisecond(s),
+ *          s, second(s),
+ *          min, minute(s),
+ *          h, hr, hour(s),
+ *          d, day(s),
+ *          w, wk, week(s),
+ *          mo, month(s),
+ *          y, yr, year(s).
+ * \return
+ *      Number of nanoseconds (will not be negative, capped to the range of a
+ *      signed 64-bit integer on the high end).
+ * \throw Client::InvalidArgumentException
+ *      If description could not be parsed successfully.
+ * \warning
+ *      This function is subject to change. It is not subject to the versioning
+ *      requirements of LogCabin's public API.
+ */
+uint64_t parseNonNegativeDuration(const std::string& description);
+
 
 } // namespace LogCabin::Util
 } // namespace LogCabin::Client

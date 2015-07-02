@@ -42,7 +42,7 @@ class OptionParser {
         , lastIndex(0)
         , logPolicy("")
         , server("localhost:5254")
-        , timeout(Client::Util::parseDuration("0s"))
+        , timeout(Client::Util::parseNonNegativeDuration("0s"))
     {
         while (true) {
             static struct option longOptions[] = {
@@ -67,7 +67,7 @@ class OptionParser {
                     server = optarg;
                     break;
                 case 't':
-                    timeout = Client::Util::parseDuration(optarg);
+                    timeout = Client::Util::parseNonNegativeDuration(optarg);
                     break;
                 case 'v':
                     logPolicy = "VERBOSE";

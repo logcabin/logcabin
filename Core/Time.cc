@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstdlib>
 #include <cstring>
 #include <functional>
 #include <stdexcept>
@@ -55,14 +56,16 @@ CSteadyClock::now()
                 now.tv_nsec));
 }
 
-uint64_t
-parseDuration(const std::string& description)
+int64_t
+parseSignedDuration(const std::string& description)
 {
     const char* start = description.c_str();
     char* end = NULL;
     errno = 0;
-    uint64_t r = strtoul(start, &end, 10);
-    if (errno != 0 || start == end) {
+    int64_t r = strtol(start, &end, 10);
+    if (errno == ERANGE) {
+        // pass
+    } else if (errno != 0 || start == end) {
         throw std::runtime_error(
             std::string("Invalid time description: "
                         "could not parse number from ") + description);
@@ -80,20 +83,107 @@ parseDuration(const std::string& description)
             std::find_if(units.begin(), units.end(),
                          std::not1(std::ptr_fun<int, int>(std::isspace))));
 
-    if (units == "ns") {
+    int64_t overflow;
+    if (r < 0L)
+       overflow = std::numeric_limits<int64_t>::min();
+    else
+       overflow = std::numeric_limits<int64_t>::max();
+
+    if (units == "ns" ||
+        units == "nanosecond" ||
+        units == "nanoseconds") {
         // pass
-    } else if (units == "us") {
-        r *= 1000UL;
-    } else if (units == "ms") {
-        r *= 1000000UL;
-    } else if (units == "s" || units == "") {
-        r *= 1000000000UL;
+    } else if (units == "us" ||
+               units == "microsecond" ||
+               units == "microseconds") {
+        if (std::abs(r) <= 9223372036854775L)
+            r *= 1000L;
+        else
+            r = overflow;
+    } else if (units == "ms" ||
+               units == "millisecond" ||
+               units == "milliseconds") {
+        if (std::abs(r) <= 9223372036854L)
+            r *= 1000000L;
+        else
+            r = overflow;
+    } else if (units == "s" ||
+               units == "second" ||
+               units == "seconds" ||
+               units == "") {
+        if (std::abs(r) <= 9223372036L)
+            r *= 1000000000L;
+        else
+            r = overflow;
+    } else if (units == "min" ||
+               units == "minute" ||
+               units == "minutes") {
+        if (std::abs(r) <= 153722867L)
+            r *= 1000000000L * 60L;
+        else
+            r = overflow;
+    } else if (units == "h" ||
+               units == "hr" ||
+               units == "hour" ||
+               units == "hours") {
+        if (std::abs(r) <= 2562047L)
+            r *= 1000000000L * 60L * 60L;
+        else
+            r = overflow;
+    } else if (units == "d" ||
+               units == "day" ||
+               units == "days") {
+        if (std::abs(r) <= 106751L)
+            r *= 1000000000L * 60L * 60L * 24L;
+        else
+            r = overflow;
+    } else if (units == "w" ||
+               units == "wk" ||
+               units == "week" ||
+               units == "weeks") {
+        if (std::abs(r) <= 15250L)
+            r *= 1000000000L * 60L * 60L * 24L * 7L;
+        else
+            r = overflow;
+    } else if (units == "mo" ||
+               units == "month" ||
+               units == "months") {
+        // Months vary in length, so this is the average number of seconds in a
+        // month. If someone is specifying durations in such large units, they
+        // probably won't care.
+        if (std::abs(r) <= 3507L)
+            r *= 1000000000L * 2629800L;
+        else
+            r = overflow;
+    } else if (units == "y" ||
+               units == "yr" ||
+               units == "year" ||
+               units == "years") {
+        // Years vary in length due to leap years, so this is the number of
+        // seconds in a 365.25-day year. If someone is specifying durations in
+        // such large units, they probably won't care.
+        if (std::abs(r) <= 292L)
+            r *= 1000000000L * 31557600L;
+        else
+            r = overflow;
     } else {
         throw std::runtime_error(
             std::string("Invalid time description: "
                         "could not parse units from ") + description);
     }
     return r;
+}
+
+uint64_t
+parseNonNegativeDuration(const std::string& description)
+{
+    int64_t r = parseSignedDuration(description);
+    if (r < 0) {
+        throw std::runtime_error(Core::StringUtil::format(
+                "Invalid time description: '%s' is negative",
+                description.c_str()));
+    }
+    return static_cast<uint64_t>(r);
 }
 
 void

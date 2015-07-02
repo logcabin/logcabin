@@ -28,6 +28,7 @@ namespace {
 
 using LogCabin::Client::Cluster;
 using LogCabin::Client::Tree;
+using LogCabin::Client::Util::parseNonNegativeDuration;
 
 enum class Command {
     MKDIR,
@@ -53,7 +54,7 @@ class OptionParser {
         , dir()
         , logPolicy("")
         , path()
-        , timeout(LogCabin::Client::Util::parseDuration("0s"))
+        , timeout(parseNonNegativeDuration("0s"))
     {
         while (true) {
             static struct option longOptions[] = {
@@ -96,7 +97,7 @@ class OptionParser {
                     logPolicy = "WARNING";
                     break;
                 case 't':
-                    timeout = LogCabin::Client::Util::parseDuration(optarg);
+                    timeout = parseNonNegativeDuration(optarg);
                     break;
                 case 'v':
                     logPolicy = "VERBOSE";

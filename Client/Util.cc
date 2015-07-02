@@ -21,11 +21,21 @@ namespace LogCabin {
 namespace Client {
 namespace Util {
 
-uint64_t
-parseDuration(const std::string& description)
+int64_t
+parseSignedDuration(const std::string& description)
 {
     try {
-        return Core::Time::parseDuration(description);
+        return Core::Time::parseSignedDuration(description);
+    } catch (const std::runtime_error& e) {
+        throw Client::InvalidArgumentException(e.what());
+    }
+}
+
+uint64_t
+parseNonNegativeDuration(const std::string& description)
+{
+    try {
+        return Core::Time::parseNonNegativeDuration(description);
     } catch (const std::runtime_error& e) {
         throw Client::InvalidArgumentException(e.what());
     }

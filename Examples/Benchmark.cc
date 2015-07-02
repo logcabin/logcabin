@@ -42,6 +42,7 @@ using LogCabin::Client::Cluster;
 using LogCabin::Client::Result;
 using LogCabin::Client::Status;
 using LogCabin::Client::Tree;
+using LogCabin::Client::Util::parseNonNegativeDuration;
 
 /**
  * Parses argv for the main function.
@@ -56,7 +57,7 @@ class OptionParser {
         , size(1024)
         , writers(1)
         , totalWrites(1000)
-        , timeout(LogCabin::Client::Util::parseDuration("30s"))
+        , timeout(parseNonNegativeDuration("30s"))
     {
         while (true) {
             static struct option longOptions[] = {
@@ -81,7 +82,7 @@ class OptionParser {
                     cluster = optarg;
                     break;
                 case 'd':
-                    timeout = LogCabin::Client::Util::parseDuration(optarg);
+                    timeout = parseNonNegativeDuration(optarg);
                     break;
                 case 'h':
                     usage();

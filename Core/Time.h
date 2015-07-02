@@ -185,14 +185,48 @@ typedef MockableClock<std::chrono::system_clock> SystemClock;
  * Convert a human-readable description of a time duration into a number of
  * nanoseconds.
  * \param description
- *      Something like 10, 10s, 200ms, 3us, or 999ns. With no units, defaults
- *      to seconds.
+ *      Something like 10, 10s, -200ms, 3us, or -999ns. With no units, defaults
+ *      to seconds. May be negative.
+ *      Allowed units:
+ *          ns, nanosecond(s),
+ *          ms, millisecond(s),
+ *          s, second(s),
+ *          min, minute(s),
+ *          h, hr, hour(s),
+ *          d, day(s),
+ *          w, wk, week(s),
+ *          mo, month(s),
+ *          y, yr, year(s).
  * \return
- *      Number of nanoseconds.
+ *      Number of nanoseconds, capped to the range of a signed 64-bit integer.
  * \throw std::runtime_error
  *      If description could not be parsed successfully.
  */
-uint64_t parseDuration(const std::string& description);
+int64_t parseSignedDuration(const std::string& description);
+
+/**
+ * Convert a human-readable description of a time duration into a number of
+ * nanoseconds.
+ * \param description
+ *      Something like 10, 10s, 200ms, 3us, or 999ns. With no units, defaults
+ *      to seconds. May not be negative.
+ *      Allowed units:
+ *          ns, nanosecond(s),
+ *          ms, millisecond(s),
+ *          s, second(s),
+ *          min, minute(s),
+ *          h, hr, hour(s),
+ *          d, day(s),
+ *          w, wk, week(s),
+ *          mo, month(s),
+ *          y, yr, year(s).
+ * \return
+ *      Number of nanoseconds, capped on the high end to the range of a signed
+ *      64-bit integer.
+ * \throw std::runtime_error
+ *      If description could not be parsed successfully.
+ */
+uint64_t parseNonNegativeDuration(const std::string& description);
 
 /**
  * Read the CPU's cycle counter.
