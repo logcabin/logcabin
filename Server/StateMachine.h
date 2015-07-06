@@ -23,6 +23,7 @@
 #include "build/Server/SnapshotStateMachine.pb.h"
 #include "Core/ConditionVariable.h"
 #include "Core/Config.h"
+#include "Core/Mutex.h"
 #include "Core/Time.h"
 #include "Tree/Tree.h"
 
@@ -102,6 +103,46 @@ class StateMachine {
     bool waitForResponse(uint64_t logIndex,
                          const Command::Request& command,
                          Command::Response& response) const;
+
+    /**
+     * Return true if the server is currently taking a snapshot and false
+     * otherwise.
+     */
+    bool isTakingSnapshot() const;
+
+    /**
+     * If the state machine is not taking a snapshot, this starts one. This
+     * method will return after the snapshot has been started (it may have
+     * already completed).
+     */
+    void startTakingSnapshot();
+
+    /**
+     * If the server is currently taking a snapshot, abort it. This method will
+     * return after the existing snapshot has been stopped (it's possible that
+     * another snapshot will have already started).
+     */
+    void stopTakingSnapshot();
+
+    /**
+     * Return the time for which the state machine will not take any automated
+     * snapshots.
+     * \return
+     *      Zero or positive duration.
+     */
+    std::chrono::nanoseconds getInhibit() const;
+
+    /**
+     * Disable automated snapshots for the given duration.
+     * \param duration
+     *      If zero or negative, immediately enables automated snapshotting.
+     *      If positive, disables automated snapshotting for the given duration
+     *      (or until a later call to #setInhibit()).
+     * Note that this will not stop the current snapshot; the caller should
+     * invoke #stopTakingSnapshot() separately if desired.
+     */
+    void setInhibit(std::chrono::nanoseconds duration);
+
 
   private:
     // forward declaration
@@ -184,6 +225,9 @@ class StateMachine {
      * Return true if it is time to create a new snapshot.
      * This is called by applyThread as an optimization to avoid waking up
      * snapshotThread upon applying every single entry.
+     * \warning
+     *      Callers should take care to honor maySnapshotAt; this method
+     *      ignores it.
      */
     bool shouldTakeSnapshot(uint64_t lastIncludedIndex) const;
 
@@ -201,7 +245,7 @@ class StateMachine {
      * Called by snapshotThreadMain to actually take the snapshot.
      */
     void takeSnapshot(uint64_t lastIncludedIndex,
-                      std::unique_lock<std::mutex>& lockGuard);
+                      std::unique_lock<Core::Mutex>& lockGuard);
 
     /**
      * Called to log a debug message if appropriate when the state machine
@@ -271,7 +315,7 @@ class StateMachine {
      * Protects against concurrent access for all members of this class (except
      * 'consensus', which is itself a monitor.
      */
-    mutable std::mutex mutex;
+    mutable Core::Mutex mutex;
 
     /**
      * Notified when lastIndex changes after some entry got applied.
@@ -282,7 +326,7 @@ class StateMachine {
 
     /**
      * Notified when shouldTakeSnapshot(lastIndex) becomes true.
-     * Also notified upon exiting.
+     * Also notified upon exiting and when #maySnapshotAt changes.
      * This is used for snapshotThread to wake up only when necessary.
      */
     mutable Core::ConditionVariable snapshotSuggested;
@@ -291,9 +335,16 @@ class StateMachine {
      * Notified when a snapshot process is forked.
      * Also notified upon exiting.
      * This is used so that the watchdog thread knows to begin checking the
-     * progress of the child process.
+     * progress of the child process, and also in #startTakingSnapshot().
      */
     mutable Core::ConditionVariable snapshotStarted;
+
+    /**
+     * Notified when a snapshot process is joined.
+     * Also notified upon exiting.
+     * This is used so that #stopTakingSnapshot() knows when it's done.
+     */
+    mutable Core::ConditionVariable snapshotCompleted;
 
     /**
      * applyThread sets this to true to signal that the server is shutting
@@ -340,7 +391,8 @@ class StateMachine {
      * The number of times a snapshot has been started.
      * In addition to being a useful stat, the watchdog thread uses this to
      * know whether it's been watching the same snapshot or whether a new one
-     * has been started.
+     * has been started, and startTakingSnapshot() waits for this to change
+     * before returning.
      */
     uint64_t numSnapshotsAttempted;
 
@@ -376,6 +428,21 @@ class StateMachine {
      * successful counts.
      */
     uint64_t numTotalAdvanceVersionEntries;
+
+    /**
+     * Set to true when an administrator has asked the server to take a
+     * snapshot; set to false once the server starts any snapshot.
+     * Snapshots that are requested due to this flag are permitted to begin
+     * even if automated snapshots have been inhibited with #setInhibit().
+     */
+    bool isSnapshotRequested;
+
+    /**
+     * The time at which the server may begin to take automated snapshots.
+     * Normally this is set to some time in the past. When automated snapshots
+     * are inhibited with #setInhibit(), this will be set to a future time.
+     */
+    TimePoint maySnapshotAt;
 
     /**
      * Tracks state for a particular client.

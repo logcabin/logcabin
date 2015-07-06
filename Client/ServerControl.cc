@@ -30,6 +30,8 @@ namespace LogCabin {
 namespace Client {
 namespace {
 
+using Client::Util::parseNonNegativeDuration;
+
 /**
  * Parses argv for the main function.
  */
@@ -42,7 +44,7 @@ class OptionParser {
         , lastIndex(0)
         , logPolicy("")
         , server("localhost:5254")
-        , timeout(Client::Util::parseNonNegativeDuration("0s"))
+        , timeout(parseNonNegativeDuration("0s"))
     {
         while (true) {
             static struct option longOptions[] = {
@@ -67,7 +69,7 @@ class OptionParser {
                     server = optarg;
                     break;
                 case 't':
-                    timeout = Client::Util::parseNonNegativeDuration(optarg);
+                    timeout = parseNonNegativeDuration(optarg);
                     break;
                 case 'v':
                     logPolicy = "VERBOSE";
@@ -95,6 +97,23 @@ class OptionParser {
             usageError("Missing arguments");
         lastIndex = index;
         return args.at(index);
+    }
+
+    /**
+     * Return all arguments at index or following it.
+     */
+    std::string remaining(uint64_t index) {
+        lastIndex = args.size();
+        std::string r;
+        while (index < args.size()) {
+            r += args.at(index);
+            if (index < args.size() - 1)
+               r += " ";
+            ++index;
+        }
+        if (index < args.size())
+            r += args.at(index);
+        return r;
     }
 
     /**
@@ -163,23 +182,26 @@ class OptionParser {
             << "Rotate the server's debug log file."
             << std::endl
 
-            // TODO(ongaro): implement snapshot inhibit
-#if 0
             << ospace("snapshot inhibit get")
             << "Print the remaining time for which the server"
             << std::endl << space
-            << "was asked to not snapshot."
+            << "was prevented from taking snapshots."
             << std::endl
 
-            << ospace("snapshot inhibit set <time>")
-            << "Stop the snapshot from snapshotting for the"
+            << ospace("snapshot inhibit set [<time>]")
+            << "  Abort the server's current snapshot if one is"
             << std::endl << space
-            << "given time duration."
+            << "  in progress, and disallow the server from"
+            << std::endl << space
+            << "  starting automated snapshots for the given"
+            << std::endl << space
+            << "  duration [default: 1week]."
             << std::endl
-#endif
 
-            // TODO(ongaro): implement snapshot commands
-#if 0
+            << ospace("snapshot inhibit clear")
+            << "Allow the server to take snapshots normally."
+            << std::endl
+
             << ospace("snapshot start")
             << "Begin taking a snapshot if none is in progress."
             << std::endl
@@ -195,7 +217,6 @@ class OptionParser {
             << std::endl << space
             << "progress, then begin taking a new snapshot."
             << std::endl
-#endif
 
             << ospace("stats get")
             << "Print detailed server metrics."
@@ -304,8 +325,20 @@ class ServerControl {
     DEFINE_RPC(ServerInfoGet,          SERVER_INFO_GET)
     DEFINE_RPC(ServerStatsDump,        SERVER_STATS_DUMP)
     DEFINE_RPC(ServerStatsGet,         SERVER_STATS_GET)
+    DEFINE_RPC(SnapshotControl,        SNAPSHOT_CONTROL)
+    DEFINE_RPC(SnapshotInhibitGet,     SNAPSHOT_INHIBIT_GET)
+    DEFINE_RPC(SnapshotInhibitSet,     SNAPSHOT_INHIBIT_SET)
 
 #undef DEFINE_RPC
+
+    void snapshotControl(Proto::SnapshotCommand command) {
+        Proto::SnapshotControl::Request request;
+        Proto::SnapshotControl::Response response;
+        request.set_command(command);
+        SnapshotControl(request, response);
+        if (response.has_error())
+            error(response.error());
+    }
 
     ClientImpl clientImpl;
     std::string server;
@@ -385,6 +418,51 @@ main(int argc, char** argv)
                 if (response.has_error())
                     error(response.error());
                 return 0;
+            }
+        } else if (options.at(0) == "snapshot") {
+            using Proto::SnapshotCommand;
+            if (options.at(1) == "start") {
+                options.done();
+                server.snapshotControl(SnapshotCommand::START_SNAPSHOT);
+                return 0;
+            } else if (options.at(1) == "stop") {
+                options.done();
+                server.snapshotControl(SnapshotCommand::STOP_SNAPSHOT);
+                return 0;
+            } else if (options.at(1) == "restart") {
+                options.done();
+                server.snapshotControl(SnapshotCommand::RESTART_SNAPSHOT);
+                return 0;
+            } else if (options.at(1) == "inhibit") {
+                if (options.at(2) == "get") {
+                    options.done();
+                    Proto::SnapshotInhibitGet::Request request;
+                    Proto::SnapshotInhibitGet::Response response;
+                    server.SnapshotInhibitGet(request, response);
+                    std::chrono::nanoseconds ns(response.nanoseconds());
+                    std::cout << ns << std::endl;
+                    return 0;
+                } else if (options.at(2) == "set") {
+                    Proto::SnapshotInhibitSet::Request request;
+                    std::string time = options.remaining(3);
+                    if (time.empty())
+                        time = "1week";
+                    request.set_nanoseconds(parseNonNegativeDuration(time));
+                    Proto::SnapshotInhibitSet::Response response;
+                    server.SnapshotInhibitSet(request, response);
+                    if (response.has_error())
+                        error(response.error());
+                    return 0;
+                } else if (options.at(2) == "clear") {
+                    options.done();
+                    Proto::SnapshotInhibitSet::Request request;
+                    request.set_nanoseconds(0);
+                    Proto::SnapshotInhibitSet::Response response;
+                    server.SnapshotInhibitSet(request, response);
+                    if (response.has_error())
+                        error(response.error());
+                    return 0;
+                }
             }
         } else if (options.at(0) == "stats") {
             if (options.at(1) == "get") {

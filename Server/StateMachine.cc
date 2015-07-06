@@ -69,6 +69,7 @@ StateMachine::StateMachine(std::shared_ptr<RaftConsensus> consensus,
     , entriesApplied()
     , snapshotSuggested()
     , snapshotStarted()
+    , snapshotCompleted()
     , exiting(false)
     , childPid(0)
     , lastIndex(0)
@@ -81,6 +82,8 @@ StateMachine::StateMachine(std::shared_ptr<RaftConsensus> consensus,
     , numRejectedAdvanceVersionEntries(0)
     , numSuccessfulAdvanceVersionEntries(0)
     , numTotalAdvanceVersionEntries(0)
+    , isSnapshotRequested(false)
+    , maySnapshotAt(TimePoint::min())
     , sessions()
     , tree()
     , versionHistory()
@@ -118,7 +121,7 @@ bool
 StateMachine::query(const Query::Request& request,
                     Query::Response& response) const
 {
-    std::lock_guard<std::mutex> lockGuard(mutex);
+    std::lock_guard<Core::Mutex> lockGuard(mutex);
     if (request.has_tree()) {
         Tree::ProtoBuf::readOnlyTreeRPC(tree,
                                         request.tree(),
@@ -132,7 +135,8 @@ StateMachine::query(const Query::Request& request,
 void
 StateMachine::updateServerStats(Protocol::ServerStats& serverStats) const
 {
-    std::lock_guard<std::mutex> lockGuard(mutex);
+    std::lock_guard<Core::Mutex> lockGuard(mutex);
+    Core::Time::SteadyTimeConverter time;
     serverStats.clear_state_machine();
     Protocol::ServerStats::StateMachine& smStats =
         *serverStats.mutable_state_machine();
@@ -153,13 +157,14 @@ StateMachine::updateServerStats(Protocol::ServerStats& serverStats) const
     smStats.set_min_supported_version(MIN_SUPPORTED_VERSION);
     smStats.set_max_supported_version(MAX_SUPPORTED_VERSION);
     smStats.set_running_version(getVersion(lastIndex));
+    smStats.set_may_snapshot_at(time.unixNanos(maySnapshotAt));
     tree.updateServerStats(*smStats.mutable_tree());
 }
 
 void
 StateMachine::wait(uint64_t index) const
 {
-    std::unique_lock<std::mutex> lockGuard(mutex);
+    std::unique_lock<Core::Mutex> lockGuard(mutex);
     while (lastIndex < index)
         entriesApplied.wait(lockGuard);
 }
@@ -169,7 +174,7 @@ StateMachine::waitForResponse(uint64_t logIndex,
                               const Command::Request& command,
                               Command::Response& response) const
 {
-    std::unique_lock<std::mutex> lockGuard(mutex);
+    std::unique_lock<Core::Mutex> lockGuard(mutex);
     while (lastIndex < logIndex)
         entriesApplied.wait(lockGuard);
 
@@ -217,6 +222,76 @@ StateMachine::waitForResponse(uint64_t logIndex,
     }
     // don't warnUnknownRequest here, since we already did so in apply()
     return false;
+}
+
+bool
+StateMachine::isTakingSnapshot() const
+{
+    std::lock_guard<Core::Mutex> lockGuard(mutex);
+    return childPid != 0;
+}
+
+void
+StateMachine::startTakingSnapshot()
+{
+    std::unique_lock<Core::Mutex> lockGuard(mutex);
+    if (childPid == 0) {
+        NOTICE("Administrator requested snapshot");
+        isSnapshotRequested = true;
+        snapshotSuggested.notify_all();
+        // This waits on numSnapshotsAttempted to change, since waiting on
+        // childPid != 0 would risk missing an entire snapshot that started and
+        // completed before this thread was scheduled.
+        uint64_t nextSnapshot = numSnapshotsAttempted + 1;
+        while (!exiting && numSnapshotsAttempted < nextSnapshot) {
+            snapshotStarted.wait(lockGuard);
+        }
+    }
+}
+
+void
+StateMachine::stopTakingSnapshot()
+{
+    std::unique_lock<Core::Mutex> lockGuard(mutex);
+    int pid = childPid;
+    if (pid != 0) {
+        NOTICE("Administrator aborted snapshot");
+        killSnapshotProcess(Core::HoldingMutex(lockGuard), SIGTERM);
+        while (!exiting && pid == childPid) {
+            snapshotCompleted.wait(lockGuard);
+        }
+    }
+}
+
+std::chrono::nanoseconds
+StateMachine::getInhibit() const
+{
+    std::lock_guard<Core::Mutex> lockGuard(mutex);
+    TimePoint now = Clock::now();
+    if (maySnapshotAt <= now) {
+        return std::chrono::nanoseconds::zero();
+    } else {
+        return maySnapshotAt - now;
+    }
+}
+
+void
+StateMachine::setInhibit(std::chrono::nanoseconds duration)
+{
+    std::lock_guard<Core::Mutex> lockGuard(mutex);
+    if (duration <= std::chrono::nanoseconds::zero()) {
+        maySnapshotAt = TimePoint::min();
+        NOTICE("Administrator permitted snapshotting");
+    } else {
+        TimePoint now = Clock::now();
+        maySnapshotAt = now + duration;
+        if (maySnapshotAt < now) { // overflow
+            maySnapshotAt = TimePoint::max();
+        }
+        NOTICE("Administrator inhibited snapshotting for the next %s",
+               Core::StringUtil::toString(maySnapshotAt - now).c_str());
+    }
+    snapshotSuggested.notify_all();
 }
 
 
@@ -314,7 +389,7 @@ StateMachine::applyThreadMain()
     try {
         while (true) {
             RaftConsensus::Entry entry = consensus->getNextEntry(lastIndex);
-            std::lock_guard<std::mutex> lockGuard(mutex);
+            std::lock_guard<Core::Mutex> lockGuard(mutex);
             switch (entry.type) {
                 case RaftConsensus::Entry::SKIP:
                     break;
@@ -331,16 +406,19 @@ StateMachine::applyThreadMain()
             expireSessions(entry.clusterTime);
             lastIndex = entry.index;
             entriesApplied.notify_all();
-            if (shouldTakeSnapshot(lastIndex))
+            if (shouldTakeSnapshot(lastIndex) &&
+                maySnapshotAt <= Clock::now()) {
                 snapshotSuggested.notify_all();
+            }
         }
     } catch (const Core::Util::ThreadInterruptedException&) {
         NOTICE("exiting");
-        std::lock_guard<std::mutex> lockGuard(mutex);
+        std::lock_guard<Core::Mutex> lockGuard(mutex);
         exiting = true;
         entriesApplied.notify_all();
         snapshotSuggested.notify_all();
         snapshotStarted.notify_all();
+        snapshotCompleted.notify_all();
         killSnapshotProcess(Core::HoldingMutex(lockGuard), SIGTERM);
     }
 }
@@ -415,8 +493,9 @@ StateMachine::killSnapshotProcess(Core::HoldingMutex holdingMutex,
     if (childPid != 0) {
         int r = kill(childPid, signum);
         if (r != 0) {
-            WARNING("Could not send %s to child process: %s",
+            WARNING("Could not send %s to child process (%d): %s",
                     strsignal(signum),
+                    childPid,
                     strerror(errno));
         }
     }
@@ -544,12 +623,29 @@ void
 StateMachine::snapshotThreadMain()
 {
     Core::ThreadId::setName("SnapshotStateMachine");
-    std::unique_lock<std::mutex> lockGuard(mutex);
+    std::unique_lock<Core::Mutex> lockGuard(mutex);
+    TimePoint lastWake = TimePoint::min();
+    bool wasInhibited = false;
     while (!exiting) {
-        if (shouldTakeSnapshot(lastIndex))
+        bool inhibited = (maySnapshotAt > Clock::now());
+
+        TimePoint waitUntil = TimePoint::max();
+        if (inhibited)
+            waitUntil = maySnapshotAt;
+
+        if (wasInhibited && !inhibited)
+            NOTICE("Now permitted to take snapshots");
+        wasInhibited = inhibited;
+
+        if (isSnapshotRequested ||
+            (!inhibited && shouldTakeSnapshot(lastIndex))) {
+
+            isSnapshotRequested = false;
             takeSnapshot(lastIndex, lockGuard);
-        else
-            snapshotSuggested.wait(lockGuard);
+            continue;
+        }
+
+        snapshotSuggested.wait_until(lockGuard, waitUntil);
     }
 }
 
@@ -558,7 +654,7 @@ StateMachine::snapshotWatchdogThreadMain()
 {
     using Core::StringUtil::toString;
     Core::ThreadId::setName("SnapshotStateMachineWatchdog");
-    std::unique_lock<std::mutex> lockGuard(mutex);
+    std::unique_lock<Core::Mutex> lockGuard(mutex);
 
     // The snapshot process that this thread is currently tracking, based on
     // numSnapshotsAttempted. If set to ~0UL, this thread is not currently
@@ -623,7 +719,7 @@ StateMachine::snapshotWatchdogThreadMain()
 
 void
 StateMachine::takeSnapshot(uint64_t lastIncludedIndex,
-                           std::unique_lock<std::mutex>& lockGuard)
+                           std::unique_lock<Core::Mutex>& lockGuard)
 {
     // Open a snapshot file, then fork a child to write a consistent view of
     // the state machine to the snapshot file while this process continues
@@ -676,7 +772,7 @@ StateMachine::takeSnapshot(uint64_t lastIncludedIndex,
         {
             // release the lock while blocking on the child to allow
             // parallelism
-            Core::MutexUnlock<std::mutex> unlockGuard(lockGuard);
+            Core::MutexUnlock<Core::Mutex> unlockGuard(lockGuard);
             pid = waitpid(pid, &status, 0);
         }
         childPid = 0;
@@ -704,6 +800,7 @@ StateMachine::takeSnapshot(uint64_t lastIncludedIndex,
                   numSnapshotsFailed,
                   numSnapshotsAttempted);
         }
+        snapshotCompleted.notify_all();
     }
 }
 

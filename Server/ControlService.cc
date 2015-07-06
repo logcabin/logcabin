@@ -21,6 +21,7 @@
 #include "Server/ControlService.h"
 #include "Server/Globals.h"
 #include "Server/RaftConsensus.h"
+#include "Server/StateMachine.h"
 
 namespace LogCabin {
 namespace Server {
@@ -64,6 +65,15 @@ ControlService::handleRPC(RPC::ServerRPC rpc)
             break;
         case OpCode::SERVER_STATS_GET:
             serverStatsGet(std::move(rpc));
+            break;
+        case OpCode::SNAPSHOT_CONTROL:
+            snapshotControl(std::move(rpc));
+            break;
+        case OpCode::SNAPSHOT_INHIBIT_GET:
+            snapshotInhibitGet(std::move(rpc));
+            break;
+        case OpCode::SNAPSHOT_INHIBIT_SET:
+            snapshotInhibitSet(std::move(rpc));
             break;
         default:
             WARNING("Client sent request with bad op code (%u) to "
@@ -182,6 +192,63 @@ ControlService::serverStatsGet(RPC::ServerRPC rpc)
 {
     PRELUDE(ServerStatsGet);
     *response.mutable_server_stats() = globals.serverStats.getCurrent();
+    rpc.reply(response);
+}
+
+void
+ControlService::snapshotControl(RPC::ServerRPC rpc)
+{
+    PRELUDE(SnapshotControl);
+    using Protocol::ServerControl::SnapshotCommand;
+    switch (request.command()) {
+        case SnapshotCommand::START_SNAPSHOT:
+            globals.stateMachine->startTakingSnapshot();
+            break;
+        case SnapshotCommand::STOP_SNAPSHOT:
+            globals.stateMachine->stopTakingSnapshot();
+            break;
+        case SnapshotCommand::RESTART_SNAPSHOT:
+            globals.stateMachine->stopTakingSnapshot();
+            globals.stateMachine->startTakingSnapshot();
+            break;
+        case SnapshotCommand::UNKNOWN_SNAPSHOT_COMMAND: // fallthrough
+        default:
+            response.set_error("Unknown SnapshotControl command");
+    }
+    rpc.reply(response);
+}
+
+void
+ControlService::snapshotInhibitGet(RPC::ServerRPC rpc)
+{
+    PRELUDE(SnapshotInhibitGet);
+    std::chrono::nanoseconds duration = globals.stateMachine->getInhibit();
+    assert(duration >= std::chrono::nanoseconds::zero());
+    response.set_nanoseconds(duration.count());
+    rpc.reply(response);
+}
+
+void
+ControlService::snapshotInhibitSet(RPC::ServerRPC rpc)
+{
+    PRELUDE(SnapshotInhibitSet);
+    bool abort = false;
+    std::chrono::nanoseconds duration;
+    if (request.has_nanoseconds()) {
+        duration = std::chrono::nanoseconds(request.nanoseconds());
+        if (request.nanoseconds() > 0 &&
+            duration < std::chrono::nanoseconds::zero()) { // overflow
+            duration = std::chrono::nanoseconds::max();
+        }
+        if (request.nanoseconds() == 0)
+            abort = false;
+    } else {
+        duration = std::chrono::nanoseconds::max();
+    }
+    globals.stateMachine->setInhibit(duration);
+    if (abort) {
+        globals.stateMachine->stopTakingSnapshot();
+    }
     rpc.reply(response);
 }
 

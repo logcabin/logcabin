@@ -35,6 +35,8 @@ enum OpCode {
     SERVER_STATS_DUMP = 7;
     SERVER_STATS_GET = 8;
     SNAPSHOT_CONTROL = 9;
+    SNAPSHOT_INHIBIT_GET = 10;
+    SNAPSHOT_INHIBIT_SET = 11;
 };
 
 /**
@@ -156,5 +158,92 @@ message ServerStatsGet {
          * Metrics, statistics, state and other such information.
          */
         optional LogCabin.Protocol.ServerStats server_stats = 1;
+    }
+}
+
+/**
+ * Operation specified in SnapshotControl.
+ */
+enum SnapshotCommand {
+    /**
+     * This must be the first value in the enum and is never assigned
+     * explicitly. If new values are added, old code will see them as set
+     * and equal to this value (though they will still serialize to the
+     * correct value).
+     */
+    UNKNOWN_SNAPSHOT_COMMAND = 0;
+    /**
+     * Begin taking a snapshot if none is in progress.
+     */
+    START_SNAPSHOT = 1;
+    /**
+     * Abort the current snapshot if one is in progress.
+     */
+    STOP_SNAPSHOT = 2;
+    /**
+     * Abort the current snapshot if one is in progress,
+     * then begin taking a new snapshot.
+     */
+    RESTART_SNAPSHOT = 3;
+};
+
+/**
+ * SnapshotControl RPC: Tell the server's state machine to start or abort
+ * taking a snapshot.
+ */
+message SnapshotControl {
+    message Request {
+        /**
+         * What to do.
+         */
+        required SnapshotCommand command = 1;
+    }
+    message Response {
+        /**
+         * This field will be present if any error occurred and not present
+         * otherwise.
+         */
+        optional string error = 1;
+    }
+}
+
+/**
+ * SnapshotInhibit RPC: Query the server's state machine to see if it has
+ * inhibited snapshotting.
+ */
+message SnapshotInhibitGet {
+    message Request {
+    }
+    message Response {
+        /**
+         * The number of nanoseconds for which the server will not be taking an
+         * automated snapshot (due to previous call to SnapshotInhibitSet).
+         */
+        optional uint64 nanoseconds = 1;
+    }
+}
+
+/**
+ * SnapshotInhibit RPC: Tell the server's state machine to abort the current
+ * snapshot and not take any more (for the given amount of time).
+ */
+message SnapshotInhibitSet {
+    message Request {
+        /**
+         * If set to nonzero, abort the current snapshot, and do not take
+         * any more automated snapshots for the given time period.
+         * If set to zero, do not abort the current snapshot, and take
+         * automated snapshots occasionally as normally configured.
+         * If unset, abort the current snapshot, and do not take any more
+         * automated snapshots ever.
+         */
+        optional uint64 nanoseconds = 1;
+    }
+    message Response {
+        /**
+         * This field will be present if any error occurred and not present
+         * otherwise.
+         */
+        optional string error = 1;
     }
 }

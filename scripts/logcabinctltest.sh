@@ -27,6 +27,21 @@ $ctl debug filename get
 $ctl debug filename set debug/2
 ! $ctl debug filename set /a/b/c/d/e/f/g
 $ctl debug rotate
+$ctl snapshot start
+$ctl snapshot stop
+$ctl snapshot restart
+$ctl snapshot start
+$ctl snapshot restart
+$ctl snapshot inhibit get
+$ctl snapshot inhibit set
+$ctl snapshot inhibit get
+$ctl snapshot inhibit set 30
+$ctl snapshot inhibit get
+$ctl snapshot inhibit set 9 weeks
+$ctl snapshot inhibit get
+! $ctl snapshot inhibit set 9 weeks wtf
+$ctl snapshot inhibit clear
+$ctl snapshot inhibit get
 $ctl stats get
 $ctl stats dump
 

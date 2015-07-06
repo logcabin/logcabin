@@ -232,6 +232,156 @@ TEST_F(ServerStateMachineTest, waitForResponse_unknown)
     EXPECT_EQ("", response);
 }
 
+struct IsTakingSnapshotHelper {
+    explicit IsTakingSnapshotHelper(StateMachine& stateMachine)
+        : stateMachine(stateMachine)
+        , count(0)
+    {
+    }
+    void operator()() {
+        std::function<void()> callback;
+        std::swap(callback, stateMachine.mutex.callback);
+        if (count == 1) {
+            stateMachine.mutex.unlock();
+            EXPECT_TRUE(stateMachine.isTakingSnapshot());
+            stateMachine.mutex.lock();
+        }
+        std::swap(callback, stateMachine.mutex.callback);
+        ++count;
+    }
+    StateMachine& stateMachine;
+    uint64_t count;
+};
+
+TEST_F(ServerStateMachineTest, isTakingSnapshot)
+{
+    IsTakingSnapshotHelper helper(*stateMachine);
+    EXPECT_FALSE(stateMachine->isTakingSnapshot());
+    {
+        std::unique_lock<Core::Mutex> lockGuard(stateMachine->mutex);
+        stateMachine->mutex.callback = std::ref(helper);
+        stateMachine->takeSnapshot(1, lockGuard);
+    }
+    EXPECT_FALSE(stateMachine->isTakingSnapshot());
+}
+
+struct StartTakingSnapshotHelper {
+    explicit StartTakingSnapshotHelper(StateMachine& stateMachine)
+        : stateMachine(stateMachine)
+        , count(0)
+    {
+    }
+    void operator()() {
+        if (count == 0) {
+            std::unique_lock<Core::Mutex> lockGuard(stateMachine.mutex);
+            stateMachine.takeSnapshot(1, lockGuard);
+        }
+        ++count;
+
+    }
+    StateMachine& stateMachine;
+    uint64_t count;
+};
+
+TEST_F(ServerStateMachineTest, startTakingSnapshot)
+{
+    EXPECT_FALSE(stateMachine->isSnapshotRequested);
+    EXPECT_EQ(0U, stateMachine->snapshotSuggested.notificationCount);
+    StartTakingSnapshotHelper helper(*stateMachine);
+    stateMachine->snapshotStarted.callback = std::ref(helper);
+    stateMachine->startTakingSnapshot();
+    EXPECT_TRUE(stateMachine->isSnapshotRequested);
+    EXPECT_EQ(1U, stateMachine->snapshotSuggested.notificationCount);
+}
+
+TEST_F(ServerStateMachineTest, startTakingSnapshot_alreadyStarted)
+{
+    stateMachine->childPid = 1000;
+    stateMachine->startTakingSnapshot();
+    EXPECT_FALSE(stateMachine->isSnapshotRequested);
+    EXPECT_EQ(0U, stateMachine->snapshotSuggested.notificationCount);
+    stateMachine->childPid = 0;
+}
+
+struct StopTakingSnapshotHelper {
+    explicit StopTakingSnapshotHelper(StateMachine& stateMachine)
+        : stateMachine(stateMachine)
+        , count(0)
+    {
+    }
+    void operator()() {
+        if (count == 3) {
+            int status = 0;
+            EXPECT_EQ(stateMachine.childPid,
+                      waitpid(stateMachine.childPid, &status, 0))
+                << strerror(errno);
+            EXPECT_TRUE(WIFSIGNALED(status));
+            EXPECT_EQ(SIGTERM, WTERMSIG(status));
+            stateMachine.childPid = 0;
+        }
+        ++count;
+    }
+    StateMachine& stateMachine;
+    uint64_t count;
+};
+
+TEST_F(ServerStateMachineTest, stopTakingSnapshot)
+{
+    // start a snapshot
+    errno = 0;
+    pid_t pid = fork();
+    ASSERT_NE(pid, -1) << strerror(errno); // error
+    if (pid == 0) { // child
+        stateMachine->globals.unblockAllSignals();
+        while (true)
+            usleep(5000);
+    }
+    // parent continues here
+    stateMachine->childPid = pid;
+    StopTakingSnapshotHelper helper(*stateMachine);
+    stateMachine->snapshotCompleted.callback = std::ref(helper);
+    stateMachine->stopTakingSnapshot();
+    EXPECT_EQ(4U, helper.count);
+}
+
+TEST_F(ServerStateMachineTest, stopTakingSnapshot_noSnapshot)
+{
+    stateMachine->stopTakingSnapshot();
+}
+
+TEST_F(ServerStateMachineTest, getInhibit)
+{
+    // time is mocked
+    EXPECT_EQ(std::chrono::nanoseconds::zero(),
+              stateMachine->getInhibit());
+    stateMachine->setInhibit(std::chrono::nanoseconds(0));
+    EXPECT_EQ(std::chrono::nanoseconds::zero(),
+              stateMachine->getInhibit());
+    stateMachine->setInhibit(std::chrono::nanoseconds(1));
+    EXPECT_EQ(std::chrono::nanoseconds(1),
+              stateMachine->getInhibit());
+    stateMachine->setInhibit(std::chrono::seconds(10000));
+    EXPECT_EQ(std::chrono::seconds(10000),
+              stateMachine->getInhibit());
+}
+
+TEST_F(ServerStateMachineTest, setInhibit)
+{
+    stateMachine->setInhibit(std::chrono::nanoseconds::zero());
+    EXPECT_EQ(std::chrono::nanoseconds::zero(),
+              stateMachine->getInhibit());
+    stateMachine->setInhibit(std::chrono::nanoseconds(100));
+    EXPECT_EQ(std::chrono::nanoseconds(100),
+              stateMachine->getInhibit());
+    stateMachine->setInhibit(std::chrono::nanoseconds(-100));
+    EXPECT_EQ(std::chrono::nanoseconds::zero(),
+              stateMachine->getInhibit());
+    stateMachine->setInhibit(std::chrono::nanoseconds::max());
+    EXPECT_LT(std::chrono::seconds(60L * 60L * 24L * 365L * 100L),
+              stateMachine->getInhibit());
+    EXPECT_LT(0U, stateMachine->snapshotSuggested.notificationCount);
+}
+
 TEST_F(ServerStateMachineTest, apply_tree)
 {
     stateMachine->sessionTimeoutNanos = 1;
@@ -425,7 +575,7 @@ TEST_F(ServerStateMachineTest, applyThreadMain_exiting_TimingSensitive)
     consensus->exit();
     {
         // applyThread won't be able to kill() yet due to mutex
-        std::unique_lock<std::mutex> lockGuard(stateMachine->mutex);
+        std::unique_lock<Core::Mutex> lockGuard(stateMachine->mutex);
         stateMachine->applyThread = std::thread(&StateMachine::applyThreadMain,
                                                 stateMachine.get());
         struct timeval startTime;
@@ -613,6 +763,81 @@ TEST_F(ServerStateMachineTest, loadVersionHistory_unknownVersion)
                  "code only supports 1 through 2");
 }
 
+struct SnapshotThreadMainHelper {
+    explicit SnapshotThreadMainHelper(StateMachine& stateMachine)
+        : stateMachine(stateMachine)
+        , count(0)
+    {
+    }
+    void operator()() {
+        // append a new entry every iteration so that shouldTakeSnapshot can
+        // return true
+        Storage::Log::Entry entry;
+        entry.set_term(1);
+        entry.set_type(Protocol::Raft::EntryType::CONFIGURATION);
+        *entry.mutable_configuration() =
+            Core::ProtoBuf::fromString<Protocol::Raft::Configuration>(
+                "prev_configuration {"
+                "    servers { server_id: 1, addresses: '127.0.0.1:5254' }"
+                "}");
+        stateMachine.consensus->append({&entry});
+        stateMachine.consensus->commitIndex =
+            stateMachine.consensus->log->getLastLogIndex();
+        stateMachine.lastIndex = stateMachine.consensus->commitIndex;
+
+        if (count == 0) {
+            // not inhibited, shouldn't take snapshot, no snapshot requested:
+            // slept
+            EXPECT_EQ(0U, stateMachine.numSnapshotsAttempted);
+
+            stateMachine.setInhibit(std::chrono::nanoseconds(1));
+            stateMachine.isSnapshotRequested = true;
+            EXPECT_FALSE(
+                    stateMachine.shouldTakeSnapshot(stateMachine.lastIndex));
+        } else if (count == 1) {
+            // inhibited and snapshot requested:
+            // took snapshot
+            EXPECT_EQ(1U, stateMachine.numSnapshotsAttempted);
+            EXPECT_FALSE(stateMachine.isSnapshotRequested);
+
+            EXPECT_FALSE(
+                    stateMachine.shouldTakeSnapshot(stateMachine.lastIndex));
+            stateMachine.snapshotMinLogSize = 1U;
+            stateMachine.snapshotRatio = 0U;
+            EXPECT_TRUE(
+                    stateMachine.shouldTakeSnapshot(stateMachine.lastIndex));
+        } else if (count == 2) {
+            // inhibited, should take snapshot, and no snapshot requested:
+            // slept
+            EXPECT_EQ(1U, stateMachine.numSnapshotsAttempted);
+
+            EXPECT_TRUE(
+                    stateMachine.shouldTakeSnapshot(stateMachine.lastIndex));
+            stateMachine.setInhibit(std::chrono::nanoseconds(0));
+        } else if (count == 3) {
+            // not inhibited, should take snapshot, and no snapshot requested:
+            // took snapshot
+            EXPECT_EQ(2U, stateMachine.numSnapshotsAttempted);
+
+            stateMachine.exiting = true;
+        }
+        ++count;
+
+    }
+    StateMachine& stateMachine;
+    uint64_t count;
+};
+
+TEST_F(ServerStateMachineTest, snapshotThreadMain)
+{
+    // time is mocked
+    stateMachine->lastIndex = 1;
+    SnapshotThreadMainHelper helper(*stateMachine);
+    stateMachine->snapshotSuggested.callback = std::ref(helper);
+    stateMachine->snapshotThreadMain();
+    EXPECT_EQ(4U, helper.count);
+}
+
 
 struct SnapshotWatchdogThreadMainHelper {
     explicit SnapshotWatchdogThreadMainHelper(StateMachine& stateMachine)
@@ -705,7 +930,7 @@ TEST_F(ServerStateMachineTest, takeSnapshot)
     stateMachine->tree.makeDirectory("/foo");
     stateMachine->sessions.insert({4, {}});
     {
-        std::unique_lock<std::mutex> lockGuard(stateMachine->mutex);
+        std::unique_lock<Core::Mutex> lockGuard(stateMachine->mutex);
         stateMachine->takeSnapshot(1, lockGuard);
     }
     stateMachine->tree.removeDirectory("/foo");

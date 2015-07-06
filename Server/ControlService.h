@@ -60,6 +60,9 @@ class ControlService : public RPC::Service {
     void serverInfoGet(RPC::ServerRPC rpc);
     void serverStatsDump(RPC::ServerRPC rpc);
     void serverStatsGet(RPC::ServerRPC rpc);
+    void snapshotControl(RPC::ServerRPC rpc);
+    void snapshotInhibitGet(RPC::ServerRPC rpc);
+    void snapshotInhibitSet(RPC::ServerRPC rpc);
 
     /**
      * The LogCabin daemon's top-level objects.
