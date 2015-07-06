@@ -83,7 +83,8 @@ class EchoServer : public RPC::OpaqueServer::Handler {
 
 class RPCClientServerTest : public ::testing::Test {
     RPCClientServerTest()
-        : clientEventLoop()
+        : config()
+        , clientEventLoop()
         , serverEventLoop()
         , clientEventLoopThread(&Event::Loop::runForever, &clientEventLoop)
         , serverEventLoopThread(&Event::Loop::runForever, &serverEventLoop)
@@ -92,15 +93,21 @@ class RPCClientServerTest : public ::testing::Test {
         , server(rpcHandler, serverEventLoop, 1024)
         , clientSession()
     {
-        Core::Config config;
-        config.set("tcpHeartbeatTimeoutMilliseconds", 12);
         address.refresh(RPC::Address::TimePoint::max());
         EXPECT_EQ("", server.bind(address));
+        config.set("tcpHeartbeatTimeoutMilliseconds", 1000);
+        init();
+    }
+
+    void init()
+    {
         clientSession = RPC::ClientSession::makeSession(
                             clientEventLoop, address, 1024,
                             RPC::ClientSession::TimePoint::max(),
                             config);
     }
+
+
     ~RPCClientServerTest()
     {
         serverEventLoop.exit();
@@ -109,6 +116,7 @@ class RPCClientServerTest : public ::testing::Test {
         clientEventLoopThread.join();
     }
 
+    Core::Config config;
     Event::Loop clientEventLoop;
     Event::Loop serverEventLoop;
     std::thread clientEventLoopThread;
@@ -128,7 +136,8 @@ TEST_F(RPCClientServerTest, echo) {
         RPC::OpaqueClientRPC rpc = clientSession->sendRequest(
                                         Core::Buffer(buf, bufLen, NULL));
         rpc.waitForReply(TimePoint::max());
-        EXPECT_EQ(RPC::OpaqueClientRPC::Status::OK, rpc.getStatus());
+        EXPECT_EQ(RPC::OpaqueClientRPC::Status::OK, rpc.getStatus())
+            << rpc.getErrorMessage();
         Core::Buffer& reply = *rpc.peekReply();
         EXPECT_EQ(bufLen, reply.getLength());
         EXPECT_EQ(0, memcmp(reply.getData(), buf, bufLen));
@@ -136,7 +145,9 @@ TEST_F(RPCClientServerTest, echo) {
 }
 
 // Test the RPC timeout (ping) mechanism.
-TEST_F(RPCClientServerTest, timeout) {
+TEST_F(RPCClientServerTest, timeout_TimingSensitive) {
+    config.set("tcpHeartbeatTimeoutMilliseconds", 12);
+    init();
     EXPECT_EQ(12UL * 1000 * 1000, clientSession->PING_TIMEOUT_NS);
     rpcHandler.delayMicros = 14 * 1000;
 
