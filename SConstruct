@@ -336,6 +336,17 @@ for target in env.FindInstalledFiles():
     install_commands.append('mkdir -p $RPM_BUILD_ROOT%s' % parent)
     install_commands.append('cp -r %s $RPM_BUILD_ROOT%s' % (source, target))
 
+pre_commands = [
+    ('/usr/bin/getent group logcabin ||' +
+     '/usr/sbin/groupadd -r logcabin'),
+    ('/usr/bin/getent passwd logcabin ||' +
+     '/usr/sbin/useradd -r -g logcabin -d / -s /sbin/nologin logcabin'),
+]
+
+post_commands = [
+    'chown -R logcabin:logcabin /var/log/logcabin'
+]
+
 # We probably don't want rpm to strip binaries.
 # This is kludged into the spec file.
 skip_stripping_binaries_commands = [
@@ -364,18 +375,20 @@ skip_stripping_binaries_commands = [
 PACKAGEROOT = 'logcabin-%s' % env['RPM_VERSION']
 
 rpms=RPMPackager.package(env,
-    target         = ['logcabin-%s' % env['RPM_VERSION']],
-    source         = env.FindInstalledFiles(),
-    X_RPM_INSTALL  = '\n'.join(install_commands),
-    PACKAGEROOT    = PACKAGEROOT,
-    NAME           = 'logcabin',
-    VERSION        = env['RPM_VERSION'],
-    PACKAGEVERSION = env['RPM_RELEASE'],
-    LICENSE        = 'ISC',
-    SUMMARY        = 'LogCabin is clustered consensus deamon',
-    X_RPM_GROUP    = ('Application/logcabin' + '\n' +
-                      '\n'.join(skip_stripping_binaries_commands)),
-    DESCRIPTION    =
+    target            = ['logcabin-%s' % env['RPM_VERSION']],
+    source            = env.FindInstalledFiles(),
+    X_RPM_INSTALL     = '\n'.join(install_commands),
+    X_RPM_PREINSTALL  = '\n'.join(pre_commands),
+    X_RPM_POSTINSTALL = '\n'.join(post_commands),
+    PACKAGEROOT       = PACKAGEROOT,
+    NAME              = 'logcabin',
+    VERSION           = env['RPM_VERSION'],
+    PACKAGEVERSION    = env['RPM_RELEASE'],
+    LICENSE           = 'ISC',
+    SUMMARY           = 'LogCabin is clustered consensus deamon',
+    X_RPM_GROUP       = ('Application/logcabin' + '\n' +
+                         '\n'.join(skip_stripping_binaries_commands)),
+    DESCRIPTION       =
     'LogCabin is a distributed system that provides a small amount of\n'
     'highly replicated, consistent storage. It is a reliable place for\n'
     'other distributed systems to store their core metadata and\n'

@@ -32,7 +32,9 @@ RETVAL=0
 
 start() {
     echo -n $"Starting $prog: "
-    daemon ${logcabin} --daemon --config ${conffile} --log ${logfile} --pidfile ${pidfile}
+    touch ${pidfile}
+    chown logcabin ${pidfile}
+    daemon --user logcabin ${logcabin} --daemon --config ${conffile} --log ${logfile} --pidfile ${pidfile}
     RETVAL=$?
     echo
     [ $RETVAL = 0 ] && touch ${lockfile}
