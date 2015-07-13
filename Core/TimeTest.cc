@@ -261,7 +261,7 @@ TEST(CoreTime, rdtsc_progressTimingSensitive) {
     EXPECT_LT(b, a + 10 * 1000 * 1000);
 }
 
-TEST(CoreTime, sleep_immediate_TimingSensitive) {
+TEST(CoreTime, sleepAbsolute_immediate_TimingSensitive) {
     Time::SteadyClock::time_point start = Time::SteadyClock::now();
     Time::sleep(Time::SteadyClock::time_point::min());
     Time::sleep(Time::SteadyClock::time_point());
@@ -271,9 +271,27 @@ TEST(CoreTime, sleep_immediate_TimingSensitive) {
               Time::SteadyClock::now());
 }
 
-TEST(CoreTime, sleep_later_TimingSensitive) {
+TEST(CoreTime, sleepAbsolute_later_TimingSensitive) {
     Time::SteadyClock::time_point start = Time::SteadyClock::now();
     Time::sleep(start + std::chrono::milliseconds(12));
+    Time::SteadyClock::time_point end = Time::SteadyClock::now();
+    EXPECT_LT(start + std::chrono::milliseconds(12), end);
+    EXPECT_GT(start + std::chrono::milliseconds(17), end);
+}
+
+TEST(CoreTime, sleepRelative_immediate_TimingSensitive) {
+    Time::SteadyClock::time_point start = Time::SteadyClock::now();
+    Time::sleep(std::chrono::nanoseconds::min());
+    Time::sleep(std::chrono::nanoseconds(-10));
+    Time::sleep(std::chrono::nanoseconds(0));
+    Time::sleep(std::chrono::nanoseconds(10));
+    EXPECT_GT(start + std::chrono::milliseconds(5),
+              Time::SteadyClock::now());
+}
+
+TEST(CoreTime, sleepRelative_later_TimingSensitive) {
+    Time::SteadyClock::time_point start = Time::SteadyClock::now();
+    Time::sleep(std::chrono::milliseconds(12));
     Time::SteadyClock::time_point end = Time::SteadyClock::now();
     EXPECT_LT(start + std::chrono::milliseconds(12), end);
     EXPECT_GT(start + std::chrono::milliseconds(17), end);

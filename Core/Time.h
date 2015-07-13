@@ -247,6 +247,11 @@ rdtsc()
 void sleep(SteadyClock::time_point wake);
 
 /**
+ * Block the calling thread for the given duration.
+ */
+void sleep(std::chrono::nanoseconds duration);
+
+/**
  * Used to convert one or more SteadyClock::time_point values into values of
  * the SystemClock. Using the same instance for many conversions is more
  * efficient, since the current time only has to be queried once for each clock

@@ -204,6 +204,20 @@ sleep(SteadyClock::time_point wake)
     }
 }
 
+void
+sleep(std::chrono::nanoseconds duration)
+{
+    typedef SteadyClock::time_point TimePoint;
+    if (duration <= std::chrono::nanoseconds::zero())
+        return;
+    TimePoint now = SteadyClock::now();
+    TimePoint wake = now + duration;
+    if (wake < now) { // overflow
+        wake = TimePoint::max();
+    }
+    Core::Time::sleep(wake);
+}
+
 SteadyTimeConverter::SteadyTimeConverter()
     : steadyNow(SteadyClock::now())
     , systemNow(SystemClock::now())
