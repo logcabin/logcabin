@@ -72,6 +72,7 @@ Globals::LogRotateHandler::handleSignalEvent()
 
 Globals::Globals()
     : config()
+    , serverStats(*this)
     , eventLoop()
     , sigIntBlocker(SIGINT)
     , sigTermBlocker(SIGTERM)
@@ -83,7 +84,6 @@ Globals::Globals()
     , sigTermMonitor(eventLoop, sigTermHandler)
     , sigUsr2Handler(eventLoop, SIGUSR2)
     , sigUsr2Monitor(eventLoop, sigUsr2Handler)
-    , serverStats(*this)
     , clusterUUID()
     , serverId(~0UL)
     , raft()
@@ -97,6 +97,7 @@ Globals::Globals()
 
 Globals::~Globals()
 {
+    serverStats.exit();
 }
 
 void

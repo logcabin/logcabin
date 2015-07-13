@@ -38,6 +38,9 @@ Bug fixes (low severity):
   availability issue that would resolve itself on the next term change.
 - Fixes failing conditional tree operations after setting a condition with a
   relative path (#177).
+- Fixes event loop thread dumping server stats to the debug log, which had the
+  potential for delays and deadlock (we never saw deadlock occur in practice,
+  however). Now the stats are dumped from a separate thread (issue #159).
 
 Internal improvements:
 

@@ -181,9 +181,8 @@ void
 ControlService::serverStatsDump(RPC::ServerRPC rpc)
 {
     PRELUDE(ServerStatsDump);
-    using Core::ProtoBuf::dumpString;
-    NOTICE("Requested dump of ServerStats:\n%s",
-           dumpString(globals.serverStats.getCurrent()).c_str());
+    NOTICE("Requested dump of ServerStats through ServerControl RPC");
+    globals.serverStats.dumpToDebugLog();
     rpc.reply(response);
 }
 

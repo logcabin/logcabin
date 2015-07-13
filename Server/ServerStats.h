@@ -17,10 +17,12 @@
 #define LOGCABIN_SERVER_SERVERSTATS_H
 
 #include <memory>
+#include <thread>
 
 #include "build/Protocol/ServerStats.pb.h"
 
 #include "Core/Mutex.h"
+#include "Core/Time.h"
 #include "Event/Signal.h"
 #include "Event/Timer.h"
 
@@ -36,9 +38,9 @@ class Globals;
  * Server statistics are gathered in two ways. First, this object maintains a
  * #stats structure that modules can fill in by acquiring a Lock and modifying
  * directly. This #stats structure is copied every time stats are requested.
- * Second, when stats are requested, getCurrent() will ask certain modules
- * (such as RaftConsensus) to fill in the current information into a stats
- * structure.
+ * Second, when stats are requested, #getCurrent() will ask certain modules
+ * (such as RaftConsensus) to fill in the current information into a copy of
+ * the stats structure.
  */
 class ServerStats {
   public:
@@ -49,15 +51,30 @@ class ServerStats {
 
     /**
      * Called after Globals are initialized to finish setting up this class.
-     * Attaches signal handler and sets up timer. Starts calling other modules
-     * for their state in getCurrent().
+     * Attaches signal handler and starts stats dumper thread. Starts calling
+     * other modules for their state in getCurrent().
      */
     void enable();
 
     /**
+     * Prepare for shutdown. Waits for the statsDumper thread to exit, and
+     * destroys the #deferred object (the opposite of #enable()).
+     */
+    void exit();
+
+    /**
+     * Write the current stats to the debug log (NOTICE level).
+     * This is preferred over calling getCurrent() followed by NOTICE(), since
+     * it will arrange for the next periodic stats dump to be delayed (there's
+     * not much sense in a periodic stats dump immediately following a manual
+     * stats dump).
+     */
+    void dumpToDebugLog() const;
+
+    /**
      * Calculate and return the current server stats.
      */
-    Protocol::ServerStats getCurrent();
+    Protocol::ServerStats getCurrent() const;
 
     /**
      * Provides read/write access to #stats, protected against concurrent
@@ -82,7 +99,21 @@ class ServerStats {
 
   private:
     /**
-     * Dumps stats to the debug log (NOTICE level) on SIGUSR1 signal.
+     * Used to dump stats periodically.
+     */
+    typedef Core::Time::SteadyClock SteadyClock;
+
+    /**
+     * Used to include wall time in stats.
+     */
+    typedef Core::Time::SystemClock SystemClock;
+
+    /**
+     * Asks statsDumper thread to dumps stats to the debug log (NOTICE level)
+     * on SIGUSR1 signal.
+     * (We don't ever want to collect stats from the Event Loop thread, since
+     * that might stall the event loop for too long and/or acquire mutexes in
+     * incorrect orders, opening up the possibility for deadlock.)
      */
     class SignalHandler : public Event::Signal {
       public:
@@ -95,48 +126,93 @@ class ServerStats {
     };
 
     /**
-     * Dumps stats to the debug log (NOTICE level) periodically.
-     */
-    class TimerHandler : public Event::Timer {
-      public:
-        /// Constructor. Begins periodic timer.
-        explicit TimerHandler(ServerStats& serverStats);
-        /// Fires when timer expires. Prints the stats to the log.
-        void handleTimerEvent();
-        /// Handle to containing class.
-        ServerStats& serverStats;
-        /// How often to dump the stats to the log, in nanoseconds. 0 indicates
-        /// never.
-        uint64_t intervalNanos;
-    };
-
-    /**
      * Members that are constructed later, during enable().
      * Whereas the ServerStats is constructed early in the server startup
      * process, these members get to access globals and globals.config in their
      * constructors.
      */
     struct Deferred {
-        /// Constructor. Called during enable().
+        /**
+         * Constructor. Called during enable().
+         */
         explicit Deferred(ServerStats& serverStats);
-        /// See SignalHandler.
+
+        /**
+         * See SignalHandler.
+         */
         SignalHandler signalHandler;
-        /// Registers signalHandler with event loop.
+
+        /**
+         * Registers signalHandler with event loop.
+         */
         Event::Signal::Monitor signalMonitor;
-        /// See TimerHandler.
-        TimerHandler timerHandler;
-        /// Registers timerHandler with event loop.
-        Event::Timer::Monitor timerMonitor;
+
+        /**
+         * If nonzero, the #statsDumper thread will write the current stats to
+         * the debug log if this duration has elapsed since the last dump.
+         */
+        std::chrono::nanoseconds dumpInterval;
+
+        /**
+         * This thread dumps the stats periodically and when signalled.
+         * Dumping the stats is done from a separate thread so that the event
+         * loop thread does not acquire locks in higher-level modules (which
+         * could result in deadlocks or delays). Introduced for
+         * https://github.com/logcabin/logcabin/issues/159 .
+         */
+        std::thread statsDumper;
     };
+
+    /**
+     * See public #dumpToDebugLog() above.
+     * Internally releases and reacquires the lock for concurrency and to avoid
+     * deadlock.
+     */
+    void dumpToDebugLog(std::unique_lock<Core::Mutex>& lockGuard) const;
+
+    /**
+     * See public #getCurrent() above.
+     * Internally releases and reacquires the lock for concurrency and to avoid
+     * deadlock.
+     */
+    Protocol::ServerStats
+    getCurrent(std::unique_lock<Core::Mutex>& lockGuard) const;
+
+    void statsDumperMain();
 
     /**
      * Server-wide objects.
      */
     Globals& globals;
+
     /**
      * Protects all of the following members of this class.
      */
-    Core::Mutex mutex;
+    mutable Core::Mutex mutex;
+
+    /**
+     * Notified when #isStatsDumpRequested is set and when #exiting is set.
+     * statsDumper waits on this.
+     */
+    Core::ConditionVariable statsDumpRequested;
+
+    /**
+     * Set to true when statsDumper should exit.
+     */
+    bool exiting;
+
+    /**
+     * Set to true when statsDumper should write the entire stats to the debug
+     * log. Mutable so that it can be reset to false in const methods such as
+     * dumpToDebugLog().
+     */
+    mutable bool isStatsDumpRequested;
+
+    /**
+     * The last time when the stats were written to the debug log.
+     * Monotonically increases.
+     */
+    mutable Core::Time::SteadyClock::time_point lastDumped;
 
     /**
      * Partially filled-in structure that is copied as the basis of all calls

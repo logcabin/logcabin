@@ -119,6 +119,12 @@ class Globals {
     Core::Config config;
 
     /**
+     * Statistics and information about the server's current state. Useful for
+     * diagnostics.
+     */
+    Server::ServerStats serverStats;
+
+    /**
      * The event loop that runs the RPC system.
      */
     Event::Loop eventLoop;
@@ -178,12 +184,6 @@ class Globals {
     Event::Signal::Monitor sigUsr2Monitor;
 
   public:
-    /**
-     * Statistics and information about the server's current state. Useful for
-     * diagnostics.
-     */
-    Server::ServerStats serverStats;
-
     /**
      * A unique ID for the cluster that this server may connect to. This is
      * initialized to a value from the config file. If it's not set then, it

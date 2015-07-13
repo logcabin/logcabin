@@ -16,6 +16,7 @@
 #include <signal.h>
 
 #include "Core/ProtoBuf.h"
+#include "Core/ThreadId.h"
 #include "Core/Time.h"
 #include "Event/Signal.h"
 #include "Server/Globals.h"
@@ -61,30 +62,10 @@ ServerStats::SignalHandler::SignalHandler(ServerStats& serverStats)
 void
 ServerStats::SignalHandler::handleSignalEvent()
 {
-    NOTICE("Received %s: ServerStats:\n%s", strsignal(signalNumber),
-           Core::ProtoBuf::dumpString(serverStats.getCurrent()).c_str());
-}
-
-//// class ServerStats::TimerHandler ////
-
-ServerStats::TimerHandler::TimerHandler(ServerStats& serverStats)
-    : Timer()
-    , serverStats(serverStats)
-    , intervalNanos(1000 * 1000 *
-                    serverStats.globals.config.read<uint64_t>(
-                         "statsDumpIntervalMilliseconds", 60000))
-{
-    if (intervalNanos != 0)
-        schedule(intervalNanos);
-}
-
-void
-ServerStats::TimerHandler::handleTimerEvent()
-{
-    NOTICE("Periodic dump of ServerStats:\n%s",
-           Core::ProtoBuf::dumpString(serverStats.getCurrent()).c_str());
-    if (intervalNanos != 0)
-        schedule(intervalNanos);
+    NOTICE("Received %s: dumping ServerStats", strsignal(signalNumber));
+    std::lock_guard<Core::Mutex> lockGuard(serverStats.mutex);
+    serverStats.isStatsDumpRequested = true;
+    serverStats.statsDumpRequested.notify_all();
 }
 
 //// class ServerStats::Deferred ////
@@ -92,9 +73,12 @@ ServerStats::TimerHandler::handleTimerEvent()
 ServerStats::Deferred::Deferred(ServerStats& serverStats)
     : signalHandler(serverStats)
     , signalMonitor(serverStats.globals.eventLoop, signalHandler)
-    , timerHandler(serverStats)
-    , timerMonitor(serverStats.globals.eventLoop, timerHandler)
+    , dumpInterval(std::chrono::milliseconds(
+        serverStats.globals.config.read<uint64_t>(
+            "statsDumpIntervalMilliseconds", 60000)))
+    , statsDumper()
 {
+    statsDumper = std::thread(&ServerStats::statsDumperMain, &serverStats);
 }
 
 //// class ServerStats ////
@@ -102,6 +86,10 @@ ServerStats::Deferred::Deferred(ServerStats& serverStats)
 ServerStats::ServerStats(Globals& globals)
     : globals(globals)
     , mutex()
+    , statsDumpRequested()
+    , exiting(false)
+    , isStatsDumpRequested(false)
+    , lastDumped(SteadyClock::now())
     , stats()
     , deferred()
 {
@@ -122,20 +110,57 @@ ServerStats::enable()
     }
 }
 
-Protocol::ServerStats
-ServerStats::getCurrent()
+void
+ServerStats::exit()
 {
-    Protocol::ServerStats copy;
+    {
+        std::lock_guard<Core::Mutex> lockGuard(mutex);
+        exiting = true;
+        statsDumpRequested.notify_all();
+    }
+    if (deferred && deferred->statsDumper.joinable())
+        deferred->statsDumper.join();
+    deferred.reset();
+}
+
+void
+ServerStats::dumpToDebugLog() const
+{
+    std::unique_lock<Core::Mutex> lockGuard(mutex);
+    dumpToDebugLog(lockGuard);
+}
+
+Protocol::ServerStats
+ServerStats::getCurrent() const
+{
+    std::unique_lock<Core::Mutex> lockGuard(mutex);
+    return getCurrent(lockGuard);
+}
+
+////////// ServerStats private //////////
+
+void
+ServerStats::dumpToDebugLog(std::unique_lock<Core::Mutex>& lockGuard) const
+{
+    isStatsDumpRequested = false;
+    Protocol::ServerStats currentStats = getCurrent(lockGuard);
+    NOTICE("ServerStats:\n%s",
+           Core::ProtoBuf::dumpString(currentStats).c_str());
+    SteadyClock::time_point now = SteadyClock::now();
+    if (lastDumped < now)
+        lastDumped = now;
+}
+
+Protocol::ServerStats
+ServerStats::getCurrent(std::unique_lock<Core::Mutex>& lockGuard) const
+{
     int64_t startTime = std::chrono::nanoseconds(
         Core::Time::SystemClock::now().time_since_epoch()).count();
-    bool enabled;
-    {
-        Lock lock(*this);
-        copy = *lock;
-        enabled = (deferred.get() != NULL);
-    }
+    Protocol::ServerStats copy = stats;
     copy.set_start_at(startTime);
-    if (enabled) {
+    if (deferred.get() != NULL) { // enabled
+        // release lock to avoid deadlock and for concurrency
+        Core::MutexUnlock<Core::Mutex> unlockGuard(lockGuard);
         globals.raft->updateServerStats(copy);
         globals.stateMachine->updateServerStats(copy);
     }
@@ -144,6 +169,35 @@ ServerStats::getCurrent()
     return copy;
 }
 
+void
+ServerStats::statsDumperMain()
+{
+    typedef SteadyClock::time_point TimePoint;
+
+    Core::ThreadId::setName("StatsDumper");
+    std::unique_lock<Core::Mutex> lockGuard(mutex);
+    while (!exiting) {
+
+        // Calculate time for next periodic dump.
+        TimePoint nextDump = TimePoint::max();
+        if (deferred->dumpInterval > std::chrono::nanoseconds::zero()) {
+            nextDump = lastDumped + deferred->dumpInterval;
+            if (nextDump < lastDumped) // overflow
+                nextDump = TimePoint::max();
+        }
+
+        // Dump out stats to debug log
+        if (isStatsDumpRequested || SteadyClock::now() >= nextDump) {
+            dumpToDebugLog(lockGuard);
+            continue;
+        }
+
+        // Wait until next time
+        statsDumpRequested.wait_until(lockGuard, nextDump);
+    }
+
+    NOTICE("Shutting down");
+}
 
 
 } // namespace LogCabin::Server
