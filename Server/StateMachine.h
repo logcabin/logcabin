@@ -318,14 +318,14 @@ class StateMachine {
     mutable Core::Mutex mutex;
 
     /**
-     * Notified when lastIndex changes after some entry got applied.
+     * Notified when lastApplied changes after some entry got applied.
      * Also notified upon exiting.
      * This is used for client threads to wait; see wait().
      */
     mutable Core::ConditionVariable entriesApplied;
 
     /**
-     * Notified when shouldTakeSnapshot(lastIndex) becomes true.
+     * Notified when shouldTakeSnapshot(lastApplied) becomes true.
      * Also notified upon exiting and when #maySnapshotAt changes.
      * This is used for snapshotThread to wake up only when necessary.
      */
@@ -366,7 +366,7 @@ class StateMachine {
      * to access this variable without holding 'mutex'. Other readers must hold
      * 'mutex'.
      */
-    uint64_t lastIndex;
+    uint64_t lastApplied;
 
     /**
      * The time when warnUnknownRequest() last printed a debug message. Used to

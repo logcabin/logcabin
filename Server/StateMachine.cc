@@ -72,7 +72,7 @@ StateMachine::StateMachine(std::shared_ptr<RaftConsensus> consensus,
     , snapshotCompleted()
     , exiting(false)
     , childPid(0)
-    , lastIndex(0)
+    , lastApplied(0)
     , lastUnknownRequestMessage(TimePoint::min())
     , numUnknownRequests(0)
     , numUnknownRequestsSinceLastMessage(0)
@@ -141,7 +141,7 @@ StateMachine::updateServerStats(Protocol::ServerStats& serverStats) const
     Protocol::ServerStats::StateMachine& smStats =
         *serverStats.mutable_state_machine();
     smStats.set_snapshotting(childPid != 0);
-    smStats.set_last_applied(lastIndex);
+    smStats.set_last_applied(lastApplied);
     smStats.set_num_sessions(sessions.size());
     smStats.set_num_unknown_requests(numUnknownRequests);
     smStats.set_num_snapshots_attempted(numSnapshotsAttempted);
@@ -156,7 +156,7 @@ StateMachine::updateServerStats(Protocol::ServerStats& serverStats) const
         numTotalAdvanceVersionEntries);
     smStats.set_min_supported_version(MIN_SUPPORTED_VERSION);
     smStats.set_max_supported_version(MAX_SUPPORTED_VERSION);
-    smStats.set_running_version(getVersion(lastIndex));
+    smStats.set_running_version(getVersion(lastApplied));
     smStats.set_may_snapshot_at(time.unixNanos(maySnapshotAt));
     tree.updateServerStats(*smStats.mutable_tree());
 }
@@ -165,7 +165,7 @@ void
 StateMachine::wait(uint64_t index) const
 {
     std::unique_lock<Core::Mutex> lockGuard(mutex);
-    while (lastIndex < index)
+    while (lastApplied < index)
         entriesApplied.wait(lockGuard);
 }
 
@@ -175,7 +175,7 @@ StateMachine::waitForResponse(uint64_t logIndex,
                               Command::Response& response) const
 {
     std::unique_lock<Core::Mutex> lockGuard(mutex);
-    while (lastIndex < logIndex)
+    while (lastApplied < logIndex)
         entriesApplied.wait(lockGuard);
 
     // Need to check whether we understood the request at the time it
@@ -388,7 +388,7 @@ StateMachine::applyThreadMain()
     Core::ThreadId::setName("StateMachine");
     try {
         while (true) {
-            RaftConsensus::Entry entry = consensus->getNextEntry(lastIndex);
+            RaftConsensus::Entry entry = consensus->getNextEntry(lastApplied);
             std::lock_guard<Core::Mutex> lockGuard(mutex);
             switch (entry.type) {
                 case RaftConsensus::Entry::SKIP:
@@ -404,9 +404,9 @@ StateMachine::applyThreadMain()
                     break;
             }
             expireSessions(entry.clusterTime);
-            lastIndex = entry.index;
+            lastApplied = entry.index;
             entriesApplied.notify_all();
-            if (shouldTakeSnapshot(lastIndex) &&
+            if (shouldTakeSnapshot(lastApplied) &&
                 maySnapshotAt <= Clock::now()) {
                 snapshotSuggested.notify_all();
             }
@@ -638,10 +638,10 @@ StateMachine::snapshotThreadMain()
         wasInhibited = inhibited;
 
         if (isSnapshotRequested ||
-            (!inhibited && shouldTakeSnapshot(lastIndex))) {
+            (!inhibited && shouldTakeSnapshot(lastApplied))) {
 
             isSnapshotRequested = false;
-            takeSnapshot(lastIndex, lockGuard);
+            takeSnapshot(lastApplied, lockGuard);
             continue;
         }
 

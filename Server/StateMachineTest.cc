@@ -118,11 +118,11 @@ struct WaitHelper {
     void operator()() {
         ++iter;
         if (iter == 1) {
-            EXPECT_EQ(0U, stateMachine.lastIndex);
-            stateMachine.lastIndex = 2;
+            EXPECT_EQ(0U, stateMachine.lastApplied);
+            stateMachine.lastApplied = 2;
         } else if (iter == 2) {
-            EXPECT_EQ(2U, stateMachine.lastIndex);
-            stateMachine.lastIndex = 3;
+            EXPECT_EQ(2U, stateMachine.lastApplied);
+            stateMachine.lastApplied = 3;
         }
     }
     StateMachine& stateMachine;
@@ -186,7 +186,7 @@ TEST_F(ServerStateMachineTest, waitForResponse_openSession)
     StateMachine::Command::Request request;
     request.mutable_open_session();
     StateMachine::Command::Response response;
-    stateMachine->lastIndex = 3;
+    stateMachine->lastApplied = 3;
     EXPECT_TRUE(stateMachine->waitForResponse(3, request, response));
     EXPECT_EQ("open_session { "
               "  client_id: 3 "
@@ -196,7 +196,7 @@ TEST_F(ServerStateMachineTest, waitForResponse_openSession)
 
 TEST_F(ServerStateMachineTest, waitForResponse_closeSession)
 {
-    stateMachine->lastIndex = 3;
+    stateMachine->lastApplied = 3;
     StateMachine::Command::Request request;
     request.mutable_close_session()->set_client_id(3);
     StateMachine::Command::Response response;
@@ -215,7 +215,7 @@ TEST_F(ServerStateMachineTest, waitForResponse_advanceVersion)
     request.mutable_advance_version()->
         set_requested_version(90);
     StateMachine::Command::Response response;
-    stateMachine->lastIndex = 3;
+    stateMachine->lastApplied = 3;
     EXPECT_TRUE(stateMachine->waitForResponse(3, request, response));
     EXPECT_EQ("advance_version { "
               "  running_version: 1 "
@@ -227,7 +227,7 @@ TEST_F(ServerStateMachineTest, waitForResponse_unknown)
 {
     StateMachine::Command::Request request; // empty
     StateMachine::Command::Response response;
-    stateMachine->lastIndex = 3;
+    stateMachine->lastApplied = 3;
     EXPECT_FALSE(stateMachine->waitForResponse(3, request, response));
     EXPECT_EQ("", response);
 }
@@ -783,7 +783,7 @@ struct SnapshotThreadMainHelper {
         stateMachine.consensus->append({&entry});
         stateMachine.consensus->commitIndex =
             stateMachine.consensus->log->getLastLogIndex();
-        stateMachine.lastIndex = stateMachine.consensus->commitIndex;
+        stateMachine.lastApplied = stateMachine.consensus->commitIndex;
 
         if (count == 0) {
             // not inhibited, shouldn't take snapshot, no snapshot requested:
@@ -793,7 +793,7 @@ struct SnapshotThreadMainHelper {
             stateMachine.setInhibit(std::chrono::nanoseconds(1));
             stateMachine.isSnapshotRequested = true;
             EXPECT_FALSE(
-                    stateMachine.shouldTakeSnapshot(stateMachine.lastIndex));
+                    stateMachine.shouldTakeSnapshot(stateMachine.lastApplied));
         } else if (count == 1) {
             // inhibited and snapshot requested:
             // took snapshot
@@ -801,18 +801,18 @@ struct SnapshotThreadMainHelper {
             EXPECT_FALSE(stateMachine.isSnapshotRequested);
 
             EXPECT_FALSE(
-                    stateMachine.shouldTakeSnapshot(stateMachine.lastIndex));
+                    stateMachine.shouldTakeSnapshot(stateMachine.lastApplied));
             stateMachine.snapshotMinLogSize = 1U;
             stateMachine.snapshotRatio = 0U;
             EXPECT_TRUE(
-                    stateMachine.shouldTakeSnapshot(stateMachine.lastIndex));
+                    stateMachine.shouldTakeSnapshot(stateMachine.lastApplied));
         } else if (count == 2) {
             // inhibited, should take snapshot, and no snapshot requested:
             // slept
             EXPECT_EQ(1U, stateMachine.numSnapshotsAttempted);
 
             EXPECT_TRUE(
-                    stateMachine.shouldTakeSnapshot(stateMachine.lastIndex));
+                    stateMachine.shouldTakeSnapshot(stateMachine.lastApplied));
             stateMachine.setInhibit(std::chrono::nanoseconds(0));
         } else if (count == 3) {
             // not inhibited, should take snapshot, and no snapshot requested:
@@ -831,7 +831,7 @@ struct SnapshotThreadMainHelper {
 TEST_F(ServerStateMachineTest, snapshotThreadMain)
 {
     // time is mocked
-    stateMachine->lastIndex = 1;
+    stateMachine->lastApplied = 1;
     SnapshotThreadMainHelper helper(*stateMachine);
     stateMachine->snapshotSuggested.callback = std::ref(helper);
     stateMachine->snapshotThreadMain();
