@@ -82,12 +82,6 @@ Protocol::Raft::SimpleConfiguration sdesc(const std::string& description) {
     return fromString<Protocol::Raft::SimpleConfiguration>(description);
 }
 
-TimePoint round(TimePoint x) {
-    milliseconds msSinceEpoch = std::chrono::duration_cast<milliseconds>(
-                                                        x.time_since_epoch());
-    return TimePoint(msSinceEpoch);
-}
-
 /**
  * Custom ServiceMock handler that increases Raft's currentTerm before
  * responding to a request.
@@ -1406,9 +1400,8 @@ TEST_F(ServerRaftConsensusTest, setConfiguration_changed)
 void
 setConfigurationHelper(RaftConsensus* consensus)
 {
-    TimePoint waitUntil(
-                consensus->stateChanged.lastWaitUntilTimeSinceEpoch);
-    EXPECT_EQ(round(Clock::mockValue) +
+    TimePoint waitUntil(consensus->stateChanged.lastWaitUntil);
+    EXPECT_EQ(Clock::mockValue +
               milliseconds(consensus->ELECTION_TIMEOUT_MS),
               waitUntil);
     Clock::mockValue += milliseconds(consensus->ELECTION_TIMEOUT_MS);
@@ -1927,29 +1920,28 @@ class FollowerThreadMainHelper {
     {
     }
     void operator()() {
-        TimePoint waitUntil(
-                    consensus.stateChanged.lastWaitUntilTimeSinceEpoch);
+        TimePoint waitUntil(consensus.stateChanged.lastWaitUntil);
 
         if (iter == 1) {
             // expect to block forever as a follower
-            EXPECT_EQ(round(TimePoint::max()), waitUntil);
+            EXPECT_EQ(TimePoint::max(), waitUntil);
             // set the peer's backoff to prepare for next iteration
             peer.backoffUntil = Clock::mockValue + milliseconds(1);
         } else if (iter == 2) {
             // still a follower so nothing to do, but this time we have to
             // block until backoff is over
-            EXPECT_EQ(round(Clock::mockValue + milliseconds(1)), waitUntil);
+            EXPECT_EQ(Clock::mockValue + milliseconds(1), waitUntil);
             Clock::mockValue += milliseconds(2);
             // move to candidacy
             consensus.startNewElection();
         } else if (iter == 3) {
             // we should have just requested peer's vote, so expect to return
             // immediately
-            EXPECT_EQ(round(TimePoint::min()), waitUntil);
+            EXPECT_EQ(TimePoint::min(), waitUntil);
         } else if (iter == 4) {
             // the vote was granted, so there's nothing left to do for this
             // peer as a candidate, sleep forever
-            EXPECT_EQ(round(TimePoint::max()), waitUntil);
+            EXPECT_EQ(TimePoint::max(), waitUntil);
             // move to leader state
             consensus.becomeLeader();
             // This test was written assuming peer's nextIndex starts one past
@@ -1960,18 +1952,18 @@ class FollowerThreadMainHelper {
         } else if (iter == 5) {
             // we should have just sent a heartbeat, so expect to return
             // immediately
-            EXPECT_EQ(round(TimePoint::min()), waitUntil);
+            EXPECT_EQ(TimePoint::min(), waitUntil);
         } else if (iter == 6) {
             // expect to block until the next heartbeat
-            EXPECT_EQ(round(peer.nextHeartbeatTime), waitUntil);
+            EXPECT_EQ(peer.nextHeartbeatTime, waitUntil);
             Clock::mockValue = peer.nextHeartbeatTime + milliseconds(1);
         } else if (iter == 7) {
             // we should have just sent a heartbeat, so expect to return
             // immediately
-            EXPECT_EQ(round(TimePoint::min()), waitUntil);
+            EXPECT_EQ(TimePoint::min(), waitUntil);
         } else if (iter == 8) {
             // expect to block until the next heartbeat
-            EXPECT_EQ(round(peer.nextHeartbeatTime), waitUntil);
+            EXPECT_EQ(peer.nextHeartbeatTime, waitUntil);
             // exit
             consensus.exit();
             EXPECT_TRUE(peer.exiting);

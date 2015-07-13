@@ -77,7 +77,7 @@ class ConditionVariable {
                const std::chrono::time_point<Clock, Duration>& abs_time) {
         std::chrono::time_point<Clock, Duration> now = Clock::now();
         std::chrono::time_point<Clock, Duration> wake = abs_time;
-        // Clamp to wake to [now, now + hour] to avoid overflow.
+        // Clamp to wake to [now - hour, now + hour] to avoid overflow.
         // See related http://gcc.gnu.org/bugzilla/show_bug.cgi?id=58931
         if (abs_time < now)
             wake = now - std::chrono::hours(1);
@@ -125,13 +125,12 @@ class ConditionVariable {
      */
     std::atomic<uint64_t> notificationCount;
     /**
-     * In the last call to wait_until, the timeout that the caller provided.
+     * In the last call to wait_until, the timeout that the caller provided (in
+     * terms of SteadyClock).
      * This is used in some unit tests to check that timeouts are set
-     * correctly. It is stored as the number of milliseconds after the
-     * clock's epoch. (Since we don't know the Clock in advance, we can't store
-     * a time_point here.)
+     * correctly.
      */
-    std::chrono::milliseconds lastWaitUntilTimeSinceEpoch;
+    Core::Time::SteadyClock::time_point lastWaitUntil;
 };
 
 } // namespace LogCabin::Core

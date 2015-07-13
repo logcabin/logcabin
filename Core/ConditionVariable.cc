@@ -26,7 +26,7 @@ ConditionVariable::ConditionVariable()
     : cv()
     , callback()
     , notificationCount(0)
-    , lastWaitUntilTimeSinceEpoch()
+    , lastWaitUntil()
 {
     // Note that all these pthread_cond* functions return errors in the return
     // code, NOT using errno.
@@ -110,9 +110,7 @@ ConditionVariable::wait_until(
             std::unique_lock<std::mutex>& lockGuard,
             const Core::Time::SteadyClock::time_point& abs_time)
 {
-    lastWaitUntilTimeSinceEpoch =
-        std::chrono::duration_cast<std::chrono::milliseconds>(
-                                        abs_time.time_since_epoch());
+    lastWaitUntil = abs_time;
     if (callback) {
         lockGuard.unlock();
         callback();
