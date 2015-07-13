@@ -408,7 +408,7 @@ class Peer : public Server {
      * if it has no new data to send, to stop the follower from starting a new
      * election.
      * \invariant
-     *      This is never more than HEARTBEAT_PERIOD_MS in the future, since
+     *      This is never more than HEARTBEAT_PERIOD in the future, since
      *      new leaders don't reset it.
      */
     TimePoint nextHeartbeatTime;
@@ -1360,7 +1360,7 @@ class RaftConsensus {
 
     /**
      * Set the timer to start a new election and notify #stateChanged.
-     * The timer is set for ELECTION_TIMEOUT_MS plus some random jitter from
+     * The timer is set for ELECTION_TIMEOUT plus some random jitter from
      * now.
      */
     void setElectionTimer();
@@ -1395,7 +1395,7 @@ class RaftConsensus {
      * on any leader is marked committed on this leader by the time this call
      * returns.
      * This is used to provide non-stale read operations to
-     * clients. It gives up after ELECTION_TIMEOUT_MS, since stepDownThread
+     * clients. It gives up after ELECTION_TIMEOUT, since stepDownThread
      * will return to the follower state after that time.
      */
     bool upToDateLeader(std::unique_lock<Mutex>& lockGuard) const;
@@ -1415,13 +1415,13 @@ class RaftConsensus {
      * A follower waits for about this much inactivity before becoming a
      * candidate and starting a new election.
      */
-    const uint64_t ELECTION_TIMEOUT_MS;
+    const std::chrono::nanoseconds ELECTION_TIMEOUT;
 
     /**
      * A leader sends RPCs at least this often, even if there is no data to
      * send.
      */
-    const uint64_t HEARTBEAT_PERIOD_MS;
+    const std::chrono::nanoseconds HEARTBEAT_PERIOD;
 
     /**
      * A leader will pack at most this many entries into an AppendEntries
@@ -1435,7 +1435,7 @@ class RaftConsensus {
      * A candidate or leader waits this long after an RPC fails before sending
      * another one, so as to not overwhelm the network with retries.
      */
-    const uint64_t RPC_FAILURE_BACKOFF_MS;
+    const std::chrono::nanoseconds RPC_FAILURE_BACKOFF;
 
     /**
      * How long the state machine updater thread should sleep if:
@@ -1445,7 +1445,7 @@ class RaftConsensus {
      * - An advance state machine entry failed to commit (probably due to lost
      *   leadership).
      */
-    const std::chrono::milliseconds STATE_MACHINE_UPDATER_BACKOFF;
+    const std::chrono::nanoseconds STATE_MACHINE_UPDATER_BACKOFF;
 
     /**
      * Prefer to keep RPC requests under this size.

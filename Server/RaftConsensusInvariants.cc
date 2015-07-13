@@ -210,8 +210,7 @@ Invariants::checkBasic()
     } else {
         expect(consensus.startElectionAt > TimePoint::min());
         expect(consensus.startElectionAt <=
-               Clock::now() + std::chrono::milliseconds(
-                                    consensus.ELECTION_TIMEOUT_MS * 2));
+               Clock::now() + consensus.ELECTION_TIMEOUT * 2);
     }
 
     // Log metadata is updated when the term or vote changes.
@@ -286,10 +285,10 @@ Invariants::checkPeerBasic()
         }
         expect(peer->matchIndex <= consensus.log->getLastLogIndex());
         expect(peer->lastAckEpoch <= consensus.currentEpoch);
-        expect(peer->nextHeartbeatTime <= Clock::now() +
-               std::chrono::milliseconds(consensus.HEARTBEAT_PERIOD_MS));
-        expect(peer->backoffUntil <= Clock::now() +
-               std::chrono::milliseconds(consensus.RPC_FAILURE_BACKOFF_MS));
+        expect(peer->nextHeartbeatTime <=
+               Clock::now() + consensus.HEARTBEAT_PERIOD);
+        expect(peer->backoffUntil <=
+               Clock::now() + consensus.RPC_FAILURE_BACKOFF);
 
         // TODO(ongaro): anything about catchup?
     }

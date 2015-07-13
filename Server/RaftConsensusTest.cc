@@ -571,8 +571,7 @@ TEST_F(ServerRaftConsensusTest, init_blanklog)
     EXPECT_EQ(0U, consensus->clusterClock.clusterTimeAtEpoch);
     EXPECT_EQ(Clock::mockValue, consensus->clusterClock.localTimeAtEpoch);
     EXPECT_LT(Clock::mockValue, consensus->startElectionAt);
-    EXPECT_GT(Clock::mockValue +
-              milliseconds(consensus->ELECTION_TIMEOUT_MS * 2),
+    EXPECT_GT(Clock::mockValue + consensus->ELECTION_TIMEOUT * 2,
               consensus->startElectionAt);
 }
 
@@ -889,8 +888,7 @@ TEST_F(ServerRaftConsensusTest, handleAppendEntries_newLeaderAndCommitIndex)
     EXPECT_EQ(0U, consensus->votedFor);
     EXPECT_EQ(10U, consensus->currentTerm);
     EXPECT_LT(Clock::mockValue, consensus->startElectionAt);
-    EXPECT_GT(Clock::mockValue +
-              milliseconds(consensus->ELECTION_TIMEOUT_MS * 2),
+    EXPECT_GT(Clock::mockValue + consensus->ELECTION_TIMEOUT * 2,
               consensus->startElectionAt);
     EXPECT_EQ(1U, consensus->commitIndex);
     EXPECT_EQ("term: 10 "
@@ -1168,8 +1166,7 @@ TEST_F(ServerRaftConsensusTest, handleSnapshotChunk_newLeader)
     EXPECT_EQ(0U, consensus->votedFor);
     EXPECT_EQ(10U, consensus->currentTerm);
     EXPECT_LT(Clock::mockValue, consensus->startElectionAt);
-    EXPECT_GT(Clock::mockValue +
-              milliseconds(consensus->ELECTION_TIMEOUT_MS * 2),
+    EXPECT_GT(Clock::mockValue + consensus->ELECTION_TIMEOUT * 2,
               consensus->startElectionAt);
     EXPECT_EQ("term: 10 "
               "bytes_stored: 5", response);
@@ -1401,10 +1398,9 @@ void
 setConfigurationHelper(RaftConsensus* consensus)
 {
     TimePoint waitUntil(consensus->stateChanged.lastWaitUntil);
-    EXPECT_EQ(Clock::mockValue +
-              milliseconds(consensus->ELECTION_TIMEOUT_MS),
+    EXPECT_EQ(Clock::mockValue + consensus->ELECTION_TIMEOUT,
               waitUntil);
-    Clock::mockValue += milliseconds(consensus->ELECTION_TIMEOUT_MS);
+    Clock::mockValue += consensus->ELECTION_TIMEOUT;
 }
 
 TEST_F(ServerRaftConsensusTest, setConfiguration_catchupFail)
@@ -2077,8 +2073,7 @@ class StepDownThreadMainHelper2 {
             peer.lastAckEpoch = 2;
         } else if (iter == 3) {
             EXPECT_EQ(3U, consensus.currentEpoch);
-            Clock::mockValue +=
-                milliseconds(consensus.ELECTION_TIMEOUT_MS);
+            Clock::mockValue += consensus.ELECTION_TIMEOUT;
         } else if (iter == 4) {
             EXPECT_EQ(3U, consensus.currentEpoch);
             consensus.exit();
@@ -2406,8 +2401,7 @@ TEST_F(ServerRaftConsensusPATest, appendEntries_ok)
     consensus->appendEntries(lockGuard, *peer);
     EXPECT_EQ(consensus->currentEpoch, peer->lastAckEpoch);
     EXPECT_EQ(4U, peer->matchIndex);
-    EXPECT_EQ(Clock::mockValue +
-              milliseconds(consensus->HEARTBEAT_PERIOD_MS),
+    EXPECT_EQ(Clock::mockValue + consensus->HEARTBEAT_PERIOD,
               peer->nextHeartbeatTime);
 
     // TODO(ongaro): test catchup code
@@ -2581,8 +2575,7 @@ TEST_F(ServerRaftConsensusPSTest, installSnapshot_ok)
     EXPECT_EQ(0U, peer->snapshotFileOffset);
     EXPECT_EQ(0U, peer->lastSnapshotIndex);
     EXPECT_EQ(consensus->currentEpoch, peer->lastAckEpoch);
-    EXPECT_EQ(Clock::mockValue +
-              milliseconds(consensus->HEARTBEAT_PERIOD_MS),
+    EXPECT_EQ(Clock::mockValue + consensus->HEARTBEAT_PERIOD,
               peer->nextHeartbeatTime);
 }
 
@@ -3078,11 +3071,9 @@ TEST_F(ServerRaftConsensusTest, setElectionTimer)
     init();
     for (uint64_t i = 0; i < 100; ++i) {
         consensus->setElectionTimer();
-        EXPECT_LE(Clock::now() +
-                  milliseconds(consensus->ELECTION_TIMEOUT_MS),
+        EXPECT_LE(Clock::now() + consensus->ELECTION_TIMEOUT,
                   consensus->startElectionAt);
-        EXPECT_GE(Clock::now() +
-                  milliseconds(consensus->ELECTION_TIMEOUT_MS) * 2,
+        EXPECT_GE(Clock::now() + consensus->ELECTION_TIMEOUT * 2,
                   consensus->startElectionAt);
     }
 }
@@ -3096,8 +3087,7 @@ TEST_F(ServerRaftConsensusTest, startNewElection)
     EXPECT_EQ(State::FOLLOWER, consensus->state);
     EXPECT_EQ(0U, consensus->currentTerm);
     EXPECT_LT(Clock::now(), consensus->startElectionAt);
-    EXPECT_GT(Clock::now() +
-              milliseconds(consensus->ELECTION_TIMEOUT_MS) * 2,
+    EXPECT_GT(Clock::now() + consensus->ELECTION_TIMEOUT * 2,
               consensus->startElectionAt);
 
     // need other votes to win
@@ -3113,8 +3103,7 @@ TEST_F(ServerRaftConsensusTest, startNewElection)
     EXPECT_EQ(0U, consensus->leaderId);
     EXPECT_EQ(1U, consensus->votedFor);
     EXPECT_LT(Clock::now(), consensus->startElectionAt);
-    EXPECT_GT(Clock::now() +
-              milliseconds(consensus->ELECTION_TIMEOUT_MS) * 2,
+    EXPECT_GT(Clock::now() + consensus->ELECTION_TIMEOUT * 2,
               consensus->startElectionAt);
     EXPECT_FALSE(bool(consensus->snapshotWriter));
 
@@ -3159,8 +3148,7 @@ TEST_F(ServerRaftConsensusTest, stepDown)
     EXPECT_EQ(0U, consensus->votedFor);
     EXPECT_EQ(Configuration::State::STABLE, consensus->configuration->state);
     EXPECT_LT(Clock::now(), consensus->startElectionAt);
-    EXPECT_GT(Clock::now() +
-              milliseconds(consensus->ELECTION_TIMEOUT_MS) * 2,
+    EXPECT_GT(Clock::now() + consensus->ELECTION_TIMEOUT * 2,
               consensus->startElectionAt);
     EXPECT_FALSE(consensus->logSyncQueued);
 

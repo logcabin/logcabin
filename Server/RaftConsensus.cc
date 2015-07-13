@@ -918,21 +918,34 @@ RaftConsensus::Entry::~Entry()
 ////////// RaftConsensus //////////
 
 RaftConsensus::RaftConsensus(Globals& globals)
-    : ELECTION_TIMEOUT_MS(globals.config.read<uint64_t>(
-        "electionTimeoutMilliseconds", 500))
-    , HEARTBEAT_PERIOD_MS(globals.config.read<uint64_t>(
-        "heartbeatPeriodMilliseconds",
-        ELECTION_TIMEOUT_MS / 2))
-    , MAX_LOG_ENTRIES_PER_REQUEST(globals.config.read<uint64_t>(
+    : ELECTION_TIMEOUT(
+        std::chrono::milliseconds(
+            globals.config.read<uint64_t>(
+                "electionTimeoutMilliseconds",
+                500)))
+    , HEARTBEAT_PERIOD(
+        globals.config.keyExists("heartbeatPeriodMilliseconds")
+            ? std::chrono::nanoseconds(
+                std::chrono::milliseconds(
+                    globals.config.read<uint64_t>(
+                        "heartbeatPeriodMilliseconds")))
+            : ELECTION_TIMEOUT / 2)
+    , MAX_LOG_ENTRIES_PER_REQUEST(
+        globals.config.read<uint64_t>(
             "maxLogEntriesPerRequest",
             5000))
-    , RPC_FAILURE_BACKOFF_MS(globals.config.read<uint64_t>(
-        "rpcFailureBackoffMilliseconds",
-        ELECTION_TIMEOUT_MS / 2))
-    , STATE_MACHINE_UPDATER_BACKOFF(std::chrono::milliseconds(
-        globals.config.read<uint64_t>(
-            "stateMachineUpdaterBackoffMilliseconds",
-            10000)))
+    , RPC_FAILURE_BACKOFF(
+        globals.config.keyExists("rpcFailureBackoffMilliseconds")
+            ? std::chrono::nanoseconds(
+                std::chrono::milliseconds(
+                    globals.config.read<uint64_t>(
+                        "rpcFailureBackoffMilliseconds")))
+            : (ELECTION_TIMEOUT / 2))
+    , STATE_MACHINE_UPDATER_BACKOFF(
+        std::chrono::milliseconds(
+            globals.config.read<uint64_t>(
+                "stateMachineUpdaterBackoffMilliseconds",
+                10000)))
     , SOFT_RPC_SIZE_LIMIT(Protocol::Common::MAX_MESSAGE_LENGTH - 1024)
     , serverId(0)
     , serverAddresses()
@@ -1277,8 +1290,7 @@ RaftConsensus::handleAppendEntries(
     // and convert to follower if necessary; reset the election timer.
     stepDown(request.term());
     setElectionTimer();
-    withholdVotesUntil = Clock::now() +
-                         std::chrono::milliseconds(ELECTION_TIMEOUT_MS);
+    withholdVotesUntil = Clock::now() + ELECTION_TIMEOUT;
 
     // Record the leader ID as a hint for clients.
     if (leaderId == 0) {
@@ -1422,8 +1434,7 @@ RaftConsensus::handleInstallSnapshot(
     // and convert to follower if necessary; reset the election timer.
     stepDown(request.term());
     setElectionTimer();
-    withholdVotesUntil = Clock::now() +
-                         std::chrono::milliseconds(ELECTION_TIMEOUT_MS);
+    withholdVotesUntil = Clock::now() + ELECTION_TIMEOUT;
 
     // Record the leader ID as a hint for clients.
     if (leaderId == 0) {
@@ -1609,12 +1620,11 @@ RaftConsensus::setConfiguration(
     stateChanged.notify_all();
 
     // Wait for new servers to be caught up. This will abort if not every
-    // server makes progress in a ELECTION_TIMEOUT_MS period.
+    // server makes progress in a ELECTION_TIMEOUT period.
     uint64_t term = currentTerm;
     ++currentEpoch;
     uint64_t epoch = currentEpoch;
-    TimePoint checkProgressAt =
-        Clock::now() + std::chrono::milliseconds(ELECTION_TIMEOUT_MS);
+    TimePoint checkProgressAt = Clock::now() + ELECTION_TIMEOUT;
     while (true) {
         if (exiting || term != currentTerm) {
             NOTICE("Lost leadership, aborting configuration change");
@@ -1638,9 +1648,7 @@ RaftConsensus::setConfiguration(
             } else {
                 ++currentEpoch;
                 epoch = currentEpoch;
-                checkProgressAt =
-                    (Clock::now() +
-                     std::chrono::milliseconds(ELECTION_TIMEOUT_MS));
+                checkProgressAt = Clock::now() + ELECTION_TIMEOUT;
             }
         }
         stateChanged.wait_until(lockGuard, checkProgressAt);
@@ -2118,8 +2126,7 @@ RaftConsensus::stepDownThreadMain()
         // step down. The election timeout is a reasonable amount of time,
         // since it's about when other servers will start elections and bump
         // the term.
-        TimePoint stepDownAt =
-            Clock::now() + std::chrono::milliseconds(ELECTION_TIMEOUT_MS);
+        TimePoint stepDownAt = Clock::now() + ELECTION_TIMEOUT;
         uint64_t term = currentTerm;
         uint64_t epoch = currentEpoch; // currentEpoch was incremented above
         while (true) {
@@ -2270,8 +2277,7 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
             break;
         case Peer::CallStatus::FAILED:
             peer.suppressBulkData = true;
-            peer.backoffUntil = start +
-                std::chrono::milliseconds(RPC_FAILURE_BACKOFF_MS);
+            peer.backoffUntil = start + RPC_FAILURE_BACKOFF;
             return;
         case Peer::CallStatus::INVALID_REQUEST:
             PANIC("The server's RaftService doesn't support the AppendEntries "
@@ -2296,8 +2302,7 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
         assert(response.term() == currentTerm);
         peer.lastAckEpoch = epoch;
         stateChanged.notify_all();
-        peer.nextHeartbeatTime = start +
-            std::chrono::milliseconds(HEARTBEAT_PERIOD_MS);
+        peer.nextHeartbeatTime = start + HEARTBEAT_PERIOD;
         if (response.success()) {
             if (peer.matchIndex > prevLogIndex + numEntries) {
                 // Revisit this warning if we pipeline AppendEntries RPCs for
@@ -2319,9 +2324,9 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
                 uint64_t thisCatchUpIterationMs =
                     uint64_t(std::chrono::duration_cast<
                                  std::chrono::milliseconds>(duration).count());
-                if (uint64_t(labs(int64_t(peer.lastCatchUpIterationMs -
-                                          thisCatchUpIterationMs))) <
-                    ELECTION_TIMEOUT_MS) {
+                if (labs(int64_t(peer.lastCatchUpIterationMs -
+                                 thisCatchUpIterationMs)) * 1000L * 1000L <
+                    std::chrono::nanoseconds(ELECTION_TIMEOUT).count()) {
                     peer.isCaughtUp_ = true;
                     stateChanged.notify_all();
                 } else {
@@ -2411,8 +2416,7 @@ RaftConsensus::installSnapshot(std::unique_lock<Mutex>& lockGuard,
             break;
         case Peer::CallStatus::FAILED:
             peer.suppressBulkData = true;
-            peer.backoffUntil = start +
-                std::chrono::milliseconds(RPC_FAILURE_BACKOFF_MS);
+            peer.backoffUntil = start + RPC_FAILURE_BACKOFF;
             return;
         case Peer::CallStatus::INVALID_REQUEST:
             PANIC("The server's RaftService doesn't support the "
@@ -2437,8 +2441,7 @@ RaftConsensus::installSnapshot(std::unique_lock<Mutex>& lockGuard,
         assert(response.term() == currentTerm);
         peer.lastAckEpoch = epoch;
         stateChanged.notify_all();
-        peer.nextHeartbeatTime = start +
-            std::chrono::milliseconds(HEARTBEAT_PERIOD_MS);
+        peer.nextHeartbeatTime = start + HEARTBEAT_PERIOD;
         peer.suppressBulkData = false;
         if (response.has_bytes_stored()) {
             // Normal path (since InstallSnapshot version 2).
@@ -2758,8 +2761,7 @@ RaftConsensus::requestVote(std::unique_lock<Mutex>& lockGuard, Peer& peer)
             break;
         case Peer::CallStatus::FAILED:
             peer.suppressBulkData = true;
-            peer.backoffUntil = start +
-                std::chrono::milliseconds(RPC_FAILURE_BACKOFF_MS);
+            peer.backoffUntil = start + RPC_FAILURE_BACKOFF;
             return;
         case Peer::CallStatus::INVALID_REQUEST:
             PANIC("The server's RaftService doesn't support the RequestVote "
@@ -2799,10 +2801,13 @@ RaftConsensus::requestVote(std::unique_lock<Mutex>& lockGuard, Peer& peer)
 void
 RaftConsensus::setElectionTimer()
 {
-    uint64_t ms = Core::Random::randomRange(ELECTION_TIMEOUT_MS,
-                                            ELECTION_TIMEOUT_MS * 2);
-    VERBOSE("Will become candidate in %lu ms", ms);
-    startElectionAt = Clock::now() + std::chrono::milliseconds(ms);
+    std::chrono::nanoseconds duration(
+        Core::Random::randomRange(
+            std::chrono::nanoseconds(ELECTION_TIMEOUT).count(),
+            std::chrono::nanoseconds(ELECTION_TIMEOUT).count() * 2));
+    VERBOSE("Will become candidate in %s",
+            Core::StringUtil::toString(duration).c_str());
+    startElectionAt = Clock::now() + duration;
     stateChanged.notify_all();
 }
 
