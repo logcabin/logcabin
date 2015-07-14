@@ -344,7 +344,9 @@ pre_commands = [
 ]
 
 post_commands = [
-    'chown -R logcabin:logcabin /var/log/logcabin'
+    'chown -R logcabin:logcabin /var/log/logcabin',
+    'mkdir -p /var/lib/logcabin',
+    'chown logcabin:logcabin /var/lib/logcabin',
 ]
 
 # We probably don't want rpm to strip binaries.
