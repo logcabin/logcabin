@@ -61,6 +61,9 @@ rh_status() {
 
 # See how we were called.
 case "$1" in
+    bootstrap)
+        runuser -s /bin/bash logcabin -c "$logcabin --bootstrap --config ${conffile} --log ${logfile}"
+        ;;
     start)
         rh_status >/dev/null 2>&1 && exit 0
         start
@@ -87,7 +90,7 @@ case "$1" in
         configtest
         ;;
     *)
-        echo $"Usage: $prog {start|stop|restart|condrestart|try-restart|status|help|configtest}"
+        echo $"Usage: $prog {bootstrap|start|stop|restart|condrestart|try-restart|status|help|configtest}"
         RETVAL=2
 esac
 
