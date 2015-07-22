@@ -2326,19 +2326,20 @@ TEST_F(ServerRaftConsensusPATest, appendEntries_limitSizeRegression)
     Protocol::Raft::AppendEntries::Request r2;
     r2.CopyFrom(request);
     r2.clear_entries();
-    int baseSize = r2.ByteSize(); // size of request with no entries
-    std::vector<int> entrySizes; // size of each entry
-    int totalSize = baseSize; // size of full request
+    // size of request with no entries
+    uint64_t baseSize = uint64_t(r2.ByteSize());
+    std::vector<uint64_t> entrySizes; // size of each entry
+    uint64_t totalSize = baseSize; // size of full request
     for (int i = 0; i < request.entries_size(); ++i) {
         *r2.add_entries() = request.entries(i);
-        int entrySize = r2.ByteSize() - baseSize;
+        uint64_t entrySize = uint64_t(r2.ByteSize()) - baseSize;
         entrySizes.push_back(entrySize);
         totalSize += entrySize;
         r2.clear_entries();
     }
-    EXPECT_EQ((std::vector<int> { 32, 15, 8, 52 }),
+    EXPECT_EQ((std::vector<uint64_t> { 32, 15, 8, 52 }),
               entrySizes);
-    EXPECT_EQ(totalSize, request.ByteSize());
+    EXPECT_EQ(totalSize, uint64_t(request.ByteSize()));
 
     // We now cap request sizes so that entry 2 doesn't fit but entry 3 would.
     consensus->SOFT_RPC_SIZE_LIMIT = (baseSize +

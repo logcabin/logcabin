@@ -2588,7 +2588,7 @@ RaftConsensus::packEntries(
         // and a length. We conservatively assume the tag and length will
         // be up to 10 bytes each (2^64), though in practice the tag is
         // probably one byte and the length is probably two.
-        currentSize += entry.ByteSize() + 20;
+        currentSize += uint64_t(entry.ByteSize()) + 20;
 
         if (currentSize >= SOFT_RPC_SIZE_LIMIT) {
             // The message might be too big: calculate more exact but more
@@ -2803,8 +2803,8 @@ RaftConsensus::setElectionTimer()
 {
     std::chrono::nanoseconds duration(
         Core::Random::randomRange(
-            std::chrono::nanoseconds(ELECTION_TIMEOUT).count(),
-            std::chrono::nanoseconds(ELECTION_TIMEOUT).count() * 2));
+            uint64_t(std::chrono::nanoseconds(ELECTION_TIMEOUT).count()),
+            uint64_t(std::chrono::nanoseconds(ELECTION_TIMEOUT).count()) * 2));
     VERBOSE("Will become candidate in %s",
             Core::StringUtil::toString(duration).c_str());
     startElectionAt = Clock::now() + duration;

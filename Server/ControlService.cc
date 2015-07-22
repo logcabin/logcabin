@@ -173,7 +173,7 @@ ControlService::serverInfoGet(RPC::ServerRPC rpc)
     PRELUDE(ServerInfoGet);
     response.set_server_id(globals.raft->serverId);
     response.set_addresses(globals.raft->serverAddresses);
-    response.set_process_id(getpid());
+    response.set_process_id(uint64_t(getpid()));
     rpc.reply(response);
 }
 
@@ -223,7 +223,7 @@ ControlService::snapshotInhibitGet(RPC::ServerRPC rpc)
     PRELUDE(SnapshotInhibitGet);
     std::chrono::nanoseconds duration = globals.stateMachine->getInhibit();
     assert(duration >= std::chrono::nanoseconds::zero());
-    response.set_nanoseconds(duration.count());
+    response.set_nanoseconds(uint64_t(duration.count()));
     rpc.reply(response);
 }
 

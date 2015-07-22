@@ -624,7 +624,6 @@ StateMachine::snapshotThreadMain()
 {
     Core::ThreadId::setName("SnapshotStateMachine");
     std::unique_lock<Core::Mutex> lockGuard(mutex);
-    TimePoint lastWake = TimePoint::min();
     bool wasInhibited = false;
     while (!exiting) {
         bool inhibited = (maySnapshotAt > Clock::now());

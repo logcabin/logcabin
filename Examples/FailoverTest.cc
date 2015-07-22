@@ -222,7 +222,6 @@ main(int argc, char** argv)
             tree.writeEx(key, toString(a + b));
             ++i;
         }
-        return 0;
 
     } catch (const LogCabin::Client::Exception& e) {
         std::cerr << "Exiting due to LogCabin::Client::Exception: "

@@ -145,7 +145,7 @@ message ServerStats {
         optional uint32 running_version = 12;
         optional Tree tree = 13;
         optional uint64 num_unknown_requests = 14;
-        optional uint64 may_snapshot_at = 15;
+        optional int64 may_snapshot_at = 15;
     };
 
     /**

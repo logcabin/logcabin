@@ -305,9 +305,9 @@ void
 SegmentedLog::Sync::updateStats(Core::RollingStat& nanos) const
 {
     std::chrono::nanoseconds elapsed = waitEnd - waitStart;
-    nanos.push(elapsed.count());
+    nanos.push(uint64_t(elapsed.count()));
     if (elapsed > diskWriteDurationThreshold)
-        nanos.noteExceptional(waitStart, elapsed.count());
+        nanos.noteExceptional(waitStart, uint64_t(elapsed.count()));
 }
 
 
@@ -789,13 +789,13 @@ SegmentedLog::updateMetadata()
 
     TimePoint end = Clock::now();
     std::chrono::nanoseconds elapsed = end - start;
-    metadataWriteNanos.push(elapsed.count());
+    metadataWriteNanos.push(uint64_t(elapsed.count()));
     if (elapsed > diskWriteDurationThreshold) {
         WARNING("Writing metadata file took longer than expected "
                 "(%s for %lu bytes)",
                 Core::StringUtil::toString(elapsed).c_str(),
                 record.getLength());
-        metadataWriteNanos.noteExceptional(start, elapsed.count());
+        metadataWriteNanos.noteExceptional(start, uint64_t(elapsed.count()));
     }
 }
 

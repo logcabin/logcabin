@@ -235,7 +235,6 @@ class PidFile {
                     strerror(errno));
             return;
         }
-        LogCabin::Core::Util::Finally _(std::bind(fclose, file));
         char readbuf[10];
         memset(readbuf, 0, sizeof(readbuf));
         size_t bytesRead = fread(readbuf, 1, sizeof(readbuf), file);
@@ -243,6 +242,7 @@ class PidFile {
             WARNING("PID could not be read from pidfile: "
                     "will not remove file %s",
                     filename.c_str());
+            fclose(file);
             return;
         }
         int pidRead = atoi(readbuf);
@@ -250,15 +250,18 @@ class PidFile {
             WARNING("PID read from pidfile (%d) does not match PID written "
                     "earlier (%d): will not remove file %s",
                     pidRead, written, filename.c_str());
+            fclose(file);
             return;
         }
         int r = unlink(filename.c_str());
         if (r != 0) {
             WARNING("Could not unlink %s: %s",
                     filename.c_str(), strerror(errno));
+            fclose(file);
             return;
         }
         written = -1;
+        fclose(file);
         NOTICE("Removed pidfile %s", filename.c_str());
     }
 

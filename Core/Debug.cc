@@ -167,7 +167,8 @@ logLevelToString(LogLevel level)
         case LogLevel::VERBOSE: return "VERBOSE";
     }
     log(LogLevel::ERROR, __FILE__, __LINE__, __FUNCTION__,
-        "%d is not a valid log level.\n", level);
+        "%d is not a valid log level.\n",
+        static_cast<int>(level));
     abort();
 }
 
