@@ -24,39 +24,47 @@ Bug fixes (high severity):
   availability and performance problems (issue #161).
 - Fixes occasional hang when exiting (issue #144).
 - Fixes client waiting past its timeout on another client's connection attempt
-(issue #173).
+  (issue #173).
 
 Bug fixes (low severity):
 
 - Fixes `Core::Debug::DebugMessage` move constructor, where `processName` and
-  `threadName` were not moved over as they should have been (git 77d7f6b6).
+  `threadName` were not moved over as they should have been (git 77d7f6b).
 - Fixes signed integer overflow bug under aggressive optimizing compilers
   affecting `SteadyTimeConverter`, which is only used in producing ServerStats
-  (git 64734001).
+  (git 6473400). Turns on `-fno-strict-overflow` compiler setting.
 - Fixes repeated PANIC in InstallSnapshot RPC after a server restarts while
   receiving a snapshot (issue #174). This could result in a temporary
   availability issue that would resolve itself on the next term change.
 - Fixes failing conditional tree operations after setting a condition with a
-  relative path (#177).
+  relative path (issue #177).
 - Fixes event loop thread dumping server stats to the debug log, which had the
   potential for delays and deadlock (we never saw deadlock occur in practice,
   however). Now the stats are dumped from a separate thread (issue #159).
+- Fixes PANIC due to "No route to host" error after many minutes of the network
+  interface going down (issue #154). This is considered low severity as it was
+  unlikely to affect overall cluster availability.
 
 Internal improvements:
 
 - Adds gcc 5.1 (which required no changes; issue #141) and clang 3.4, 3.5, 3.6,
   and 3.7 (issue #9) as supported compilers.
 - `liblogcabin.a` is now compiled with `-fPIC`, so it can be linked into shared
-  object (.so) files.
+  object (.so) files (git 1ca169c).
 - Optimizes setting `nextIndex` on leaders by capping it to just past the
   follower's last log index. This helps with followers that are new or have
-  fallen far behind.
+  fallen far behind (git fcbacbb).
 - Clients now make a best effort attempt to close their sessions when they shut
   down gracefully (issue #116). Before, client sessions were only ever expired
   after a timeout. This state could accumulate quickly when running short-lived
   clients in a tight loop. Enabling this change requires all servers to be
   updated (so that the state machine is updated); new clients talking to old
   clusters will issue a warning that they are unable to close their sessions.
+- SegmentedLog now coalesces back-to-back fdatasync calls, making batch log
+  appends much more efficient (issue #165).
+- Leaders will now limit the amount of data they send to a follower when their
+  connection to that follower is lost, which reduces wasted bandwidth
+  (git e238fa6).
 
 New backwards-compatible changes:
 
@@ -64,24 +72,40 @@ New backwards-compatible changes:
   `getLogPolicy`, `logPolicyFromString`, `logPolicyToString` were introduced in
   `include/LogCabin/Debug.h`.
 - The LogCabin daemon will now reopen its log file on `SIGUSR2` (useful for log
-  rotation). Signal handling was not listed as part of LogCabin's public API
-  until now; signals listed in `--help` messages are now subject to semantic
-  versioning.
+  rotation; issue #150). Signal handling was not listed as part of LogCabin's
+  public API until now; signals listed in `--help` messages are now subject to
+  semantic versioning.
 - The `build/Examples/ServerControl` or `/usr/bin/logcabinctl` program can be
-  used to inspect and manipulate an individual server's state. Its command line
-  is now part of LogCabin's public API.
+  used to inspect and manipulate an individual server's state (issue #151). Its
+  command line is now part of LogCabin's public API.
 - All clients now have `--verbose` and `--verbosity` to control the debug log
   level and policy (issue #153). The server's config file now has a new option
   `logPolicy` to control the same.
+- Exceptions due to bad user input are now caught by broad exception handlers.
+  They were uncaught before, causing the process to abort() and create
+  unnecessary core files (issue #166).
+- Adds several new ServerStats metrics.
 
 Changes to unstable APIs:
 
 - `build/Examples/ServerStats` or `/usr/bin/logcabin-serverstats` along with
   `scripts/serverstats.py` have been removed. The `logcabinctl` program can now
   be used to fetch the stats instead, and the Python wrapper wasn't kept
-  up-to-date anyhow.
+  up-to-date anyhow. External clients linked to old versions of
+  `LogCabin::Client::Cluster::getServerStats()` will not work with new servers,
+  and `logcabinctl stats get` and other clients linked to the same function will
+  not work with old servers.
 - `Examples/HelloWorld` is no longer installed to
   `/usr/bin/logcabin-helloworld`.
+- Fixes RPM build on Scons 2.3.0 (git e77d217).
+- Removes the 'reload' command from the Red Hat init script, which would
+  previously kill the server (git 28044cb).
+- Changes the log path in the Red Hat init script to
+  `/var/log/logcabin/logcabin.log` (git e9e466f).
+- Changes the RPM package and Red Hat init script to launch the LogCabin server
+  as user `logcabin` instead of `root` (issue #178). Changes the storage path.
+- The client library in testing mode (`MockClientImpl`) will now return obvious
+  timeout errors, making it easier to unit test client code (git a8b22be).
 
 Version 1.0.0 (2015-04-29)
 ==========================
