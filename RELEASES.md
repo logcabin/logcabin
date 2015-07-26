@@ -22,7 +22,10 @@ Bug fixes (high severity):
   the follower would end up with a corrupt log (issue #160). Before, it was
   also possible for packing up the requests to take so long as to cause
   availability and performance problems (issue #161).
-- Fixes occasional hang when exiting (issue #144).
+- Fixes occasional hang when exiting due to unsafe access of a boolean flag
+  (issue #144).
+- Fixes hang when exiting while removing servers from the cluster configuration
+  (issue #183).
 - Fixes client waiting past its timeout on another client's connection attempt
   (issue #173).
 

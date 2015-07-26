@@ -216,6 +216,13 @@ Peer::exit()
 {
     NOTICE("Flagging peer %lu to exit", serverId);
     exiting = true;
+    // Usually telling peers to exit is paired with an interruptAll(). That can
+    // be error-prone, however, when you're removing servers from the
+    // configuration (if the code removes servers and then calls
+    // interruptAll(), it won't interrupt() the removed servers). So it's
+    // better to just interrupt() here as well. See
+    // https://github.com/logcabin/logcabin/issues/183
+    interrupt();
 }
 
 uint64_t
@@ -315,14 +322,19 @@ std::shared_ptr<RPC::ClientSession>
 Peer::getSession(std::unique_lock<Mutex>& lockGuard)
 {
     if (!session || !session->getErrorMessage().empty()) {
+        // Unfortunately, creating a session isn't currently interruptible, so
+        // we use a timeout to prevent the server from hanging forever if some
+        // peer thread happens to be creating a session when it's told to exit.
+        // See https://github.com/logcabin/logcabin/issues/183 for more detail.
+        TimePoint timeout = Clock::now() + consensus.ELECTION_TIMEOUT;
         // release lock for concurrency
         Core::MutexUnlock<Mutex> unlockGuard(lockGuard);
         RPC::Address target(addresses, Protocol::Common::DEFAULT_PORT);
-        target.refresh(RPC::Address::TimePoint::max());
+        target.refresh(timeout);
         Client::SessionManager::ServerId peerId(serverId);
         session = consensus.sessionManager.createSession(
             target,
-            RPC::ClientSession::TimePoint::max(),
+            timeout,
             &consensus.globals.clusterUUID,
             &peerId);
     }
