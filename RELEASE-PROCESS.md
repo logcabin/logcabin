@@ -25,16 +25,24 @@ Release Process
   - Child processes (for snapshots) may leak memory.
 
 - Run smoke test client under valgrind:
+  - `./scripts/smoketest.py --client='valgrind build/Examples/SmokeTest'`
   - Heap should have 0 bytes in use at exit and no other valgrind errors shown.
 
 - Run smoke test using g++ 4.9 ThreadSanitizer:
+  - Here's a `Local.sc`:
+```
+CXX='g++-4.9'
+CXXFLAGS=['-Werror', '-fsanitize=thread']
+LINKFLAGS=['-fsanitize=thread', '-pie']
+BUILDTYPE='DEBUG'
+```
   - This may print warnings, but look through them.
   - As of 1.0 release, see one warning about a read of 8 bytes in
     LogCabin::Storage::FilesystemUtil::write called from
     LogCabin::Storage::SegmentedLog::segmentPreparerMain().
     This might be a false alarm.
 
-- Run build, unit tests, and readme.sh on RHEL/CentOS 6.
+- Run build, unit tests, readme.sh, and `scons rpm` on RHEL/CentOS 6.
   - All should pass.
 
 - Run `scripts/failovertest.py` and
@@ -45,7 +53,8 @@ Release Process
   --writes=1000000 --thread=16' --timeout=45`
   - Should reach timeout with no errors.
   - No performance targets at the moment, but 1.0 on /dev/shm on Diego's laptop
-    wrote 3850 objects per second with the default settings.
+    wrote 3850 objects per second with the default settings (1.1 did the same
+    under g++-4.4-release build).
 
 - In `SConstruct`, update the version number and RPM version number and set the
   RPM release string to '1'.

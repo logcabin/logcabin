@@ -12,8 +12,11 @@ Release Process
 
 See [RELEASE-PROCESS.md](RELEASE-PROCESS.md).
 
-Version 1.1.0-alpha.0 (In Development)
-======================================
+Version 1.1.0 (2015-07-26)
+==========================
+
+This release brings many bug fixes and improvements since v1.0.0. All users are
+strongly encouraged to upgrade.
 
 Bug fixes (high severity):
 
