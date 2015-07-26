@@ -47,7 +47,9 @@ class CoreDebugTest : public ::testing::Test {
         setLogFile(stderr);
     }
     ~CoreDebugTest() {
-        setLogFile(stderr);
+        FILE* prev = setLogFile(stderr);
+        if (prev != stderr)
+            fclose(prev);
         Storage::FilesystemUtil::remove(tmpdir);
     }
 
