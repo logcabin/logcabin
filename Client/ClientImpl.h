@@ -86,10 +86,11 @@ class ClientImpl {
      */
     virtual void initDerived();
 
-    std::pair<uint64_t, Configuration> getConfiguration();
+    GetConfigurationResult getConfiguration(TimePoint timeout);
     ConfigurationResult setConfiguration(
                             uint64_t oldId,
-                            const Configuration& newConfiguration);
+                            const Configuration& newConfiguration,
+                            TimePoint timeout);
 
     /// See Cluster::getServerInfo.
     Result getServerInfo(const std::string& host,

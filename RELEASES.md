@@ -12,10 +12,21 @@ Release Process
 
 See [RELEASE-PROCESS.md](RELEASE-PROCESS.md).
 
-Version 1.1.1-alpha.0 (In Development)
+Version 1.2.0-alpha.0 (In Development)
 ======================================
 
-Nothing noteworthy yet.
+New backwards-compatible changes:
+
+- Added new API getConfiguration2, which behaves as getConfiguration
+  but allows a timeout. The API returns a the configuration plus a
+  status code to allow for a TIMEOUT response.
+- Added companion getConfiguration2Ex that behaves as
+  getConfiguration2 but throws exceptions.
+- Added setConfiguration2 which behaves as setConfiguration but allows
+  a timeout.
+- Added companion setConfiguration2Ex that behaves as
+  setConfiguration2 throws exceptions.
+- See https://github.com/logcabin/logcabin/pull/184 for details
 
 
 Version 1.1.0 (2015-07-26)

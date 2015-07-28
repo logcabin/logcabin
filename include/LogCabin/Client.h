@@ -93,6 +93,7 @@ typedef std::vector<Server> Configuration;
 
 /**
  * Returned by Cluster::setConfiguration.
+ * \since LogCabin v1.2.0
  */
 struct ConfigurationResult {
     ConfigurationResult();
@@ -113,12 +114,53 @@ struct ConfigurationResult {
          * unavailable.
          */
         BAD = 2,
+        /**
+         * The reconfiguration could not be completed in the requested
+         * timeframe.
+         * \since LogCabin v1.2.0
+         */
+        TIMEOUT = 3,
     } status;
 
     /**
      * If status is BAD, the servers that were unavailable to join the cluster.
      */
     Configuration badServers;
+
+    /**
+     * Error message, if status is not OK.
+     */
+    std::string error;
+};
+
+/**
+ * Returned by Cluster::getConfiguration2().
+ */
+struct GetConfigurationResult {
+    GetConfigurationResult();
+    ~GetConfigurationResult();
+
+    enum Status {
+        /**
+         * The operation succeeded.
+         */
+        OK = 0,
+        /**
+         * The call could not be completed in the requested timeframe.
+         */
+        TIMEOUT = 1,
+    } status;
+
+    /**
+     * If status is OK, identifies the configuration. Pass this to
+     * setConfiguration later.
+     */
+    uint64_t configuration;
+
+    /**
+     * If status is OK, the list of servers in the configuration.
+     */
+    Configuration servers;
 
     /**
      * Error message, if status is not OK.
@@ -241,6 +283,24 @@ class ConditionNotMetException : public Exception {
 class TimeoutException : public Exception {
   public:
     explicit TimeoutException(const std::string& error);
+};
+
+/**
+ * See ConfigurationResult::BAD
+ * \since LogCabin v1.2.0
+ */
+class ConfigurationExceptionBad : public Exception {
+  public:
+    explicit ConfigurationExceptionBad(const std::string& error);
+};
+
+/**
+ * See ConfigurationResult::CHANGED
+ * \since LogCabin v1.2.0
+ */
+class ConfigurationExceptionChanged : public Exception {
+  public:
+    explicit ConfigurationExceptionChanged(const std::string& error);
 };
 
 /**
@@ -657,6 +717,25 @@ class Cluster {
     std::pair<uint64_t, Configuration> getConfiguration() const;
 
     /**
+     * Get the current, stable cluster configuration.
+     * \param timeoutNanoseconds
+     *      Amount of time to wait for getConfiguration to
+     *      complete. Passing 0 indicates that no timeout is desired.
+     * \return
+     *      See GetConfigurationResult
+     * \since LogCabin v1.2.0.
+     */
+    GetConfigurationResult getConfiguration2(
+                                uint64_t timeoutNanoseconds) const;
+
+    /**
+     * Like getConfiguration2 but throws exceptions upon errors.
+     * \since LogCabin v1.2.0.
+     */
+    GetConfigurationResult getConfiguration2Ex(
+                                uint64_t timeoutNanoseconds) const;
+
+    /**
      * Change the cluster's configuration.
      * \param oldId
      *      The ID of the cluster's current configuration.
@@ -666,6 +745,37 @@ class Cluster {
     ConfigurationResult setConfiguration(
                                 uint64_t oldId,
                                 const Configuration& newConfiguration);
+
+    /**
+     * Like setConfiguration but allows a timeout.
+     * \param oldId
+     *      The ID of the cluster's current configuration.
+     * \param newConfiguration
+     *      The list of servers in the new configuration.
+     * \param timeoutNanoseconds
+     *      Amount of time to wait for the call to complete. 0=wait
+     *      forever
+     * \since LogCabin v1.2.0.
+     */
+    ConfigurationResult setConfiguration2(
+                                uint64_t oldId,
+                                const Configuration& newConfiguration,
+                                uint64_t timeoutNanoseconds);
+    /**
+     * Like setConfiguration2 but throws exceptions upon errors.
+     * \param oldId
+     *      The ID of the cluster's current configuration.
+     * \param newConfiguration
+     *      The list of servers in the new configuration.
+     * \param timeoutNanoseconds
+     *      Amount of time to wait for the call to complete. 0=wait
+     *      forever
+     * \since LogCabin v1.2.0.
+     */
+    ConfigurationResult setConfiguration2Ex(
+                                uint64_t oldId,
+                                const Configuration& newConfiguration,
+                                uint64_t timeoutNanoseconds);
 
     /**
      * Retrieve basic information from the given server, like its ID and the
