@@ -18,6 +18,8 @@
 # Short-Description: start and stop logcabin
 ### END INIT INFO
 
+SYSTEMCTL_SKIP_REDIRECT=1
+
 # Source function library.
 . /etc/rc.d/init.d/functions
 
