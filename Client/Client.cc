@@ -77,6 +77,20 @@ Server::operator=(const Server& other)
     return *this;
 }
 
+////////// GetConfigurationResult //////////
+
+GetConfigurationResult::GetConfigurationResult()
+    : status(OK)
+    , configuration(0)
+    , servers()
+    , error()
+{
+}
+
+GetConfigurationResult::~GetConfigurationResult()
+{
+}
+
 ////////// ConfigurationResult //////////
 
 ConfigurationResult::ConfigurationResult()
@@ -154,6 +168,17 @@ ConditionNotMetException::ConditionNotMetException(const std::string& error)
 }
 
 TimeoutException::TimeoutException(const std::string& error)
+    : Exception(error)
+{
+}
+
+ConfigurationExceptionBad::ConfigurationExceptionBad(const std::string& error)
+    : Exception(error)
+{
+}
+
+ConfigurationExceptionChanged::ConfigurationExceptionChanged(
+    const std::string& error)
     : Exception(error)
 {
 }
@@ -504,16 +529,64 @@ Cluster::~Cluster()
 std::pair<uint64_t, Configuration>
 Cluster::getConfiguration() const
 {
-    return clientImpl->getConfiguration();
+    const uint64_t timeout(0);
+    GetConfigurationResult r = getConfiguration2(timeout);
+    return std::make_pair(r.configuration, r.servers);
+}
+
+GetConfigurationResult
+Cluster::getConfiguration2(uint64_t timeoutNanoseconds) const
+{
+    return clientImpl->getConfiguration(
+        ClientImpl::absTimeout(timeoutNanoseconds));
+}
+
+GetConfigurationResult
+Cluster::getConfiguration2Ex(uint64_t timeoutNanoseconds) const
+{
+    GetConfigurationResult result(getConfiguration2(timeoutNanoseconds));
+    if (result.status == GetConfigurationResult::TIMEOUT) {
+        throw TimeoutException(result.error);
+    }
+    return result;
 }
 
 ConfigurationResult
 Cluster::setConfiguration(uint64_t oldId,
                           const Configuration& newConfiguration)
 {
-    return clientImpl->setConfiguration(oldId, newConfiguration);
+    const uint64_t timeout(0);
+    return setConfiguration2(oldId, newConfiguration, timeout);
 }
 
+ConfigurationResult
+Cluster::setConfiguration2(uint64_t oldId,
+                           const Configuration& newConfiguration,
+                           uint64_t timeoutNanoseconds)
+{
+    return clientImpl->setConfiguration(
+        oldId, newConfiguration, ClientImpl::absTimeout(timeoutNanoseconds));
+}
+
+ConfigurationResult
+Cluster::setConfiguration2Ex(uint64_t oldId,
+                             const Configuration& newConfiguration,
+                             uint64_t timeoutNanoseconds)
+{
+    ConfigurationResult result = setConfiguration2(oldId,
+                                                   newConfiguration,
+                                                   timeoutNanoseconds);
+    if (result.status == ConfigurationResult::BAD) {
+        throw ConfigurationExceptionBad(result.error);
+    }
+    if (result.status == ConfigurationResult::CHANGED) {
+        throw ConfigurationExceptionChanged(result.error);
+    }
+    if (result.status == ConfigurationResult::TIMEOUT) {
+        throw TimeoutException(result.error);
+    }
+    return result;
+}
 
 Result
 Cluster::getServerInfo(const std::string& host,

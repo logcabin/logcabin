@@ -485,28 +485,39 @@ ClientImpl::initDerived()
     }
 }
 
-std::pair<uint64_t, Configuration>
-ClientImpl::getConfiguration()
+GetConfigurationResult
+ClientImpl::getConfiguration(TimePoint timeout)
 {
-    // TODO(ongaro):  expose timeout
     Protocol::Client::GetConfiguration::Request request;
     Protocol::Client::GetConfiguration::Response response;
-    leaderRPC->call(OpCode::GET_CONFIGURATION, request, response,
-                    TimePoint::max());
+    typedef LeaderRPCBase::Status RPCStatus;
+    RPCStatus status = leaderRPC->call(
+        OpCode::GET_CONFIGURATION, request, response, timeout);
     Configuration configuration;
     for (auto it = response.servers().begin();
          it != response.servers().end();
          ++it) {
         configuration.push_back({it->server_id(), it->addresses()});
     }
-    return {response.id(), configuration};
+    GetConfigurationResult result;
+    if (status == RPCStatus::TIMEOUT) {
+        result.status = GetConfigurationResult::Status::TIMEOUT;
+        result.error = "Client-specified timeout elapsed";
+        return result;
+    } else {
+        GetConfigurationResult configurationResult;
+        result.status = GetConfigurationResult::Status::OK;
+        result.configuration = response.id();
+        result.servers = configuration;
+        return result;
+    }
 }
 
 ConfigurationResult
 ClientImpl::setConfiguration(uint64_t oldId,
-                             const Configuration& newConfiguration)
+                             const Configuration& newConfiguration,
+                             TimePoint timeout)
 {
-    // TODO(ongaro):  expose timeout
     Protocol::Client::SetConfiguration::Request request;
     request.set_old_id(oldId);
     for (auto it = newConfiguration.begin();
@@ -517,9 +528,15 @@ ClientImpl::setConfiguration(uint64_t oldId,
         s->set_addresses(it->addresses);
     }
     Protocol::Client::SetConfiguration::Response response;
-    leaderRPC->call(OpCode::SET_CONFIGURATION, request, response,
-                    TimePoint::max());
+    typedef LeaderRPCBase::Status RPCStatus;
+    RPCStatus status = leaderRPC->call(
+        OpCode::SET_CONFIGURATION, request, response, timeout);
     ConfigurationResult result;
+    if (status == RPCStatus::TIMEOUT) {
+        result.status = ConfigurationResult::Status::TIMEOUT;
+        result.error = "Client-specified timeout elapsed";
+        return result;
+    }
     if (response.has_ok()) {
         result.status = ConfigurationResult::OK;
         return result;
