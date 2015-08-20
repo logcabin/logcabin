@@ -93,7 +93,6 @@ typedef std::vector<Server> Configuration;
 
 /**
  * Returned by Cluster::setConfiguration.
- * \since LogCabin v1.2.0
  */
 struct ConfigurationResult {
     ConfigurationResult();
@@ -135,6 +134,7 @@ struct ConfigurationResult {
 
 /**
  * Returned by Cluster::getConfiguration2().
+ * \since LogCabin v1.2.0
  */
 struct GetConfigurationResult {
     GetConfigurationResult();
@@ -763,13 +763,6 @@ class Cluster {
                                 uint64_t timeoutNanoseconds);
     /**
      * Like setConfiguration2 but throws exceptions upon errors.
-     * \param oldId
-     *      The ID of the cluster's current configuration.
-     * \param newConfiguration
-     *      The list of servers in the new configuration.
-     * \param timeoutNanoseconds
-     *      Amount of time to wait for the call to complete. 0=wait
-     *      forever
      * \since LogCabin v1.2.0.
      */
     ConfigurationResult setConfiguration2Ex(
