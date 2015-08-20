@@ -1,5 +1,6 @@
 /* Copyright (c) 2009-2014 Stanford University
  * Copyright (c) 2015 Diego Ongaro
+ * Copyright (c) 2015 Scale Computing
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -35,6 +36,10 @@ namespace LogCabin {
 namespace Core {
 namespace Random {
 
+// forward declaration
+void acquireMutex();
+void releaseMutex();
+
 namespace {
 
 // forward declaration
@@ -52,7 +57,9 @@ class RandomState {
         , randbuf()
     {
         reset();
-        int err = pthread_atfork(NULL, NULL, resetRandomState);
+        int err = pthread_atfork(LogCabin::Core::Random::acquireMutex,
+                                 LogCabin::Core::Random::releaseMutex,
+                                 resetRandomState);
         if (err != 0) {
             // too early to call ERROR in here
             fprintf(stderr, "Failed to set up pthread_atfork() handler to "
@@ -107,6 +114,9 @@ class RandomState {
         return r;
     }
 
+    friend void LogCabin::Core::Random::acquireMutex();
+    friend void LogCabin::Core::Random::releaseMutex();
+
   private:
 
     /**
@@ -143,6 +153,9 @@ class RandomState {
 void
 resetRandomState()
 {
+    // we will have grabbed the mutex in pthread_atfork prepare, need
+    // to release here
+    releaseMutex();
     randomState.reset();
 }
 
@@ -173,6 +186,27 @@ randomUnit()
 }
 
 } // anonymous namespace
+
+/**
+ * Called before fork() to grab the mutex used in pthread_atfork. This
+ * function is outside of the anonymous namespace so it can be called
+ * from RandomTest.
+ */
+void
+acquireMutex()
+{
+    randomState.mutex.lock();
+}
+
+/**
+ * Called in the parent post fork(). This function is outside of the
+ * anonymous namespace so it can be called from RandomTest.
+ */
+void
+releaseMutex()
+{
+    randomState.mutex.unlock();
+}
 
 uint8_t
 random8()
