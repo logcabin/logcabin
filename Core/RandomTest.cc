@@ -1,5 +1,6 @@
 /* Copyright (c) 2012 Stanford University
  * Copyright (c) 2015 Diego Ongaro
+ * Copyright (c) 2015 Scale Computing
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -16,12 +17,18 @@
 
 #include <gtest/gtest.h>
 #include <unistd.h>
+#include <thread>
 
 #include "Core/Random.h"
+#include "Core/ConditionVariable.h"
 
 namespace LogCabin {
 namespace Core {
 namespace Random {
+
+void acquireMutex();
+void releaseMutex();
+
 namespace {
 
 TEST(CoreRandomTest, fork) {
@@ -46,6 +53,44 @@ TEST(CoreRandomTest, fork) {
         }
     }
     EXPECT_GT(2U, failures) << failures;
+}
+
+void sleepWithLock(bool& haveLock, std::mutex& m, Core::ConditionVariable& c) {
+    LogCabin::Core::Random::acquireMutex();
+    {
+        std::unique_lock<std::mutex> lock(m);
+        haveLock = true;
+        c.notify_one();
+    }
+    usleep(10000);
+    LogCabin::Core::Random::releaseMutex();
+}
+
+TEST(CoreRandomTest, forkWillNotDeadlock_TimingSensitive) {
+    bool haveLock(false);
+    std::mutex m;
+    Core::ConditionVariable c;
+    std::thread t(&sleepWithLock, std::ref(haveLock), std::ref(m), std::ref(c));
+
+    {
+        std::unique_lock<std::mutex> lock(m);
+        while (!haveLock) {
+            c.wait(lock);
+        }
+    }
+
+    pid_t pid = fork();
+    if (pid == 0) { // child
+        random8();
+        _exit(0);
+    } else { // parent
+        random8();
+        int status = 0;
+        waitpid(pid, &status, 0);
+        ASSERT_TRUE(WIFEXITED(status));
+    }
+    t.join();
+    // if we exit this function without hanging we pass
 }
 
 TEST(CoreRandomTest, bitCoverage8) {
