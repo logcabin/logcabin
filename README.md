@@ -6,16 +6,18 @@ Overview
 LogCabin is a distributed system that provides a small amount of highly
 replicated, consistent storage. It is a reliable place for other distributed
 systems to store their core metadata and is helpful in solving cluster
-management issues. LogCabin is released under the permissive ISC license
-(which is equivalent to the Simplified BSD License).
+management issues. LogCabin uses the
+[Raft consensus algorithm](https://raft.github.io) internally and is actually
+the very first implementation of Raft. It's released under the
+[ISC license](https://en.wikipedia.org/wiki/ISC_license) (equivalent to BSD).
 
-LogCabin uses the Raft consensus algorithm internally, which is described at
-<https://raftconsensus.github.io>.
-
-Code-level documentation can be found at <https://logcabin.github.io>.
-
-Recent updates on LogCabin's development can be found at
-<http://ongardie.net/blog/+logcabin/>.
+External resources:
+- [Slide deck](https://logcabin.github.io/talk/)
+  on LogCabin's usage, operations, and internals
+- [Code-level documentation](https://logcabin.github.io/doxygen/annotated.html)
+  built with Doxygen
+- Recent updates on LogCabin's development on
+  [Diego's blog](http://ongardie.net/blog/+logcabin/)
 
 Information about releases is in [RELEASES.md](RELEASES.md).
 
