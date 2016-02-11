@@ -15,6 +15,10 @@ See [RELEASE-PROCESS.md](RELEASE-PROCESS.md).
 Version 1.2.0-alpha.0 (In Development)
 ======================================
 
+Internal improvements:
+
+- #200: reset leader election timeout in follower after disk io completes
+
 New backwards-compatible changes:
 
 - Added new API getConfiguration2, which behaves as getConfiguration

@@ -1,5 +1,6 @@
 /* Copyright (c) 2012 Stanford University
  * Copyright (c) 2015 Diego Ongaro
+ * Copyright (c) 2015 Scale Computing
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -1298,8 +1299,10 @@ RaftConsensus::handleAppendEntries(
         // 'response' accordingly.
         response.set_term(request.term());
     }
-    // This request is a sign of life from the current leader. Update our term
-    // and convert to follower if necessary; reset the election timer.
+    // This request is a sign of life from the current leader. Update
+    // our term and convert to follower if necessary; reset the
+    // election timer. set it here in case request we exit the
+    // function early, we will set it again after the disk write.
     stepDown(request.term());
     setElectionTimer();
     withholdVotesUntil = Clock::now() + ELECTION_TIMEOUT;
@@ -1416,6 +1419,11 @@ RaftConsensus::handleAppendEntries(
         stateChanged.notify_all();
         VERBOSE("New commitIndex: %lu", commitIndex);
     }
+
+    // reset election timer to avoid punishing the leader for our own
+    // long disk writes
+    setElectionTimer();
+    withholdVotesUntil = Clock::now() + ELECTION_TIMEOUT;
 }
 
 void
