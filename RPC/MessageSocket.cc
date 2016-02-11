@@ -258,12 +258,14 @@ MessageSocket::readable()
                         "0xdaf4 (first two bytes are 0x%02x)",
                         inbound.header.fixed);
                 disconnect();
+                return;
             }
             if (inbound.header.version != 1) {
                 WARNING("Disconnecting since message uses version %u, but "
                         "this code only understands version 1",
                         inbound.header.version);
                 disconnect();
+                return;
             }
             if (inbound.header.payloadLength > maxMessageLength) {
                 WARNING("Disconnecting since message is too long to receive "
