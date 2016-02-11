@@ -231,7 +231,7 @@ void
 ControlService::snapshotInhibitSet(RPC::ServerRPC rpc)
 {
     PRELUDE(SnapshotInhibitSet);
-    bool abort = false;
+    bool abort = true;
     std::chrono::nanoseconds duration;
     if (request.has_nanoseconds()) {
         duration = std::chrono::nanoseconds(request.nanoseconds());
