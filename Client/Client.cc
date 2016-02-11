@@ -25,7 +25,7 @@ namespace LogCabin {
 namespace Client {
 
 namespace {
-void throwException(const Result& result)
+void throwException(const Result& result, uint64_t timeoutNanos)
 {
     switch (result.status) {
         case Status::OK:
@@ -39,7 +39,11 @@ void throwException(const Result& result)
         case Status::CONDITION_NOT_MET:
             throw ConditionNotMetException(result.error);
         case Status::TIMEOUT:
-            throw TimeoutException(result.error);
+        {
+            throw TimeoutException(result.error + ": " +
+                                   Core::StringUtil::toString(timeoutNanos) +
+                                   "ns");
+        }
     }
 }
 } // anonymous namespace
@@ -281,7 +285,8 @@ Tree::setWorkingDirectory(const std::string& newWorkingDirectory)
 void
 Tree::setWorkingDirectoryEx(const std::string& workingDirectory)
 {
-    throwException(setWorkingDirectory(workingDirectory));
+    throwException(setWorkingDirectory(workingDirectory),
+                   treeDetails->timeoutNanos);
 }
 
 std::string
@@ -329,7 +334,7 @@ Tree::setCondition(const std::string& path, const std::string& value)
 void
 Tree::setConditionEx(const std::string& path, const std::string& value)
 {
-    throwException(setCondition(path, value));
+    throwException(setCondition(path, value), treeDetails->timeoutNanos);
 }
 
 std::pair<std::string, std::string>
@@ -369,7 +374,7 @@ Tree::makeDirectory(const std::string& path)
 void
 Tree::makeDirectoryEx(const std::string& path)
 {
-    throwException(makeDirectory(path));
+    throwException(makeDirectory(path), treeDetails->timeoutNanos);
 }
 
 Result
@@ -389,7 +394,7 @@ std::vector<std::string>
 Tree::listDirectoryEx(const std::string& path) const
 {
     std::vector<std::string> children;
-    throwException(listDirectory(path, children));
+    throwException(listDirectory(path, children), treeDetails->timeoutNanos);
     return children;
 }
 
@@ -407,7 +412,7 @@ Tree::removeDirectory(const std::string& path)
 void
 Tree::removeDirectoryEx(const std::string& path)
 {
-    throwException(removeDirectory(path));
+    throwException(removeDirectory(path), treeDetails->timeoutNanos);
 }
 
 Result
@@ -425,7 +430,7 @@ Tree::write(const std::string& path, const std::string& contents)
 void
 Tree::writeEx(const std::string& path, const std::string& contents)
 {
-    throwException(write(path, contents));
+    throwException(write(path, contents), treeDetails->timeoutNanos);
 }
 
 Result
@@ -444,7 +449,7 @@ std::string
 Tree::readEx(const std::string& path) const
 {
     std::string contents;
-    throwException(read(path, contents));
+    throwException(read(path, contents), treeDetails->timeoutNanos);
     return contents;
 }
 
@@ -462,7 +467,7 @@ Tree::removeFile(const std::string& path)
 void
 Tree::removeFileEx(const std::string& path)
 {
-    throwException(removeFile(path));
+    throwException(removeFile(path), treeDetails->timeoutNanos);
 }
 
 std::shared_ptr<const TreeDetails>
@@ -604,7 +609,8 @@ Cluster::getServerInfoEx(const std::string& host,
                          uint64_t timeoutNanoseconds)
 {
     Server info;
-    throwException(getServerInfo(host, timeoutNanoseconds, info));
+    throwException(getServerInfo(host, timeoutNanoseconds, info),
+                   timeoutNanoseconds);
     return info;
 }
 
@@ -631,7 +637,8 @@ Cluster::getServerStatsEx(const std::string& host,
                           uint64_t timeoutNanoseconds)
 {
     Protocol::ServerStats stats;
-    throwException(getServerStats(host, timeoutNanoseconds, stats));
+    throwException(getServerStats(host, timeoutNanoseconds, stats),
+                   timeoutNanoseconds);
     return stats;
 }
 
