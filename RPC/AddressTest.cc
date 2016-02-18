@@ -55,6 +55,29 @@ TEST(RPCAddressTest, constructor) {
     EXPECT_EQ("80", ipv4Port.hosts.at(0).second);
     EXPECT_EQ("1.2.3.4:80", ipv4Port.originalString);
 
+    // multiple hosts
+    Address all("example.com,"
+                "example.com:80,"
+                "1.2.3.4,"
+                "1.2.3.4:80", 80);
+    all.refresh(TimePoint::max());
+    EXPECT_EQ((std::vector<std::pair<std::string, std::string>> {
+                {"example.com", "80"},
+                {"example.com", "80"},
+                {"1.2.3.4", "80"},
+                {"1.2.3.4", "80"},
+               }),
+              all.hosts);
+
+    Address commas(",,,example.com,,,,", 80);
+    commas.refresh(TimePoint::max());
+    EXPECT_EQ((std::vector<std::pair<std::string, std::string>> {
+                {"example.com", "80"},
+               }),
+              commas.hosts);
+}
+
+TEST(RPCAddressTest, constructor_IPv6) {
     // IPv6
     Address ipv6("[1:2:3:4:5:6:7:8]", 80);
     ipv6.refresh(TimePoint::max());
@@ -91,14 +114,8 @@ TEST(RPCAddressTest, constructor) {
                 {"::1", "80"},
                }),
               all.hosts);
-
-    Address commas(",,,example.com,,,,", 80);
-    commas.refresh(TimePoint::max());
-    EXPECT_EQ((std::vector<std::pair<std::string, std::string>> {
-                {"example.com", "80"},
-               }),
-              commas.hosts);
 }
+
 
 TEST(RPCAddressTest, constructor_copy) {
     Address a("127.0.0.1", 80);
@@ -178,7 +195,9 @@ TEST(RPCAddressTest, refresh) {
     Address ipv4b("0", 80);
     ipv4b.refresh(TimePoint::max());
     EXPECT_EQ("0.0.0.0:80", ipv4b.getResolvedString()) << "any address";
+}
 
+TEST(RPCAddressTest, refresh_IPv6) {
     // IPv6
     const char* disclaimer = "Failure of this test is normal if no external "
                              "network interface has an IPv6 address set.";

@@ -20,8 +20,8 @@ before_install:
 - echo "HTML_TIMESTAMP = no" >> docs/Doxyfile
 script:
 - scons NUMCPUS=2
-- VERBOSE=1 build/test/test --gtest_filter='-*TimingSensitive*'
-- VERBOSE=1 build/test/test --gtest_filter='*TimingSensitive*' || true
+- VERBOSE=1 build/test/test --gtest_filter='-*TimingSensitive*:*IPv6*'
+- VERBOSE=1 build/test/test --gtest_filter='*TimingSensitive*:*IPv6*' || true
 - ./build/Examples/SmokeTest --mock
 - scons check
 - scons docs; DOCS_STATUS=$?; (exit $DOCS_STATUS)
