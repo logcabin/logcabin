@@ -394,6 +394,8 @@ ClientImpl::ExactlyOnceRPCHelper::keepAliveThreadMain()
                 case LeaderRPCBase::Call::Status::OK:
                     break;
                 case LeaderRPCBase::Call::Status::RETRY:
+                    doneWithRPC(trequest.exactly_once(),
+                                Core::HoldingMutex(lockGuard));
                     continue; // retry outer loop
                 case LeaderRPCBase::Call::Status::TIMEOUT:
                     PANIC("Unexpected timeout for keep-alive");
