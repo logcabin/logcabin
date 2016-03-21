@@ -26,13 +26,15 @@ This README will walk you through how to compile and run LogCabin.
 Questions
 =========
 
-The best place to ask questions is on the
-[raft-dev](https://groups.google.com/forum/#!forum/raft-dev) mailing list by
-prefixing the subject line with "[LogCabin]" (we may create a separate mailing
-list for LogCabin in the future if LogCabin-specific posts start to be a
-significant fraction of the raft-dev traffic). You might also try `#logcabin`
-on the freenode IRC network, although there isn't always people around. Use
-GitHub Issues to report problems or suggest features.
+The best place to ask questions about the LogCabin implementation is on the
+[logcabin-dev](https://groups.google.com/forum/#!forum/logcabin-dev) mailing
+list. You might also try `#logcabin` on the freenode IRC network, although
+there aren't always people around. Use GitHub Issues to report problems or
+suggest features.
+
+For questions and discussion about the Raft consensus algorithm, which LogCabin
+implements, use the
+[raft-dev](https://groups.google.com/forum/#!forum/raft-dev) mailing list.
 
 Building
 ========
