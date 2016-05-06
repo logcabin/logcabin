@@ -2863,6 +2863,13 @@ RaftConsensus::startNewElection()
         return;
     }
 
+    if (commitIndex >= configuration->id &&
+        !configuration->hasVote(configuration->localServer)) {
+        // we are not in the latest configuration, do not start an election
+        setElectionTimer();
+        return;
+    }
+
     if (leaderId > 0) {
         NOTICE("Running for election in term %lu "
                "(haven't heard from leader %lu lately)",
