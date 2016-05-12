@@ -99,7 +99,7 @@ extern std::string processName;
     if (::LogCabin::Core::Debug::isLogging(level, __FILE__)) { \
         ::LogCabin::Core::Debug::log(level, \
             __FILE__, __LINE__, __FUNCTION__, \
-            format "\n", ##__VA_ARGS__); \
+            format, ##__VA_ARGS__); \
     } \
 } while (0)
 

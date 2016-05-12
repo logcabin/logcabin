@@ -420,6 +420,29 @@ log(LogLevel level,
 {
     va_list ap;
 
+    std::string message;
+    // this part is copied from Core::StringUtil::toString.
+    va_start(ap, format);
+    // We're not really sure how big of a buffer will be necessary.
+    // Try 1K, if not the return value will tell us how much is necessary.
+    size_t bufSize = 1024;
+    while (true) {
+        char buf[bufSize];
+        // vsnprintf trashes the va_list, so copy it first
+        va_list aq;
+        va_copy(aq, ap);
+        int r = vsnprintf(buf, bufSize, format, aq);
+        va_end(aq);
+        assert(r >= 0); // old glibc versions returned -1
+        size_t r2 = size_t(r);
+        if (r2 < bufSize) {
+            message = buf; // copy string
+            break;
+        }
+        bufSize = size_t(r2) + 1;
+    }
+    va_end(ap);
+
     if (logHandler) {
         DebugMessage d;
         d.filename = relativeFileName(fileName);
@@ -429,29 +452,7 @@ log(LogLevel level,
         d.logLevelString = logLevelToString(level);
         d.processName = processName;
         d.threadName = ThreadId::getName();
-
-        // this part is copied from Core::StringUtil::toString.
-        va_start(ap, format);
-        // We're not really sure how big of a buffer will be necessary.
-        // Try 1K, if not the return value will tell us how much is necessary.
-        size_t bufSize = 1024;
-        while (true) {
-            char buf[bufSize];
-            // vsnprintf trashes the va_list, so copy it first
-            va_list aq;
-            va_copy(aq, ap);
-            int r = vsnprintf(buf, bufSize, format, aq);
-            va_end(aq);
-            assert(r >= 0); // old glibc versions returned -1
-            size_t r2 = size_t(r);
-            if (r2 < bufSize) {
-                buf[r2 - 1] = '\0'; // strip off "\n" added by LOG macro
-                d.message = buf; // copy string
-                break;
-            }
-            bufSize = size_t(r2) + 1;
-        }
-        va_end(ap);
+        d.message = message;
         (logHandler)(d);
         return;
     }
@@ -481,22 +482,12 @@ log(LogLevel level,
         formattedSeconds[sizeof(formattedSeconds) - 1] = '\0';
     }
 
-    // This ensures that output on stderr won't be interspersed with other
-    // output. This normally happens automatically for a single call to
-    // fprintf, but must be explicit since we're using two calls here.
-    flockfile(stream);
-
-    fprintf(stream, "%s.%06lu %s:%d in %s() %s[%s:%s]: ",
+    fprintf(stream, "%s.%06lu %s:%d in %s() %s[%s:%s]: %s\n",
             formattedSeconds, now.tv_nsec / 1000,
             relativeFileName(fileName), lineNum, functionName,
             logLevelToString(level),
-            processName.c_str(), ThreadId::getName().c_str());
-
-    va_start(ap, format);
-    vfprintf(stream, format, ap);
-    va_end(ap);
-
-    funlockfile(stream);
+            processName.c_str(), ThreadId::getName().c_str(),
+            message.c_str());
 
     fflush(stream);
 }
