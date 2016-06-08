@@ -25,6 +25,12 @@
 
 namespace LogCabin {
 namespace Core {
+
+namespace StringUtil {
+std::string format(const char* format, ...)
+    __attribute__((format(printf, 1, 2)));
+}
+
 namespace Debug {
 
 // Configuring logging is exposed to clients as well as servers,
@@ -62,17 +68,14 @@ isLogging(LogLevel level, const char* fileName);
  *      The output of __LINE__.
  * \param functionName
  *      The output of __FUNCTION__.
- * \param format
- *      A printf-style format string for the message. It should include a line
- *      break at the end.
- * \param ...
- *      The arguments to the format string, as in printf.
+ * \param message
+ *      A descriptive message to print, which should not include a line break
+ *      at the end.
  */
 void
 log(LogLevel level,
     const char* fileName, uint32_t lineNum, const char* functionName,
-    const char* format, ...)
-__attribute__((format(printf, 5, 6)));
+    const char* message);
 
 /**
  * A short name to be used in log messages to identify this process.
@@ -89,17 +92,18 @@ extern std::string processName;
  * This is normally called by ERROR(), WARNING(), NOTICE(), or VERBOSE().
  * \param level
  *      The level of importance of the message.
- * \param format
+ * \param _format
  *      A printf-style format string for the message. It should not include a
  *      line break at the end, as LOG will add one.
  * \param ...
  *      The arguments to the format string, as in printf.
  */
-#define LOG(level, format, ...) do { \
+#define LOG(level, _format, ...) do { \
     if (::LogCabin::Core::Debug::isLogging(level, __FILE__)) { \
         ::LogCabin::Core::Debug::log(level, \
             __FILE__, __LINE__, __FUNCTION__, \
-            format, ##__VA_ARGS__); \
+            ::LogCabin::Core::StringUtil::format( \
+                _format, ##__VA_ARGS__).c_str()); \
     } \
 } while (0)
 
