@@ -3115,7 +3115,7 @@ TEST_F(ServerRaftConsensusTest, startNewElection)
     consensus->startNewElection();
     EXPECT_EQ(State::LEADER, consensus->state);
 
-    // not part of current configuration
+    // not part of current uncommitted configuration
     consensus->stepDown(10);
     entry1.set_term(9);
     *entry1.mutable_configuration() = desc(
@@ -3124,6 +3124,13 @@ TEST_F(ServerRaftConsensusTest, startNewElection)
         "}");
     consensus->append({&entry1});
     consensus->startNewElection();
+    EXPECT_EQ(11U, consensus->currentTerm);
+    EXPECT_EQ(State::CANDIDATE, consensus->state);
+
+    // not part of current committed configuration
+    consensus->commitIndex = consensus->log->getLastLogIndex();
+    consensus->startNewElection();
+    EXPECT_EQ(11U, consensus->currentTerm);
     EXPECT_EQ(State::CANDIDATE, consensus->state);
 }
 
