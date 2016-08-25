@@ -1069,6 +1069,23 @@ TEST_F(StorageSegmentedLogTest, loadOpenSegment_removeUnneeded)
                                   O_RDONLY).fd);
 }
 
+TEST_F(StorageSegmentedLogTest, loadOpenSegment_removeFileOfAllZeros)
+{
+    FS::File file = FS::openFile(log->dir,
+                                 openSegment.filename,
+                                 O_CREAT|O_WRONLY);
+    FS::truncate(file, 8 * 1024 * 1024);
+    LogCabin::Core::Debug::setLogPolicy({ // expect warnings
+        {"Storage/SegmentedLog", "ERROR"}
+    });
+    EXPECT_FALSE(log->loadOpenSegment(openSegment, 1));
+    LogCabin::Core::Debug::setLogPolicy({
+        {"", "WARNING"}
+    });
+    EXPECT_EQ(-1, FS::tryOpenFile(log->dir, openSegment.filename,
+                                  O_RDONLY).fd);
+}
+
 TEST_F(StorageSegmentedLogTest, loadOpenSegment_corruptDelete)
 {
     log->truncatePrefix(3);
