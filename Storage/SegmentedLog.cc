@@ -992,10 +992,19 @@ SegmentedLog::loadOpenSegment(Segment& segment, uint64_t logStartIndex)
         uint8_t version = *reader.get<uint8_t>(0, 1);
         offset += 1;
         if (version != 1) {
-            PANIC("Segment version read from %s was %u, but this code can "
-                  "only read version 1",
-                  segment.filename.c_str(),
-                  version);
+            uint64_t remainingBytes = reader.getFileLength() - offset;
+            if (version == 0 &&
+                isAllZeros(reader.get(
+                               offset, remainingBytes), remainingBytes)) {
+                // move the offset to the end of the file. allow the
+                // existing cleanup mechanism to remove this file.
+                offset = reader.getFileLength();
+            } else {
+                PANIC("Segment version read from %s was %u, "
+                      "but this code can only read version 1",
+                      segment.filename.c_str(),
+                      version);
+            }
         }
     }
 
