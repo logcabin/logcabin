@@ -55,6 +55,8 @@ StateMachine::StateMachine(std::shared_ptr<RaftConsensus> consensus,
             config.read<uint64_t>("snapshotRatio", 4))
     , snapshotWatchdogInterval(std::chrono::milliseconds(
             config.read<uint64_t>("snapshotWatchdogMilliseconds", 10000)))
+    , snapshotIndexDiff(
+            config.read<uint64_t>("snapshotIndexDiff", 0))
       // TODO(ongaro): This should be configurable, but it must be the same for
       // every server, so it's dangerous to put it in the config file. Need to
       // use the Raft log to agree on this value. Also need to inform clients
@@ -614,7 +616,8 @@ StateMachine::shouldTakeSnapshot(uint64_t lastIncludedIndex) const
         return false;
     if (lastIncludedIndex < stats.last_snapshot_index())
         return false;
-    if (lastIncludedIndex < stats.last_log_index() * 3 / 4)
+    if (snapshotIndexDiff &&
+	(lastIncludedIndex - stats.last_snapshot_index() < snapshotIndexDiff))
         return false;
     return true;
 }
