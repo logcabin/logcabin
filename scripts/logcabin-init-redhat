@@ -23,6 +23,121 @@ SYSTEMCTL_SKIP_REDIRECT=1
 # Source function library.
 . /etc/rc.d/init.d/functions
 
+
+# OVERRIDE REDHAT PROVIDED STATUS FUNCTIONS TO ACCEPT BINARY NAME
+# __proc_pids {program} [pidfile]
+# Set $pid to pids from /var/run* for {program}.  $pid should be declared
+# local in the caller.
+# Returns LSB exit code for the 'status' action.
+__pids_var_run() {
+    local base=${1##*/}
+    local pid_file=${2:-/var/run/$base.pid}
+    local binary=$3
+
+    pid=
+    if [ -f "$pid_file" ] ; then
+	local line p
+
+	[ ! -r "$pid_file" ] && return 4 # "user had insufficient privilege"
+	while : ; do
+	    read line
+	    [ -z "$line" ] && break
+	    for p in $line ; do
+		if [ -z "${p//[0-9]/}" ] && [ -d "/proc/$p" ]; then
+		    if [ -n "$binary" ]; then
+			local b=$(readlink /proc/$p/exe | sed -e 's/\s*(deleted)$//')
+			[ "$b" != "$binary" ] && continue
+		    fi
+		    pid="$pid $p"
+                fi
+	    done
+	done < "$pid_file"
+
+	if [ -n "$pid" ]; then
+	    return 0
+	fi
+	return 1 # "Program is dead and /var/run pid file exists"
+    fi
+    return 3 # "Program is not running"
+}
+
+status() {
+    local base pid lock_file= pid_file= binary=
+
+    # Test syntax.
+    if [ "$#" = 0 ] ; then
+	echo $"Usage: status [-p pidfile [-b binary]] {program}"
+	return 1
+    fi
+    if [ "$1" = "-p" ]; then
+	pid_file=$2
+	shift 2
+    fi
+    if [ "$1" = "-b" ]; then
+	if [ -z $pid_file ]; then
+	    echo $"-b option can be used only with -p"
+	    echo $"Usage: status -p pidfile -b binary program"
+	    return 1
+	fi
+	binary=$2
+	shift 2
+    fi
+    if [ "$1" = "-l" ]; then
+	lock_file=$2
+	shift 2
+    fi
+    base=${1##*/}
+
+    if [ "$_use_systemctl" = "1" ]; then
+	systemctl status ${0##*/}.service
+	ret=$?
+	# LSB daemons that dies abnormally in systemd looks alive in systemd's eyes due to RemainAfterExit=yes
+	# lets adjust the reality a little bit
+	if systemctl show -p ActiveState ${0##*/}.service | grep -q '=active$' && \
+		systemctl show -p SubState ${0##*/}.service | grep -q '=exited$' ; then
+	    ret=3
+	fi
+	return $ret
+    fi
+
+    # First try "pidof"
+    __pids_var_run "$1" "$pid_file" "$binary"
+    RC=$?
+    if [ -z "$pid_file" -a -z "$pid" ]; then
+	pid="$(__pids_pidof "$1")"
+    fi
+    if [ -n "$pid" ]; then
+	echo $"${base} (pid $pid) is running..."
+	return 0
+    fi
+
+    case "$RC" in
+	0)
+	    echo $"${base} (pid $pid) is running..."
+	    return 0
+	    ;;
+	1)
+	    echo $"${base} dead but pid file exists"
+	    return 1
+	    ;;
+	4)
+	    echo $"${base} status unknown due to insufficient privileges."
+	    return 4
+	    ;;
+    esac
+    if [ -z "${lock_file}" ]; then
+	lock_file=${base}
+    fi
+    # See if /var/lock/subsys/${lock_file} exists
+    if [ -f /var/lock/subsys/${lock_file} ]; then
+	echo $"${base} dead but subsys locked"
+	return 2
+    fi
+    echo $"${base} is stopped"
+    return 3
+}
+# END REDHAT FUNCTION OVERRIDE
+
 prog=logcabin
 logcabin=${LOGCABIN-/usr/bin/logcabind}
 conffile=${CONFFILE-/etc/logcabin.conf}
@@ -58,7 +173,7 @@ configtest() {
 }
 
 rh_status() {
-    status -p ${pidfile} ${logcabin}
+    status -p ${pidfile} -b ${logcabin} ${logcabin}
 }
 
 # See how we were called.
