@@ -10,3 +10,7 @@
 /smoketest*.conf
 /smoketeststorage
 /storage
+CMakeFiles/
+CMakeCache.txt
+Makefile
+*.cmake
