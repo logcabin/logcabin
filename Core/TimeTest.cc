@@ -260,7 +260,7 @@ TEST(CoreTime, rdtsc_progressTimingSensitive) {
 #if defined(__i386) || defined(__x86_64__)
     EXPECT_LT(a + 1000 * 1000, b);
 #elif defined(__powerpc__)
-    EXPECT_GT(a * 1000 * 1000, b);
+    EXPECT_LT(a + 1000 * 500, b);
 #else
 #error "Unsupported platform."
 #endif
