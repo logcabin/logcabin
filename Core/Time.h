@@ -240,7 +240,7 @@ rdtsc()
     uint32_t lo, hi;
     __asm__ __volatile__("rdtsc" : "=a" (lo), "=d" (hi));
     return ((uint64_t(hi) << 32) | lo);
-#elif defined(__powerpc__)
+#elif defined(__powerpc64__)
     return (__builtin_ppc_get_timebase());
 #else
 #error "Unsupported platform."
