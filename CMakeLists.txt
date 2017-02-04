@@ -7,15 +7,23 @@ include_directories(BEFORE .)
 include_directories(BEFORE ./include)
 include_directories(BEFORE ./build)
 
-# c++ std should be defined in another way, but let make it work first
+# c++ std should be defined in another way, but let's make it work first
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-strict-overflow -fPIC")
 
-set(CMAKE_PROTO_CXX_FLAGS ${CMAKE_CXX_FLAGS})
-set(CMAKE_GTEST_CXX_FLAGS ${CMAKE_CXX_FLAGS})
+# TODO: accept user input
+set(CMAKE_PROTO_CXX_FLAGS " ")
+set(CMAKE_GTEST_CXX_FLAGS " ")
 
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -DDEBUG")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_R} -O2 -DNDEBUG")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O2 -DNDEBUG")
+
+file(MAKE_DIRECTORY build)
+cmake_policy(SET CMP0015 NEW)
+link_directories(build)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/build)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/build)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/build)
 
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
@@ -52,7 +60,7 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
         -Wno-unreachable-code ## clang 3.4 is knon to emit warnings without -Wno-unreachable-code, I will move this out when I have idea to get compiler version
     )
     foreach(FLAG in FLAG_LIST)
-        set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} ${FLAG}" ) 
+        set(CMAKE_LOGCABIN_CXX_FLAGS  "${LOGCABIN_CXX_FLAGS} ${FLAG}" ) 
     endforeach()
 elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
     message("using gcc")
@@ -74,14 +82,11 @@ elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
                   # don't use and that cause warnings with -Weffc++.
         )
     foreach(FLAG ${FLAG_LIST})
-        set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} ${FLAG}" ) 
+        set(CMAKE_LOGCABIN_CXX_FLAGS  "${LOGCABIN_CXX_FLAGS} ${FLAG}" ) 
     endforeach()
 endif()
 
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/build)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/build)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/build)
-
+## here starts the src list
 # add core dir
 set(CORE_SRC
     Core/Buffer.cc
@@ -196,7 +201,6 @@ set(SERVER_SRC
     Server/RaftService.cc
     Server/ServerStats.cc
     Server/StateMachine.cc
-    ${SERVER_PROTO_SRC}
     )
 
 set(STORAGE_SRC
@@ -208,16 +212,43 @@ set(STORAGE_SRC
     Storage/SegmentedLog.cc
     Storage/SimpleFileLog.cc
     Storage/SnapshotFile.cc
-    ${STORAGE_PROTO_SRC}
     )
 
 set(TREE_SRC
     Tree/ProtoBuf.cc
     Tree/Tree.cc
-    ${TREE_PROTO_SRC}
     )
 
-file(MAKE_DIRECTORY build)
+#src list is end
+
+## search for test and mock files
+file(GLOB TEST_FILES 
+    ./Core/*Test.cc 
+    ./Event/*Test.cc
+    ./RPC/*Test.cc
+    ./Protocol/*Test.cc
+    ./Tree/*Test.cc
+    ./Client/*Test.cc
+    ./Storage/*Test.cc
+    ./Server/*Test.cc
+    )
+file(GLOB MOCK_FILES 
+    ./Core/*Mock.cc 
+    ./Event/*Mock.cc
+    ./RPC/*Mock.cc
+    ./Protocol/*Mock.cc
+    ./Tree/*Mock.cc
+    ./Client/*Mock.cc
+    ./Storage/*Mock.cc
+    ./Server/*Mock.cc
+    )
+
+## search for example files
+file(GLOB EXAMPLE_FILES 
+    ./Examples/*.cc
+    )
+
+# protoc generator
 
 macro(c_proto_buff INPUT_LIST OUTPUT_LIST)
     list(LENGTH ${INPUT_LIST} LIST_SIZE)
@@ -249,18 +280,69 @@ c_proto_buff(TREE_PROTO TREE_PROTO_SRC)
 c_proto_buff(SERVER_PROTO SERVER_PROTO_SRC)
 c_proto_buff(STORAGE_PROTO STORAGE_PROTO_SRC)
 
+## append compiler flags (and generate a object)
+
+# logcabin srcs
+set_property(
+    SOURCE
+    Storage/Tool.cc
+    Server/Main.cc
+    ${CORE_SRC}
+    ${CLIENT_SRC}
+    ${EVENT_SRC}
+    ${RPC_SRC}
+    ${SERVER_SRC}
+    ${STORAGE_SRC}
+    ${TREE_SRC}
+    ${EXAMPLE_FILES}
+    APPEND_STRING
+    PROPERTY
+    COMPILE_FLAGS
+    " ${CMAKE_LOGCABIN_CXX_FLAGS}"
+    )
+
+# protobuf flags
+set_property(
+    SOURCE
+    ${CORE_PROTO_SRC}
+    ${PROTOCOL_SRC}
+    ${TREE_PROTO_SRC}
+    ${SERVER_PROTO_SRC}
+    ${STORAGE_PROTO_SRC}
+    APPEND_STRING
+    PROPERTY
+    COMPILE_FLAGS
+    " ${CMAKE_PROTO_CXX_FLAGS}"
+    )
+
+set_property(
+    SOURCE
+    gtest/src/gtest-all.cc
+    test/TestRunner.cc
+    ${TEST_FILES}
+    ${MOCK_FILES}
+    APPEND_STRING
+    PROPERTY
+    COMPILE_FLAGS
+    # -fno-access-control allows tests to access private members
+    " ${CMAKE_GTEST_CXX_FLAGS} ${CMAKE_LOGCABIN_CXX_FLAGS} -fno-access-control"
+    )
+
 ##executable daemon
-## I will change it back to LogCabin after I finish all coding
 add_executable(LogCabin
     Server/Main.cc
     ${SERVER_SRC}
+    ${SERVER_PROTO_SRC}
     ${STORAGE_SRC}
+    ${STORAGE_PROTO_SRC}
     ${CLIENT_SRC}
     ${TREE_SRC}
+    ${TREE_PROTO_SRC}
     ${PROTOCOL_SRC}
     ${RPC_SRC}
     ${EVENT_SRC}
     ${CORE_SRC}
+    ${CORE_PROTO_SRC}
     )
 
 add_executable(ServerControl
@@ -271,19 +353,24 @@ add_library(logcabin STATIC
     EXCLUDE_FROM_ALL
     ${CLIENT_SRC}
     ${TREE_SRC}
+    ${TREE_PROTO_SRC}
     ${PROTOCOL_SRC}
     ${RPC_SRC}
     ${EVENT_SRC}
     ${CORE_SRC}
+    ${CORE_PROTO_SRC}
     )
 
 add_executable(StorageTool
     Storage/Tool.cc
     ${STORAGE_SRC}
+    ${STORAGE_PROTO_SRC}
     ${SERVER_PROTO_FOR_STORAGE_TOOL_SRC}
     ${TREE_SRC}
+    ${TREE_PROTO_SRC}
     ${PROTOCOL_SRC}
     ${CORE_SRC}
+    ${CORE_PROTO_SRC}
     )
 
 add_custom_target(check
@@ -299,7 +386,24 @@ add_custom_target(tags
     COMMAND ctags -R --exclude=build --exclude=docs --exclude=CMakeFiles .
     )
 
+# check library exists
+function(check_lib_exist LIB_NAME)
+    set(PATH_VAR_NAME "${LIB_NAME}_PATH")
+    find_library(${PATH_VAR_NAME} NAMES ${LIB_NAME})
+    if("${${PATH_VAR_NAME}}" STREQUAL "${PATH_VAR_NAME}-NOTFOUND")
+        ## sending warrning alows user to compile the lib without unnecessary dependency 
+        message(WARNING "can not find library ${LIB_NAME}")
+    endif()
+endfunction(check_lib_exist)
+
+check_lib_exist(pthread)
+check_lib_exist(protobuf)
+check_lib_exist(rt)
+check_lib_exist(cryptopp)
+
+# collect all libs when they all exist
 SET(LIBRERYS pthread protobuf rt cryptopp)
+
 target_link_libraries(LogCabin ${LIBRERYS})
 target_link_libraries(StorageTool ${LIBRERYS})
 target_link_libraries(ServerControl logcabin ${LIBRERYS})
@@ -340,33 +444,9 @@ add_executable(TreeOps
     )
 target_link_libraries(TreeOps logcabin ${LIBRERYS})
 
-## for testing
-file(GLOB TEST_FILES 
-    ./Core/*Test.cc 
-    ./Event/*Test.cc
-    ./RPC/*Test.cc
-    ./Protocol/*Test.cc
-    ./Tree/*Test.cc
-    ./Client/*Test.cc
-    ./Storage/*Test.cc
-    ./Server/*Test.cc
-    )
-file(GLOB MOCK_FILES 
-    ./Core/*Mock.cc 
-    ./Event/*Mock.cc
-    ./RPC/*Mock.cc
-    ./Protocol/*Mock.cc
-    ./Tree/*Mock.cc
-    ./Client/*Mock.cc
-    ./Storage/*Mock.cc
-    ./Server/*Mock.cc
-    )
-
 include_directories(BEFORE ./gtest)
 include_directories(BEFORE ./gtest/include)
 
-## fno-access-control
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-access-control")
 add_executable(TestRunner
     test/TestRunner.cc
     gtest/src/gtest-all.cc
@@ -374,13 +454,17 @@ add_executable(TestRunner
     ${TEST_FILES}
     ${MOCK_FILES}
     ${SERVER_SRC}
+    ${SERVER_PROTO_SRC}
     ${STORAGE_SRC}
+    ${STORAGE_PROTO_SRC}
     ${CLIENT_SRC}
     ${TREE_SRC}
+    ${TREE_PROTO_SRC}
     ${PROTOCOL_SRC}
     ${RPC_SRC}
     ${EVENT_SRC}
     ${CORE_SRC}
+    ${CORE_PROTO_SRC}
     )
 add_custom_command(
     OUTPUT gtest/src/gtest-all.cc
@@ -388,5 +472,3 @@ add_custom_command(
     )
 
 target_link_libraries(TestRunner ${LIBRERYS})
-cmake_policy(SET CMP0015 NEW)
-link_directories(build)
