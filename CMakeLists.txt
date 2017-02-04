@@ -331,18 +331,6 @@ set_property(
 ##executable daemon
 add_executable(LogCabin
     Server/Main.cc
-    ${SERVER_SRC}
-    ${SERVER_PROTO_SRC}
-    ${STORAGE_SRC}
-    ${STORAGE_PROTO_SRC}
-    ${CLIENT_SRC}
-    ${TREE_SRC}
-    ${TREE_PROTO_SRC}
-    ${PROTOCOL_SRC}
-    ${RPC_SRC}
-    ${EVENT_SRC}
-    ${CORE_SRC}
-    ${CORE_PROTO_SRC}
     )
 
 add_executable(ServerControl
@@ -350,7 +338,6 @@ add_executable(ServerControl
     )
 
 add_library(logcabin STATIC 
-    EXCLUDE_FROM_ALL
     ${CLIENT_SRC}
     ${TREE_SRC}
     ${TREE_PROTO_SRC}
@@ -361,16 +348,18 @@ add_library(logcabin STATIC
     ${CORE_PROTO_SRC}
     )
 
+add_library(ServerSrcObject STATIC 
+    ${SERVER_SRC}
+    ${SERVER_PROTO_SRC}
+    )
+
+add_library(StorageSrcObject STATIC 
+    ${STORAGE_PROTO_SRC}
+    ${STORAGE_SRC}
+    )
+
 add_executable(StorageTool
     Storage/Tool.cc
-    ${STORAGE_SRC}
-    ${STORAGE_PROTO_SRC}
-    ${SERVER_PROTO_FOR_STORAGE_TOOL_SRC}
-    ${TREE_SRC}
-    ${TREE_PROTO_SRC}
-    ${PROTOCOL_SRC}
-    ${CORE_SRC}
-    ${CORE_PROTO_SRC}
     )
 
 add_custom_target(check
@@ -404,8 +393,8 @@ check_lib_exist(cryptopp)
 # collect all libs when they all exist
 SET(LIBRERYS pthread protobuf rt cryptopp)
 
-target_link_libraries(LogCabin ${LIBRERYS})
-target_link_libraries(StorageTool ${LIBRERYS})
+target_link_libraries(LogCabin ServerSrcObject StorageSrcObject logcabin ${LIBRERYS})
+target_link_libraries(StorageTool ServerSrcObject StorageSrcObject logcabin ${LIBRERYS})
 target_link_libraries(ServerControl logcabin ${LIBRERYS})
 
 ## The following codes will build the examples
@@ -450,25 +439,12 @@ include_directories(BEFORE ./gtest/include)
 add_executable(TestRunner
     test/TestRunner.cc
     gtest/src/gtest-all.cc
-    ${CORE_PROTO_SRC}
     ${TEST_FILES}
     ${MOCK_FILES}
-    ${SERVER_SRC}
-    ${SERVER_PROTO_SRC}
-    ${STORAGE_SRC}
-    ${STORAGE_PROTO_SRC}
-    ${CLIENT_SRC}
-    ${TREE_SRC}
-    ${TREE_PROTO_SRC}
-    ${PROTOCOL_SRC}
-    ${RPC_SRC}
-    ${EVENT_SRC}
-    ${CORE_SRC}
-    ${CORE_PROTO_SRC}
     )
 add_custom_command(
     OUTPUT gtest/src/gtest-all.cc
     COMMAND git submodule update --init --recursive
     )
 
-target_link_libraries(TestRunner ${LIBRERYS})
+target_link_libraries(TestRunner ServerSrcObject StorageSrcObject logcabin ${LIBRERYS})
