@@ -7,8 +7,6 @@ include_directories(BEFORE .)
 include_directories(BEFORE ./include)
 include_directories(BEFORE ./build)
 
-# c++ std should be defined in another way, but let's make it work first
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-strict-overflow -fPIC")
 
 # TODO: accept user input
@@ -19,15 +17,20 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -DDEBUG")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O2 -DNDEBUG")
 
 file(MAKE_DIRECTORY build)
+
 cmake_policy(SET CMP0015 NEW)
 link_directories(build)
+
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/build)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/build)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/build)
 
-
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
     message("using clang")
+
+    ## clang will always use c++11 as std
+    set(CPP_STD c++11)
+
     set (FLAG_LIST 
         -Wno-c++98-compat-pedantic 
         -Wno-covered-switch-default 
@@ -64,6 +67,25 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
     endforeach()
 elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
     message("using gcc")
+
+    ## detect gcc version to decide wich c std should we use
+    execute_process(
+        COMMAND ${CMAKE_CXX_COMPILER} -v
+        OUTPUT_VARIABLE COMPILER_VERSION_OUTPUT
+        ERROR_VARIABLE COMPILER_VERSION_ERROR
+        )
+
+    string(REGEX MATCH "gcc version ([0-9]+)\\.([0-9]+)\\.([0-9]+)"
+        GCC_COMPILER_VERSION "${COMPILER_VERSION_ERROR} ${COMPILER_VERSION_OUTPUT}")
+    STRING(REPLACE "gcc version " "" GCC_VERSION_NUMBER ${GCC_COMPILER_VERSION})
+    if(${GCC_VERSION_NUMBER} VERSION_LESS "4.7.0")
+        set(CPP_STD c++0x)
+    else()
+        set(CPP_STD c++11)
+    endif()
+
+    ## gcc std setting end
+
     set(FLAG_LIST 
         -Wall 
         -Wextra 
@@ -85,6 +107,8 @@ elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
         set(CMAKE_LOGCABIN_CXX_FLAGS  "${LOGCABIN_CXX_FLAGS} ${FLAG}" ) 
     endforeach()
 endif()
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=${CPP_STD}")
 
 ## here starts the src list
 # add core dir
