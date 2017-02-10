@@ -26,7 +26,6 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/build)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/build)
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-    message("using clang")
 
     ## clang will always use c++11 as std
     set(CPP_STD c++11)
@@ -66,7 +65,6 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
         set(CMAKE_LOGCABIN_CXX_FLAGS  "${LOGCABIN_CXX_FLAGS} ${FLAG}" ) 
     endforeach()
 elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-    message("using gcc")
 
     ## detect gcc version to decide wich c std should we use
     execute_process(
@@ -289,14 +287,21 @@ macro(c_proto_buff INPUT_LIST OUTPUT_LIST)
         list(GET ${INPUT_LIST} ${INDEX} CUR_INPUT)
         list(GET ${OUTPUT_LIST} ${INDEX} CUR_OUTPUT)
 
+
         add_custom_command(
             OUTPUT ${CUR_OUTPUT}
-            COMMAND cp ${CUR_INPUT} build/${CUR_INPUT} && protoc -I. --cpp_out=. --python_out=. build/${CUR_INPUT}
-            DEPENDS ${CUR_INPUT} ${OUTPUT_PATH}
+            COMMAND protoc -I. --cpp_out=. --python_out=. build/${CUR_INPUT}
+            DEPENDS ${CUR_INPUT} ${OUTPUT_PATH} copy_proto_files_to_build
             )
     endforeach()
 
 endmacro(c_proto_buff)
+
+add_custom_target(copy_proto_files_to_build
+    ## This command will only works on linux, cp on macos doesn't provide --parents option
+    COMMAND cp --parents ${CORE_PROTO} ${PROTOCOL_PROTO} ${TREE_PROTO} ${SERVER_PROTO} ${STORAGE_PROTO} ./build
+    DEPENDS ${CORE_PROTO} ${PROTOCOL_PROTO} ${TREE_PROTO} ${SERVER_PROTO} ${STORAGE_PROTO}
+    )
 
 c_proto_buff(CORE_PROTO CORE_PROTO_SRC)
 c_proto_buff(PROTOCOL_PROTO PROTOCOL_SRC)
@@ -404,7 +409,7 @@ function(check_lib_exist LIB_NAME)
     set(PATH_VAR_NAME "${LIB_NAME}_PATH")
     find_library(${PATH_VAR_NAME} NAMES ${LIB_NAME})
     if("${${PATH_VAR_NAME}}" STREQUAL "${PATH_VAR_NAME}-NOTFOUND")
-        ## sending warrning alows user to compile the lib without unnecessary dependency 
+        ## sending warrning allows user to compile the lib without unnecessary dependency 
         message(WARNING "can not find library ${LIB_NAME}")
     endif()
 endfunction(check_lib_exist)
@@ -415,47 +420,47 @@ check_lib_exist(rt)
 check_lib_exist(cryptopp)
 
 # collect all libs when they all exist
-SET(LIBRERYS pthread protobuf rt cryptopp)
+SET(LIBRARYS pthread protobuf rt cryptopp)
 
-target_link_libraries(LogCabin ServerSrcObject StorageSrcObject logcabin ${LIBRERYS})
-target_link_libraries(StorageTool ServerSrcObject StorageSrcObject logcabin ${LIBRERYS})
-target_link_libraries(ServerControl logcabin ${LIBRERYS})
+target_link_libraries(LogCabin ServerSrcObject StorageSrcObject logcabin ${LIBRARYS})
+target_link_libraries(StorageTool ServerSrcObject StorageSrcObject logcabin ${LIBRARYS})
+target_link_libraries(ServerControl logcabin ${LIBRARYS})
 
 ## The following codes will build the examples
 add_executable(Benchmark
     Examples/Benchmark.cc
     )
-target_link_libraries(Benchmark logcabin ${LIBRERYS})
+target_link_libraries(Benchmark logcabin ${LIBRARYS})
 
 add_executable(FailoverTest
     Examples/FailoverTest.cc
     )
-target_link_libraries(FailoverTest logcabin ${LIBRERYS})
+target_link_libraries(FailoverTest logcabin ${LIBRARYS})
 
 add_executable(HelloWorld
     Examples/HelloWorld.cc
     )
-target_link_libraries(HelloWorld logcabin ${LIBRERYS})
+target_link_libraries(HelloWorld logcabin ${LIBRARYS})
 
 add_executable(Reconfigure
     Examples/Reconfigure.cc
     )
-target_link_libraries(Reconfigure logcabin ${LIBRERYS})
+target_link_libraries(Reconfigure logcabin ${LIBRARYS})
 
 add_executable(ReconfigureTest
     Examples/ReconfigureTest.cc
     )
-target_link_libraries(ReconfigureTest logcabin ${LIBRERYS})
+target_link_libraries(ReconfigureTest logcabin ${LIBRARYS})
 
 add_executable(SmokeTest
     Examples/SmokeTest.cc
     )
-target_link_libraries(SmokeTest logcabin ${LIBRERYS})
+target_link_libraries(SmokeTest logcabin ${LIBRARYS})
 
 add_executable(TreeOps
     Examples/TreeOps.cc
     )
-target_link_libraries(TreeOps logcabin ${LIBRERYS})
+target_link_libraries(TreeOps logcabin ${LIBRARYS})
 
 include_directories(BEFORE ./gtest)
 include_directories(BEFORE ./gtest/include)
@@ -471,4 +476,4 @@ add_custom_command(
     COMMAND git submodule update --init --recursive
     )
 
-target_link_libraries(TestRunner ServerSrcObject StorageSrcObject logcabin ${LIBRERYS})
+target_link_libraries(TestRunner ServerSrcObject StorageSrcObject logcabin ${LIBRARYS})
