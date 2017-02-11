@@ -420,47 +420,47 @@ check_lib_exist(rt)
 check_lib_exist(cryptopp)
 
 # collect all libs when they all exist
-SET(LIBRARYS pthread protobuf rt cryptopp)
+SET(LIBRARIES pthread protobuf rt cryptopp)
 
-target_link_libraries(LogCabin ServerSrcObject StorageSrcObject logcabin ${LIBRARYS})
-target_link_libraries(StorageTool ServerSrcObject StorageSrcObject logcabin ${LIBRARYS})
-target_link_libraries(ServerControl logcabin ${LIBRARYS})
+target_link_libraries(LogCabin ServerSrcObject StorageSrcObject logcabin ${LIBRARIES})
+target_link_libraries(StorageTool ServerSrcObject StorageSrcObject logcabin ${LIBRARIES})
+target_link_libraries(ServerControl logcabin ${LIBRARIES})
 
 ## The following codes will build the examples
 add_executable(Benchmark
     Examples/Benchmark.cc
     )
-target_link_libraries(Benchmark logcabin ${LIBRARYS})
+target_link_libraries(Benchmark logcabin ${LIBRARIES})
 
 add_executable(FailoverTest
     Examples/FailoverTest.cc
     )
-target_link_libraries(FailoverTest logcabin ${LIBRARYS})
+target_link_libraries(FailoverTest logcabin ${LIBRARIES})
 
 add_executable(HelloWorld
     Examples/HelloWorld.cc
     )
-target_link_libraries(HelloWorld logcabin ${LIBRARYS})
+target_link_libraries(HelloWorld logcabin ${LIBRARIES})
 
 add_executable(Reconfigure
     Examples/Reconfigure.cc
     )
-target_link_libraries(Reconfigure logcabin ${LIBRARYS})
+target_link_libraries(Reconfigure logcabin ${LIBRARIES})
 
 add_executable(ReconfigureTest
     Examples/ReconfigureTest.cc
     )
-target_link_libraries(ReconfigureTest logcabin ${LIBRARYS})
+target_link_libraries(ReconfigureTest logcabin ${LIBRARIES})
 
 add_executable(SmokeTest
     Examples/SmokeTest.cc
     )
-target_link_libraries(SmokeTest logcabin ${LIBRARYS})
+target_link_libraries(SmokeTest logcabin ${LIBRARIES})
 
 add_executable(TreeOps
     Examples/TreeOps.cc
     )
-target_link_libraries(TreeOps logcabin ${LIBRARYS})
+target_link_libraries(TreeOps logcabin ${LIBRARIES})
 
 include_directories(BEFORE ./gtest)
 include_directories(BEFORE ./gtest/include)
@@ -476,4 +476,4 @@ add_custom_command(
     COMMAND git submodule update --init --recursive
     )
 
-target_link_libraries(TestRunner ServerSrcObject StorageSrcObject logcabin ${LIBRARYS})
+target_link_libraries(TestRunner ServerSrcObject StorageSrcObject logcabin ${LIBRARIES})
