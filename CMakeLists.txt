@@ -299,7 +299,7 @@ endmacro(c_proto_buff)
 
 add_custom_target(copy_proto_files_to_build
     ## This command will only works on linux, cp on macos doesn't provide --parents option
-    COMMAND cp --parents ${CORE_PROTO} ${PROTOCOL_PROTO} ${TREE_PROTO} ${SERVER_PROTO} ${STORAGE_PROTO} ./build
+    COMMAND cd ${SOURCE} cp --parents ${CORE_PROTO} ${PROTOCOL_PROTO} ${TREE_PROTO} ${SERVER_PROTO} ${STORAGE_PROTO} ./build
     DEPENDS ${CORE_PROTO} ${PROTOCOL_PROTO} ${TREE_PROTO} ${SERVER_PROTO} ${STORAGE_PROTO}
     )
 
@@ -387,6 +387,7 @@ add_library(StorageSrcObject STATIC
     ${STORAGE_PROTO_SRC}
     ${STORAGE_SRC}
     )
+add_dependencies(StorageSrcObject ${PROTOCOL_SRC})
 
 add_executable(StorageTool
     Storage/Tool.cc
