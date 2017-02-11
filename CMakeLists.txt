@@ -381,6 +381,7 @@ add_library(ServerSrcObject STATIC
     ${SERVER_SRC}
     ${SERVER_PROTO_SRC}
     )
+add_dependencies(ServerSrcObject ${PROTOCOL_SRC})
 
 add_library(StorageSrcObject STATIC 
     ${STORAGE_PROTO_SRC}
