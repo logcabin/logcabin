@@ -88,7 +88,7 @@ class RandomState {
                     "psuedo random number generator seed: %s\n",
                     strerror(errno));
             srand(static_cast<unsigned int>(time(NULL)));
-            seed = rand();
+            seed = rand(); // NOLINT
         }
         initstate_r(seed, statebuf, STATE_BYTES, &randbuf);
         static_assert(RAND_MAX >= (1L << 30), "RAND_MAX too small");
