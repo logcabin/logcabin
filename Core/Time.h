@@ -236,9 +236,15 @@ static __inline __attribute__((always_inline))
 uint64_t
 rdtsc()
 {
+#if defined(__i386) || defined(__x86_64__)
     uint32_t lo, hi;
     __asm__ __volatile__("rdtsc" : "=a" (lo), "=d" (hi));
     return ((uint64_t(hi) << 32) | lo);
+#elif defined(__powerpc64__)
+    return (__builtin_ppc_get_timebase());
+#else
+#error "Unsupported platform."
+#endif
 }
 
 /**
