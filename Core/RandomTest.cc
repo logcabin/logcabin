@@ -18,6 +18,7 @@
 #include <gtest/gtest.h>
 #include <unistd.h>
 #include <thread>
+#include <fcntl.h>
 
 #include "Core/Random.h"
 #include "Core/ConditionVariable.h"
@@ -53,6 +54,42 @@ TEST(CoreRandomTest, fork) {
         }
     }
     EXPECT_GT(2U, failures) << failures;
+}
+
+TEST(CoreRandomTest, forkWithNoAvailableFDs) {
+    std::vector<int> fds;
+    int fd;
+    while ((fd = open("/dev/zero", O_RDONLY)) >= 0)
+    {
+        fds.push_back(fd);
+    }
+
+    // failures counts the number of attempts that the parent and child chose
+    // the same random value. This is expected attempt/256 times.
+    uint64_t failures = 0;
+    for (uint64_t attempt = 0; attempt < 16; ++attempt) {
+        errno = 0;
+        pid_t pid = fork();
+        ASSERT_NE(pid, -1) << strerror(errno); // error
+        if (pid == 0) { // child
+            _exit(random8());
+        } else { // parent
+            uint8_t parent = random8();
+            int status = 0;
+            int r = waitpid(pid, &status, 0);
+            ASSERT_EQ(pid, r);
+            ASSERT_TRUE(WIFEXITED(status));
+            uint8_t child = uint8_t(WEXITSTATUS(status));
+            if (parent == child)
+                ++failures;
+        }
+    }
+    EXPECT_GT(2U, failures) << failures;
+
+    for (auto it = fds.begin(); it != fds.end(); ++it)
+    {
+        close(*it);
+    }
 }
 
 void sleepWithLock(bool& haveLock, std::mutex& m, Core::ConditionVariable& c) {

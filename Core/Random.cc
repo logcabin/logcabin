@@ -73,20 +73,22 @@ class RandomState {
 
     void reset() {
         std::lock_guard<std::mutex> lockGuard(mutex);
-        int fd = open("/dev/urandom", O_RDONLY);
-        if (fd < 0) {
-            // too early to call PANIC in here
-            fprintf(stderr, "Couldn't open /dev/urandom: %s\n",
-                    strerror(errno));
-            abort();
-        }
         unsigned int seed;
-        ssize_t bytesRead = read(fd, &seed, sizeof(seed));
-        close(fd);
-        if (bytesRead != sizeof(seed)) {
-            // too early to call PANIC in here
-            fprintf(stderr, "Couldn't read full seed from /dev/urandom\n");
-            abort();
+        int fd = open("/dev/urandom", O_RDONLY);
+        if (fd >= 0) {
+            ssize_t bytesRead = read(fd, &seed, sizeof(seed));
+            close(fd);
+            if (bytesRead != sizeof(seed)) {
+                // too early to call PANIC in here
+                fprintf(stderr, "Couldn't read full seed from /dev/urandom\n");
+                abort();
+            }
+        } else {
+            fprintf(stderr, "Failed to open /dev/urandom. falling back to a "
+                    "psuedo random number generator seed: %s\n",
+                    strerror(errno));
+            srand(static_cast<unsigned int>(time(NULL)));
+            seed = rand(); // NOLINT
         }
         initstate_r(seed, statebuf, STATE_BYTES, &randbuf);
         static_assert(RAND_MAX >= (1L << 30), "RAND_MAX too small");
