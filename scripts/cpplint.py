@@ -3140,7 +3140,7 @@ def process(filename):
 def main():
   if len(sys.argv) == 1:
     def list_all(result, dirname, filenames):
-      if re.search('\./(gtest|build)(/|$)', dirname):
+      if re.search('\./(gtest|build|CMakeFiles)(/|$)', dirname):
           return
       result += [dirname + '/' + filename for filename in filenames]
     files = []
