@@ -298,6 +298,13 @@ class StateMachine {
     std::chrono::nanoseconds snapshotWatchdogInterval;
 
     /**
+     * Allowed difference between the latest index of the log and the
+     * index of latest snapshot. If the value is 0 (default), it will be
+     * ignored.
+     */
+    uint64_t snapshotIndexDiff;
+
+    /**
      * The time interval after which to remove an inactive client session, in
      * nanoseconds of cluster time.
      */
