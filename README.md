@@ -277,9 +277,9 @@ To install a bunch of things on your filesystem, run:
 
 Along with the binaries, this installs a RHEL 6-compatible init script.
 
-If you don't want these files to pollute your filesystem, you can install the files
-to any given directory as follows (replace `pathtoinstallprefix` in both places
-with wherever you'd like the files to go):
+If you don't want these files to pollute your filesystem, 
+you can install the files to any given directory as follows 
+(replace `pathtoinstallprefix` in both places with wherever you'd like the files to go):
 
     scons --install-sandbox=pathtoinstallprefix pathtoinstallprefix
 
@@ -300,3 +300,42 @@ All commits should pass the pre-commit hooks. Enable them to run before each
 commit:
 
     ln -s ../../hooks/pre-commit .git/hooks/pre-commit
+
+Running with Docker
+======================
+
+Getting all the dependencies right to build and run logcabin can be an issue. 
+Its easier to run it with a docker container where dependency versions
+ are managed properly. There is a dockerfile which can be used as following
+ 1. Install docker (https://www.docker.com/)
+ 2. Make sure to add your user to docker group 
+    so that you do not need to use sudo to run docker
+    
+    sudo usermod -aG docker $USER
+
+ 3. Enable IP6 support on docker 
+    as explained here https://docs.docker.com/config/daemon/ipv6/.
+
+ 4. Build docker image by running command:
+
+    docker build . -t logcabin-dev
+
+ 5. Run the container and map current working directory to /logcabin volume
+    
+    docker run -it -v $(pwd):/logcabin logcabin-dev:latest /bin/bash
+
+ 6. In the container, you can run steps documented in the above sections.
+    e.g. To build the code within container. run scons after running step 2.
+
+Debugging with VSCode
+======================
+
+It is possible to run and debug C++ code in the docker container with VSCode. 
+The .vscode folder contains task to build the logcabin code in docker container 
+and launch configurations to be able to run and debug logcabin code from within VSCode.
+
+1. Install VSCode https://code.visualstudio.com/
+2. Install remote development extension for VSCode from 
+https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.vscode-remote-extensionpack
+3. Open logcabin folder.
+4. Run/Debug by executing Run menu.

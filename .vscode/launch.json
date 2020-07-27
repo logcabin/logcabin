@@ -1,0 +1,36 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [       
+        {
+            "name": "(gdb) Docker",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "build/test/test",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "/logcabin",
+            "environment": [],
+            "externalConsole": true,
+            "preLaunchTask": "scons-build",
+            "MIMode": "gdb",
+            "targetArchitecture": "x64",
+            "sourceFileMap": { "/logcabin": "${workspaceFolder}" },
+            "pipeTransport": {
+                "debuggerPath": "/usr/bin/gdb",
+                "pipeProgram": "docker",
+                "pipeArgs": ["run", "--rm", "--interactive","--volume","${workspaceFolder}:/logcabin","--workdir","/logcabin","--privileged","logcabin-dev:latest","/bin/bash","-c"],
+                "pipeCwd": ""
+            },
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        }
+    ]
+}
