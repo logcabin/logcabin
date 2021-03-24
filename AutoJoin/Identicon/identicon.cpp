@@ -11,6 +11,8 @@ identicon::identicon(int height, int width)
     this->width = width;
     this->x = (width / 2) - 1;
     this->y = (height / 2) - 1;
+    this->initialx = this->x;
+    this->initialy = this->y;
 }
 
 identicon::identicon(int height, int width, int startx, int starty)
@@ -21,6 +23,8 @@ identicon::identicon(int height, int width, int startx, int starty)
     else this->x = (width / 2) - 1;
     if(starty < height) this->y = starty;
     else this->y = (height / 2) - 1;
+    this->initialx = this->x;
+    this->initialy = this->y;
 }
 
 int identicon::find(string searchstring, char target)
@@ -100,4 +104,7 @@ void identicon::generate(string hash)
     cout << "+ " << endl;
 
     cout << " y" << endl;
+
+    this->x = this->initialx;
+    this->y = this->initialy;
 }

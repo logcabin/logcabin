@@ -6,6 +6,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h> 
 #include <cstring>
+#include "identicon/identicon.cpp"
 
 using namespace std;
 
@@ -17,5 +18,6 @@ class autojoin {
     vector<string> parseString(string input, char delimeter);
     int createHostConnection(int port, int mode, struct sockaddr_in sock);
     int createClientConnection(string ip, int port, int mode, struct sockaddr_in socketadd);
+    int autojoinprogram(string name, string port, string remoteaddress, int mode);
 };
 
