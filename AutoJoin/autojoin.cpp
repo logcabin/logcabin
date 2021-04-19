@@ -40,7 +40,7 @@ int autojoin::createHostConnection(int port, int mode, struct sockaddr_in sock)
     }
 
     // Forcefully attaching socket to the port 8080
-    if (setsockopt(host_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)))
+    if (setsockopt(host_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt)))
     {
         perror("setsockopt");
         exit(EXIT_FAILURE);
@@ -48,11 +48,12 @@ int autojoin::createHostConnection(int port, int mode, struct sockaddr_in sock)
     sock.sin_family = mode;
     sock.sin_addr.s_addr = INADDR_ANY;
     sock.sin_port = htons(port);
-
+    int tempvar = 0;
     // Forcefully attaching socket to the port
-    if (bind(host_fd, (struct sockaddr *)&sock, sizeof(sock)) < 0)
+    if (tempvar = (bind(host_fd, (struct sockaddr *)&sock, sizeof(sock))) < 0)
     {
         perror("bind failed");
+
         exit(EXIT_FAILURE);
     }
 
@@ -65,7 +66,7 @@ int autojoin::createClientConnection(string ip, int port, int mode, struct socka
     char address[100];
     cout << "Copying address into ip" << endl;
     strcpy(address, ip.c_str());
-    char buffer[1024] = {0};
+    char buffer[2048] = {0};
     cout << "Creating socket" << endl;
     if ((sock = socket(mode, SOCK_STREAM, 0)) < 0)
     {
@@ -93,15 +94,15 @@ int autojoin::createClientConnection(string ip, int port, int mode, struct socka
 
     return sock;
 }
-// Name is the hash for identicon, port is the port that it will listen on, remote address/host/node 
-// remote address is the address to reach out to for join, host makes the node the host, node puts it into passive mode
+// Name is the hash for identicon, port is the port that it will listen on, remote address/host/node
+// remoteaddress is the address to reach out to for join, host makes the node the host, node puts it into passive mode
 // Mode is for AF_INET for ipv4 and AF_INET6 for ipv6
 int autojoinprogram(string name, string port, string remoteaddress, int mode)
 {
     struct sockaddr_in address;
     int addrlen = sizeof(address);
     int newsocket, bRead;
-    char buffer[1024] = {0};
+    char buffer[2048] = {0};
     autojoin autojoinobject = autojoin();
     while (1)
     {
@@ -125,8 +126,8 @@ int autojoinprogram(string name, string port, string remoteaddress, int mode)
                     perror("accept");
                     exit(EXIT_FAILURE);
                 }
-                cout << "Reading transmition from socket" << endl;
-                bRead = read(newsocket, buffer, 1024);
+                cout << "Reading transmission from socket" << endl;
+                bRead = read(newsocket, buffer, 2048);
                 string temp = buffer;
                 identicon printiden = identicon();
                 printiden.generate(temp);
@@ -178,7 +179,7 @@ int autojoinprogram(string name, string port, string remoteaddress, int mode)
                 if ((newsocket = accept(hostsocket, (struct sockaddr *)&address, (socklen_t *)&addrlen)) < 0)
                 {
                     cout << "Reading transmition from socket" << endl;
-                    bRead = read(newsocket, buffer, 1024);
+                    bRead = read(newsocket, buffer, 2048);
                     string temp = buffer;
                     if (temp == "node_set_as_host")
                     {
@@ -201,7 +202,7 @@ int autojoinprogram(string name, string port, string remoteaddress, int mode)
         else
         {
             cout << "Node configured as client to auto join" << endl;
-            vector<string> ip = autojoinobject.parseString(remoteaddress, ':');
+            vector<string> ip = autojoinobject.parseString(remoteaddress, ';');
             cout << "Address: " + ip[0] << endl;
             cout << "Port: " + ip[1] << endl;
 
@@ -216,13 +217,13 @@ int autojoinprogram(string name, string port, string remoteaddress, int mode)
                     exit(-1);
                 }
 
-                char message[1024];
+                char message[2048];
                 identicon printiden = identicon();
                 printiden.generate(name);
                 strcpy(message, name.c_str());
                 cout << "Message copied in" << endl;
                 send(newsocket, message, strlen(message), 0);
-                bRead = read(newsocket, buffer, 1024);
+                bRead = read(newsocket, buffer, 2048);
                 cout << buffer << endl;
                 string temp = buffer;
                 if (temp == "connection-accepted")
