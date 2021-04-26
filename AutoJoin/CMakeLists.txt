@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20) # version can be different
+cmake_minimum_required(VERSION 3.16) # version can be different
 
 project(my_cpp_project) #name of your project
 
