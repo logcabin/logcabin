@@ -40,6 +40,19 @@ TEST(parseString3, testing){
    }
 }
 
+TEST(createHostConnection, testing){
+   autojoin TestObj;
+   struct sockaddr_in address;
+   int hostsocket = TestObj.createHostConnection(1552, AF_INET, address);
+   EXPECT_EQ(hostsocket,3);
+}
+
+TEST(createHostConnection2, testing){
+   autojoin TestObj;
+   struct sockaddr_in address;
+   EXPECT_EXIT(TestObj.createHostConnection(155, AF_INET, address),::testing::ExitedWithCode(1),"");
+}
+
 int main(int argc, char* argv[])
 {
     ::testing::InitGoogleTest(&argc, argv);
