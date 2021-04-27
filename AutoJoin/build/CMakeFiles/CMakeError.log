@@ -1,0 +1,60 @@
+Performing C SOURCE FILE Test CMAKE_HAVE_LIBC_PTHREAD failed with the following output:
+Change Dir: /home/al/code/AutoJoin/build/CMakeFiles/CMakeTmp
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_686ab/fast && /usr/bin/make  -f CMakeFiles/cmTC_686ab.dir/build.make CMakeFiles/cmTC_686ab.dir/build
+make[1]: Entering directory '/home/al/code/AutoJoin/build/CMakeFiles/CMakeTmp'
+Building C object CMakeFiles/cmTC_686ab.dir/src.c.o
+/usr/bin/cc -DCMAKE_HAVE_LIBC_PTHREAD   -o CMakeFiles/cmTC_686ab.dir/src.c.o -c /home/al/code/AutoJoin/build/CMakeFiles/CMakeTmp/src.c
+Linking C executable cmTC_686ab
+/snap/cmake/858/bin/cmake -E cmake_link_script CMakeFiles/cmTC_686ab.dir/link.txt --verbose=1
+/usr/bin/cc -rdynamic CMakeFiles/cmTC_686ab.dir/src.c.o -o cmTC_686ab 
+/usr/bin/ld: CMakeFiles/cmTC_686ab.dir/src.c.o: in function `main':
+src.c:(.text+0x46): undefined reference to `pthread_create'
+/usr/bin/ld: src.c:(.text+0x52): undefined reference to `pthread_detach'
+/usr/bin/ld: src.c:(.text+0x5e): undefined reference to `pthread_cancel'
+/usr/bin/ld: src.c:(.text+0x6f): undefined reference to `pthread_join'
+collect2: error: ld returned 1 exit status
+make[1]: *** [CMakeFiles/cmTC_686ab.dir/build.make:99: cmTC_686ab] Error 1
+make[1]: Leaving directory '/home/al/code/AutoJoin/build/CMakeFiles/CMakeTmp'
+make: *** [Makefile:127: cmTC_686ab/fast] Error 2
+
+
+Source file was:
+#include <pthread.h>
+
+static void* test_func(void* data)
+{
+  return data;
+}
+
+int main(void)
+{
+  pthread_t thread;
+  pthread_create(&thread, NULL, test_func, NULL);
+  pthread_detach(thread);
+  pthread_cancel(thread);
+  pthread_join(thread, NULL);
+  pthread_atfork(NULL, NULL, NULL);
+  pthread_exit(NULL);
+
+  return 0;
+}
+
+Determining if the function pthread_create exists in the pthreads failed with the following output:
+Change Dir: /home/al/code/AutoJoin/build/CMakeFiles/CMakeTmp
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_b7b8d/fast && /usr/bin/make  -f CMakeFiles/cmTC_b7b8d.dir/build.make CMakeFiles/cmTC_b7b8d.dir/build
+make[1]: Entering directory '/home/al/code/AutoJoin/build/CMakeFiles/CMakeTmp'
+Building C object CMakeFiles/cmTC_b7b8d.dir/CheckFunctionExists.c.o
+/usr/bin/cc   -DCHECK_FUNCTION_EXISTS=pthread_create -o CMakeFiles/cmTC_b7b8d.dir/CheckFunctionExists.c.o -c /snap/cmake/858/share/cmake-3.20/Modules/CheckFunctionExists.c
+Linking C executable cmTC_b7b8d
+/snap/cmake/858/bin/cmake -E cmake_link_script CMakeFiles/cmTC_b7b8d.dir/link.txt --verbose=1
+/usr/bin/cc  -DCHECK_FUNCTION_EXISTS=pthread_create -rdynamic CMakeFiles/cmTC_b7b8d.dir/CheckFunctionExists.c.o -o cmTC_b7b8d  -lpthreads 
+/usr/bin/ld: cannot find -lpthreads
+collect2: error: ld returned 1 exit status
+make[1]: *** [CMakeFiles/cmTC_b7b8d.dir/build.make:99: cmTC_b7b8d] Error 1
+make[1]: Leaving directory '/home/al/code/AutoJoin/build/CMakeFiles/CMakeTmp'
+make: *** [Makefile:127: cmTC_b7b8d/fast] Error 2
+
+
+

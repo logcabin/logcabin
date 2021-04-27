@@ -6,7 +6,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h> 
 #include <cstring>
-#include "identicon/identicon.cpp"
+#include "Identicon/identicon.cpp"
 
 using namespace std;
 
