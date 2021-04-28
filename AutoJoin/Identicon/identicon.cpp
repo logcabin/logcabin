@@ -36,6 +36,9 @@ int identicon::find(string searchstring, char target)
         {
             return i;
         }
+        else{
+            
+        }
     }
     return -1;
 }
