@@ -27,3 +27,20 @@ gcc manage.cpp -l~/avahi
 gcc zeroconf/browse-services.c -o manage.out -L~/avahi/ -lavahi-client -lavahi-common
 
 ```
+
+3. From 2 different terminals with all of the above already completed run the following
+host
+```bash
+# arg 1 is the name of the service to broadcast the
+# arg 2 is the mode to start the socket with
+# arg 3 is the communication type to use ipv4/6
+sudo ./manage.out host host 4
+```
+
+client
+```bash
+# arg 1 is the name of the service to look for
+# arg 2 is the mode to start the socket with
+# arg 3 is the communication type to use ipv4/6
+sudo ./manage.out host auto 4
+```

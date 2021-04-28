@@ -23,7 +23,6 @@ std::string string_to_hex(char *data)
     for (int i = 0; i < data_length; ++i)
         ss << std::hex << (int)data[i];
     std::string hex_str = ss.str();
-    cout << hex_str << endl;
     return hex_str;
 }
 
