@@ -22,9 +22,7 @@ cd ~ && git clone git@github.com:lathiat/avahi.git
 2. Compile the cluster management application
 ```bash
 # Compile and link the 2 programs
-gcc manage.cpp -l~/avahi
-
-gcc zeroconf/browse-services.c -o manage.out -L~/avahi/ -lavahi-client -lavahi-common
+g++ -g -fpermissive manage.cpp -o manage.out -L~/avahi/ -lavahi-client -lavahi-common -I../include/ -lcrypto -lssl
 
 ```
 

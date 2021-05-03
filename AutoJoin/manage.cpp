@@ -114,5 +114,5 @@ int main(int argc, char **argv)
 
     cout << "name: " << name << " mode: " << mode << std::endl;
 
-    autojoinprogram(name, "777", mode, AF_INET);
+    autojoinprogram(name, "7777", mode, AF_INET);
 }
