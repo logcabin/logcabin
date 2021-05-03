@@ -5,6 +5,7 @@ identicon::identicon()
     ;
 }
 
+// Set the width and height of the identicon
 identicon::identicon(int height, int width)
 {
     this->height = height;
@@ -15,6 +16,8 @@ identicon::identicon(int height, int width)
     this->initialy = this->y;
 }
 
+//Set the width and height of the identicon and 
+// the starting coordinates of the identicon
 identicon::identicon(int height, int width, int startx, int starty)
 {
     this->height = height;
@@ -43,6 +46,7 @@ int identicon::find(string searchstring, char target)
     return -1;
 }
 
+// Generate the identicon with hash
 void identicon::generate(string hash)
 {
     char identicon[width][height];
