@@ -22,8 +22,8 @@
 #include <iostream>
 #include <string>
 
-#include "build/Server/SnapshotMetadata.pb.h"
-#include "build/Server/SnapshotStateMachine.pb.h"
+#include "Server/SnapshotMetadata.pb.h"
+#include "Server/SnapshotStateMachine.pb.h"
 #include "Core/Config.h"
 #include "Core/Debug.h"
 #include "Core/ProtoBuf.h"

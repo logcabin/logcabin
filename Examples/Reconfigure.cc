@@ -192,11 +192,12 @@ main(int argc, char** argv)
     std::pair<uint64_t, Configuration> configuration =
         cluster.getConfiguration();
     uint64_t id = configuration.first;
-    std::cout << "Current configuration:" << std::endl;
+    std::cout << std::endl << "Current configuration:" << std::endl;
+    std::cout << "----------------------" << std::endl;
     printConfiguration(configuration);
 
-    std::cout << "Attempting to change cluster membership to the following:"
-              << std::endl;
+    std::cout << "Attempting to change cluster membership to the following:" << std::endl;
+    std::cout << "---------------------------------------------------------" << std::endl;
     Configuration servers;
     for (auto it = options.servers.begin();
          it != options.servers.end();
@@ -245,6 +246,7 @@ main(int argc, char** argv)
     std::cout << std::endl;
 
     std::cout << "Current configuration:" << std::endl;
+    std::cout << "----------------------" << std::endl;
     printConfiguration(cluster.getConfiguration());
 
     if (result.status == ConfigurationResult::OK)

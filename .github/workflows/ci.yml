@@ -1,0 +1,74 @@
+name: LogCabin CI
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        build_type: [DEBUG, RELEASE]
+        compiler:
+          - {cc: gcc, cxx: g++}
+          - {cc: clang, cxx: clang++}
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y scons libprotobuf-dev protobuf-compiler libcrypto++-dev libssl-dev python3-dev
+    
+    - name: Build
+      run: |
+        scons BUILDTYPE=${{ matrix.build_type }} CC=${{ matrix.compiler.cc }} CXX=${{ matrix.compiler.cxx }}
+    
+    - name: Test
+      run: |
+        scons test BUILDTYPE=${{ matrix.build_type }} CC=${{ matrix.compiler.cc }} CXX=${{ matrix.compiler.cxx }}
+    
+  static-analysis:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cppcheck clang-tidy lcov
+    
+    - name: Run cppcheck
+      run: |
+        cppcheck --enable=all --std=c++17 --quiet --suppress=missingIncludeSystem -I. -Iinclude Core Event RPC Protocol Tree Client Storage Server
+    
+    - name: Run code coverage
+      run: |
+        scons coverage
+        
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v3
+      with:
+        directory: ./coverage
+        fail_ci_if_error: false
+        verbose: true
+    
+  docker:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v2
+      with:
+        context: .
+        push: false
+        tags: logcabin:latest

@@ -16,6 +16,7 @@ LINKFLAGS='-lc++ -L%s/lib -Wl,-rpath,%s/lib' % (PROTOINSTALLPATH,
 ```
 
 To use libstdc++ instead:
+
 ```python
 CXX='clang++-3.5'
 CXXFLAGS=['-Werror']
@@ -28,8 +29,7 @@ LINKFLAGS='-L%s/lib -Wl,-rpath,%s/lib' % (PROTOINSTALLPATH,
 Note that earlier versions of libstdc++ do not seem to work. For example, Diego wasn't
 able to even build ```#include <thread>``` using clang++ 3.4 and libstdc++ 4.6
 (due to std::chrono::duration issues as in
-https://github.com/Andersbakken/rct/issues/17).
-
+<https://github.com/Andersbakken/rct/issues/17>).
 
 The ProtoBuf library was built as follows (using v2.6.1, git hash bba83652):
 

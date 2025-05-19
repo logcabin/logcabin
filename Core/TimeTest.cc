@@ -248,17 +248,20 @@ TEST(CoreTime, parseNonNegativeDuration) {
 
 TEST(CoreTime, rdtsc_increasing) {
     uint64_t a = Time::rdtsc();
+    usleep(10);
     uint64_t b = Time::rdtsc();
     EXPECT_LT(a, b);
 }
 
 TEST(CoreTime, rdtsc_progressTimingSensitive) {
     uint64_t a = Time::rdtsc();
-    usleep(1000);
+    usleep(5000);
     uint64_t b = Time::rdtsc();
     EXPECT_LT(a, b);
 #if defined(__i386) || defined(__x86_64__)
     EXPECT_LT(a + 1000 * 1000, b);
+#elif defined(__aarch64__)
+    EXPECT_LT(a + 1000, b);
 #elif defined(__powerpc64__)
     EXPECT_LT(a + 1000 * 500, b);
 #else

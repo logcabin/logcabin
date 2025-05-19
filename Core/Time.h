@@ -242,6 +242,10 @@ rdtsc()
     return ((uint64_t(hi) << 32) | lo);
 #elif defined(__powerpc64__)
     return (__builtin_ppc_get_timebase());
+#elif defined(__aarch64__)
+    uint64_t val;
+    asm volatile("mrs %0, cntvct_el0" : "=r" (val));
+    return val;
 #else
 #error "Unsupported platform."
 #endif

@@ -26,112 +26,160 @@ Usage:
 Options:
   -h --help            Show this help message and exit
   --binary=<cmd>       Server binary to execute [default: build/LogCabin]
-  --client=<cmd>       Client binary to execute
-                       [default: 'build/Examples/FailoverTest']
   --reconf=<opts>      Additional options to pass through to the Reconfigure
                        binary. [default: '']
-  --servers=<num>      Number of servers [default: 5]
-  --timeout=<seconds>  Number of seconds to wait for client to complete before
-                       exiting with an ok [default: 20]
-  --killinterval=<seconds>  Number of seconds to wait between killing servers
-                            [default: 5]
-  --launchdelay=<seconds>  Number of seconds to wait before restarting server
-                           [default: 0]
 """
 
-from __future__ import print_function, division
-from common import sh, captureSh, Sandbox, smokehosts
-from docopt import docopt
-import os
 import random
-import subprocess
 import time
 
-def main():
-    arguments = docopt(__doc__)
-    client_commands = arguments['--client']
-    server_command = arguments['--binary']
-    num_servers = int(arguments['--servers'])
-    reconf_opts = arguments['--reconf']
-    if reconf_opts == "''":
-        reconf_opts = ""
-    timeout = int(arguments['--timeout'])
-    killinterval = int(arguments['--killinterval'])
-    launchdelay = int(arguments['--launchdelay'])
+from docopt import docopt
+from TestFramework import TestFramework, run_shell_command
 
-    server_ids = range(1, num_servers + 1)
-    cluster = "--cluster=%s" % ','.join([h[0] for h in
-                                        smokehosts[:num_servers]])
-    with Sandbox() as sandbox:
-        sh('rm -rf smoketeststorage/')
-        sh('rm -f debug/*')
-        sh('mkdir -p debug')
+class FailoverTest(TestFramework):
+    def __init__(self):
+        TestFramework.__init__(self)
+        # Hold metadata from each experiment.
+        # E.g. start and end time, kill interval, launch delay
+        self.experiment_metadata = {}
+        # Path to the csv file for the plot
+        self.csv_file = "scripts/plot/csv/failover.csv"
+        self.plot_file = "scripts/plot/plot_failover.py"
+    
+    def run_failovertest(self, writes, run):
 
-        for server_id in server_ids:
-            host = smokehosts[server_id - 1]
-            with open('smoketest-%d.conf' % server_id, 'w') as f:
-                try:
-                    f.write(open('smoketest.conf').read())
-                    f.write('\n\n')
-                except:
-                    pass
-                f.write('serverId = %d\n' % server_id)
-                f.write('listenAddresses = %s\n' % host[0])
+        client_process = self.execute_client_command(
+            client_executable = 'build/Examples/FailoverTest',
+            conf = {
+                "options": "--writes=%d" % (writes),
+                "command": ""
+            },
+            bg = True
+        )
 
+        # This is placed after the start of the client command so as to increment the
+        # self.client_commands counter first.
+        self.experiment_metadata[self.client_commands] = {} # initialize
+        self.experiment_metadata[self.client_commands]["start_time"] = time.time()
+        self.experiment_metadata[self.client_commands]["writes"] = writes
+        self.experiment_metadata[self.client_commands]["run"] = run
 
-        print('Initializing first server\'s log')
-        sandbox.rsh(smokehosts[0][0],
-                    '%s --bootstrap --config smoketest-%d.conf' %
-                    (server_command, server_ids[0]),
-                   stderr=open('debug/bootstrap', 'w'))
-        print()
+        return client_process
 
-        processes = {}
+    def random_server_kill(
+        self,
+        test_process,
+        server_command,
+        killinterval,
+        launchdelay
+    ):
+        """ 
+        Randomly kill a server in the cluster at a given interval and restart it after a given
+        delay. The process is repeated until the failovertest exits. The presence of errors is
+        checked.
 
-        def launch_server(server_id):
-            host = smokehosts[server_id - 1]
-            command = ('%s --config smoketest-%d.conf -l %s' %
-                       (server_command, server_id, 'debug/%d' % server_id))
-            print('Starting %s on %s' % (command, host[0]))
-            processes[server_id] = sandbox.rsh(
-                host[0], command, bg=True)
-            sandbox.checkFailures()
+        Important: The killinerval should be greater or equal to the launchdelay.
+        """
 
-        for server_id in server_ids:
-            launch_server(server_id)
-
-        print('Growing cluster')
-        sh('build/Examples/Reconfigure %s %s set %s' %
-           (cluster,
-            reconf_opts,
-            ' '.join([h[0] for h in smokehosts[:num_servers]])))
-
-        for i, client_command in enumerate(client_commands):
-            print('Starting %s %s on localhost' % (client_command, cluster))
-            sandbox.rsh('localhost',
-                        '%s %s' % (client_command, cluster),
-                        bg=True,
-                        stderr=open('debug/client%d' % i, 'w'))
+        self.experiment_metadata[self.client_commands]["kill_interval"] = killinterval
+        self.experiment_metadata[self.client_commands]["launch_delay"] = launchdelay
 
         start = time.time()
         lastkill = start
         tolaunch = [] # [(time to launch, server id)]
+
         while True:
             time.sleep(.1)
-            sandbox.checkFailures()
+
+            self.sandbox.checkFailures()
             now = time.time()
-            if now - start > timeout:
-                print('Timeout met with no errors')
+
+            # Check if the failovertest exited
+            if test_process.proc.poll() is not None:
+                self.experiment_metadata[self.client_commands]["end_time"] = time.time()
+                # Revive killed servers to start (probably) next test fresh
+                for server_id_ip in self.server_ids_ips:
+                    if server_id_ip not in self.server_processes.keys():
+                        self._start_server(server_command, server_id_ip)
+                # Exit infinite loop
                 break
+
+            # Check if the kill interval has been met
             if now - lastkill > killinterval:
-                server_id = random.choice(processes.keys())
-                print('Killing server %d' % server_id)
-                sandbox.kill(processes[server_id])
-                del processes[server_id]
+                server_id_ip = random.choice(self.server_processes.keys())
+
+                self._kill_server(server_id_ip)
+
                 lastkill = now
-                tolaunch.append((now + launchdelay, server_id))
+                tolaunch.append((now + launchdelay, server_id_ip))
+
+            # Check if lanchdelay has been met and there are servers to launch
             while tolaunch and now > tolaunch[0][0]:
-                launch_server(tolaunch.pop(0)[1])
+                server_id_ip = tolaunch.pop(0)[1]
+                self._start_server(server_command, server_id_ip)
+
+    def _write_csv(self):
+        with open("%s" % self.csv_file, 'w') as f:
+            f.write("time;writes;killinterval;launchdelay;run\n")
+
+            for _, metadata in self.experiment_metadata.items():
+                f.write('%f;%d;%d;%d;%d\n' % (
+                    metadata["end_time"] - metadata["start_time"],
+                    int(metadata["writes"]),
+                    metadata["kill_interval"],
+                    metadata["launch_delay"],
+                    metadata["run"])
+                )
+
+    def plot(self):
+        self._write_csv()
+        self._print_string("\nPlotting failover results")
+        try:
+            run_shell_command('python3 %s' % self.plot_file)
+        except Exception as e:
+            self._print_string("Error: %s" % e)
+            self.cleanup()
+
+def main():
+    # Parse command line arguments
+    arguments = docopt(__doc__)
+
+    server_command = arguments['--binary']
+
+    reconf_opts = arguments['--reconf']
+    if reconf_opts == "''":
+        reconf_opts = ""
+
+    runs = 5
+    writes_array = [512, 1024, 2048]
+
+    killintervals = [4, 4, 4, 6, 6, 6, 8, 8, 8]
+    launchdelays = [1, 2, 3, 1, 3, 5, 1, 4, 7]
+
+    # Run the test
+    test = FailoverTest()
+
+    test.create_configs()
+    test.create_folders()
+
+    test.initialize_cluster(server_command, reconf_opts)
+
+    for run in range(runs):
+        for writes in writes_array:
+            for killinterval, launchdelay in zip(killintervals, launchdelays):
+                print("\n============================================")
+                print("writes: %d, killinterval: %d, launchdelay: %d" % (
+                    writes,
+                    killinterval,
+                    launchdelay)
+                )
+                print("============================================")
+
+                process = test.run_failovertest(writes, run)
+                test.random_server_kill(process, server_command, killinterval, launchdelay)
+
+    test.plot()
+    test.cleanup()
 
 if __name__ == '__main__':
     main()

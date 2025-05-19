@@ -13,3 +13,6 @@ src = [
 object_files['Storage'] = (env.StaticObject(src) +
                            env.Protobuf("SegmentedLog.proto") +
                            env.Protobuf("SimpleFileLog.proto"))
+
+lib = env.StaticLibrary('Storage', object_files['Storage'])
+env.Append(LIBS=['zstd'])

@@ -250,7 +250,7 @@ SimpleFileLog::takeSync()
 {
     std::unique_ptr<Sync> other(new Sync(getLastLogIndex()));
     std::swap(other, currentSync);
-    return std::move(other);
+    return other;
 }
 
 void

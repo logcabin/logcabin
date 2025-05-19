@@ -17,9 +17,11 @@
  * Contains the format for SimpleFileLog's metadata files.
  */
 
+syntax = "proto2";
+
 package LogCabin.Storage.SimpleFileLogMetadata;
 
-import "build/Protocol/RaftLogMetadata.proto";
+import "RaftLogMetadata.proto";
 
 message Metadata {
     required uint64 version = 1;

@@ -17,7 +17,7 @@
 #include <string>
 #include <vector>
 
-#include "build/Storage/SimpleFileLog.pb.h"
+#include "SimpleFileLog.pb.h"
 #include "Storage/FilesystemUtil.h"
 #include "Storage/MemoryLog.h"
 #include "Storage/Log.h"

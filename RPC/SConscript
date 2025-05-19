@@ -12,5 +12,6 @@ src = [
     "Server.cc",
     "ServerRPC.cc",
     "ThreadDispatchService.cc",
+    "TLS.cc",
 ]
 object_files['RPC'] = env.StaticObject(src)

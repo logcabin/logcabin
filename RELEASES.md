@@ -30,8 +30,7 @@ New backwards-compatible changes:
   a timeout.
 - Added companion setConfiguration2Ex that behaves as
   setConfiguration2 throws exceptions.
-- See https://github.com/logcabin/logcabin/pull/184 for details
-
+- See <https://github.com/logcabin/logcabin/pull/184> for details
 
 Version 1.1.0 (2015-07-26)
 ==========================
@@ -185,7 +184,6 @@ guaranteed, as there is no explicit protocol specification.
   running the old version of the code may not be able to participate in the
   cluster (they will most likely PANIC repeatedly until their code is
   upgraded).
-
 
 The following are specifically excluded from the public API and are not subject
 to semantic versioning (they may be added to the public API in future

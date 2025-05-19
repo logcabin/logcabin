@@ -18,7 +18,7 @@
 #include <thread>
 #include <vector>
 
-#include "build/Storage/SegmentedLog.pb.h"
+#include "SegmentedLog.pb.h"
 #include "Core/Buffer.h"
 #include "Core/ConditionVariable.h"
 #include "Core/Mutex.h"

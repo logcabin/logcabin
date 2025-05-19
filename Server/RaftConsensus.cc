@@ -1127,6 +1127,30 @@ RaftConsensus::exit()
     interruptAll();
 }
 
+void RaftConsensus::dump_log() {
+    uint64_t log_index;
+    uint64_t log_term;
+
+    std::vector<std::pair<uint64_t, uint64_t>> index_term;
+
+    // Generate the index_term vector of pairs
+    for (uint64_t i = 1; i <= log->getLastLogIndex(); i++) {
+        log_index = i;
+        log_term = log->getEntry(log_index).term();
+        index_term.push_back(std::make_pair(log_index, log_term));
+    }
+
+    // Print to sdtout the human-readable log
+    std::string log_str("|");
+    for (auto it = index_term.begin(); it != index_term.end(); ++it) {
+        std::ostringstream stringStream;
+        stringStream << " " << it->first << ":" << it->second << " |";
+        std::string index_term_string = stringStream.str();
+        log_str += index_term_string;
+    }
+    NOTICE("Server's %lu log:\n%s", serverId, log_str.c_str());
+}
+
 void
 RaftConsensus::bootstrapConfiguration()
 {
@@ -1298,6 +1322,20 @@ RaftConsensus::handleAppendEntries(
         // We're about to bump our term in the stepDown below: update
         // 'response' accordingly.
         response.set_term(request.term());
+
+        // This is used by the caller to decrement its nextIndex to the previous
+        // term if it does not exist to its log.
+        response.set_conflicting_term(currentTerm);
+
+        // Find the first index of the currentTerm
+        uint64_t firstIndexOfConflict = log->getLogStartIndex();
+        while (firstIndexOfConflict <= log->getLastLogIndex() &&
+               log->getEntry(firstIndexOfConflict).term() != currentTerm) {
+            ++firstIndexOfConflict;
+        }
+
+        // The index to decrement the nextIndex of the caller.
+        response.set_first_index_of_conflict(firstIndexOfConflict);
     }
     // This request is a sign of life from the current leader. Update
     // our term and convert to follower if necessary; reset the
@@ -1336,6 +1374,11 @@ RaftConsensus::handleAppendEntries(
 
     // If we got this far, we're accepting the request.
     response.set_success(true);
+
+    // Do not include conflicting_term and first_index_of_conflict in the
+    // response, since we are accepting the request (sucess = true).
+    response.clear_conflicting_term();
+    response.clear_first_index_of_conflict();
 
     // This needs to be able to handle duplicated RPC requests. We compare the
     // entries' terms to know if we need to do the operation; otherwise,
@@ -2367,6 +2410,13 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
                 peer.nextIndex > response.last_log_index() + 1) {
                 peer.nextIndex = response.last_log_index() + 1;
             }
+
+            if(response.has_conflicting_term() &&
+               response.has_first_index_of_conflict() &&
+               peer.nextIndex > response.first_index_of_conflict() &&
+               log->getEntry(response.first_index_of_conflict()).term() != response.conflicting_term()) {
+                peer.nextIndex = response.first_index_of_conflict();
+            }
         }
     }
     if (response.has_server_capabilities()) {
@@ -2579,7 +2629,7 @@ RaftConsensus::packEntries(
     // Calculating the size of the request ProtoBuf is a bit expensive, so this
     // estimates high, then if it reaches the size limit, corrects the estimate
     // and keeps going. This is a dumb algorithm but does well enough. It gets
-    // the number of calls to request.ByteSize() down to about 15 even with
+    // the number of calls to request.ByteSizeLong() down to about 15 even with
     // extremely small entries (10 bytes of payload data in each of 50,000
     // entries filling to a 1MB max).
 
@@ -2598,7 +2648,7 @@ RaftConsensus::packEntries(
         *request.mutable_entries();
 
     uint64_t numEntries = 0;
-    uint64_t currentSize = downCast<uint64_t>(request.ByteSize());
+    uint64_t currentSize = downCast<uint64_t>(request.ByteSizeLong());
 
     for (uint64_t index = nextIndex; index <= lastIndex; ++index) {
         const Log::Entry& entry = log->getEntry(index);
@@ -2608,12 +2658,12 @@ RaftConsensus::packEntries(
         // and a length. We conservatively assume the tag and length will
         // be up to 10 bytes each (2^64), though in practice the tag is
         // probably one byte and the length is probably two.
-        currentSize += uint64_t(entry.ByteSize()) + 20;
+        currentSize += uint64_t(entry.ByteSizeLong()) + 20;
 
         if (currentSize >= SOFT_RPC_SIZE_LIMIT) {
             // The message might be too big: calculate more exact but more
             // expensive size.
-            uint64_t actualSize = downCast<uint64_t>(request.ByteSize());
+            uint64_t actualSize = downCast<uint64_t>(request.ByteSizeLong());
             assert(currentSize >= actualSize);
             currentSize = actualSize;
             if (currentSize >= SOFT_RPC_SIZE_LIMIT && numEntries > 0) {

@@ -2327,19 +2327,19 @@ TEST_F(ServerRaftConsensusPATest, appendEntries_limitSizeRegression)
     r2.CopyFrom(request);
     r2.clear_entries();
     // size of request with no entries
-    uint64_t baseSize = uint64_t(r2.ByteSize());
+    uint64_t baseSize = uint64_t(r2.ByteSizeLong());
     std::vector<uint64_t> entrySizes; // size of each entry
     uint64_t totalSize = baseSize; // size of full request
     for (int i = 0; i < request.entries_size(); ++i) {
         *r2.add_entries() = request.entries(i);
-        uint64_t entrySize = uint64_t(r2.ByteSize()) - baseSize;
+        uint64_t entrySize = uint64_t(r2.ByteSizeLong()) - baseSize;
         entrySizes.push_back(entrySize);
         totalSize += entrySize;
         r2.clear_entries();
     }
     EXPECT_EQ((std::vector<uint64_t> { 32, 15, 8, 52 }),
               entrySizes);
-    EXPECT_EQ(totalSize, uint64_t(request.ByteSize()));
+    EXPECT_EQ(totalSize, uint64_t(request.ByteSizeLong()));
 
     // We now cap request sizes so that entry 2 doesn't fit but entry 3 would.
     consensus->SOFT_RPC_SIZE_LIMIT = (baseSize +
@@ -2752,9 +2752,9 @@ TEST_F(ServerRaftConsensusTest, packEntries)
     uint64_t n = consensus->packEntries(3U, request);
     EXPECT_GT(5000U, n);
     EXPECT_LT(0U, n);
-    EXPECT_GE(1024, request.ByteSize());
+    EXPECT_GE(1024, request.ByteSizeLong());
     *request.add_entries() = consensus->log->getEntry(3);
-    EXPECT_LE(1024, request.ByteSize());
+    EXPECT_LE(1024, request.ByteSizeLong());
     request.clear_entries();
 
     // one entry is allowed even if it's too big

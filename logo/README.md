@@ -4,7 +4,7 @@ In case you're wondering, no, those lines aren't straight. Every point on the
 image is positioned by hand, poorly, intentionally.
 
 The font used is called "Cabin", of course. It's available in the Debian
-package `fonts-cabin` and from http://www.impallari.com/cabin/ under the SIL
+package `fonts-cabin` and from [http://www.impallari.com/cabin/](http://www.impallari.com/cabin/) under the SIL
 Open Font License.
 
 Additional files:
@@ -18,7 +18,6 @@ Additional files:
   (it has an enlarged chimney and door similar to the lasercut version, but
   retains the color from the logo; the roof is slightly enlarged on the left;
   on a 3x3" canvas).
-
 
 Files in this directory are:
 

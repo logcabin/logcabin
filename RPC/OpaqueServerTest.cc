@@ -56,10 +56,12 @@ class RPCOpaqueServerTest : public ::testing::Test {
         fd2 = fds[1];
     }
     ~RPCOpaqueServerTest() {
-        if (fd1 != -1)
+        if (fd1 != -1) {
             EXPECT_EQ(0, close(fd1));
-        if (fd2 != -1)
+        }
+        if (fd2 != -1) {
             EXPECT_EQ(0, close(fd2));
+        }
     }
     Event::Loop loop;
     Address address;

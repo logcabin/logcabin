@@ -11,17 +11,102 @@ management issues. LogCabin uses the
 the very first implementation of Raft. It's released under the
 [ISC license](https://en.wikipedia.org/wiki/ISC_license) (equivalent to BSD).
 
-External resources:
+## Key Features
+
+- **Raft Consensus Algorithm**: Implements the complete Raft protocol for strong consistency
+- **High Availability**: Provides reliable storage with automatic failover
+- **TLS Support**: Secure communications with TLS encryption
+- **Prometheus Monitoring**: Built-in metrics for observability
+- **Docker Support**: Easy deployment with Docker and Docker Compose
+- **Configurable Installation**: Flexible installation options with custom prefixes
+- **Kubernetes Support**: Complete deployment support for Kubernetes environments (new!)
+- **Web Admin Interface**: Convenient web-based management dashboard (new!)
+- **CMake Build System**: Modern build system alongside traditional SCons (new!)
+- **OpenTelemetry Tracing**: Distributed tracing for better diagnostics (new!)
+- **Advanced Storage Options**: LSM-based storage engine (high write throughput, background compaction, compression support, bloom filter, configurable flush/compaction) and optimized configurations (new!)
+- **Grafana Dashboards**: Pre-configured monitoring visualization (new!)
+
+## External Resources
+
 - [Slide deck](https://logcabin.github.io/talk/)
   on LogCabin's usage, operations, and internals
 - [Code-level documentation](https://logcabin.github.io/doxygen/annotated.html)
   built with Doxygen
+- [Installation guide](INSTALL.md) for detailed setup instructions (new!)
 - Recent updates on LogCabin's development on
   [Diego's blog](http://ongardie.net/blog/+logcabin/)
 
 Information about releases is in [RELEASES.md](RELEASES.md).
 
-This README will walk you through how to compile and run LogCabin.
+## Quick Start
+
+### Using Docker
+
+```bash
+# Run a single node
+docker run -d -p 5254:5254 -p 9090:9090 logcabin
+
+# Run a cluster using Docker Compose
+docker-compose up -d
+```
+
+### Building from Source
+
+```bash
+# Clone the repository
+git clone https://github.com/logcabin/logcabin.git
+cd logcabin
+
+# Build with default settings
+scons
+
+# Install with custom prefix
+sudo scons install PREFIX=/opt/logcabin
+```
+
+For detailed installation instructions, see [INSTALL.md](INSTALL.md).
+
+## Monitoring
+
+LogCabin now includes Prometheus metrics for monitoring. Access metrics at:
+
+```
+http://your-server:9090/metrics
+```
+
+Configure the metrics server in your configuration file:
+
+```
+# Enable Prometheus metrics
+metricsEnabled = true
+metricsListenAddress = 0.0.0.0
+metricsPort = 9090
+```
+
+## Security
+
+LogCabin now supports TLS encryption for secure communication:
+
+```
+# Enable TLS
+tlsEnabled = true
+tlsCertFile = /path/to/cert.pem
+tlsKeyFile = /path/to/key.pem
+tlsCaFile = /path/to/ca.pem
+```
+
+## LSM 存储引擎快速配置
+
+在 `config/storage.conf` 中启用 LSM：
+
+```
+storageModule = LSM
+lsmBufferSizeMB = 64
+lsmCompressionEnabled = true
+lsmCompressionAlgorithm = zstd
+lsmMaxLevels = 7
+lsmBloomFilterFPRate = 0.01
+```
 
 Questions
 =========
@@ -52,6 +137,7 @@ Pre-requisites:
 - protobuf (v2.6.x suggested, v2.5.x should work, v2.3.x is not supported)
 - crypto++ (v5.6.1 is known to work)
 - doxygen (optional; v1.8.8 is known to work)
+- python (v2.7 and v3.10 for the test scripts and the plots correspondingly)
 
 In short, RHEL/CentOS 6 should work, as well as anything more recent.
 
@@ -60,7 +146,6 @@ Get the source code:
     git clone git://github.com/logcabin/logcabin.git
     cd logcabin
     git submodule update --init
-
 
 Build the client library, server binary, and unit tests:
 
@@ -98,9 +183,9 @@ Running a real cluster
 This section shows you how to run the `HelloWorld` example program against a
 three-server LogCabin cluster. We'll run all the servers on localhost for now:
 
- - Server 1 will listen on 127.0.0.1:5254
- - Server 2 will listen on 127.0.0.1:5255
- - Server 3 will listen on 127.0.0.1:5256
+- Server 1 will listen on 127.0.0.1:5254
+- Server 2 will listen on 127.0.0.1:5255
+- Server 3 will listen on 127.0.0.1:5256
 
 Port 5254 is LogCabin's default port and is reserved by IANA for LogCabin. The
 other two belong to others and are hopefully not in use on your network.

@@ -1,0 +1,197 @@
+version: '3.8'
+
+# 定义LogCabin集群网络
+networks:
+  logcabin_net:
+    driver: bridge
+
+services:
+  # 单节点模式
+  standalone:
+    build: .
+    image: logcabin:latest
+    ports:
+      - "5254:5254"   # LogCabin端口
+      - "9090:9090"   # Prometheus指标端口
+    volumes:
+      - ./config:/etc/logcabin
+      - logcabin_data:/var/lib/logcabin
+      - logcabin_logs:/var/log/logcabin
+    command: ["--config", "/etc/logcabin/logcabin.conf", "--bootstrap"]
+    environment:
+      - SERVER_ID=1
+    networks:
+      - logcabin_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    profiles: 
+      - standalone
+
+  # 三节点集群配置
+  node1:
+    build: .
+    image: logcabin:latest
+    hostname: node1
+    ports:
+      - "5254:5254"
+      - "9091:9090"
+    volumes:
+      - ./config/node1:/etc/logcabin
+      - node1_data:/var/lib/logcabin
+      - node1_logs:/var/log/logcabin
+    command: ["--config", "/etc/logcabin/logcabin.conf", "--bootstrap"]
+    environment:
+      - SERVER_ID=1
+      - NODE_NAME=node1
+    networks:
+      logcabin_net:
+        aliases:
+          - logcabin-node1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    profiles: 
+      - cluster
+    deploy:
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+
+  node2:
+    build: .
+    image: logcabin:latest
+    hostname: node2
+    ports:
+      - "5255:5254"
+      - "9092:9090"
+    volumes:
+      - ./config/node2:/etc/logcabin
+      - node2_data:/var/lib/logcabin
+      - node2_logs:/var/log/logcabin
+    command: ["--config", "/etc/logcabin/logcabin.conf"]
+    environment:
+      - SERVER_ID=2
+      - NODE_NAME=node2
+    networks:
+      logcabin_net:
+        aliases:
+          - logcabin-node2
+    depends_on:
+      - node1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    profiles: 
+      - cluster
+    deploy:
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+
+  node3:
+    build: .
+    image: logcabin:latest
+    hostname: node3
+    ports:
+      - "5256:5254"
+      - "9093:9090"
+    volumes:
+      - ./config/node3:/etc/logcabin
+      - node3_data:/var/lib/logcabin
+      - node3_logs:/var/log/logcabin
+    command: ["--config", "/etc/logcabin/logcabin.conf"]
+    environment:
+      - SERVER_ID=3
+      - NODE_NAME=node3
+    networks:
+      logcabin_net:
+        aliases:
+          - logcabin-node3
+    depends_on:
+      - node1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    profiles: 
+      - cluster
+    deploy:
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+
+  # 集群初始化器
+  cluster-init:
+    image: logcabin:latest
+    networks:
+      - logcabin_net
+    depends_on:
+      - node1
+      - node2
+      - node3
+    volumes:
+      - ./scripts:/scripts
+    entrypoint: ["/bin/bash", "/scripts/init-cluster.sh"]
+    profiles: 
+      - cluster
+
+  # 添加Prometheus监控
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    networks:
+      - logcabin_net
+    depends_on:
+      - node1
+      - node2
+      - node3
+    profiles: 
+      - monitoring
+
+  # 添加Grafana可视化
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./config/grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    networks:
+      - logcabin_net
+    depends_on:
+      - prometheus
+    profiles: 
+      - monitoring
+
+volumes:
+  logcabin_data:
+  logcabin_logs:
+  node1_data:
+  node1_logs:
+  node2_data:
+  node2_logs:
+  node3_data:
+  node3_logs:
+  prometheus_data:
+  grafana_data:

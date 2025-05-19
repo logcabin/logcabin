@@ -29,7 +29,7 @@ typedef std::chrono::milliseconds ms;
 // That's just the nature of testing condition variables.
 
 class CoreConditionVariableTest : public ::testing::Test {
-    CoreConditionVariableTest()
+  public: CoreConditionVariableTest()
         : mutex()
         , stdmutex()
         , cv()
@@ -45,7 +45,7 @@ class CoreConditionVariableTest : public ::testing::Test {
         mutex.callback =
             std::bind(&CoreConditionVariableTest::incrementMutexCounter, this);
     }
-    ~CoreConditionVariableTest()
+  public: ~CoreConditionVariableTest()
     {
         cv.notify_all();
         if (thread1.joinable())

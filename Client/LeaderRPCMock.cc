@@ -47,7 +47,7 @@ LeaderRPCMock::popRequest()
 {
     MessagePtr request = std::move(requestLog.at(0).second);
     requestLog.pop_front();
-    return std::move(request);
+    return request;
 }
 
 LeaderRPCMock::Status

@@ -62,6 +62,7 @@ class Config {
     typedef std::string string;
 
   public:
+ friend class CoreConfigTest; // Added for testing purposes
     /**
      * Base class for Config exceptions.
      */
@@ -164,6 +165,8 @@ class Config {
     void remove(const string& key);
 
   private:
+    friend class CoreConfigTest;
+  public:
     /**
      * Convert from a T to a string.
      * Type T must support << operator.
@@ -183,6 +186,7 @@ class Config {
     template<class T>
     static T fromString(const string& key, const string& s);
 
+  private:
     /**
      * Read a line, strip comments, and trim it.
      */

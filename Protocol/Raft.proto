@@ -12,6 +12,8 @@
 // ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 // OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
+syntax = "proto2";
+
 package LogCabin.Protocol.Raft;
 
 /**
@@ -254,6 +256,18 @@ message AppendEntries {
          * Sent back to inform leader of what code the recipient is running.
          */
         optional ServerCapabilities server_capabilities = 4;
+
+        /**
+        * If the follower's log is inconsistent with the leader's, this
+        * indicates the term of the conflicting entry.
+        */
+        optional uint64 conflicting_term = 5;
+
+        /**
+        * If the follower's log is inconsistent with the leader's, this
+        * indicates the index of the first entry with the conflicting term.
+        */
+        optional uint64 first_index_of_conflict = 6;
     }
 }
 

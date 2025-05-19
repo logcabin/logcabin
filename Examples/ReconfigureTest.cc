@@ -40,6 +40,7 @@ class OptionParser {
         , argv(argv)
         , cluster("logcabin:5254")
         , fatal(false)
+        , tries(10)
         , logPolicy("")
     {
         while (true) {
@@ -48,11 +49,12 @@ class OptionParser {
                {"fatal",  no_argument, NULL, 'f'},
                {"help",  no_argument, NULL, 'h'},
                {"seed",  required_argument, NULL, 's'},
+               {"tries", required_argument, NULL, 't'},
                {"verbose",  no_argument, NULL, 'v'},
                {"verbosity",  required_argument, NULL, 256},
                {0, 0, 0, 0}
             };
-            int c = getopt_long(argc, argv, "c:fhs:v", longOptions, NULL);
+            int c = getopt_long(argc, argv, "c:fhst:v", longOptions, NULL);
 
             // Detect the end of the options.
             if (c == -1)
@@ -70,6 +72,9 @@ class OptionParser {
                     break;
                 case 's':
                     srand(static_cast<unsigned int>(atoi(optarg)));
+                    break;
+                case 't':
+                    tries = atoi(optarg);
                     break;
                 case 'v':
                     logPolicy = "VERBOSE";
@@ -94,10 +99,10 @@ class OptionParser {
 
     void usage() {
         std::cout
-            << "Test that repeatedly changes the cluster membership to random "
+            << "Test repeatedly changes the cluster membership to random "
             << "subsets of its"
             << std::endl
-            << "initial configuration."
+            << "initial configuration for a number of tries."
             << std::endl
             << std::endl
             << "This program is subject to change (it is not part of "
@@ -134,6 +139,10 @@ class OptionParser {
             << "Random seed [default: 1]"
             << std::endl
 
+            << "  -t <num>, --tries=<num>        "
+            << "Number of cluster membership changes [default: 10]"
+            << std::endl
+
             << "  -v, --verbose                  "
             << "Same as --verbosity=VERBOSE"
             << std::endl
@@ -159,6 +168,7 @@ class OptionParser {
     char**& argv;
     std::string cluster;
     bool fatal;
+    int tries;
     std::string logPolicy;
 };
 
@@ -181,8 +191,8 @@ changeConfiguration(Cluster& cluster,
                     uint64_t lastId,
                     bool fatal)
 {
-    std::cout << "Attempting to change cluster membership to the following:"
-              << std::endl;
+    std::cout << "Attempting to change cluster membership to the following:" << std::endl;
+    std::cout << "---------------------------------------------------------" << std::endl;
     for (auto it = configuration.begin(); it != configuration.end(); ++it) {
         std::cout << "- " << it->serverId << ": " << it->addresses
                   << std::endl;
@@ -207,6 +217,7 @@ changeConfiguration(Cluster& cluster,
     std::cout << std::endl;
 
     std::cout << "Current configuration:" << std::endl;
+    std::cout << "----------------------" << std::endl;
      std::pair<uint64_t, Configuration> current = cluster.getConfiguration();
     printConfiguration(current);
     if (result.status != ConfigurationResult::OK && fatal) {
@@ -234,7 +245,8 @@ main(int argc, char** argv)
     uint64_t lastId = current.first;
     Configuration& fullConfiguration = current.second;
 
-    while (true) {
+    int count = 0;
+    while (count < options.tries) {
         Configuration newConfiguration;
         uint64_t desiredServers =
             (uint64_t(rand()) % fullConfiguration.size()) + 1; // NOLINT
@@ -249,5 +261,6 @@ main(int argc, char** argv)
         }
         lastId = changeConfiguration(cluster, newConfiguration, lastId,
                                      options.fatal);
+        ++count;
     }
 }

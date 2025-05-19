@@ -1,7 +1,6 @@
 This file describes the procedure for creating a new release of LogCabin. For
 release notes, see [RELEASES.md](RELEASES.md).
 
-
 Release Process
 ===============
 
@@ -30,14 +29,16 @@ Release Process
 
 - Run smoke test using g++ 4.9 ThreadSanitizer:
   - Here's a `Local.sc`:
-```
+
+```bash
 CXX='g++-4.9'
 CXXFLAGS=['-Werror', '-fsanitize=thread']
 LINKFLAGS=['-fsanitize=thread', '-pie']
 BUILDTYPE='DEBUG'
 ```
-  - This may print warnings, but look through them.
-  - As of 1.0 release, see one warning about a read of 8 bytes in
+
+- This may print warnings, but look through them.
+- As of 1.0 release, see one warning about a read of 8 bytes in
     LogCabin::Storage::FilesystemUtil::write called from
     LogCabin::Storage::SegmentedLog::segmentPreparerMain().
     This might be a false alarm.

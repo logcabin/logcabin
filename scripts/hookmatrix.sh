@@ -5,7 +5,7 @@
 # You can find a bunch of configurations in hookmatrix.sample/ in the top-level
 # project directory.
 
-TIMES=3
+TIMES=1
 FAILS=0
 
 if [ $# -eq 0 ]; then

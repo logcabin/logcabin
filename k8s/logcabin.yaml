@@ -1,0 +1,190 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: logcabin
+  labels:
+    app: logcabin
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logcabin-config
+  namespace: logcabin
+data:
+  logcabin.conf: |
+    # LogCabin基本配置
+    electionTimeoutMilliseconds = 500
+    heartbeatPeriodMilliseconds = 250
+    rpcFailureBackoffMilliseconds = 250
+    storageModule = Segmented
+    storageChecksum = CRC32
+    
+    # Prometheus指标配置
+    metricsEnabled = true
+    metricsListenAddress = 0.0.0.0
+    metricsPort = 9090
+    
+  prometheus-config.yml: |
+    global:
+      scrape_interval: 15s
+    scrape_configs:
+      - job_name: 'logcabin'
+        kubernetes_sd_configs:
+          - role: endpoints
+            namespaces:
+              names:
+                - logcabin
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_service_name]
+            regex: logcabin
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_container_port_name]
+            regex: metrics
+            action: keep
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: logcabin
+  namespace: logcabin
+spec:
+  serviceName: "logcabin"
+  replicas: 3
+  selector:
+    matchLabels:
+      app: logcabin
+  template:
+    metadata:
+      labels:
+        app: logcabin
+    spec:
+      securityContext:
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: logcabin
+        image: logcabin:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: logcabin
+          containerPort: 5254
+        - name: metrics
+          containerPort: 9090
+        volumeMounts:
+        - name: config
+          mountPath: /etc/logcabin
+        - name: data
+          mountPath: /var/lib/logcabin
+        - name: logs
+          mountPath: /var/log/logcabin
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: SERVER_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        livenessProbe:
+          httpGet:
+            path: /metrics
+            port: metrics
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /metrics
+            port: metrics
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+      volumes:
+      - name: config
+        configMap:
+          name: logcabin-config
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 1Gi
+  - metadata:
+      name: logs
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 500Mi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: logcabin
+  namespace: logcabin
+spec:
+  clusterIP: None
+  selector:
+    app: logcabin
+  ports:
+  - port: 5254
+    name: logcabin
+  - port: 9090
+    name: metrics
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: logcabin-client
+  namespace: logcabin
+spec:
+  selector:
+    app: logcabin
+  ports:
+  - port: 5254
+    name: logcabin
+  - port: 9090
+    name: metrics
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: logcabin-init
+  namespace: logcabin
+spec:
+  ttlSecondsAfterFinished: 100
+  template:
+    spec:
+      containers:
+      - name: init
+        image: logcabin:latest
+        command: 
+        - "/bin/bash"
+        - "-c"
+        - |
+          # 等待所有Pod就绪
+          sleep 10
+          
+          # 初始化集群配置
+          ALLSERVERS="logcabin-0.logcabin.logcabin.svc.cluster.local:5254,logcabin-1.logcabin.logcabin.svc.cluster.local:5254,logcabin-2.logcabin.logcabin.svc.cluster.local:5254"
+          /usr/bin/LogCabin --cluster=$ALLSERVERS --reconfigure set logcabin-0.logcabin.logcabin.svc.cluster.local:5254 logcabin-1.logcabin.logcabin.svc.cluster.local:5254 logcabin-2.logcabin.logcabin.svc.cluster.local:5254
+          
+          # 验证集群状态
+          echo "测试写入..." 
+          echo "Hello K8s" | /usr/bin/LogCabin --cluster=$ALLSERVERS --treeop write /k8s-test
+          echo "测试读取..."
+          /usr/bin/LogCabin --cluster=$ALLSERVERS --treeop read /k8s-test
+      restartPolicy: OnFailure

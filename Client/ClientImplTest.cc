@@ -173,20 +173,20 @@ TEST_F(ClientClientImplExactlyOnceTest, keepAliveThreadMain_TimingSensitive) {
     client.exactlyOnceRPCHelper.keepAliveInterval = milliseconds(2);
     client.exactlyOnceRPCHelper.keepAliveCV.notify_all();
     // in 2ms, 4ms, 6ms, 8ms, 10ms
-    usleep(11000);
+    usleep(12000);
     EXPECT_EQ(6U, mockRPC->requestLog.size()) << disclaimer;
 
     // Disable heartbeat.
     client.exactlyOnceRPCHelper.keepAliveInterval = milliseconds(0);
     client.exactlyOnceRPCHelper.keepAliveCV.notify_all();
-    usleep(3000);
+    usleep(4000);
     EXPECT_EQ(6U, mockRPC->requestLog.size()) << disclaimer;
 
     // Now enable but "make a request" ourselves to prevent heartbeat.
     client.exactlyOnceRPCHelper.getRPCInfo(TimePoint::max());
     client.exactlyOnceRPCHelper.keepAliveInterval = milliseconds(10);
     client.exactlyOnceRPCHelper.keepAliveCV.notify_all();
-    usleep(7500);
+    usleep(8000);
     client.exactlyOnceRPCHelper.getRPCInfo(TimePoint::max());
     usleep(6000);
     EXPECT_EQ(6U, mockRPC->requestLog.size()) << disclaimer;

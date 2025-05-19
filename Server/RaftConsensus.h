@@ -994,13 +994,20 @@ class RaftConsensus {
     /**
      * Destructor.
      */
-    ~RaftConsensus();
+    virtual ~RaftConsensus();
 
     /// Initialize. Must be called before any other method.
     void init();
 
     /// Signal the consensus module to exit (shut down threads, etc).
     void exit();
+
+    /**
+     * Print the log indexes and terms in a human-readable format as NOTICE
+     * log message. Spliting entries with horizontal lines. Each entry is 
+     * printed as: index:term.
+    */
+    virtual void dump_log();
 
     /**
      * Initialize the log with a configuration consisting of just this server.

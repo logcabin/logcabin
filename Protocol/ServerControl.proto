@@ -12,9 +12,11 @@
 // ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 // OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
+syntax = "proto2";
+
 package LogCabin.Protocol.ServerControl;
 
-import "build/Protocol/ServerStats.proto";
+import "ServerStats.proto";
 
 /**
  * \file

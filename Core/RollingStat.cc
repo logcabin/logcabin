@@ -15,7 +15,10 @@
 
 #include <cmath>
 
-#include "build/Protocol/ServerStats.pb.h"
+#include "Core/Time.h"
+#include "Core/Util.h"
+#include "ServerStats.pb.h"
+
 #include "Core/RollingStat.h"
 #include "Core/StringUtil.h"
 

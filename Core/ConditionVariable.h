@@ -111,6 +111,7 @@ class ConditionVariable {
     }
 
   private:
+    public: // Made public for testing
     /// Underlying condition variable.
     pthread_cond_t cv;
     /**

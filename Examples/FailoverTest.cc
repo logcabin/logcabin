@@ -40,17 +40,19 @@ class OptionParser {
         , cluster("logcabin:5254")
         , logPolicy("")
         , timeout(parseNonNegativeDuration("10s"))
+        , writes(100)
     {
         while (true) {
             static struct option longOptions[] = {
                {"cluster",  required_argument, NULL, 'c'},
                {"help",  no_argument, NULL, 'h'},
                {"timeout",  required_argument, NULL, 't'},
+               {"writes", required_argument, NULL, 'w'},
                {"verbose",  no_argument, NULL, 'v'},
                {"verbosity",  required_argument, NULL, 256},
                {0, 0, 0, 0}
             };
-            int c = getopt_long(argc, argv, "c:t:hv", longOptions, NULL);
+            int c = getopt_long(argc, argv, "c:tw:hv", longOptions, NULL);
 
             // Detect the end of the options.
             if (c == -1)
@@ -62,6 +64,9 @@ class OptionParser {
                     break;
                 case 't':
                     timeout = parseNonNegativeDuration(optarg);
+                    break;
+                case 'w':
+                    writes = atoi(optarg);
                     break;
                 case 'h':
                     usage();
@@ -125,6 +130,13 @@ class OptionParser {
             << "operations [default: 10s]"
             << std::endl
 
+            << "  -w <count>, --writes=<count>   "
+            << "Number of writes to perform before"
+            << std::endl
+            << "                                 "
+            << "exiting [default: 100]"
+            << std::endl
+
             << "  -v, --verbose                  "
             << "Same as --verbosity=VERBOSE"
             << std::endl
@@ -151,6 +163,7 @@ class OptionParser {
     std::string cluster;
     std::string logPolicy;
     uint64_t timeout;
+    uint64_t writes;
 };
 
 std::string
@@ -211,7 +224,7 @@ main(int argc, char** argv)
         tree.writeEx("0000000000000000", "0000000000000001");
         tree.writeEx("0000000000000001", "0000000000000001");
         uint64_t i = 2;
-        while (true) {
+        while (i < options.writes) {
             if ((i & (i-1)) == 0) { // powers of two
                 std::cout << "i=" << i << std::endl;
                 verify(tree);
